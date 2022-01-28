@@ -1,0 +1,6 @@
+[submodule "hetero_edgesoftmax/libnpy"]
+	path = hetero_edgesoftmax/libnpy
+	url = https://github.com/llohse/libnpy/
+[submodule "hetero_edgesoftmax/cusplibrary"]
+	path = hetero_edgesoftmax/cusplibrary
+	url = https://github.com/cusplibrary/cusplibrary
