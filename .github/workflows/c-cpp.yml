@@ -25,6 +25,5 @@ jobs:
     # - run: echo "Installed cuda version is: ${{steps.cuda-toolkit.outputs.cuda}}"
     # - run: echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
     - run: nvcc -V
-    - run: cd hetero_edgesoftmax
     - name: make
-      run: make
+      run: cd hetero_edgesoftmax && make
