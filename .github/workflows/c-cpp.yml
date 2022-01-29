@@ -1,0 +1,29 @@
+name: C/C++ CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # explicit include-based build matrix, of known valid options
+      matrix:
+        include:
+          # 20.04 supports CUDA 11.0+
+          - os: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: 'recursive'
+    - uses: Jimver/cuda-toolkit@v0.2.4
+      id: cuda-toolkit
+      with:
+        cuda: '11.2.2'
+    # - run: echo "Installed cuda version is: ${{steps.cuda-toolkit.outputs.cuda}}"
+    # - run: echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
+    - run: nvcc -V
+    - name: make
+      run: make
