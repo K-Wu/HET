@@ -1,12 +1,13 @@
 ﻿#include "cuda_runtime.h"
 #include "device_launch_parameters.h"
-#include "libnpy/include/npy.hpp"
+
+#include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
 #include <cusp/csr_matrix.h>
 #include <cusp/coo_matrix.h>
-#include "utils.h"
+#include <npy.hpp>
 #include <thrust/random.h>
 #include <thrust/device_vector.h>
 #include <thrust/transform.h>
