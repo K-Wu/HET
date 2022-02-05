@@ -5,6 +5,8 @@ VisualStudioVersion = 16.0.31829.152
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "hetero_edgesoftmax", "hetero_edgesoftmax\hetero_edgesoftmax.vcxproj", "{05BDDFD2-CF7A-4476-9FC1-B7F9DB1E4F0B}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "show_smid", "show_smid\show_smid.vcxproj", "{D0CAB66F-F8F2-48A1-9CDC-68B2DBC30E6B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -15,6 +17,10 @@ Global
 		{05BDDFD2-CF7A-4476-9FC1-B7F9DB1E4F0B}.Debug|x64.Build.0 = Debug|x64
 		{05BDDFD2-CF7A-4476-9FC1-B7F9DB1E4F0B}.Release|x64.ActiveCfg = Release|x64
 		{05BDDFD2-CF7A-4476-9FC1-B7F9DB1E4F0B}.Release|x64.Build.0 = Release|x64
+		{D0CAB66F-F8F2-48A1-9CDC-68B2DBC30E6B}.Debug|x64.ActiveCfg = Debug|x64
+		{D0CAB66F-F8F2-48A1-9CDC-68B2DBC30E6B}.Debug|x64.Build.0 = Debug|x64
+		{D0CAB66F-F8F2-48A1-9CDC-68B2DBC30E6B}.Release|x64.ActiveCfg = Release|x64
+		{D0CAB66F-F8F2-48A1-9CDC-68B2DBC30E6B}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

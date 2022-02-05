@@ -4,3 +4,6 @@
 [submodule "hetero_edgesoftmax/cusplibrary"]
 	path = hetero_edgesoftmax/cusplibrary
 	url = https://github.com/cusplibrary/cusplibrary
+[submodule "hetero_edgesoftmax/data/ogbn_mag"]
+	path = hetero_edgesoftmax/data/ogbn_mag
+	url = git@github.com:K-Wu/_hetero_edgesoftmax_data_ogbn_mag.git
