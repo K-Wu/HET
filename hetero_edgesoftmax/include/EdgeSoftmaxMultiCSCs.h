@@ -34,8 +34,7 @@ __device__ __forceinline__ void _perRow_EdgeSoftmaxSecondStageCSCKernel(int col_
 
     for (int edge_idx = col_start; edge_idx < col_end; edge_idx++)
     {
-        int col = matCols[edge_idx];
-        float val = mu * expf(edge_input_data[edge_idx]) / outNode[col];
+        float val = mu * expf(edge_input_data[edge_idx]) / outNode[col_idx];
         outEdge[edge_idx] = val;
     }
 }
