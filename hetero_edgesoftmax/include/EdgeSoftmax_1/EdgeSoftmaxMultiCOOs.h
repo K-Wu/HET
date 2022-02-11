@@ -1,6 +1,17 @@
 #pragma once
 #include "hetero_edgesoftmax.h"
 
+// __device__ __forceinline__ int blockIdxSwizzle(){
+//     // map block_index from [0, block_num) to [0, block_num) but aim to keep the same relation on the same streaming mulitiprocessor
+//     int block_index = blockIdx.x;
+//     int sm_id = getsmid();
+//     int sm_num = getnsmid();
+//     assert(sm_num == RTX_3090_SM_NUM || sm_num == RTX_2070MQ_SM_NUM);
+//     assert(gridDim.x%sm_num == 0);
+//     assert(block_index % sm_num == sm_id);
+//     return sm_id*(gridDim.x/sm_num) + (block_index/sm_num);
+// }
+
 __device__ __forceinline__ void _perRow_EdgeSoftmaxFirstStageCOOKernel(int edge_idx, float *__restrict__ outNode, int nnz, int *__restrict__ matCols,
                                                                        float *__restrict__ edge_input_data, float mu)
 {
@@ -66,23 +77,23 @@ std::vector<thrust::device_vector<float>> _doGPUEdgeSoftmaxMultiCOOsKernel(int n
     std::vector<thrust::device_vector<float>> outNodes_per_relation_vect_vect(num_relations, thrust::device_vector<float>(num_nodes, 0));
     thrust::device_vector<float *> outNodes_per_relation_vect;
     size_t total_nnzs = 0;
-    for (int idx_matrix = 0; idx_matrix < num_relations; idx_matrix++)
+    for (int idx_relation = 0; idx_relation < num_relations; idx_relation++)
     {
 
-        matCols_vect[idx_matrix] = thrust::raw_pointer_cast(coo_matrices_column_indices[idx_matrix].data());
-        nnzs_vect.push_back(coo_matrices_column_indices[idx_matrix].size());
-        total_nnzs += coo_matrices_column_indices[idx_matrix].size();
+        matCols_vect[idx_relation] = thrust::raw_pointer_cast(coo_matrices_column_indices[idx_relation].data());
+        nnzs_vect.push_back(coo_matrices_column_indices[idx_relation].size());
+        total_nnzs += coo_matrices_column_indices[idx_relation].size();
     }
 
-    for (int idx_matrix = 0; idx_matrix < num_relations; idx_matrix++)
+    for (int idx_relation = 0; idx_relation < num_relations; idx_relation++)
     {
         //thrust::device_vector<float> outEdge_vect_for_curr_relation(coo_matrices[0].num_edges, 0);
         //outNodes_per_relation_vect_vect.push_back(outEdge_vect_for_curr_relation);
         //printf("%x\n",thrust::raw_pointer_cast(outEdge_vect_for_curr_relation.data()));
         //outNodes_per_relation_vect.push_back(thrust::raw_pointer_cast(outEdge_vect_for_curr_relation.data()));
 
-        std::cout << thrust::raw_pointer_cast(outNodes_per_relation_vect_vect[idx_matrix].data()) << std::endl;
-        outNodes_per_relation_vect.push_back(thrust::raw_pointer_cast(outNodes_per_relation_vect_vect[idx_matrix].data()));
+        std::cout << thrust::raw_pointer_cast(outNodes_per_relation_vect_vect[idx_relation].data()) << std::endl;
+        outNodes_per_relation_vect.push_back(thrust::raw_pointer_cast(outNodes_per_relation_vect_vect[idx_relation].data()));
     }
 
     float *outEdges;

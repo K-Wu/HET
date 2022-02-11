@@ -80,24 +80,24 @@ std::vector<thrust::device_vector<float>> doGPUEdgeSoftmaxMultiCSRsKernel(std::v
     std::vector<thrust::device_vector<float>> outNodes_per_relation_vect_vect(csr_matrices.size(), thrust::device_vector<float>(csr_matrices[0].num_rows, 0));
     thrust::device_vector<float *> outNodes_per_relation_vect;
     size_t total_nnzs = 0;
-    for (int idx_matrix = 0; idx_matrix < csr_matrices.size(); idx_matrix++)
+    for (int idx_relation = 0; idx_relation < csr_matrices.size(); idx_relation++)
     {
 
-        matCols_vect[idx_matrix] = thrust::raw_pointer_cast(csr_matrices[idx_matrix].column_indices.data());
-        matRows_vect[idx_matrix] = thrust::raw_pointer_cast(csr_matrices[idx_matrix].row_offsets.data());
-        nnzs_vect.push_back(csr_matrices[idx_matrix].column_indices.size());
-        total_nnzs += csr_matrices[idx_matrix].column_indices.size();
+        matCols_vect[idx_relation] = thrust::raw_pointer_cast(csr_matrices[idx_relation].column_indices.data());
+        matRows_vect[idx_relation] = thrust::raw_pointer_cast(csr_matrices[idx_relation].row_offsets.data());
+        nnzs_vect.push_back(csr_matrices[idx_relation].column_indices.size());
+        total_nnzs += csr_matrices[idx_relation].column_indices.size();
     }
 
-    for (int idx_matrix = 0; idx_matrix < csr_matrices.size(); idx_matrix++)
+    for (int idx_relation = 0; idx_relation < csr_matrices.size(); idx_relation++)
     {
         //thrust::device_vector<float> outEdge_vect_for_curr_relation(csr_matrices[0].num_rows, 0);
         //outNodes_per_relation_vect_vect.push_back(outEdge_vect_for_curr_relation);
         //printf("%x\n",thrust::raw_pointer_cast(outEdge_vect_for_curr_relation.data()));
         //outNodes_per_relation_vect.push_back(thrust::raw_pointer_cast(outEdge_vect_for_curr_relation.data()));
 
-        std::cout << thrust::raw_pointer_cast(outNodes_per_relation_vect_vect[idx_matrix].data()) << std::endl;
-        outNodes_per_relation_vect.push_back(thrust::raw_pointer_cast(outNodes_per_relation_vect_vect[idx_matrix].data()));
+        std::cout << thrust::raw_pointer_cast(outNodes_per_relation_vect_vect[idx_relation].data()) << std::endl;
+        outNodes_per_relation_vect.push_back(thrust::raw_pointer_cast(outNodes_per_relation_vect_vect[idx_relation].data()));
     }
 
     float *outEdges;

@@ -1,5 +1,24 @@
 ﻿#include "hetero_edgesoftmax.h"
-#include "EdgeSoftmax.h"
+#include "EdgeSoftmax_1/EdgeSoftmax_1.h"
+#include "EdgeSoftmax_4/EdgeSoftmax_4.h"
+
+
+ struct identity_firstfloat
+ {
+   //float4 argument_type;
+   //float result_type;
+   __thrust_exec_check_disable__
+   __host__ __device__ const float &operator()(const float4 &x) const {return x.x;}
+ }; // end identity_firstfloat
+
+ struct compare_firstfloat
+{
+  __host__ __device__
+  bool operator()(float4 x, float y) const
+  {
+    return x.x==y;
+  }
+};
 
 std::pair<std::pair<std::vector<int>, std::vector<int>>, std::vector<int>> generate_concatenate_coo_format(std::vector<std::vector<int>> coo_matrices_data)
 {
@@ -60,12 +79,19 @@ int basic_correctness_test()
     std::vector<int> citing_data;
     std::vector<int> writing_data;
 
-    npy::LoadArrayFromNumpy("data/written-by_coo_2.npy", written_by_shape, fortran_order, written_by_data);
-    npy::LoadArrayFromNumpy("data/has_coo_2.npy", has_shape, fortran_order, has_data);
-    npy::LoadArrayFromNumpy("data/is-about_coo_2.npy", is_about_shape, fortran_order, is_about_data);
-    npy::LoadArrayFromNumpy("data/cited_coo_2.npy", cited_shape, fortran_order, cited_data);
-    npy::LoadArrayFromNumpy("data/citing_coo_2.npy", citing_shape, fortran_order, citing_data);
-    npy::LoadArrayFromNumpy("data/writing_coo_2.npy", writing_shape, fortran_order, writing_data);
+    /*npy::LoadArrayFromNumpy("data/ogbn_mag/written-by_coo_1.npy", written_by_shape, fortran_order, written_by_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/has_coo_1.npy", has_shape, fortran_order, has_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/is-about_coo_1.npy", is_about_shape, fortran_order, is_about_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/cited_coo_1.npy", cited_shape, fortran_order, cited_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/citing_coo_1.npy", citing_shape, fortran_order, citing_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/writing_coo_1.npy", writing_shape, fortran_order, writing_data);*/
+
+     npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/written-by_coo_2.npy", written_by_shape, fortran_order, written_by_data);
+     npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/has_coo_2.npy", has_shape, fortran_order, has_data);
+     npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/is-about_coo_2.npy", is_about_shape, fortran_order, is_about_data);
+     npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/cited_coo_2.npy", cited_shape, fortran_order, cited_data);
+     npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/citing_coo_2.npy", citing_shape, fortran_order, citing_data);
+     npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/writing_coo_2.npy", writing_shape, fortran_order, writing_data);
 
     std::vector<int> max_idxes;
     max_idxes.push_back(*std::max_element(written_by_data.begin(), written_by_data.end()));
@@ -223,6 +249,7 @@ int basic_correctness_test()
     //std::vector<thrust::device_vector<float>> MultiCSRoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxMultiCSRsKernel({written_by_csr_d, has_csr_d, is_about_csr_d, cited_csr_d, citing_csr_d, writing_csr_d}, false);
     std::vector<thrust::device_vector<float>> CSCoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxConcatenatedCSCKernel(concatenated_csc_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
     std::vector<thrust::device_vector<float>> COOoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxConcatenatedCOOKernel(concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
+    std::vector<thrust::device_vector<float4>> COOoutNodes_4_per_relation_vect_vect = doGPUEdgeSoftmax_4ConcatenatedCOOKernel(concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
 
     std::vector<thrust::device_vector<float>> MultiCSCoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxMultiCSCsKernel({written_by_csc_d, has_csc_d, is_about_csc_d, cited_csc_d, citing_csc_d, writing_csc_d}, false);
     std::vector<thrust::device_vector<float>> MultiCOOoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxMultiCOOsKernel<cusp::coo_matrix<int, int, cusp::device_memory>>({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, false);
@@ -255,9 +282,12 @@ int basic_correctness_test()
         std::cout << thrust::equal(thrust::device, MultiCOOoutNodes_per_relation_vect_vect[idx].begin(), MultiCOOoutNodes_per_relation_vect_vect[idx].end(), CSRoutNodes_per_relation_vect_vect[idx].begin());
         std::cout << thrust::equal(thrust::device, COOoutNodes_per_relation_vect_vect[idx].begin(), COOoutNodes_per_relation_vect_vect[idx].end(), CSRoutNodes_per_relation_vect_vect[idx].begin());
 
-        print_range("MultiCSRoutNodes_per_relation_vect_vect[idx]", MultiCSRoutNodes_per_relation_vect_vect[idx].begin(), MultiCSRoutNodes_per_relation_vect_vect[idx].end());
+        //thrust::transform(COOoutNodes_4_per_relation_vect_vect[idx].begin(), COOoutNodes_4_per_relation_vect_vect[idx].end(), COOoutNodes_per_relation_vect_vect[idx].begin(), identity_firstfloat());
+        std::cout << thrust::equal(thrust::device, COOoutNodes_4_per_relation_vect_vect[idx].begin(), COOoutNodes_4_per_relation_vect_vect[idx].end(), COOoutNodes_per_relation_vect_vect[idx].begin(),compare_firstfloat());
+        
+        //print_range("MultiCSRoutNodes_per_relation_vect_vect[idx]", MultiCSRoutNodes_per_relation_vect_vect[idx].begin(), MultiCSRoutNodes_per_relation_vect_vect[idx].end());
         // print_range("CSRoutNodes_per_relation_vect_vect[idx]", CSRoutNodes_per_relation_vect_vect[idx].begin(), CSRoutNodes_per_relation_vect_vect[idx].end());
-        print_range("COOoutNodes_per_relation_vect_vect[idx]", COOoutNodes_per_relation_vect_vect[idx].begin(), COOoutNodes_per_relation_vect_vect[idx].end());
+        //print_range("COOoutNodes_per_relation_vect_vect[idx]", COOoutNodes_per_relation_vect_vect[idx].begin(), COOoutNodes_per_relation_vect_vect[idx].end());
         std::cout << std::endl;
     }
 

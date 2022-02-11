@@ -53,13 +53,13 @@ std::vector<thrust::device_vector<float>> _doGPUEdgeSoftmaxConcatenatedCOOKernel
     std::vector<thrust::device_vector<float>> outNodes_per_relation_vect_vect(num_relations, thrust::device_vector<float>(num_nodes, 0));
     thrust::device_vector<float *> outNodes_per_relation_vect;
 
-    for (int idx_matrix = 0; idx_matrix < num_relations; idx_matrix++)
+    for (int idx_relation = 0; idx_relation < num_relations; idx_relation++)
     {
         //thrust::device_vector<float> outEdge_vect_for_curr_relation(concatenated_coo_matrix.num_rows, 0);
         //outNodes_per_relation_vect_vect.push_back(outEdge_vect_for_curr_relation);
         //outNodes_per_relation_vect.push_back(thrust::raw_pointer_cast(outEdge_vect_for_curr_relation.data()));
-        std::cout << thrust::raw_pointer_cast(outNodes_per_relation_vect_vect[idx_matrix].data()) << std::endl;
-        outNodes_per_relation_vect.push_back(thrust::raw_pointer_cast(outNodes_per_relation_vect_vect[idx_matrix].data()));
+        std::cout << thrust::raw_pointer_cast(outNodes_per_relation_vect_vect[idx_relation].data()) << std::endl;
+        outNodes_per_relation_vect.push_back(thrust::raw_pointer_cast(outNodes_per_relation_vect_vect[idx_relation].data()));
     }
 
     float *outEdges;
