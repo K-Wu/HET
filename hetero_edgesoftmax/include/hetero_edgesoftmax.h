@@ -20,6 +20,8 @@
 #include <thrust/transform.h>
 #include <thrust/functional.h>
 
+#define WARP_SIZE (32)
+
 #define RTX_3090_MAX_BLOCKSIZE 1024
 #define RTX_3090_SM_NUM 82
 #define NUM_MAX_RELATIONS 8
