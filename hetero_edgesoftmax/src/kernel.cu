@@ -266,6 +266,7 @@ int basic_correctness_test()
 
     thrust::device_vector<float4> COOOutEdgeAttention_per_relation = doGPUEdgeAttentionConcatenatedCOOKernel_128_16({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
     thrust::device_vector<float4> COOOutEdgeAttention_per_relation_128_8 = doGPUEdgeAttentionConcatenatedCOOKernel_128_8({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
+    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_256_16 = doGPUEdgeAttentionConcatenatedCOOKernel_256_16({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
 
     for (int idx = 0; idx < MultiCSRoutNodes_per_relation_vect_vect.size(); idx++)
     {
@@ -305,6 +306,7 @@ int basic_correctness_test()
     }
     std::cout<<"COOOutEdgeAttention_per_relation"<<std::endl;
     std::cout << thrust::equal(thrust::device, COOOutEdgeAttention_per_relation_128_8.begin(), COOOutEdgeAttention_per_relation_128_8.end(), COOOutEdgeAttention_per_relation.begin(),compare_float4());
+std::cout << thrust::equal(thrust::device, COOOutEdgeAttention_per_relation_256_16.begin(), COOOutEdgeAttention_per_relation_256_16.end(), COOOutEdgeAttention_per_relation.begin(),compare_float4());
 
 
     // cudaDeviceReset must be called before exiting in order for profiling and
