@@ -20,6 +20,14 @@ struct compare_firstfloat
     }
 };
 
+struct compare_float4
+{
+    __host__ __device__ bool operator()(float4 x, float4 y) const
+    {
+        return x.x == y.x && x.y == y.y && x.z==y.z && x.w==y.w;
+    }
+};
+
 std::pair<std::pair<std::vector<int>, std::vector<int>>, std::vector<int>> generate_concatenate_coo_format(std::vector<std::vector<int>> coo_matrices_data)
 {
     std::vector<std::pair<std::pair<int, int>, int>> coo_matrices_data_concatenated;
@@ -254,7 +262,8 @@ int basic_correctness_test()
     std::vector<thrust::device_vector<float>> MultiCSCoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxMultiCSCsKernel({written_by_csc_d, has_csc_d, is_about_csc_d, cited_csc_d, citing_csc_d, writing_csc_d}, false);
     std::vector<thrust::device_vector<float>> MultiCOOoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxMultiCOOsKernel<cusp::coo_matrix<int, int, cusp::device_memory>>({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, false);
 
-    thrust::device_vector<float4> COOOutEdgeAttention_per_relation = doGPUEdgeAttentionConcatenatedCOOKernel({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
+    thrust::device_vector<float4> COOOutEdgeAttention_per_relation = doGPUEdgeAttentionConcatenatedCOOKernel_128_16({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
+    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_128_8 = doGPUEdgeAttentionConcatenatedCOOKernel_128_8({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
 
     for (int idx = 0; idx < MultiCSRoutNodes_per_relation_vect_vect.size(); idx++)
     {
@@ -292,6 +301,9 @@ int basic_correctness_test()
         // print_range("COOoutNodes_per_relation_vect_vect[idx]", COOoutNodes_per_relation_vect_vect[idx].begin(), COOoutNodes_per_relation_vect_vect[idx].end());
         std::cout << std::endl;
     }
+    std::cout<<"COOOutEdgeAttention_per_relation"<<std::endl;
+    std::cout << thrust::equal(thrust::device, COOOutEdgeAttention_per_relation_128_8.begin(), COOOutEdgeAttention_per_relation_128_8.end(), COOOutEdgeAttention_per_relation.begin(),compare_float4());
+
 
     // cudaDeviceReset must be called before exiting in order for profiling and
     // tracing tools such as Nsight and Visual Profiler to show complete traces.
