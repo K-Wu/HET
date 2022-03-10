@@ -186,6 +186,8 @@ int basic_correctness_test()
     }
     assert(total_nnzs == concatenated_coo_values.size());
 
+    printf("concatenated coo edge %d node %d\n", total_nnzs, concatenated_coo_h.num_rows);
+
     concatenated_coo_h.sort_by_row_and_column();
 
     cusp::csr_matrix<int, int, cusp::host_memory> concatenated_csr_h(concatenated_coo_h);

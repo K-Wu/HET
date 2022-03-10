@@ -98,7 +98,7 @@ __device__ __forceinline__ void mysgemm_128_8(int m, int n, int k, float *A, flo
 #define A(idx_head, row, col) A[(idx_head * k) + (row) + (col)*m]
 #define B(idx_head, row, col) B[(idx_head * k) + (row) + (dest_node_index_unique[col]) * m]
 #define C(idx_head, row, col) C[(idx_head * k) + (row) + (col)*m]
-    __shared__ float shmem[TILE_NUM_HEAD][TILE_SZ_RATIO / TILE_NUM_HEAD][TILE_SZ_B];
+    __shared__ float shmem[TILE_NUM_HEAD][TILE_SZ_B][TILE_SZ_RATIO / TILE_NUM_HEAD];
 
     // INSERT KERNEL CODE HERE
 
@@ -135,7 +135,7 @@ __device__ __forceinline__ void mysgemm_128_8(int m, int n, int k, float *A, flo
         int shdmemLDBrowIdx = i * TILE_SZ_RATIO / TILE_NUM_HEAD + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD);
         int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD);
         int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
-        shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
+        shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
 
         __syncthreads();
         // compute C
@@ -146,18 +146,14 @@ __device__ __forceinline__ void mysgemm_128_8(int m, int n, int k, float *A, flo
                 int CcolIdx = shdmemColIdx + /*blockIdx.x * TILE_SZ_B*/ BcolBias;
                 if (CcolIdx < n)
                 {
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg0 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0][shdmemColIdx];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg1 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][1][shdmemColIdx];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg2 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][2][shdmemColIdx];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg3 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][3][shdmemColIdx];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg4 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][4][shdmemColIdx];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg5 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][5][shdmemColIdx];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg6 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][6][shdmemColIdx];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg7 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][7][shdmemColIdx];
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)+=reg4*shmem[1-threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0][shdmemColIdx];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx)+=reg5*shmem[1-threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][1][shdmemColIdx];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx)+=reg6*shmem[1-threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][2][shdmemColIdx];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx)+=reg7*shmem[1-threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][3][shdmemColIdx];*/
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg0 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][0];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg1 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][1];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg2 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][2];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg3 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][3];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg4 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][4];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg5 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][5];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg6 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][6];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg7 * shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][7];
                 }
             }
         }
