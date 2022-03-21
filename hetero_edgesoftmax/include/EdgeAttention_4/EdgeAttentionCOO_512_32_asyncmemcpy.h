@@ -48,7 +48,7 @@
 #define COARSE_SGEMM_NODES_PER_BLOCK (TILE_SZ_B)
 static_assert(TILE_SZ_RATIO % TILE_NUM_HEAD == 0, "");
 
-__device__ __forceinline__ void mysgemm_512_32(int m, int n, int k, float *A, float *B, float *C, int *dest_node_index_unique, int BcolBias)
+__device__ __forceinline__ void mysgemm_512_32_asyncmemcpy(int m, int n, int k, float *A, float *B, float *C, int *dest_node_index_unique, int BcolBias)
 {
     assert(k == 64);
     assert(m == OUT_DIM);
@@ -132,10 +132,10 @@ __device__ __forceinline__ void mysgemm_512_32(int m, int n, int k, float *A, fl
     float reg5;
     float reg6;
     float reg7;
-    /*__shared__ float shmem_Adata[256*8];
+    __shared__ float shmem_Adata[256 * 8];
     cg::thread_block_tile<32> tile32 = cg::tiled_partition<32>(cg::this_thread_block());
     // load A in registers; software pipelining
-    cg::memcpy_async(tile32, shmem_Adata, &(A(0,0,0*8)), sizeof(float)*256*8);*/
+    cg::memcpy_async(tile32, shmem_Adata, &(A(0, 0, 0 * 8)), sizeof(float) * 256 * 8);
 
 #pragma unroll 2
     for (int i = 0; i < (K + 8 - 1) / (8); i++)
@@ -143,28 +143,29 @@ __device__ __forceinline__ void mysgemm_512_32(int m, int n, int k, float *A, fl
         // shuffle: only half of the warp load the register
         // if (threadIdx.x%32<16){
         // TODO: async load A data to be used in the next iteration into the shared memory
-        /*cg::wait(tile32);
-        reg0=shmem_Adata[ArowIdx+0*8];
-        reg1=shmem_Adata[ArowIdx+1*8];
-        reg2=shmem_Adata[ArowIdx+2*8];
-        reg3=shmem_Adata[ArowIdx+3*8];
-        reg4=shmem_Adata[ArowIdx+4*8];
-        reg5=shmem_Adata[ArowIdx+5*8];
-        reg6=shmem_Adata[ArowIdx+6*8];
-        reg7=shmem_Adata[ArowIdx+7*8];
+        cg::wait(tile32);
+        reg0 = shmem_Adata[ArowIdx + 0 * 8];
+        reg1 = shmem_Adata[ArowIdx + 1 * 8];
+        reg2 = shmem_Adata[ArowIdx + 2 * 8];
+        reg3 = shmem_Adata[ArowIdx + 3 * 8];
+        reg4 = shmem_Adata[ArowIdx + 4 * 8];
+        reg5 = shmem_Adata[ArowIdx + 5 * 8];
+        reg6 = shmem_Adata[ArowIdx + 6 * 8];
+        reg7 = shmem_Adata[ArowIdx + 7 * 8];
 
         __syncthreads();
-        if (i<(k + 8 - 1) / (8) - 1){
-            cg::memcpy_async(tile32, shmem_Adata, &(A(0,0,(i+1)*8)), sizeof(float)*256*8);
-        }*/
-        reg0 = (ArowIdx < OUT_DIM && K > i * 8) ? A(ArowIdx / K, ArowIdx % K, i * 8) : 0.0f;
-        reg1 = (ArowIdx < OUT_DIM && K > i * 8 + 1) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 1) : 0.0f;
-        reg2 = (ArowIdx < OUT_DIM && K > i * 8 + 2) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 2) : 0.0f;
-        reg3 = (ArowIdx < OUT_DIM && K > i * 8 + 3) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 3) : 0.0f;
-        reg4 = (ArowIdx < OUT_DIM && K > i * 8 + 4) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 4) : 0.0f;
-        reg5 = (ArowIdx < OUT_DIM && K > i * 8 + 5) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 5) : 0.0f;
-        reg6 = (ArowIdx < OUT_DIM && K > i * 8 + 6) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 6) : 0.0f;
-        reg7 = (ArowIdx < OUT_DIM && K > i * 8 + 7) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 7) : 0.0f;
+        if (i < (k + 8 - 1) / (8) - 1)
+        {
+            cg::memcpy_async(tile32, shmem_Adata, &(A(0, 0, (i + 1) * 8)), sizeof(float) * 256 * 8);
+        }
+        // reg0 = (ArowIdx < OUT_DIM && K > i * 8) ? A(ArowIdx / K, ArowIdx % K, i * 8) : 0.0f;
+        // reg1 = (ArowIdx < OUT_DIM && K > i * 8 + 1) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 1) : 0.0f;
+        // reg2 = (ArowIdx < OUT_DIM && K > i * 8 + 2) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 2) : 0.0f;
+        // reg3 = (ArowIdx < OUT_DIM && K > i * 8 + 3) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 3) : 0.0f;
+        // reg4 = (ArowIdx < OUT_DIM && K > i * 8 + 4) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 4) : 0.0f;
+        // reg5 = (ArowIdx < OUT_DIM && K > i * 8 + 5) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 5) : 0.0f;
+        // reg6 = (ArowIdx < OUT_DIM && K > i * 8 + 6) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 6) : 0.0f;
+        // reg7 = (ArowIdx < OUT_DIM && K > i * 8 + 7) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 7) : 0.0f;
 
         // // shuffle: the second half of each warp get the register data from the first half through warp shuffling
         // reg0= __shfl_sync(0xffffffff, reg0, ((threadIdx.x%32)<16?((threadIdx.x%32)):((threadIdx.x%32)-16)));
@@ -235,8 +236,8 @@ __device__ __forceinline__ void mysgemm_512_32(int m, int n, int k, float *A, fl
         }
         shmem[(i + 1) % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = next_iter_shmem_val_0;
         shmem[(i + 1) % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 16][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = next_iter_shmem_val_2;
-        __syncthreads();
     }
+    __syncthreads();
 
     for (int store_iter = 0; store_iter < 256 * 32 / TILE_SZ_A; store_iter++)
     {
@@ -258,8 +259,8 @@ __device__ __forceinline__ void mysgemm_512_32(int m, int n, int k, float *A, fl
     // faster than the alternative.
 }
 
-__global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32(float **__restrict__ intermediate_node_vect, int nnz, int *__restrict__ matCols, int *__restrict__ matRelation,
-                                                                                 float *__restrict__ node_input_data, float *__restrict__ relation_attention_matrices, int **__restrict__ dest_node_to_unique_index_per_relation, int **__restrict__ unique_index_to_dest_node_per_relation, int *__restrict__ sizes_unique_index_to_dest_node_per_relation, int num_relations, int *__restrict__ num_blocks_xdim_for_same_relation_per_block_vect, int *__restrict__ beg_node_entry_idxes_vect, int *__restrict__ blockid_relation_id_vect)
+__global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32_asyncmemcpy(float **__restrict__ intermediate_node_vect, int nnz, int *__restrict__ matCols, int *__restrict__ matRelation,
+                                                                                             float *__restrict__ node_input_data, float *__restrict__ relation_attention_matrices, int **__restrict__ dest_node_to_unique_index_per_relation, int **__restrict__ unique_index_to_dest_node_per_relation, int *__restrict__ sizes_unique_index_to_dest_node_per_relation, int num_relations, int *__restrict__ num_blocks_xdim_for_same_relation_per_block_vect, int *__restrict__ beg_node_entry_idxes_vect, int *__restrict__ blockid_relation_id_vect)
 {
 
     int beg_node_entry_idx = beg_node_entry_idxes_vect[blockIdx.x];
@@ -268,21 +269,21 @@ __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32
 
     for (int node_entry_idx = beg_node_entry_idx; node_entry_idx < sizes_unique_index_to_dest_node_per_relation[relation_idx]; node_entry_idx += stride)
     {
-        mysgemm_512_32(OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx], NODE_INPUT_DIM_PER_HEAD, &relation_attention_matrices[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD], node_input_data, intermediate_node_vect[relation_idx], unique_index_to_dest_node_per_relation[relation_idx], node_entry_idx);
+        mysgemm_512_32_asyncmemcpy(OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx], NODE_INPUT_DIM_PER_HEAD, &relation_attention_matrices[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD], node_input_data, intermediate_node_vect[relation_idx], unique_index_to_dest_node_per_relation[relation_idx], node_entry_idx);
     }
 }
 
-__global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_NonPersistentBlock_512_32(float **__restrict__ intermediate_node_vect, int nnz, int *__restrict__ matCols, int *__restrict__ matRelation,
-                                                                                                    float *__restrict__ node_input_data, float *__restrict__ relation_attention_matrices, int **__restrict__ dest_node_to_unique_index_per_relation, int **__restrict__ unique_index_to_dest_node_per_relation, int *__restrict__ sizes_unique_index_to_dest_node_per_relation, int num_relations, int *__restrict__ beg_node_entry_idxes_vect, int *__restrict__ blockid_relation_id_vect)
+__global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_NonPersistentBlock_512_32_asyncmemcpy(float **__restrict__ intermediate_node_vect, int nnz, int *__restrict__ matCols, int *__restrict__ matRelation,
+                                                                                                                float *__restrict__ node_input_data, float *__restrict__ relation_attention_matrices, int **__restrict__ dest_node_to_unique_index_per_relation, int **__restrict__ unique_index_to_dest_node_per_relation, int *__restrict__ sizes_unique_index_to_dest_node_per_relation, int num_relations, int *__restrict__ beg_node_entry_idxes_vect, int *__restrict__ blockid_relation_id_vect)
 {
 
     int node_entry_idx = beg_node_entry_idxes_vect[blockIdx.x];
     int relation_idx = blockid_relation_id_vect[blockIdx.x];
 
-    mysgemm_512_32(OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx], NODE_INPUT_DIM_PER_HEAD, &relation_attention_matrices[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD], node_input_data, intermediate_node_vect[relation_idx], unique_index_to_dest_node_per_relation[relation_idx], node_entry_idx);
+    mysgemm_512_32_asyncmemcpy(OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx], NODE_INPUT_DIM_PER_HEAD, &relation_attention_matrices[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD], node_input_data, intermediate_node_vect[relation_idx], unique_index_to_dest_node_per_relation[relation_idx], node_entry_idx);
 }
 
-thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32(int num_nodes, cusp::coo_matrix<int, int, cusp::device_memory>::row_indices_array_type concatenated_coo_matrix_row_indices, cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type concatenated_coo_matrix_column_indices, std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices, cusp::coo_matrix<int, int, cusp::device_memory>::values_array_type concatenated_coo_matrix_values, int num_relations, bool FlagInitWithRandomValue, bool FlagEqualWorkPartitionForBlocks)
+thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32_asyncmemcpy(int num_nodes, cusp::coo_matrix<int, int, cusp::device_memory>::row_indices_array_type concatenated_coo_matrix_row_indices, cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type concatenated_coo_matrix_column_indices, std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices, cusp::coo_matrix<int, int, cusp::device_memory>::values_array_type concatenated_coo_matrix_values, int num_relations, bool FlagInitWithRandomValue, bool FlagEqualWorkPartitionForBlocks)
 {
 
     std::vector<thrust::device_vector<float>> intermediate_node_vect(num_relations);
@@ -427,8 +428,8 @@ thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCO
         dim3 grid(RTX_3090_GRIDSIZE, 1, 1);
         t1 = std::chrono::high_resolution_clock::now();
         // EdgeAttentionConcatenatedCOOKernel<<<grid, block>>>( thrust::raw_pointer_cast(outEdges_per_relation_vect.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()), node_input_data);
-        EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32<<<grid, block>>>(thrust::raw_pointer_cast(intermediate_node_vect_d.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
-                                                                                          node_input_data, relation_attention_matrices, thrust::raw_pointer_cast(dest_node_to_unique_index_per_relation_d.data()), thrust::raw_pointer_cast(unique_indices_to_column_indices_per_relation_d.data()), thrust::raw_pointer_cast(num_unique_indices_to_column_indices_per_relation.data()), num_relations, thrust::raw_pointer_cast(num_blocks_xdim_for_same_relation_per_block_vect.data()), thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()), thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
+        EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32_asyncmemcpy<<<grid, block>>>(thrust::raw_pointer_cast(intermediate_node_vect_d.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
+                                                                                                      node_input_data, relation_attention_matrices, thrust::raw_pointer_cast(dest_node_to_unique_index_per_relation_d.data()), thrust::raw_pointer_cast(unique_indices_to_column_indices_per_relation_d.data()), thrust::raw_pointer_cast(num_unique_indices_to_column_indices_per_relation.data()), num_relations, thrust::raw_pointer_cast(num_blocks_xdim_for_same_relation_per_block_vect.data()), thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()), thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
     }
     else
     { // if not FlagEqualWorkPartitionForBlocks
@@ -464,8 +465,8 @@ thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCO
 
         dim3 block(COARSE_SGEMM_BLOCKSIZE, 1, 1);
         dim3 grid(non_persistent_block_num, 1, 1);
-        EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_NonPersistentBlock_512_32<<<grid, block>>>(thrust::raw_pointer_cast(intermediate_node_vect_d.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
-                                                                                                             node_input_data, relation_attention_matrices, thrust::raw_pointer_cast(dest_node_to_unique_index_per_relation_d.data()), thrust::raw_pointer_cast(unique_indices_to_column_indices_per_relation_d.data()), thrust::raw_pointer_cast(num_unique_indices_to_column_indices_per_relation.data()), num_relations, thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()), thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
+        EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_NonPersistentBlock_512_32_asyncmemcpy<<<grid, block>>>(thrust::raw_pointer_cast(intermediate_node_vect_d.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
+                                                                                                                         node_input_data, relation_attention_matrices, thrust::raw_pointer_cast(dest_node_to_unique_index_per_relation_d.data()), thrust::raw_pointer_cast(unique_indices_to_column_indices_per_relation_d.data()), thrust::raw_pointer_cast(num_unique_indices_to_column_indices_per_relation.data()), num_relations, thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()), thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
     }
 
     dim3 block2(RTX_3090_BLOCKSIZE, 1, 1);
@@ -481,21 +482,21 @@ thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCO
     cuda_err_chk(cudaPeekAtLastError());
     cuda_err_chk(cudaDeviceSynchronize());
     std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-    std::cout << "GPU doGPUEdgeAttentionConcatenatedCOO_512_32 Kernel time: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() << " us" << std::endl;
+    std::cout << "GPU doGPUEdgeAttentionConcatenatedCOO_512_32_asyncmemcpy Kernel time: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() << " us" << std::endl;
     // cudaFree(outEdges);
     cudaFree(node_input_data);
     cudaFree(relation_attention_matrices);
     return outEdges_vect;
 }
 
-thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_512_32(std::vector<cusp::coo_matrix<int, int, cusp::device_memory>> coo_matrices, cusp::coo_matrix<int, int, cusp::device_memory> concatenated_coo_matrix, int num_relations, bool FlagInitWithRandomValue, bool FlagEqualWorkPartitionForBlocks)
+thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_512_32_asyncmemcpy(std::vector<cusp::coo_matrix<int, int, cusp::device_memory>> coo_matrices, cusp::coo_matrix<int, int, cusp::device_memory> concatenated_coo_matrix, int num_relations, bool FlagInitWithRandomValue, bool FlagEqualWorkPartitionForBlocks)
 {
     std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices;
     for (int idx_relation = 0; idx_relation < coo_matrices.size(); idx_relation++)
     {
         coo_matrices_column_indices.push_back(coo_matrices[idx_relation].column_indices);
     }
-    return EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue, FlagEqualWorkPartitionForBlocks);
+    return EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32_asyncmemcpy(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue, FlagEqualWorkPartitionForBlocks);
 }
 
 #undef K

@@ -1,6 +1,9 @@
 #pragma once
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
+#include <cooperative_groups.h>
+#include <cooperative_groups/memcpy_async.h>
+namespace cg = cooperative_groups;
 
 #include "utils.h"
 #include <stdio.h>
