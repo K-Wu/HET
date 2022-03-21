@@ -32,7 +32,7 @@
 //   block (0,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16 nodes); block(1,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16 nodes); ... block(BLOCKDIM_X-1,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16 nodes);
 //   block (0,1): (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes); block(1,1): (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes); ... block(BLOCKDIM_X-1,1): (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes);
 
-#define OUT_DIM  (256)
+#define OUT_DIM (256)
 #define NUM_HEADS (4)
 // d_k
 #define NODE_INPUT_DIM_PER_HEAD (OUT_DIM / NUM_HEADS)
@@ -43,14 +43,13 @@
 #define TILE_NUM_HEAD (TILE_SZ_A / NODE_INPUT_DIM_PER_HEAD)
 //#define TILE_NUM_HEAD 1
 
-
 #define COARSE_SGEMM_BLOCKSIZE (TILE_SZ_A)
 #define COARSE_SGEMM_NODES_PER_BLOCK (TILE_SZ_B)
 static_assert(TILE_SZ_RATIO % TILE_NUM_HEAD == 0, "");
 
 __device__ __forceinline__ void mysgemm_128_8(int m, int n, int k, float *A, float *B, float *C, int *dest_node_index_unique, int BcolBias)
 {
-
+    assert(k == 64);
 /********************************************************************
  *
  * Compute C = A x B
@@ -98,13 +97,13 @@ __device__ __forceinline__ void mysgemm_128_8(int m, int n, int k, float *A, flo
 #define A(idx_head, row, col) A[(idx_head * k) + (row) + (col)*m]
 #define B(idx_head, row, col) B[(idx_head * k) + (row) + (dest_node_index_unique[col]) * m]
 #define C(idx_head, row, col) C[(idx_head * k) + (row) + (col)*m]
-    __shared__ float shmem[2/*double buffering*/][TILE_NUM_HEAD][TILE_SZ_B][TILE_SZ_RATIO / TILE_NUM_HEAD];
+    __shared__ float shmem[2 /*double buffering*/][TILE_NUM_HEAD][TILE_SZ_B][TILE_SZ_RATIO / TILE_NUM_HEAD];
 
     // INSERT KERNEL CODE HERE
 
     int ArowIdx = blockIdx.y * TILE_SZ_A + threadIdx.x;
 
-    int shdmemLDBrowIdx = 0/*i*/ * TILE_SZ_RATIO / TILE_NUM_HEAD + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD);
+    int shdmemLDBrowIdx = 0 /*i*/ * TILE_SZ_RATIO / TILE_NUM_HEAD + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD);
     int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD);
     int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
     shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
@@ -116,10 +115,10 @@ __device__ __forceinline__ void mysgemm_128_8(int m, int n, int k, float *A, flo
         float reg1 = 0.0f;
         float reg2 = 0.0f;
         float reg3 = 0.0f;
-        float reg4=0.0f;
-        float reg5=0.0f;
-        float reg6=0.0f;
-        float reg7=0.0f;
+        float reg4 = 0.0f;
+        float reg5 = 0.0f;
+        float reg6 = 0.0f;
+        float reg7 = 0.0f;
         if (ArowIdx < m)
         {
             reg0 = (k > i * TILE_SZ_RATIO / TILE_NUM_HEAD) ? A(ArowIdx / k, ArowIdx % k, i * TILE_SZ_RATIO / TILE_NUM_HEAD) : 0.0f;
@@ -142,7 +141,6 @@ __device__ __forceinline__ void mysgemm_128_8(int m, int n, int k, float *A, flo
         int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
 
         float next_iter_shmem_val = (shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD < k && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD, shdmemLDBcolIdx) : 0.0f;
- 
 
         // compute C
         if (ArowIdx < m)
@@ -152,18 +150,18 @@ __device__ __forceinline__ void mysgemm_128_8(int m, int n, int k, float *A, flo
                 int CcolIdx = shdmemColIdx + /*blockIdx.x * TILE_SZ_B*/ BcolBias;
                 if (CcolIdx < n)
                 {
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg0 * shmem[i%2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][0];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg1 * shmem[i%2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][1];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg2 * shmem[i%2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][2];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg3 * shmem[i%2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][3];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg4 * shmem[i%2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][4];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg5 * shmem[i%2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][5];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg6 * shmem[i%2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][6];
-                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg7 * shmem[i%2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][7];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg0 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][0];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg1 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][1];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg2 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][2];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg3 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][3];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg4 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][4];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg5 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][5];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg6 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][6];
+                    C(ArowIdx / k, ArowIdx % k, CcolIdx) += reg7 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx][7];
                 }
             }
         }
-        shmem[(i+1)%2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD)] = next_iter_shmem_val;
+        shmem[(i + 1) % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD)] = next_iter_shmem_val;
         __syncthreads();
     }
 
@@ -175,7 +173,7 @@ __device__ __forceinline__ void mysgemm_128_8(int m, int n, int k, float *A, flo
 }
 
 __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_128_8(float **__restrict__ intermediate_node_vect, int nnz, int *__restrict__ matCols, int *__restrict__ matRelation,
-                                                                          float *__restrict__ node_input_data, float *__restrict__ relation_attention_matrices, int **__restrict__ dest_node_to_unique_index_per_relation, int **__restrict__ unique_index_to_dest_node_per_relation, int *__restrict__ sizes_unique_index_to_dest_node_per_relation, int num_relations, int *__restrict__ num_blocks_xdim_for_same_relation_per_block_vect, int *__restrict__ beg_node_entry_idxes_vect, int *__restrict__ blockid_relation_id_vect)
+                                                                                float *__restrict__ node_input_data, float *__restrict__ relation_attention_matrices, int **__restrict__ dest_node_to_unique_index_per_relation, int **__restrict__ unique_index_to_dest_node_per_relation, int *__restrict__ sizes_unique_index_to_dest_node_per_relation, int num_relations, int *__restrict__ num_blocks_xdim_for_same_relation_per_block_vect, int *__restrict__ beg_node_entry_idxes_vect, int *__restrict__ blockid_relation_id_vect)
 {
 
     int beg_node_entry_idx = beg_node_entry_idxes_vect[blockIdx.x];
@@ -187,9 +185,6 @@ __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_128_8(
         mysgemm_128_8(OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx], NODE_INPUT_DIM_PER_HEAD, &relation_attention_matrices[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD], node_input_data, intermediate_node_vect[relation_idx], unique_index_to_dest_node_per_relation[relation_idx], node_entry_idx);
     }
 }
-
-
-
 
 thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_128_8(int num_nodes, cusp::coo_matrix<int, int, cusp::device_memory>::row_indices_array_type concatenated_coo_matrix_row_indices, cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type concatenated_coo_matrix_column_indices, std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices, cusp::coo_matrix<int, int, cusp::device_memory>::values_array_type concatenated_coo_matrix_values, int num_relations, bool FlagInitWithRandomValue)
 {
@@ -334,7 +329,7 @@ thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCO
     std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     // EdgeAttentionConcatenatedCOOKernel<<<grid, block>>>( thrust::raw_pointer_cast(outEdges_per_relation_vect.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()), node_input_data);
     EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_128_8<<<grid, block>>>(thrust::raw_pointer_cast(intermediate_node_vect_d.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
-                                                                               node_input_data, relation_attention_matrices, thrust::raw_pointer_cast(dest_node_to_unique_index_per_relation_d.data()), thrust::raw_pointer_cast(unique_indices_to_column_indices_per_relation_d.data()), thrust::raw_pointer_cast(num_unique_indices_to_column_indices_per_relation.data()), num_relations, thrust::raw_pointer_cast(num_blocks_xdim_for_same_relation_per_block_vect.data()), thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()), thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
+                                                                                     node_input_data, relation_attention_matrices, thrust::raw_pointer_cast(dest_node_to_unique_index_per_relation_d.data()), thrust::raw_pointer_cast(unique_indices_to_column_indices_per_relation_d.data()), thrust::raw_pointer_cast(num_unique_indices_to_column_indices_per_relation.data()), num_relations, thrust::raw_pointer_cast(num_blocks_xdim_for_same_relation_per_block_vect.data()), thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()), thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
     dim3 block2(RTX_3090_BLOCKSIZE, 1, 1);
     dim3 grid2(RTX_3090_GRIDSIZE, 1, 1);
     EdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel<<<grid2, block2>>>(thrust::raw_pointer_cast(outEdges_vect.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_row_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
@@ -345,6 +340,7 @@ thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCO
         std::cout << "intermediate_node_vect[" << idx_relation << "]" << std::endl;
         thrust::copy(intermediate_node_vect[idx_relation].begin(), intermediate_node_vect[idx_relation].end(), std::ostream_iterator<float>(std::cout, ","));
     }*/
+    thrust::copy(intermediate_node_vect[0].begin(), intermediate_node_vect[0].begin() + 1, std::ostream_iterator<float>(std::cout, ","));
     cuda_err_chk(cudaPeekAtLastError());
     cuda_err_chk(cudaDeviceSynchronize());
     std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
