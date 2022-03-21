@@ -186,7 +186,7 @@ __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_128_8(
     }
 }
 
-thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_128_8(int num_nodes, cusp::coo_matrix<int, int, cusp::device_memory>::row_indices_array_type concatenated_coo_matrix_row_indices, cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type concatenated_coo_matrix_column_indices, std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices, cusp::coo_matrix<int, int, cusp::device_memory>::values_array_type concatenated_coo_matrix_values, int num_relations, bool FlagInitWithRandomValue)
+thrust::device_vector<float4> EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_128_8(int num_nodes, cusp::coo_matrix<int, int, cusp::device_memory>::row_indices_array_type concatenated_coo_matrix_row_indices, cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type concatenated_coo_matrix_column_indices, std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices, cusp::coo_matrix<int, int, cusp::device_memory>::values_array_type concatenated_coo_matrix_values, int num_relations, bool FlagInitWithRandomValue)
 {
 
     std::vector<thrust::device_vector<float>> intermediate_node_vect(num_relations);
@@ -358,9 +358,12 @@ thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_128_8(std:
     {
         coo_matrices_column_indices.push_back(coo_matrices[idx_relation].column_indices);
     }
-    return EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_128_8(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue);
+    return EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_128_8(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue);
 }
 
+#undef A
+#undef B
+#undef C
 #undef TILE_SZ_A
 #undef TILE_SZ_B
 #undef TILE_SZ_RATIO

@@ -137,7 +137,6 @@ __device__ __forceinline__ void mysgemm_512_32(int m, int n, int k, float *A, fl
     // load A in registers; software pipelining
     cg::memcpy_async(tile32, shmem_Adata, &(A(0,0,0*8)), sizeof(float)*256*8);*/
 
-#pragma unroll 2
     for (int i = 0; i < (K + 8 - 1) / (8); i++)
     {
         // shuffle: only half of the warp load the register
@@ -282,7 +281,7 @@ __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_NonPer
     mysgemm_512_32(OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx], NODE_INPUT_DIM_PER_HEAD, &relation_attention_matrices[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD], node_input_data, intermediate_node_vect[relation_idx], unique_index_to_dest_node_per_relation[relation_idx], node_entry_idx);
 }
 
-thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32(int num_nodes, cusp::coo_matrix<int, int, cusp::device_memory>::row_indices_array_type concatenated_coo_matrix_row_indices, cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type concatenated_coo_matrix_column_indices, std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices, cusp::coo_matrix<int, int, cusp::device_memory>::values_array_type concatenated_coo_matrix_values, int num_relations, bool FlagInitWithRandomValue, bool FlagEqualWorkPartitionForBlocks)
+thrust::device_vector<float4> EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_512_32(int num_nodes, cusp::coo_matrix<int, int, cusp::device_memory>::row_indices_array_type concatenated_coo_matrix_row_indices, cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type concatenated_coo_matrix_column_indices, std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices, cusp::coo_matrix<int, int, cusp::device_memory>::values_array_type concatenated_coo_matrix_values, int num_relations, bool FlagInitWithRandomValue, bool FlagEqualWorkPartitionForBlocks)
 {
 
     std::vector<thrust::device_vector<float>> intermediate_node_vect(num_relations);
@@ -495,9 +494,12 @@ thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_512_32(std
     {
         coo_matrices_column_indices.push_back(coo_matrices[idx_relation].column_indices);
     }
-    return EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue, FlagEqualWorkPartitionForBlocks);
+    return EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_512_32(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue, FlagEqualWorkPartitionForBlocks);
 }
 
+#undef A
+#undef B
+#undef C
 #undef K
 #undef TILE_SZ_A
 #undef TILE_SZ_B

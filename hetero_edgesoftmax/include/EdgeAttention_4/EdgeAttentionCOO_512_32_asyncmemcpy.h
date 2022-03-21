@@ -132,12 +132,12 @@ __device__ __forceinline__ void mysgemm_512_32_asyncmemcpy(int m, int n, int k, 
     float reg5;
     float reg6;
     float reg7;
-    __shared__ float shmem_Adata[256 * 8];
+    __shared__ float shmem_Adata[256*8];
     cg::thread_block_tile<32> tile32 = cg::tiled_partition<32>(cg::this_thread_block());
     // load A in registers; software pipelining
     cg::memcpy_async(tile32, shmem_Adata, &(A(0, 0, 0 * 8)), sizeof(float) * 256 * 8);
 
-#pragma unroll 2
+
     for (int i = 0; i < (K + 8 - 1) / (8); i++)
     {
         // shuffle: only half of the warp load the register
@@ -283,7 +283,7 @@ __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_NonPer
     mysgemm_512_32_asyncmemcpy(OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx], NODE_INPUT_DIM_PER_HEAD, &relation_attention_matrices[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD], node_input_data, intermediate_node_vect[relation_idx], unique_index_to_dest_node_per_relation[relation_idx], node_entry_idx);
 }
 
-thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32_asyncmemcpy(int num_nodes, cusp::coo_matrix<int, int, cusp::device_memory>::row_indices_array_type concatenated_coo_matrix_row_indices, cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type concatenated_coo_matrix_column_indices, std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices, cusp::coo_matrix<int, int, cusp::device_memory>::values_array_type concatenated_coo_matrix_values, int num_relations, bool FlagInitWithRandomValue, bool FlagEqualWorkPartitionForBlocks)
+thrust::device_vector<float4> EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_512_32_asyncmemcpy(int num_nodes, cusp::coo_matrix<int, int, cusp::device_memory>::row_indices_array_type concatenated_coo_matrix_row_indices, cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type concatenated_coo_matrix_column_indices, std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices, cusp::coo_matrix<int, int, cusp::device_memory>::values_array_type concatenated_coo_matrix_values, int num_relations, bool FlagInitWithRandomValue, bool FlagEqualWorkPartitionForBlocks)
 {
 
     std::vector<thrust::device_vector<float>> intermediate_node_vect(num_relations);
@@ -428,6 +428,8 @@ thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCO
         dim3 grid(RTX_3090_GRIDSIZE, 1, 1);
         t1 = std::chrono::high_resolution_clock::now();
         // EdgeAttentionConcatenatedCOOKernel<<<grid, block>>>( thrust::raw_pointer_cast(outEdges_per_relation_vect.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()), node_input_data);
+        //cudaFuncSetAttribute(EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32_asyncmemcpy, cudaFuncAttributeMaxDynamicSharedMemorySize, 65536);
+        
         EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32_asyncmemcpy<<<grid, block>>>(thrust::raw_pointer_cast(intermediate_node_vect_d.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
                                                                                                       node_input_data, relation_attention_matrices, thrust::raw_pointer_cast(dest_node_to_unique_index_per_relation_d.data()), thrust::raw_pointer_cast(unique_indices_to_column_indices_per_relation_d.data()), thrust::raw_pointer_cast(num_unique_indices_to_column_indices_per_relation.data()), num_relations, thrust::raw_pointer_cast(num_blocks_xdim_for_same_relation_per_block_vect.data()), thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()), thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
     }
@@ -465,6 +467,7 @@ thrust::device_vector<float4> EdgeAttentionConcatenatedFirstStageWeightMulDestCO
 
         dim3 block(COARSE_SGEMM_BLOCKSIZE, 1, 1);
         dim3 grid(non_persistent_block_num, 1, 1);
+        //cudaFuncSetAttribute(EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_NonPersistentBlock_512_32_asyncmemcpy, cudaFuncAttributeMaxDynamicSharedMemorySize, 65536);
         EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_NonPersistentBlock_512_32_asyncmemcpy<<<grid, block>>>(thrust::raw_pointer_cast(intermediate_node_vect_d.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
                                                                                                                          node_input_data, relation_attention_matrices, thrust::raw_pointer_cast(dest_node_to_unique_index_per_relation_d.data()), thrust::raw_pointer_cast(unique_indices_to_column_indices_per_relation_d.data()), thrust::raw_pointer_cast(num_unique_indices_to_column_indices_per_relation.data()), num_relations, thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()), thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
     }
@@ -496,9 +499,12 @@ thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_512_32_asy
     {
         coo_matrices_column_indices.push_back(coo_matrices[idx_relation].column_indices);
     }
-    return EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32_asyncmemcpy(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue, FlagEqualWorkPartitionForBlocks);
+    return EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_512_32_asyncmemcpy(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue, FlagEqualWorkPartitionForBlocks);
 }
 
+#undef A
+#undef B
+#undef C
 #undef K
 #undef TILE_SZ_A
 #undef TILE_SZ_B
