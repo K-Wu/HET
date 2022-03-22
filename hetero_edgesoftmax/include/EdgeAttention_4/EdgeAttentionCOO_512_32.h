@@ -104,7 +104,7 @@ __device__ __forceinline__ void mysgemm_512_32(int m, int n, int k, float *A, fl
     __shared__ float shmem_output[16 /*node idx*/][16 /*element idx in 4 heads*/][2 /*node idx 2nd part*/][16 /*element idx in 4 heads 2nd part*/];
     for (int idx = 0; idx < 16; idx++)
     {
-        shmem_output[idx][threadIdx.x / 32][threadIdx.x % 32 / 16][threadIdx.x % 16] = 0;
+        shmem_output[idx][threadIdx.x / 32][threadIdx.x % 32 / 16][threadIdx.x % 16] = 0.0f;
     }
     static_assert(TILE_SZ_RATIO / TILE_NUM_HEAD == 4);
     static_assert(TILE_SZ_RATIO % TILE_NUM_HEAD == 0);
@@ -187,48 +187,49 @@ __device__ __forceinline__ void mysgemm_512_32(int m, int n, int k, float *A, fl
         // compute C
         if (ArowIdx < OUT_DIM)
         {
-            float shmem_val0[2];
-            float shmem_val1[2];
-            float shmem_val2[2];
-            float shmem_val3[2];
-            float shmem_val4[2];
-            float shmem_val5[2];
-            float shmem_val6[2];
-            float shmem_val7[2];
-            // software pipelining to load data from shared memory for the next iteration
-            shmem_val0[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][0];
-            shmem_val1[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][1];
-            shmem_val2[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][2];
-            shmem_val3[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][3];
-            shmem_val4[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][4];
-            shmem_val5[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][5];
-            shmem_val6[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][6];
-            shmem_val7[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][7];
+//// software pipelining to load data from shared memory for the next iteration
+// float shmem_val0[2];
+// float shmem_val1[2];
+// float shmem_val2[2];
+// float shmem_val3[2];
+// float shmem_val4[2];
+// float shmem_val5[2];
+// float shmem_val6[2];
+// float shmem_val7[2];
+// shmem_val0[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][0];
+// shmem_val1[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][1];
+// shmem_val2[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][2];
+// shmem_val3[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][3];
+// shmem_val4[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][4];
+// shmem_val5[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][5];
+// shmem_val6[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][6];
+// shmem_val7[0] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][0 + shdmemColIdxBias][7];
+#pragma unroll 2
             for (int shdmemColIdx = 0; shdmemColIdx < 16; shdmemColIdx++)
             {
                 // software pipelining to load data from shared memory for the next iteration
-                if (shdmemColIdx < 15)
-                {
-                    shmem_val0[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][0];
-                    shmem_val1[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][1];
-                    shmem_val2[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][2];
-                    shmem_val3[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][3];
-                    shmem_val4[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][4];
-                    shmem_val5[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][5];
-                    shmem_val6[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][6];
-                    shmem_val7[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][7];
-                }
+                // if (shdmemColIdx < 15)
+                //{
+                //    shmem_val0[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][0];
+                //    shmem_val1[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][1];
+                //    shmem_val2[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][2];
+                //    shmem_val3[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][3];
+                //    shmem_val4[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][4];
+                //    shmem_val5[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][5];
+                //    shmem_val6[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][6];
+                //    shmem_val7[(shdmemColIdx + 1) % 2] = shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + 1 + shdmemColIdxBias][7];
+                //}
                 int CcolIdx = shdmemColIdx + /*blockIdx.x * TILE_SZ_B*/ BcolBias + shdmemColIdxBias;
                 if (CcolIdx < n)
                 {
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg0 * shmem_val0[shdmemColIdx % 2];
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg1 * shmem_val1[shdmemColIdx % 2];
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg2 * shmem_val2[shdmemColIdx % 2];
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg3 * shmem_val3[shdmemColIdx % 2];
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg4 * shmem_val4[shdmemColIdx % 2];
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg5 * shmem_val5[shdmemColIdx % 2];
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg6 * shmem_val6[shdmemColIdx % 2];
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg7 * shmem_val7[shdmemColIdx % 2];
+                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg0 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][0] /*shmem_val0[shdmemColIdx % 2]*/;
+                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg1 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][1] /*shmem_val1[shdmemColIdx % 2]*/;
+                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg2 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][2] /*shmem_val2[shdmemColIdx % 2]*/;
+                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg3 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][3] /*shmem_val3[shdmemColIdx % 2]*/;
+                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg4 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][4] /*shmem_val4[shdmemColIdx % 2]*/;
+                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg5 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][5] /*shmem_val5[shdmemColIdx % 2]*/;
+                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg6 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][6] /*shmem_val6[shdmemColIdx % 2]*/;
+                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg7 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][7] /*shmem_val7[shdmemColIdx % 2]*/;
                 }
             }
         }
@@ -237,6 +238,7 @@ __device__ __forceinline__ void mysgemm_512_32(int m, int n, int k, float *A, fl
         __syncthreads();
     }
 
+    // TODO: optimize thread mapping to improve access pattern
     for (int store_iter = 0; store_iter < 256 * 32 / TILE_SZ_A; store_iter++)
     {
         int node_idx_1 = store_iter;

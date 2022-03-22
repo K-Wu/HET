@@ -6,3 +6,4 @@
 #include "EdgeAttentionCOO_256_32.h"
 #include "EdgeAttentionCOO_512_32.h"
 #include "EdgeAttentionCOO_512_32_asyncmemcpy.h"
+#include "EdgeAttentionCOO_512_32_A100.h"

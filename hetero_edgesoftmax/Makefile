@@ -25,7 +25,7 @@ INCL_DIRS := ./include ./cusplibrary ./libnpy/include
 INC_FLAGS := $(addprefix -I,$(INCL_DIRS))
 LDFLAGS :=  -lcurand
 CPPFLAGS ?= $(INC_FLAGS) -Wall -pthread -MMD -MP -shared -fPIC -std=c++11 -O3 -mavx -ftree-vectorize -fopt-info-vec
-CUDAFLAGS = $(INC_FLAGS) -maxrregcount 64 -res-usage -g -lineinfo --restrict --extended-lambda -std=c++17 -O3 -DCUDA -DNOT_IMPL -arch=sm_86 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80 -gencode=arch=compute_86,code=sm_86 -gencode=arch=compute_86,code=compute_86
+CUDAFLAGS = $(INC_FLAGS) -maxrregcount 128 -res-usage -g -lineinfo --restrict --extended-lambda -std=c++17 -O3 -DCUDA -DNOT_IMPL -arch=sm_86 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80 -gencode=arch=compute_86,code=sm_86 -gencode=arch=compute_86,code=compute_86
 # -opt-info inline -res-usage
 
 all: objs exes header_objs

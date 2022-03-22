@@ -28,6 +28,14 @@ struct compare_float4
     }
 };
 
+struct approx_compare_float4
+{
+    __host__ __device__ bool operator()(float4 x, float4 y) const
+    {
+        return (x.x - y.x) / (x.x + y.x) < 0.0001 && (x.y - y.y) / (x.y + y.y) < 0.0001 && (x.z - y.z) / (x.z + y.z) < 0.0001 && (x.w - y.w) / (x.w + y.w) < 0.0001;
+    }
+};
+
 std::pair<std::pair<std::vector<int>, std::vector<int>>, std::vector<int>> generate_concatenate_coo_format(std::vector<std::vector<int>> coo_matrices_data)
 {
     std::vector<std::pair<std::pair<int, int>, int>> coo_matrices_data_concatenated;
@@ -271,6 +279,8 @@ int basic_correctness_test()
     thrust::device_vector<float4> COOOutEdgeAttention_per_relation_256_32 = doGPUEdgeAttentionConcatenatedCOOKernel_256_32({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, false);
     thrust::device_vector<float4> COOOutEdgeAttention_per_relation_256_32_2 = doGPUEdgeAttentionConcatenatedCOOKernel_256_32({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, true);
     thrust::device_vector<float4> COOOutEdgeAttention_per_relation_512_32 = doGPUEdgeAttentionConcatenatedCOOKernel_512_32({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, false);
+    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_512_32_A100 = doGPUEdgeAttentionConcatenatedCOOKernel_512_32_A100({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, false);
+
     thrust::device_vector<float4> COOOutEdgeAttention_per_relation_512_32_asyncmemcpy = doGPUEdgeAttentionConcatenatedCOOKernel_512_32_asyncmemcpy({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, false);
 
     // thrust::device_vector<float4> COOOutEdgeAttention_per_relation_512_32_2 = doGPUEdgeAttentionConcatenatedCOOKernel_512_32({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, true);
@@ -320,6 +330,7 @@ int basic_correctness_test()
     std::cout << thrust::equal(thrust::device, COOOutEdgeAttention_per_relation_256_32_2.begin(), COOOutEdgeAttention_per_relation_256_32_2.end(), COOOutEdgeAttention_per_relation.begin(), compare_float4());
     std::cout << thrust::equal(thrust::device, COOOutEdgeAttention_per_relation_512_32.begin(), COOOutEdgeAttention_per_relation_512_32.end(), COOOutEdgeAttention_per_relation.begin(), compare_float4());
     std::cout << thrust::equal(thrust::device, COOOutEdgeAttention_per_relation_512_32_asyncmemcpy.begin(), COOOutEdgeAttention_per_relation_512_32_asyncmemcpy.end(), COOOutEdgeAttention_per_relation.begin(), compare_float4());
+    std::cout << thrust::equal(thrust::device, COOOutEdgeAttention_per_relation_512_32_A100.begin(), COOOutEdgeAttention_per_relation_512_32_A100.end(), COOOutEdgeAttention_per_relation.begin(), approx_compare_float4());
 
     // std::cout << thrust::equal(thrust::device, COOOutEdgeAttention_per_relation_512_32_2.begin(), COOOutEdgeAttention_per_relation_512_32_2.end(), COOOutEdgeAttention_per_relation.begin(),compare_float4());
 
