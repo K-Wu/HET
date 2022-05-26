@@ -99,8 +99,8 @@ __device__ __forceinline__ void mysgemm_256_32(int m, int n, int k, float *A, fl
 #define C(idx_head, row, col) C[(idx_head * k) + (row) + (col)*m]
 
     __shared__ float shmem[2 /*double buffering*/][TILE_NUM_HEAD][TILE_SZ_B][8];
-    static_assert(TILE_SZ_RATIO / TILE_NUM_HEAD == 2);
-    static_assert(TILE_SZ_RATIO % TILE_NUM_HEAD == 0);
+    static_assert(TILE_SZ_RATIO / TILE_NUM_HEAD == 2, "");
+    static_assert(TILE_SZ_RATIO % TILE_NUM_HEAD == 0, "");
     // each thread should load 8/(TILE_SZ_RATIO / TILE_NUM_HEAD) times per iteration
 
     // INSERT KERNEL CODE HERE
