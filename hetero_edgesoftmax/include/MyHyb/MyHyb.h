@@ -85,12 +85,12 @@ public:
                 else{
                     int64_t NumEdgesFromThisRowAndRelationship = cusp_csrs[IdxRelationship].row_offsets[IdxRow+1]-cusp_csrs[IdxRelationship].row_offsets[IdxRow];
                     this->row_ptr[IdxRow+IdxRelationship*this->num_rows+1]=this->row_ptr[IdxRow+IdxRelationship*this->num_rows]+NumEdgesFromThisRowAndRelationship;
-                    assert(this->row_ptr[IdxRow+IdxRelationship*this->num_rows+1]==this->row_ptr[IdxRelationship*this->num_rows+1]+cusp_csrs[IdxRelationship].row_offsets[IdxRow+1]);
+                    assert(this->row_ptr[IdxRow+IdxRelationship*this->num_rows+1]==this->row_ptr[IdxRelationship*this->num_rows]+cusp_csrs[IdxRelationship].row_offsets[IdxRow+1]);
                 }
             }
-            assert(this->row_ptr[1+IdxRelationship*this->num_rows]== std::accumulate(num_nnzs.begin(), std::advance(num_nnzs.begin(),IdxRelationship+1), 0));
+            assert(this->row_ptr[(1+IdxRelationship)*this->num_rows]== std::accumulate(num_nnzs.begin(), std::next(num_nnzs.begin(),IdxRelationship+1), 0));
             for (int64_t IdxEdgeThisRelationship = 0; IdxEdgeThisRelationship<cusp_csrs[IdxRelationship].num_entries;IdxEdgeThisRelationship++){
-                this->col_idx[this->row_ptr[1+IdxRelationship*this->num_rows]+IdxEdgeThisRelationship]=cusp_csrs[IdxRelationship].column_indices[IdxEdgeThisRelationship];
+                this->col_idx[this->row_ptr[IdxRelationship*this->num_rows]+IdxEdgeThisRelationship]=cusp_csrs[IdxRelationship].column_indices[IdxEdgeThisRelationship];
             }                        
         }
     }
@@ -192,20 +192,20 @@ public:
     std::vector<int64_t> num_nnzs;
     int64_t total_num_nnzs;
     CSRType csr;
-    thrust::detail::vector_base<IdxType, Alloc> ELLcolptr;
-    thrust::detail::vector_base<IdxType, Alloc> ELLreltype;
+    thrust::detail::vector_base<IdxType, Alloc> ELLColIdx;
+    thrust::detail::vector_base<IdxType, Alloc> ELLRelType;
 
     MyHyb(const int64_t HybIndexMax, const int64_t ELL_logical_width, const int64_t ELL_physical_width, const CSRType& csr,
-    const thrust::detail::vector_base<IdxType, Alloc>& ELLcolptr,
-    const thrust::detail::vector_base<IdxType, Alloc>& ELLreltype,
+    const thrust::detail::vector_base<IdxType, Alloc>& ELLColIdx,
+    const thrust::detail::vector_base<IdxType, Alloc>& ELLRelType,
     const int64_t num_rows, const int64_t num_cols, const int64_t num_rels,
     const std::vector<int64_t>& num_nnzs){
         this->HybIndexMax = HybIndexMax;
         this->ELL_logical_width = ELL_logical_width;
         this->ELL_physical_width = ELL_physical_width;
         this->csr = csr;
-        this->ELLcolptr = ELLcolptr;
-        this->ELLreltype = ELLreltype;
+        this->ELLColIdx = ELLColIdx;
+        this->ELLRelType = ELLRelType;
         this->num_rows = num_rows;
         this->num_cols = num_cols;
         this->num_rels = num_rels;
@@ -216,16 +216,16 @@ public:
 
     void VerifyThrustAllocatorRecognizable() const {
         // the allocator should be either std::allocator (thrust::host_vector's) or thrust::device_allocator (thrust::device_vector's)
-        assert(IsHostVector(ELLreltype) || IsDeviceVector(ELLreltype));
+        assert(IsHostVector(ELLRelType) || IsDeviceVector(ELLRelType));
         //assert(std::is_same(thrust::device_vector<IdxType>::Parent::storage_type::allocator_type,Alloc)||
         //std::is_same(thrust::host_vector<IdxType>::Parent::storage_type::allocator_type,Alloc));
     }
 
     bool IsDataOnGPU() const {
-        return IsDeviceVector(ELLreltype);
+        return IsDeviceVector(ELLRelType);
     }
     bool IsDataOnCPU() const {
-        return IsHostVector(ELLreltype);
+        return IsHostVector(ELLRelType);
     }
 
 };
@@ -388,7 +388,7 @@ bool IsEqual(const MyHeteroSeparateCSR<IdxType, typename thrust::host_vector<Idx
 
     for(int64_t IdxRelationship = 0; IdxRelationship < csr1.num_rels; IdxRelationship++){
         for (int64_t IdxRow = 0; IdxRow < csr1.num_rows; IdxRow++){
-            if (csr1.row_ptr[IdxRelationship*num_rows + IdxRow + 1] != csr2.row_ptr[IdxRelationship*num_rows + IdxRow + 1]){
+            if (csr1.row_ptr[IdxRelationship* csr1.num_rows + IdxRow + 1] != csr2.row_ptr[IdxRelationship* csr1.num_rows + IdxRow + 1]){
                 return false;
             }
         }
@@ -417,7 +417,7 @@ MyHeteroSeparateCSR<IdxType, std::allocator<IdxType>> ToSeparateCSR_CPU(const My
     thrust::host_vector<IdxType> result_row_ptr(csr.num_rows*csr.num_rels+1, 0);
     thrust::host_vector<IdxType> result_col_idx(csr.total_num_nnzs, 0);
     // TODO: implement here
-    std::vector<std::vector<std::vector<IdxType>>> rel_type_to_edges(csr.num_rows,std::vector<std::vector<IdxType>>(csr.num_rows,std::vector<IdxType>()));
+    std::vector<std::vector<std::vector<IdxType>>> rel_type_to_edges(csr.num_rels,std::vector<std::vector<IdxType>>(csr.num_rows,std::vector<IdxType>()));
 
     for (int64_t IdxRow =0; IdxRow < csr.num_rows; IdxRow++){
         for (IdxType IdxEdge = csr.row_ptr[IdxRow]; IdxEdge < csr.row_ptr[IdxRow+1]; IdxEdge++){
@@ -475,8 +475,8 @@ bool IsEqual(const MyHyb<IdxType, std::allocator<IdxType>, CSRType>& myhyb1, con
     for (int64_t IdxNode = 0; IdxNode<myhyb1.HybIndexMax; IdxNode++){
         std::set<std::pair<IdxType,IdxType>> DestNodeRelTypeSet;
         for (int64_t IdxElement = IdxNode*myhyb1.ELL_physical_width; IdxElement < IdxNode*myhyb1.ELL_physical_width+myhyb1.ELL_logical_width; IdxElement++){
-            IdxType IdxDestNode = myhyb1.ELL_col_idx[IdxElement];
-            IdxType IdxRelationship = myhyb1.ELL_rel_type[IdxElement];
+            IdxType IdxDestNode = myhyb1.ELLColIdx[IdxElement];
+            IdxType IdxRelationship = myhyb1.ELLRelType[IdxElement];
             if (IdxDestNode == MyHyb_NONEXISTENT_ELEMENT){
                 continue;
             }
@@ -484,8 +484,8 @@ bool IsEqual(const MyHyb<IdxType, std::allocator<IdxType>, CSRType>& myhyb1, con
         }
         int64_t NumEdgesFromThisSourceNode1 = DestNodeRelTypeSet.size();
         for (int64_t IdxElement = IdxNode*myhyb2.ELL_physical_width; IdxElement < IdxNode*myhyb2.ELL_physical_width+myhyb2.ELL_logical_width; IdxElement++){
-            IdxType IdxDestNode = myhyb2.ELL_col_idx[IdxElement];
-            IdxType IdxRelationship = myhyb2.ELL_rel_type[IdxElement];
+            IdxType IdxDestNode = myhyb2.ELLColIdx[IdxElement];
+            IdxType IdxRelationship = myhyb2.ELLRelType[IdxElement];
             if (IdxDestNode == MyHyb_NONEXISTENT_ELEMENT){
                 continue;
             }
@@ -506,15 +506,15 @@ MyHyb<IdxType, std::allocator<IdxType>, MyHeteroSeparateCSR<IdxType, std::alloca
     //csr.col_idx;
     //csr.rel_type;
     //TODO: implement here
-    thrust::host_vector<IdxType> ELLcolptr(ELLMaxIndex*ELL_physical_width, MyHyb_NONEXISTENT_ELEMENT);
-    thrust::host_vector<IdxType> ELLreltype(ELLMaxIndex*ELL_physical_width, MyHyb_NONEXISTENT_ELEMENT);
+    thrust::host_vector<IdxType> ELLColIdx(ELLMaxIndex*ELL_physical_width, MyHyb_NONEXISTENT_ELEMENT);
+    thrust::host_vector<IdxType> ELLRelType(ELLMaxIndex*ELL_physical_width, MyHyb_NONEXISTENT_ELEMENT);
     //based on MyHeteroSeparateCSR<IdxType, std::allocator<IdxType>> ToSeparateCSR_CPU(const MyHeteroIntegratedCSR<IdxType, std::allocator<IdxType>>& csr)
 
     thrust::host_vector<IdxType> result_row_ptr(csr.num_rows*csr.num_rels+1, 0);
     thrust::host_vector<IdxType> result_col_idx(csr.total_num_nnzs, 0);
     // TODO: implement here
 
-    std::vector<std::vector<std::vector<IdxType>>> residue_csr_rel_type_to_edges(csr.num_rows,std::vector<std::vector<IdxType>>(csr.num_rows,std::vector<IdxType>()));
+    std::vector<std::vector<std::vector<IdxType>>> residue_csr_rel_type_to_edges(csr.num_rels,std::vector<std::vector<IdxType>>(csr.num_rows,std::vector<IdxType>()));
 
     for (int64_t IdxRow =0; IdxRow < csr.num_rows; IdxRow++){
         for (IdxType IdxEdge = csr.row_ptr[IdxRow]; IdxEdge < csr.row_ptr[IdxRow+1]; IdxEdge++){
@@ -524,8 +524,8 @@ MyHyb<IdxType, std::allocator<IdxType>, MyHeteroSeparateCSR<IdxType, std::alloca
             IdxType IdxRelationshipEdge = csr.rel_type[IdxEdge];
             if (IdxEdge<ELL_logical_width && IdxRow<ELLMaxIndex){
                 // store the edge in the ELL
-                    ELLcolptr[IdxRow*ELL_physical_width+IdxEdge] = IdxDestNode;
-                    ELLreltype[IdxRow*ELL_physical_width+IdxEdge] = IdxRelationshipEdge;
+                    ELLColIdx[IdxRow*ELL_physical_width+IdxEdge] = IdxDestNode;
+                    ELLRelType[IdxRow*ELL_physical_width+IdxEdge] = IdxRelationshipEdge;
             }
             else{
                 // store the rest into the CSR
@@ -548,7 +548,7 @@ MyHyb<IdxType, std::allocator<IdxType>, MyHeteroSeparateCSR<IdxType, std::alloca
     }
 
     MyHeteroSeparateCSR<IdxType, std::allocator<IdxType>> resultCSR(csr.num_rows, csr.num_cols, csr.num_rels, csr.num_nnzs, /*result_rel_ptr,*/ result_row_ptr, result_col_idx);
-    MyHyb<IdxType, std::allocator<IdxType>, MyHeteroSeparateCSR<IdxType, std::allocator<IdxType>>> result_hyb(ELLMaxIndex, ELL_logical_width, ELL_physical_width, resultCSR, ELLcolptr, ELLreltype,  csr.num_rows, csr.num_cols, csr.num_rels, csr.num_nnzs);
+    MyHyb<IdxType, std::allocator<IdxType>, MyHeteroSeparateCSR<IdxType, std::allocator<IdxType>>> result_hyb(ELLMaxIndex, ELL_logical_width, ELL_physical_width, resultCSR, ELLColIdx, ELLRelType,  csr.num_rows, csr.num_cols, csr.num_rels, csr.num_nnzs);
     return result_hyb;
 }
 
@@ -560,8 +560,8 @@ MyHyb<IdxType, thrust::device_allocator<IdxType>, MyHeteroSeparateCSR<IdxType, t
     //csr.row_ptr;
     //csr.col_idx;
     //csr.rel_type;
-    thrust::device_vector<IdxType> ELLcolptr(ELLMaxIndex*ELL_physical_width, MyHyb_NONEXISTENT_ELEMENT);
-    thrust::device_vector<IdxType> ELLreltype(ELLMaxIndex*ELL_physical_width, MyHyb_NONEXISTENT_ELEMENT);
+    thrust::device_vector<IdxType> ELLColIdx(ELLMaxIndex*ELL_physical_width, MyHyb_NONEXISTENT_ELEMENT);
+    thrust::device_vector<IdxType> ELLRelType(ELLMaxIndex*ELL_physical_width, MyHyb_NONEXISTENT_ELEMENT);
     //based on MyHeteroSeparateCSR<IdxType, std::allocator<IdxType>> ToSeparateCSR_CPU(const MyHeteroIntegratedCSR<IdxType, std::allocator<IdxType>>& csr)
 
     thrust::device_vector<IdxType> result_row_ptr(csr.num_rows*csr.num_rels+1, 0);
@@ -633,6 +633,6 @@ MyHeteroSeparateCSR<IdxType, ReturnAlloc> ToSeparateCSR(const MyHeteroIntegrated
 template<typename InputAlloc, typename ReturnAlloc, typename IdxType>
 MyHyb<IdxType, ReturnAlloc, MyHeteroSeparateCSR<IdxType, ReturnAlloc>> MyHybIntegratedCSRToSeparateCSR(const MyHyb<IdxType, ReturnAlloc, MyHeteroIntegratedCSR<IdxType, ReturnAlloc>>& hyb) {
     MyHyb<IdxType, ReturnAlloc, MyHeteroSeparateCSR<IdxType, ReturnAlloc>> result(hyb.HybIndexMax, hyb.ELL_logical_width, hyb.ELL_physical_width,
-        ToSeparateCSR<InputAlloc, ReturnAlloc, IdxType>(hyb.csr), ELLcolptr, ELLreltype, hyb.num_rows, hyb.num_cols, hyb.num_rels, hyb.num_nnzs);
+        ToSeparateCSR<InputAlloc, ReturnAlloc, IdxType>(hyb.csr), ELLColIdx, ELLRelType, hyb.num_rows, hyb.num_cols, hyb.num_rels, hyb.num_nnzs);
     return result;
 }
