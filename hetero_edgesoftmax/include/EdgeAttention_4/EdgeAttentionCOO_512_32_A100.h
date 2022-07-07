@@ -106,8 +106,8 @@ __device__ __forceinline__ void mysgemm_512_32_A100(int m, int n, int k, float *
     {
         shmem_output[idx][threadIdx.x / 32][threadIdx.x % 32 / 16][threadIdx.x % 16] = 0.0f;
     }
-    static_assert(TILE_SZ_RATIO / TILE_NUM_HEAD == 4);
-    static_assert(TILE_SZ_RATIO % TILE_NUM_HEAD == 0);
+    static_assert(TILE_SZ_RATIO / TILE_NUM_HEAD == 4, "");
+    static_assert(TILE_SZ_RATIO % TILE_NUM_HEAD == 0, "");
     // each thread should load 8/(TILE_SZ_RATIO / TILE_NUM_HEAD) times per iteration
 
     // INSERT KERNEL CODE HERE
@@ -221,10 +221,9 @@ __device__ __forceinline__ void mysgemm_512_32_A100(int m, int n, int k, float *
                     tmp += reg2 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][2 + regDataIdxBias];
                     tmp += reg3 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][3 + regDataIdxBias];
                     tmp += __shfl_sync(0xffffffff, tmp, (threadIdx.x + 16) % 32);
-                    if (CcolIdx < n && threadIdx.x % 32 < 16)
-                    {
+                    
                         shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += tmp;
-                    }
+                    
                 }
             }
         }
@@ -254,7 +253,7 @@ __device__ __forceinline__ void mysgemm_512_32_A100(int m, int n, int k, float *
     // faster than the alternative.
 }
 
-__launch_bounds__(512, 3)
+//__launch_bounds__(512, 3)
     __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32_A100(float **__restrict__ intermediate_node_vect, int nnz, int *__restrict__ matCols, int *__restrict__ matRelation,
                                                                                           float *__restrict__ node_input_data, float *__restrict__ relation_attention_matrices, int **__restrict__ dest_node_to_unique_index_per_relation, int **__restrict__ unique_index_to_dest_node_per_relation, int *__restrict__ sizes_unique_index_to_dest_node_per_relation, int num_relations, int *__restrict__ num_blocks_xdim_for_same_relation_per_block_vect, int *__restrict__ beg_node_entry_idxes_vect, int *__restrict__ blockid_relation_id_vect)
 {
@@ -269,7 +268,7 @@ __launch_bounds__(512, 3)
     }
 }
 
-__launch_bounds__(512, 3)
+//__launch_bounds__(512, 3)
     __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_NonPersistentBlock_512_32_A100(float **__restrict__ intermediate_node_vect, int nnz, int *__restrict__ matCols, int *__restrict__ matRelation,
                                                                                                              float *__restrict__ node_input_data, float *__restrict__ relation_attention_matrices, int **__restrict__ dest_node_to_unique_index_per_relation, int **__restrict__ unique_index_to_dest_node_per_relation, int *__restrict__ sizes_unique_index_to_dest_node_per_relation, int num_relations, int *__restrict__ beg_node_entry_idxes_vect, int *__restrict__ blockid_relation_id_vect)
 {
