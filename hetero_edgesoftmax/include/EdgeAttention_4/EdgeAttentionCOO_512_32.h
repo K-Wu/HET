@@ -256,6 +256,9 @@ __device__ __forceinline__ void mysgemm_512_32(int m, int n, int k, float *A, fl
     // from A and compute using that value rather than loading all values
     // before doing the computation.  This approach seems to be slightly
     // faster than the alternative.
+#undef A
+#undef B
+#undef C
 }
 
 __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel_512_32(float **__restrict__ intermediate_node_vect, int nnz, int *__restrict__ matCols, int *__restrict__ matRelation,

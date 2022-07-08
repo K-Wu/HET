@@ -255,6 +255,9 @@ __device__ __forceinline__ void mysgemm_512_32_asyncmemcpy(int m, int n, int k, 
     // from A and compute using that value rather than loading all values
     // before doing the computation.  This approach seems to be slightly
     // faster than the alternative.
+#undef A
+#undef B
+#undef C
 }
 
 __launch_bounds__(512, 2)
