@@ -7,3 +7,6 @@
 [submodule "hetero_edgesoftmax/data/ogbn_mag"]
 	path = hetero_edgesoftmax/data/ogbn_mag
 	url = git@github.com:K-Wu/_hetero_edgesoftmax_data_ogbn_mag.git
+[submodule "hetero_edgesoftmax/data/MyHybData"]
+	path = hetero_edgesoftmax/data/MyHybData
+	url = git@bitbucket.org:tonywuk/myhyb_dataset.git
