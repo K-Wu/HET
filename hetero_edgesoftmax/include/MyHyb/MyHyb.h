@@ -8,12 +8,47 @@
 #include <cusp/csr_matrix.h>
 #include <map>
 #include <set>
+#include <optional>
+//#include <optional>
 
 #ifdef MyHyb_NONEXISTENT_ELEMENT
 #error "MyHyb_DEFINE_CONSTANT is already defined"
 #else 
 #define MyHyb_NONEXISTENT_ELEMENT -1
 #endif 
+
+
+template <typename IdxType>
+thrust::host_vector<IdxType> TransposeCSR(thrust::detail::vector_base<IdxType, std::allocator<IdxType>>& row_ptr, thrust::detail::vector_base<IdxType, std::allocator<IdxType>>& col_idx ){
+    //transpose the csr matrix, and return the permutation array so that rel_type in integratedCSR and eid in FusedGAT can be mapped to the new order using the permutation array.
+    thrust::host_vector<IdxType> permutation(col_idx.size());
+    thrust::sequence<>(permutation.begin(),permutation.end(), 0);
+    thrust::host_vector<IdxType> new_row_ptr(row_ptr.size());
+    thrust::host_vector<IdxType> new_col_idx(col_idx.size());
+
+    std::map<IdxType, std::vector<std::pair<IdxType, IdxType>>> col_row_map;
+
+    for (int64_t i = 0; i < row_ptr.size() - 1; i++) {
+        for (int64_t j = row_ptr[i]; j < row_ptr[i + 1]; j++) {
+            assert(col_idx[j]<row_ptr.size()-1);
+            col_row_map[col_idx[j]].push_back(std::make_pair(i, permutation[j]));
+        }
+    }
+
+    new_row_ptr[0] = 0;
+    for (int64_t idxNode = 0; idxNode< row_ptr.size() - 1; idxNode++) { // assert num_rows == num_cols
+        new_row_ptr[idxNode] = new_row_ptr[idxNode -1] + col_row_map[idxNode].size();
+        for (int64_t idxEdgeForCurrNode = 0; idxEdgeForCurrNode< col_row_map[idxNode].size(); idxEdgeForCurrNode++) {
+            new_col_idx[new_row_ptr[idxNode] + idxEdgeForCurrNode] = col_row_map[idxNode][idxEdgeForCurrNode].first;
+            permutation[new_row_ptr[idxNode] + idxEdgeForCurrNode] = col_row_map[idxNode][idxEdgeForCurrNode].second;
+        }
+    }
+
+    thrust::copy(new_row_ptr.begin(), new_row_ptr.end(), row_ptr.begin());
+    thrust::copy(new_col_idx.begin(), new_col_idx.end(), col_idx.begin());
+    return permutation;
+
+}
 
 template <typename IdxType, typename Alloc>
 bool IsDeviceVector(const thrust::detail::vector_base<IdxType, Alloc>& vec)
@@ -95,6 +130,26 @@ public:
         }
     }
 
+    template<typename OtherType, typename OtherAlloc>
+    void Transpose(std::optional<typename std::reference_wrapper<typename thrust::detail::vector_base<OtherType, OtherAlloc>>> eids){
+        thrust::host_vector<IdxType>  permutation = TransposeCSR(row_ptr, col_idx);
+        
+        if (eids.has_value()){
+            thrust::detail::vector_base<IdxType, OtherAlloc>& eids_ref = eids.value().get();
+            thrust::detail::vector_base<OtherType, OtherAlloc> new_eids(eids_ref.size());
+            thrust::detail::vector_base<IdxType, OtherAlloc> eids_new(permutation.size());
+            typedef thrust::detail::vector_base<IdxType, OtherAlloc>::iterator ElementIterator;
+            typedef thrust::host_vector<IdxType>::iterator IndexIterator;
+            thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter(eids_ref.begin(), permutation.begin());
+            //for (int64_t idx = 0; idx < eids_ref.size(); idx++) {
+            //    new_eids[idx] = *permute_iter;
+            //    permute_iter++;
+            //}
+            thrust::copy(permute_iter, permute_iter + eids_ref.size(), new_eids.begin());
+            thrust::copy(new_eids.begin(), new_eids.end(), eids_ref.begin());
+        }
+    }
+
     template<typename OtherAlloc>
     MyHeteroSeparateCSR(const MyHeteroSeparateCSR<IdxType, OtherAlloc>& csr){
         //this->rel_ptr = csr.rel_ptr;
@@ -149,6 +204,25 @@ public:
         this->rel_type = rel_type;
     }
 
+    MyHeteroIntegratedCSR(const thrust::detail::vector_base<IdxType, std::allocator<IdxType>>& row_ptr,
+                            const thrust::detail::vector_base<IdxType, std::allocator<IdxType>>& col_idx,
+                            const thrust::detail::vector_base<IdxType, std::allocator<IdxType>>& rel_type){
+        this->row_ptr = row_ptr;
+        this->col_idx = col_idx;
+        this->rel_type = rel_type;
+        this->num_rows = row_ptr.size()-1;
+        this->num_cols = this->num_rows;
+        // num rels is the largest index in rel_type
+        this->num_rels = (*std::max_element(rel_type.begin(), rel_type.end()))+1;
+        this->total_num_nnzs = col_idx.size();
+        // count rel_type to get num_nnz of each type
+        std::vector<int64_t> num_nnz_type(this->num_rels,0);
+        for (int64_t i=0;i<this->total_num_nnzs;i++){
+            num_nnz_type[rel_type[i]]++;
+        }
+        this->num_nnzs = num_nnz_type;
+    }
+
     template<typename OtherAlloc>
     MyHeteroIntegratedCSR(const MyHeteroIntegratedCSR<IdxType, OtherAlloc>& csr){
         this->rel_type = csr.rel_type;
@@ -159,6 +233,108 @@ public:
         this->num_cols = csr.num_cols;
         this->num_rels = csr.num_rels;
         this->total_num_nnzs = csr.total_num_nnzs;
+    }
+
+    void SortByEdgeType_CPU() {
+        assert(IsDataOnCPU());
+        for (int64_t IdxRow =0; IdxRow < num_rows; IdxRow++){
+            std::vector<std::pair<IdxType, IdxType>> EdgeRelationshipPairFromThisNode;
+            for (IdxType IdxEdge = row_ptr[IdxRow]; IdxEdge < row_ptr[IdxRow+1]; IdxEdge++){
+                IdxType IdxSrcNode = IdxRow;
+                IdxType IdxDestNode = col_idx[IdxEdge];
+                IdxType IdxRelationshipEdge = rel_type[IdxEdge];
+                //rel_type_to_edges[IdxRelationshipEdge][IdxSrcNode].push_back(IdxDestNode);
+                EdgeRelationshipPairFromThisNode.push_back(std::make_pair(IdxDestNode, IdxRelationshipEdge));
+            }
+            std::sort(EdgeRelationshipPairFromThisNode.begin(), EdgeRelationshipPairFromThisNode.end(), [](const std::pair<IdxType, IdxType>& a, const std::pair<IdxType, IdxType>& b){
+                return a.second < b.second;
+            });
+            //write back
+            for (int64_t IdxEdge = 0; IdxEdge < EdgeRelationshipPairFromThisNode.size(); IdxEdge++){
+                col_idx[row_ptr[IdxRow]+IdxEdge] = EdgeRelationshipPairFromThisNode[IdxEdge].first;
+                rel_type[row_ptr[IdxRow]+IdxEdge] = EdgeRelationshipPairFromThisNode[IdxEdge].second;
+            }
+        }
+    }
+
+    template<typename OtherType, typename OtherAlloc>
+    void Transpose(std::optional<typename std::reference_wrapper<typename thrust::detail::vector_base<OtherType, OtherAlloc>>> eids){
+        thrust::host_vector<IdxType>  permutation = TransposeCSR(row_ptr, col_idx);
+        
+        if (eids.has_value()){
+            
+            thrust::detail::vector_base<IdxType, OtherAlloc>& eids_ref = eids.value().get();
+            thrust::detail::vector_base<OtherType, OtherAlloc> new_eids(eids_ref.size());
+            thrust::detail::vector_base<IdxType, OtherAlloc> eids_new(permutation.size());
+            typedef thrust::detail::vector_base<IdxType, OtherAlloc>::iterator ElementIterator;
+            typedef thrust::host_vector<IdxType>::iterator IndexIterator;
+            thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter(eids_ref.begin(), permutation.begin());
+            thrust::copy(permute_iter, permute_iter+ eids_ref.size(), new_eids.begin());
+            thrust::copy(new_eids.begin(), new_eids.end(), eids_ref.begin());
+        }
+
+        // work on rel_types
+        typedef thrust::detail::vector_base<IdxType, OtherAlloc>::iterator ElementIterator;
+        typedef thrust::host_vector<IdxType>::iterator IndexIterator;
+        thrust::detail::vector_base<IdxType, OtherAlloc> new_rel_types(permutation.size());
+        thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter(rel_type.begin(), permutation.begin());
+        thrust::copy(permute_iter, permute_iter + permutation.size(), new_rel_types.begin());
+        thrust::copy(new_rel_types.begin(), new_rel_types.end(), rel_type.begin());
+    }
+
+    bool IsSortedByEdgeType_CPU() {
+        assert(IsDataOnCPU());
+        for (int64_t IdxRow =0; IdxRow < num_rows; IdxRow++){
+            std::vector<std::pair<IdxType, IdxType>> EdgeRelationshipPairFromThisNode;
+            for (IdxType IdxEdge = row_ptr[IdxRow]; IdxEdge < row_ptr[IdxRow+1]; IdxEdge++){
+                IdxType IdxSrcNode = IdxRow;
+                IdxType IdxDestNode = col_idx[IdxEdge];
+                IdxType IdxRelationshipEdge = rel_type[IdxEdge];
+                //rel_type_to_edges[IdxRelationshipEdge][IdxSrcNode].push_back(IdxDestNode);
+                EdgeRelationshipPairFromThisNode.push_back(std::make_pair(IdxDestNode, IdxRelationshipEdge));
+            }
+            std::sort(EdgeRelationshipPairFromThisNode.begin(), EdgeRelationshipPairFromThisNode.end(), [](const std::pair<IdxType, IdxType>& a, const std::pair<IdxType, IdxType>& b){
+                return a.second < b.second;
+            });
+
+            //check if the input csr is sorted
+            for (int64_t IdxEdge = 0; IdxEdge < EdgeRelationshipPairFromThisNode.size(); IdxEdge++){
+                if (col_idx[row_ptr[IdxRow]+IdxEdge] != EdgeRelationshipPairFromThisNode[IdxEdge].first){
+                    return false;
+                }
+
+                if (rel_type[row_ptr[IdxRow]+IdxEdge] = EdgeRelationshipPairFromThisNode[IdxEdge].second){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+
+
+    void SortByEdgeType_CPU(const thrust::detail::vector_base<IdxType, Alloc>& eids) {
+        assert(IsDataOnCPU());
+        for (int64_t IdxRow =0; IdxRow < num_rows; IdxRow++){
+            std::vector<std::pair<std::pair<IdxType, IdxType>, IdxType>> EdgeRelationshipEidsTupleFromThisNode;
+            for (IdxType IdxEdge = row_ptr[IdxRow]; IdxEdge < row_ptr[IdxRow+1]; IdxEdge++){
+                IdxType IdxSrcNode = IdxRow;
+                IdxType IdxDestNode = col_idx[IdxEdge];
+                IdxType IdxRelationshipEdge = rel_type[IdxEdge];
+                IdxType ElementEids = eids[IdxEdge]; 
+                //rel_type_to_edges[IdxRelationshipEdge][IdxSrcNode].push_back(IdxDestNode);
+                EdgeRelationshipEidsTupleFromThisNode.push_back(std::make_pair(std::make_pair(IdxDestNode, IdxRelationshipEdge),ElementEids));
+            }
+            std::sort(EdgeRelationshipEidsTupleFromThisNode.begin(), EdgeRelationshipEidsTupleFromThisNode.end(), [](const std::pair<IdxType, IdxType>& a, const std::pair<IdxType, IdxType>& b){
+                return a.first.second < b.first.second;
+            });
+            //write back
+            for (int64_t IdxEdge = 0; IdxEdge < EdgeRelationshipEidsTupleFromThisNode.size(); IdxEdge++){
+                col_idx[row_ptr[IdxRow]+IdxEdge] = EdgeRelationshipEidsTupleFromThisNode[IdxEdge].first.first;
+                rel_type[row_ptr[IdxRow]+IdxEdge] = EdgeRelationshipEidsTupleFromThisNode[IdxEdge].first.second;
+                eids[rot_ptr[IdxRow]+IdxEdge] = EdgeRelationshipEidsTupleFromThisNode[IdxEdge].second;
+            }
+        }
     }
 
     void VerifyThrustAllocatorRecognizable() const {
@@ -260,7 +436,7 @@ MyHeteroIntegratedCSR<IdxType, std::allocator<IdxType>> ToIntegratedCSR_CPU(cons
     thrust::host_vector<IdxType> result_col_idx(total_num_nnzs, 0);
     thrust::host_vector<IdxType> result_rel_type(total_num_nnzs, 0);
 
-    // TODO: implement here
+    
     for (int64_t IdxRelation = 0; IdxRelation < csr.num_rels; IdxRelation++){
         for (int64_t IdxRow = 0; IdxRow < csr.num_rows; IdxRow++){
             for (IdxType IdxElementColIdxWithOffset = csr.row_ptr[IdxRelation*csr.num_rows + IdxRow]; IdxElementColIdxWithOffset < csr.row_ptr[IdxRelation*csr.num_rows + IdxRow+1]; IdxElementColIdxWithOffset++){
@@ -633,6 +809,6 @@ MyHeteroSeparateCSR<IdxType, ReturnAlloc> ToSeparateCSR(const MyHeteroIntegrated
 template<typename InputAlloc, typename ReturnAlloc, typename IdxType>
 MyHyb<IdxType, ReturnAlloc, MyHeteroSeparateCSR<IdxType, ReturnAlloc>> MyHybIntegratedCSRToSeparateCSR(const MyHyb<IdxType, ReturnAlloc, MyHeteroIntegratedCSR<IdxType, ReturnAlloc>>& hyb) {
     MyHyb<IdxType, ReturnAlloc, MyHeteroSeparateCSR<IdxType, ReturnAlloc>> result(hyb.HybIndexMax, hyb.ELL_logical_width, hyb.ELL_physical_width,
-        ToSeparateCSR<InputAlloc, ReturnAlloc, IdxType>(hyb.csr), ELLColIdx, ELLRelType, hyb.num_rows, hyb.num_cols, hyb.num_rels, hyb.num_nnzs);
+        ToSeparateCSR<InputAlloc, ReturnAlloc, IdxType>(hyb.csr), hyb.ELLColIdx, hyb.ELLRelType, hyb.num_rows, hyb.num_cols, hyb.num_rels, hyb.num_nnzs);
     return result;
 }

@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "show_smid", "show_smid\show
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "myhyb_test", "hetero_edgesoftmax\myhyb_test.vcxproj", "{DC562BF4-E245-4644-8E2C-57600C3729F9}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DGLHackKernelTest", "hetero_edgesoftmax\DGLHackKernelTest.vcxproj", "{4FC5211B-7FB5-4FE2-961A-A50EDC08C274}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -27,6 +29,10 @@ Global
 		{DC562BF4-E245-4644-8E2C-57600C3729F9}.Debug|x64.Build.0 = Debug|x64
 		{DC562BF4-E245-4644-8E2C-57600C3729F9}.Release|x64.ActiveCfg = Release|x64
 		{DC562BF4-E245-4644-8E2C-57600C3729F9}.Release|x64.Build.0 = Release|x64
+		{4FC5211B-7FB5-4FE2-961A-A50EDC08C274}.Debug|x64.ActiveCfg = Debug|x64
+		{4FC5211B-7FB5-4FE2-961A-A50EDC08C274}.Debug|x64.Build.0 = Debug|x64
+		{4FC5211B-7FB5-4FE2-961A-A50EDC08C274}.Release|x64.ActiveCfg = Release|x64
+		{4FC5211B-7FB5-4FE2-961A-A50EDC08C274}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
