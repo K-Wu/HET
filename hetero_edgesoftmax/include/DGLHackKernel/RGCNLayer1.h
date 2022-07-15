@@ -44,7 +44,7 @@ __global__ void RgcnLayer1KernelImpl(const Idx* ranges,
 template </*int XPU, */typename Idx, typename DType>
 void RgcnLayer1Impl(
     //GraphRef graph,
-    MyHeteroIntegratedCSR<int32_t, thrust::device_allocator<int32_t>> csr,
+    MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> weight,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> norm,
@@ -81,6 +81,13 @@ void RgcnLayer1Impl(
         int nblks = num_nodes;
         int nthrs = feat_len_y * feat_len_x;
         //auto* thr_entry = runtime::CUDAThreadEntry::ThreadLocal();
+        cuda_err_chk(cudaDeviceSynchronize());
+        std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
         RgcnLayer1KernelImpl<Idx, DType><<<nblks, nthrs/*, 0, thr_entry->stream*/>>>
             (range_data, ids_data, eids_data, typeids_data, hidden_data, weight_data, norm_data, ret_data, num_nodes, feat_len_y, feat_len_x, ntypes);
+        cuda_err_chk(cudaPeekAtLastError());
+        cuda_err_chk(cudaDeviceSynchronize());
+        std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+        std::cout << "RGCN Layer 1 forward time: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " ms"<<std::endl;
+
     }
