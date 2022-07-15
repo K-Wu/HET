@@ -36,7 +36,7 @@ int FusetGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph, 
     MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_el=GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, 1});
     MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_er=GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, 1});
 
-    float slope;
+    float slope=0.2;
 
     FusedGatKernelImpl<Idx, DType>(incsr, feat_src, el, er, sum, exp, ret, eids, slope);
     // TODO: check if transpsoed eid is needed here
@@ -51,9 +51,9 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(){
     std::vector<unsigned long> etypes_shape;
 
     //bool fortran_order;
-    std::vector<int> srcs_data;
-    std::vector<int> dsts_data;
-    std::vector<int> etypes_data;
+    std::vector<int64_t> srcs_data;
+    std::vector<int64_t> dsts_data;
+    std::vector<int64_t> etypes_data;
 
     int num_nodes = 14541;
     int num_edges = 620232;
@@ -76,9 +76,9 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(){
     std::vector<unsigned long> etypes_shape;
 
     //bool fortran_order;
-    std::vector<int> srcs_data;
-    std::vector<int> dsts_data;
-    std::vector<int> etypes_data;
+    std::vector<int64_t> srcs_data;
+    std::vector<int64_t> dsts_data;
+    std::vector<int64_t> etypes_data;
 
     int num_nodes = 2500604;
     int num_edges = 16109182;
@@ -125,7 +125,7 @@ int RGCNLayer1Profiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph
     MySimpleNDArray<Idx, thrust::device_allocator<Idx>> transposed_eids(std::vector<int64_t>{transposed_csr.total_num_nnzs},transposed_csr.rel_type);
     
 
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden=GenerateRandomNDArray<DType>({csr.total_num_nnzs,in_feat}); // TODO: assuming hidden is x. need to verify if that is correct
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden=GenerateRandomNDArray<DType>({csr.num_rows,in_feat}); // TODO: assuming hidden is x. need to verify if that is correct
 
     MySimpleNDArray<DType, thrust::device_allocator<DType>> weight=GenerateRandomNDArray<DType>({csr.num_rels, in_feat, out_feat});
     // asuming num_bases == num_rels

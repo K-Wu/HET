@@ -26,17 +26,19 @@ public:
     MySimpleNDArray(const MySimpleNDArray<DType, OtherAlloc>& other) : shape(other.shape), data(other.data) {}
 
     /*! \return the data pointer with type. */
-    template <typename T>
-    inline T* Ptr() {
-        DType* result = thrust::raw_pointer_cast(data.data());
-        return static_cast<T*>(result);
-    }
+    //template <typename T>
+    //inline T* Ptr() {
+    //    return static_cast<T*>(thrust::raw_pointer_cast(data.data()));
+    //}
 
-    template <typename T>
-    inline const T* Ptr() const {
-        const DType* result = thrust::raw_pointer_cast(data.data());
-        return static_cast<const T*>(result);
-    }
+    inline DType* Ptr() {
+           return static_cast<DType*>(thrust::raw_pointer_cast(data.data()));
+        }
+
+    //template <typename T>
+    //inline const T* Ptr() const {
+    //    return static_cast<const T*>(thrust::raw_pointer_cast(data.data()));
+    //}
 
 
 

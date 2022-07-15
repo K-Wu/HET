@@ -121,16 +121,16 @@ void BackwardFusedGatKernelImpl(
         BackwardGatFusedData<Idx, DType> gdata;
         int64_t el_xlen =  el.ComputeXLength();
         int64_t feat_src_xlen =  feat_src.ComputeXLength();
-        gdata.feat_src = feat_src.Ptr<DType>();
-        gdata.el = el.Ptr<DType>();
-        gdata.er = er.Ptr<DType>();
-        gdata.sum = sum.Ptr<DType>();
-        gdata.exp = exp.Ptr<DType>();
-        gdata.ret = ret.Ptr<DType>();
-        gdata.grad_out= grad_out.Ptr<DType>();
-        gdata.grad_feat_src = grad_feat_src.Ptr<DType>();
-        gdata.grad_el = grad_el.Ptr<DType>();
-        gdata.grad_er = grad_er.Ptr<DType>();
+        gdata.feat_src = feat_src.Ptr();
+        gdata.el = el.Ptr();
+        gdata.er = er.Ptr();
+        gdata.sum = sum.Ptr();
+        gdata.exp = exp.Ptr();
+        gdata.ret = ret.Ptr();
+        gdata.grad_out= grad_out.Ptr();
+        gdata.grad_feat_src = grad_feat_src.Ptr();
+        gdata.grad_el = grad_el.Ptr();
+        gdata.grad_er = grad_er.Ptr();
         gdata.leaky_relu_slope = slope;
         //gdata.n = el.GetSize()/sizeof(DType)/el_xlen; 
         gdata.n = el.data.size()/el_xlen;
@@ -139,7 +139,7 @@ void BackwardFusedGatKernelImpl(
         gdata.feat_src_hidden = feat_src_xlen/el_xlen;
         //auto outcsr = graph.GetOutCSRMatrix();
         //minigun::Csr<Idx> ocsr = utils::CreateCsr<Idx>(outcsr.indptr, outcsr.indices);
-        gdata.eids = eids.Ptr<Idx>();//static_cast<Idx*>(outcsr.data->data);
+        gdata.eids = eids.Ptr();//static_cast<Idx*>(outcsr.data->data);
         // write a device function and call it from here
         //LOG(INFO) << "Within Fused Gat Kernel Impl." << "feat_src_dim:" << feat_src.GetSize()/sizeof(DType)/feat_src_xlen << "*" << feat_src_xlen 
         //    <<" el_dim:" << el.GetSize()/sizeof(DType)/el_xlen << "*" << el_xlen  << " ret_dim:" << ret.GetSize()/sizeof(DType)/ret_len <<"*" << ret_len

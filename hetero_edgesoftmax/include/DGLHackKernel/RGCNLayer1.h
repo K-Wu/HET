@@ -61,12 +61,12 @@ void RgcnLayer1Impl(
         //auto type_ids = csr[3];
         auto range_data = static_cast<Idx*>(thrust::raw_pointer_cast(csr.row_ptr.data()));
         auto ids_data = static_cast<Idx*>(thrust::raw_pointer_cast(csr.col_idx.data()));
-        auto eids_data = eids.Ptr<Idx>();
+        auto eids_data = eids.Ptr();
         auto typeids_data = static_cast<Idx*>(thrust::raw_pointer_cast(csr.rel_type.data()));
-        auto hidden_data = hidden.Ptr<DType>();
-        auto weight_data = weight.Ptr<DType>();
-        auto norm_data = norm.Ptr<DType>();
-        auto ret_data = ret.Ptr<DType>();
+        auto hidden_data = hidden.Ptr();
+        auto weight_data = weight.Ptr();
+        auto norm_data = norm.Ptr();
+        auto ret_data = ret.Ptr();
         //print_dims(hidden);
         //print_dims(weight);
         //print_dims(norm);

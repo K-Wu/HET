@@ -124,12 +124,12 @@ void FusedGatKernelImpl(
         int64_t feat_src_xlen = feat_src.ComputeXLength();
         int64_t ret_len =  ret.ComputeXLength();
 
-        gdata.feat_src = feat_src.Ptr<DType>();
-        gdata.el = el.Ptr<DType>();
-        gdata.er = er.Ptr<DType>();
-        gdata.sum = sum.Ptr<DType>();
-        gdata.exp = exp.Ptr<DType>();
-        gdata.ret = ret.Ptr<DType>();
+        gdata.feat_src = feat_src.Ptr();
+        gdata.el = el.Ptr();
+        gdata.er = er.Ptr();
+        gdata.sum = sum.Ptr();
+        gdata.exp = exp.Ptr();
+        gdata.ret = ret.Ptr();
         gdata.leaky_relu_slope = slope;
         gdata.n = el.data.size()/el_xlen; 
         gdata.e_xlen = el_xlen;
@@ -141,7 +141,7 @@ void FusedGatKernelImpl(
         //aten::CSRMatrix incsr(graph->NumVertices(0), graph->NumVertices(0), incsr_elements[0], incsr_elements[1], incsr_elements[2]);
 
         //gdata.eids = incsr.data.Ptr<Idx>(); //TODO: generate eid for this
-        gdata.eids = eids.Ptr<Idx>();
+        gdata.eids = eids.Ptr();
         // write a device function and call it from here
         //LOG(INFO) << "Within Fused Gat Kernel Impl." << "feat_src_dim:" << feat_src.GetSize()/sizeof(DType)/feat_src_xlen << "*" << feat_src_xlen 
         //    <<" el_dim:" << el.GetSize()/sizeof(DType)/el_xlen << "*" << el_xlen  << " ret_dim:" << ret.GetSize()/sizeof(DType)/ret_len <<"*" << ret_len

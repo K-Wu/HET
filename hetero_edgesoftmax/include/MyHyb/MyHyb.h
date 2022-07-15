@@ -9,6 +9,7 @@
 #include <map>
 #include <set>
 #include <optional>
+#include <numeric>
 //#include <optional>
 
 #ifdef MyHyb_NONEXISTENT_ELEMENT
@@ -37,7 +38,7 @@ thrust::host_vector<IdxType> TransposeCSR(thrust::detail::vector_base<IdxType, s
 
     new_row_ptr[0] = 0;
     for (int64_t idxNode = 0; idxNode< row_ptr.size() - 1; idxNode++) { // assert num_rows == num_cols
-        new_row_ptr[idxNode] = new_row_ptr[idxNode -1] + col_row_map[idxNode].size();
+        new_row_ptr[idxNode+1] = new_row_ptr[idxNode] + col_row_map[idxNode].size();
         for (int64_t idxEdgeForCurrNode = 0; idxEdgeForCurrNode< col_row_map[idxNode].size(); idxEdgeForCurrNode++) {
             new_col_idx[new_row_ptr[idxNode] + idxEdgeForCurrNode] = col_row_map[idxNode][idxEdgeForCurrNode].first;
             permutation[new_row_ptr[idxNode] + idxEdgeForCurrNode] = col_row_map[idxNode][idxEdgeForCurrNode].second;
@@ -92,7 +93,7 @@ public:
         this->num_cols = num_cols;
         this->num_rels = num_rels;
         this->num_nnzs = num_nnzs;
-        this->total_num_nnzs = std::accumulate(num_nnzs.begin(), num_nnzs.end(), 0);
+        this->total_num_nnzs = std::reduce(num_nnzs.begin(), num_nnzs.end());
         //this->rel_ptr = rel_ptr;
         this->row_ptr = row_ptr;
         this->col_idx = col_idx;
@@ -107,7 +108,7 @@ public:
             this->num_nnzs[csr_idx]=cusp_csrs[csr_idx].num_entries;
         }
         this->num_rels = cusp_csrs.size();
-        this->total_num_nnzs = std::accumulate(num_nnzs.begin(), num_nnzs.end(), 0);
+        this->total_num_nnzs = std::reduce(num_nnzs.begin(), num_nnzs.end());
         this->row_ptr = thrust::detail::vector_base<IdxType, Alloc>(this->num_rels*this->num_rows+1,0);
         this->col_idx = thrust::detail::vector_base<IdxType, Alloc>(this->total_num_nnzs,0);
 
@@ -123,7 +124,7 @@ public:
                     assert(this->row_ptr[IdxRow+IdxRelationship*this->num_rows+1]==this->row_ptr[IdxRelationship*this->num_rows]+cusp_csrs[IdxRelationship].row_offsets[IdxRow+1]);
                 }
             }
-            assert(this->row_ptr[(1+IdxRelationship)*this->num_rows]== std::accumulate(num_nnzs.begin(), std::next(num_nnzs.begin(),IdxRelationship+1), 0));
+            assert(this->row_ptr[(1+IdxRelationship)*this->num_rows]== std::reduce(num_nnzs.begin(), std::next(num_nnzs.begin(),IdxRelationship+1)));
             for (int64_t IdxEdgeThisRelationship = 0; IdxEdgeThisRelationship<cusp_csrs[IdxRelationship].num_entries;IdxEdgeThisRelationship++){
                 this->col_idx[this->row_ptr[IdxRelationship*this->num_rows]+IdxEdgeThisRelationship]=cusp_csrs[IdxRelationship].column_indices[IdxEdgeThisRelationship];
             }                        
@@ -133,13 +134,13 @@ public:
     template<typename OtherType, typename OtherAlloc>
     void Transpose(std::optional<typename std::reference_wrapper<typename thrust::detail::vector_base<OtherType, OtherAlloc>>> eids){
         thrust::host_vector<IdxType>  permutation = TransposeCSR(row_ptr, col_idx);
-        
+        assert(num_rows==num_cols);
         if (eids.has_value()){
             thrust::detail::vector_base<IdxType, OtherAlloc>& eids_ref = eids.value().get();
             thrust::detail::vector_base<OtherType, OtherAlloc> new_eids(eids_ref.size());
             thrust::detail::vector_base<IdxType, OtherAlloc> eids_new(permutation.size());
-            typedef thrust::detail::vector_base<IdxType, OtherAlloc>::iterator ElementIterator;
-            typedef thrust::host_vector<IdxType>::iterator IndexIterator;
+            typedef typename thrust::detail::vector_base<IdxType, OtherAlloc>::iterator ElementIterator;
+            typedef typename thrust::host_vector<IdxType>::iterator IndexIterator;
             thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter(eids_ref.begin(), permutation.begin());
             //for (int64_t idx = 0; idx < eids_ref.size(); idx++) {
             //    new_eids[idx] = *permute_iter;
@@ -194,7 +195,7 @@ public:
                             const thrust::detail::vector_base<IdxType, OtherAlloc>& row_ptr,
                             const thrust::detail::vector_base<IdxType, OtherAlloc>& col_idx,
                             const thrust::detail::vector_base<IdxType, OtherAlloc>& rel_type){
-        this->total_num_nnzs = std::accumulate(num_nnzs.begin(), num_nnzs.end(), 0);
+        this->total_num_nnzs = std::reduce(num_nnzs.begin(), num_nnzs.end());
         this->num_rows = num_rows;
         this->num_cols = num_cols;
         this->num_rels = num_rels;
@@ -259,6 +260,9 @@ public:
 
     template<typename OtherType, typename OtherAlloc>
     void Transpose(std::optional<typename std::reference_wrapper<typename thrust::detail::vector_base<OtherType, OtherAlloc>>> eids){
+        assert(num_rows==num_cols);
+
+
         thrust::host_vector<IdxType>  permutation = TransposeCSR(row_ptr, col_idx);
         
         if (eids.has_value()){
@@ -266,16 +270,16 @@ public:
             thrust::detail::vector_base<IdxType, OtherAlloc>& eids_ref = eids.value().get();
             thrust::detail::vector_base<OtherType, OtherAlloc> new_eids(eids_ref.size());
             thrust::detail::vector_base<IdxType, OtherAlloc> eids_new(permutation.size());
-            typedef thrust::detail::vector_base<IdxType, OtherAlloc>::iterator ElementIterator;
-            typedef thrust::host_vector<IdxType>::iterator IndexIterator;
+            typedef typename thrust::detail::vector_base<IdxType, OtherAlloc>::iterator ElementIterator;
+            typedef typename thrust::host_vector<IdxType>::iterator IndexIterator;
             thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter(eids_ref.begin(), permutation.begin());
             thrust::copy(permute_iter, permute_iter+ eids_ref.size(), new_eids.begin());
             thrust::copy(new_eids.begin(), new_eids.end(), eids_ref.begin());
         }
 
         // work on rel_types
-        typedef thrust::detail::vector_base<IdxType, OtherAlloc>::iterator ElementIterator;
-        typedef thrust::host_vector<IdxType>::iterator IndexIterator;
+        typedef typename thrust::detail::vector_base<IdxType, OtherAlloc>::iterator ElementIterator;
+        typedef typename thrust::host_vector<IdxType>::iterator IndexIterator;
         thrust::detail::vector_base<IdxType, OtherAlloc> new_rel_types(permutation.size());
         thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter(rel_type.begin(), permutation.begin());
         thrust::copy(permute_iter, permute_iter + permutation.size(), new_rel_types.begin());
@@ -332,7 +336,7 @@ public:
             for (int64_t IdxEdge = 0; IdxEdge < EdgeRelationshipEidsTupleFromThisNode.size(); IdxEdge++){
                 col_idx[row_ptr[IdxRow]+IdxEdge] = EdgeRelationshipEidsTupleFromThisNode[IdxEdge].first.first;
                 rel_type[row_ptr[IdxRow]+IdxEdge] = EdgeRelationshipEidsTupleFromThisNode[IdxEdge].first.second;
-                eids[rot_ptr[IdxRow]+IdxEdge] = EdgeRelationshipEidsTupleFromThisNode[IdxEdge].second;
+                eids[row_ptr[IdxRow]+IdxEdge] = EdgeRelationshipEidsTupleFromThisNode[IdxEdge].second;
             }
         }
     }
@@ -386,7 +390,7 @@ public:
         this->num_cols = num_cols;
         this->num_rels = num_rels;
         this->num_nnzs=num_nnzs;
-        this->total_num_nnzs = std::accumulate(num_nnzs.begin(), num_nnzs.end(), 0);
+        this->total_num_nnzs = std::reduce(num_nnzs.begin(), num_nnzs.end());
     }
 
 
@@ -428,7 +432,7 @@ MyHeteroIntegratedCSR<IdxType, std::allocator<IdxType>> ToIntegratedCSR_CPU(cons
     //csr.rel_ptr;
     //csr.row_ptr;
     //csr.col_idx;
-    int64_t total_num_nnzs = std::accumulate(csr.num_nnzs.begin(), csr.num_nnzs.end(), 0);
+    int64_t total_num_nnzs = std::reduce(csr.num_nnzs.begin(), csr.num_nnzs.end());
 
     std::vector<std::map<IdxType,  std::vector<IdxType>>> edge_to_rel_type(csr.num_rows);
 
