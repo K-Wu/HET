@@ -108,7 +108,7 @@ void BackwardFusedGatKernelImpl(
     MySimpleNDArray<DType,thrust::device_allocator<DType>> grad_feat_src,
     MySimpleNDArray<DType,thrust::device_allocator<DType>> grad_el,
     MySimpleNDArray<DType,thrust::device_allocator<DType>> grad_er,
-    MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids, //thrust::sequence<Idx>(eids.data.begin(),eids.data.end(), 0); TODO: check if it needs a different eid
+    //MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids, //thrust::sequence<Idx>(eids.data.begin(),eids.data.end(), 0); TODO: check if it needs a different eid
     float slope) {
         // As GAT only has 1 type of relationship, we use a specialcase of separateCSR where num releationship is asserted as 1 
         assert(outcsr.num_rels==1);
@@ -139,7 +139,8 @@ void BackwardFusedGatKernelImpl(
         gdata.feat_src_hidden = feat_src_xlen/el_xlen;
         //auto outcsr = graph.GetOutCSRMatrix();
         //minigun::Csr<Idx> ocsr = utils::CreateCsr<Idx>(outcsr.indptr, outcsr.indices);
-        gdata.eids = eids.Ptr();//static_cast<Idx*>(outcsr.data->data);
+        //gdata.eids = eids.Ptr();//static_cast<Idx*>(outcsr.data->data);
+        gdata.eids = static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.eids.data()));
         // write a device function and call it from here
         //LOG(INFO) << "Within Fused Gat Kernel Impl." << "feat_src_dim:" << feat_src.GetSize()/sizeof(DType)/feat_src_xlen << "*" << feat_src_xlen 
         //    <<" el_dim:" << el.GetSize()/sizeof(DType)/el_xlen << "*" << el_xlen  << " ret_dim:" << ret.GetSize()/sizeof(DType)/ret_len <<"*" << ret_len

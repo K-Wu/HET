@@ -106,7 +106,7 @@ void FusedGatKernelImpl(
     MySimpleNDArray<DType, thrust::device_allocator<DType>> sum,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> exp,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> ret,
-    MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids,//thrust::sequence<Idx>(eids.data.begin(),eids.data.end(), 0);
+    //MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids,//thrust::sequence<Idx>(eids.data.begin(),eids.data.end(), 0);
     float slope) {
         // As GAT only has 1 type of relationship, we use a specialcase of separateCSR where num releationship is asserted as 1 
         assert(incsr.num_rels==1);
@@ -141,7 +141,9 @@ void FusedGatKernelImpl(
         //aten::CSRMatrix incsr(graph->NumVertices(0), graph->NumVertices(0), incsr_elements[0], incsr_elements[1], incsr_elements[2]);
 
         //gdata.eids = incsr.data.Ptr<Idx>(); //TODO: generate eid for this
-        gdata.eids = eids.Ptr();
+        //gdata.eids = eids.Ptr();
+        gdata.eids = static_cast<Idx*>(thrust::raw_pointer_cast(incsr.eids.data()));
+
         // write a device function and call it from here
         //LOG(INFO) << "Within Fused Gat Kernel Impl." << "feat_src_dim:" << feat_src.GetSize()/sizeof(DType)/feat_src_xlen << "*" << feat_src_xlen 
         //    <<" el_dim:" << el.GetSize()/sizeof(DType)/el_xlen << "*" << el_xlen  << " ret_dim:" << ret.GetSize()/sizeof(DType)/ret_len <<"*" << ret_len

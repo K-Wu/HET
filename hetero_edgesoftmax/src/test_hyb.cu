@@ -95,7 +95,15 @@ int main(){
     cusp::csr_matrix<int, int, cusp::host_memory> writing_csr_h(writing_coo_h);
 
     std::vector<cusp::csr_matrix<int, int, cusp::host_memory>> csr_matrices = {written_by_csr_h, has_csr_h, is_about_csr_h, cited_csr_h, citing_csr_h, writing_csr_h};
-    MyHeteroSeparateCSR<int, std::allocator<int>> myHeteroSeparateCSR(csr_matrices);
+
+    int64_t total_num_nnzs = 0;
+    for (auto& csr_matrix : csr_matrices)
+    {
+        total_num_nnzs += csr_matrix.values.size();
+    }
+    thrust::host_vector<int> eids(total_num_nnzs);
+    thrust::sequence<>(eids.begin(), eids.end(), 0);
+    MyHeteroSeparateCSR<int, std::allocator<int>> myHeteroSeparateCSR(csr_matrices, eids);
 
     MyHeteroIntegratedCSR<int, std::allocator<int>> myHeteroIntegratedCSR = ToIntegratedCSR<std::allocator<int>, std::allocator<int>, int>(myHeteroSeparateCSR);
     MyHeteroSeparateCSR<int, std::allocator<int>> myHeteroSeparateCSR2 = ToSeparateCSR<std::allocator<int>, std::allocator<int>, int>(myHeteroIntegratedCSR);

@@ -50,8 +50,7 @@ void RgcnLayer1BackwardImpl(
     MySimpleNDArray<DType, thrust::device_allocator<DType>> norm,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_out,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_hidden,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_weight,
-    MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids){
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_weight){
         //assert(csr.IsSortedByEdgeType_CPU());
         //cudaDeviceSynchronize();
         //auto t1 = std::chrono::steady_clock::now();
@@ -64,7 +63,8 @@ void RgcnLayer1BackwardImpl(
         //auto type_ids = csr[3];
         auto range_data = static_cast<Idx*>(thrust::raw_pointer_cast(transposed_csr.row_ptr.data()));
         auto ids_data = static_cast<Idx*>(thrust::raw_pointer_cast(transposed_csr.col_idx.data()));
-        auto eids_data = eids.Ptr();
+        //auto eids_data = static_cast<Idx*>(thrust::raw_pointer_cast(eids));
+        auto eids_data = static_cast<Idx*>(thrust::raw_pointer_cast(transposed_csr.eids.data()));
         auto typeids_data = static_cast<Idx*>(thrust::raw_pointer_cast(transposed_csr.rel_type.data()));
         auto hidden_data = hidden.Ptr();
         auto weight_data = weight.Ptr();

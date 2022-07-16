@@ -5,21 +5,22 @@
 int FusetGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph, int64_t num_heads, int64_t num_hidden){
     typedef int32_t Idx;
     typedef float DType;
-  
 
-    MyHeteroSeparateCSR<Idx, std::allocator<Idx>> incsr_h(std::vector<cusp::csr_matrix<int, int, cusp::host_memory>>{graph});
-    MyHeteroSeparateCSR<Idx, std::allocator<Idx>> outcsr_h(incsr_h);
-    MySimpleNDArray<Idx, std::allocator<Idx>> eids_h(std::vector<int64_t>{incsr_h.total_num_nnzs});
+    MySimpleNDArray<Idx, std::allocator<Idx>> eids_h(std::vector<int64_t>{(int64_t) graph.values.size()});
     thrust::sequence<>(eids_h.data.begin(),eids_h.data.end(), 0);
-    MySimpleNDArray<Idx, std::allocator<Idx>> transposed_eids_h(eids_h);
-    outcsr_h.Transpose<>(std::optional<std::reference_wrapper<typename thrust::detail::vector_base<Idx, std::allocator<Idx>>>>{transposed_eids_h.data});
+    //MySimpleNDArray<Idx, std::allocator<Idx>> transposed_eids_h(eids_h);
+
+    MyHeteroSeparateCSR<Idx, std::allocator<Idx>> incsr_h(std::vector<cusp::csr_matrix<int, int, cusp::host_memory>>{graph}, eids_h.data);
+    MyHeteroSeparateCSR<Idx, std::allocator<Idx>> outcsr_h(incsr_h);
+    
+    outcsr_h.Transpose();//std::optional<std::reference_wrapper<typename thrust::detail::vector_base<Idx, std::allocator<Idx>>>>{transposed_eids_h.data});
 
     // copy CSR+eid data to device
 
     MyHeteroSeparateCSR<Idx, thrust::device_allocator<Idx>> incsr(incsr_h);
     MyHeteroSeparateCSR<Idx, thrust::device_allocator<Idx>> outcsr(outcsr_h);
-    MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids(eids_h);
-    MySimpleNDArray<Idx, thrust::device_allocator<Idx>> transposed_eids(transposed_eids_h);
+    //MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids(eids_h);
+    //MySimpleNDArray<Idx, thrust::device_allocator<Idx>> transposed_eids(transposed_eids_h);
     
 
     MySimpleNDArray<DType, thrust::device_allocator<DType>> feat_src=GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, num_hidden});
@@ -38,9 +39,9 @@ int FusetGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph, 
 
     float slope=0.2;
 
-    FusedGatKernelImpl<Idx, DType>(incsr, feat_src, el, er, sum, exp, ret, eids, slope);
+    FusedGatKernelImpl<Idx, DType>(incsr, feat_src, el, er, sum, exp, ret, slope);
     // TODO: check if transpsoed eid is needed here
-    BackwardFusedGatKernelImpl<Idx, DType>(outcsr, feat_src, el, er, sum, exp, ret, grad_out, grad_feat_src, grad_el, grad_er, transposed_eids, slope);
+    BackwardFusedGatKernelImpl<Idx, DType>(outcsr, feat_src, el, er, sum, exp, ret, grad_out, grad_feat_src, grad_el, grad_er, slope);
     return 0;
 }
 // TODO: implement thrust::vector Transpose(CSRType, eids) with optional eid as output
@@ -168,13 +169,14 @@ int RGCNLayer1Profiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph
 
     MySimpleNDArray<Idx, std::allocator<Idx>> eids_h(std::vector<int64_t>{(int64_t)graph.column_indices.size()});
     thrust::sequence<>(eids_h.data.begin(), eids_h.data.end(), 0);
-    MySimpleNDArray<Idx, std::allocator<Idx>> transposed_eids_h(eids_h);
+    //MySimpleNDArray<Idx, std::allocator<Idx>> transposed_eids_h(eids_h);
 
     MyHeteroIntegratedCSR<Idx, std::allocator<Idx>> csr_h(graph.row_offsets, graph.column_indices, graph.values, eids_h.data);
     MyHeteroIntegratedCSR<Idx, std::allocator<Idx>> transposed_csr_h(csr_h);
     //MySimpleNDArray<Idx, std::allocator<Idx>> eids_h(std::vector<int64_t>{csr_h.total_num_nnzs});
     transposed_csr_h.Transpose();
-    thrust::copy(transposed_csr_h.eids.begin(), transposed_csr_h.eids.end(), transposed_eids_h.data.begin());
+    //thrust::copy(csr_h.eids.begin(), csr_h.eids.end(), eids_h.data.begin());
+    //thrust::copy(transposed_csr_h.eids.begin(), transposed_csr_h.eids.end(), transposed_eids_h.data.begin());
 
     //transposed_csr_h.Transpose<>(std::optional<std::reference_wrapper<typename thrust::detail::vector_base<Idx, std::allocator<Idx>>>>{transposed_eids_h.data});
 
@@ -183,8 +185,8 @@ int RGCNLayer1Profiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph
 
     MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr(csr_h);
     MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> transposed_csr(transposed_csr_h);
-    MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids(eids_h);
-    MySimpleNDArray<Idx, thrust::device_allocator<Idx>> transposed_eids(transposed_eids_h);
+    //MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids(eids_h);
+    //MySimpleNDArray<Idx, thrust::device_allocator<Idx>> transposed_eids(transposed_eids_h);
     
 
     MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden=GenerateRandomNDArray<DType>({csr.num_rows,in_feat}); // TODO: assuming hidden is x. need to verify if that is correct
@@ -201,7 +203,7 @@ int RGCNLayer1Profiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph
 
     // sort edges according to relationship type
 
-    RgcnLayer1Impl<Idx, DType>(csr, hidden, weight, norm, ret, eids);
-    RgcnLayer1BackwardImpl<Idx, DType>(transposed_csr, hidden, weight, norm, grad_out, grad_hidden, grad_weight, transposed_eids);
+    RgcnLayer1Impl<Idx, DType>(csr, hidden, weight, norm, ret);
+    RgcnLayer1BackwardImpl<Idx, DType>(transposed_csr, hidden, weight, norm, grad_out, grad_hidden, grad_weight);
     return 0;
 }

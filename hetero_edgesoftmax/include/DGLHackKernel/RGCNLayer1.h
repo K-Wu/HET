@@ -48,8 +48,7 @@ void RgcnLayer1Impl(
     MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> weight,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> norm,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> ret,
-    MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids){
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> ret){
         //LOG(INFO) << "Calling implementation of rgn layer 1 forward";
         //assert(csr.IsSortedByEdgeType_CPU());
         //typedef int32_t Idx;
@@ -61,7 +60,8 @@ void RgcnLayer1Impl(
         //auto type_ids = csr[3];
         auto range_data = static_cast<Idx*>(thrust::raw_pointer_cast(csr.row_ptr.data()));
         auto ids_data = static_cast<Idx*>(thrust::raw_pointer_cast(csr.col_idx.data()));
-        auto eids_data = eids.Ptr();
+        //auto eids_data = static_cast<Idx*>(thrust::raw_pointer_cast(eids);
+        auto eids_data = static_cast<Idx*>(thrust::raw_pointer_cast(csr.eids.data()));
         auto typeids_data = static_cast<Idx*>(thrust::raw_pointer_cast(csr.rel_type.data()));
         auto hidden_data = hidden.Ptr();
         auto weight_data = weight.Ptr();
