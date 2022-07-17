@@ -44,7 +44,7 @@ thrust::host_vector<IdxType> TransposeCSR(thrust::detail::vector_base<IdxType, s
     }
 
     new_row_ptr[0] = 0;
-    for (int64_t idxNode = 0; idxNode< row_ptr.size(); idxNode++) { // assert num_rows == num_cols
+    for (int64_t idxNode = 0; idxNode< row_ptr.size()-1; idxNode++) { // assert num_rows == num_cols
         new_row_ptr[idxNode+1] = new_row_ptr[idxNode] + col_row_map[idxNode].size();
         for (int64_t idxEdgeForCurrNode = 0; idxEdgeForCurrNode< col_row_map[idxNode].size(); idxEdgeForCurrNode++) {
             new_col_idx[new_row_ptr[idxNode] + idxEdgeForCurrNode] = col_row_map[idxNode][idxEdgeForCurrNode].first;
@@ -114,15 +114,18 @@ public:
     const thrust::detail::vector_base<IdxType, OtherAlloc>& eids){
         this->eids = eids;
         this->num_nnzs = std::vector<int64_t>(cusp_csrs.size(),0);
+        this->num_rows=0;this->num_cols = 0;
         for (int64_t csr_idx=0;csr_idx< cusp_csrs.size();csr_idx++){
             this->num_rows = std::max(this->num_rows, (int64_t)cusp_csrs[csr_idx].num_rows);
             this->num_cols = std::max(this->num_cols, (int64_t)cusp_csrs[csr_idx].num_cols);
             this->num_nnzs[csr_idx]=cusp_csrs[csr_idx].num_entries;
+            //printf("num_rows: %d, num_cols: %d, num_nnzs: %d\n", cusp_csrs[csr_idx].num_rows, cusp_csrs[csr_idx].num_cols, this->num_nnzs[csr_idx]);
         }
         this->num_rels = cusp_csrs.size();
         this->total_num_nnzs = my_accumulate<>(num_nnzs.begin(), num_nnzs.end(), 0);
         this->row_ptr = thrust::detail::vector_base<IdxType, Alloc>(this->num_rels*this->num_rows+1,0);
         this->col_idx = thrust::detail::vector_base<IdxType, Alloc>(this->total_num_nnzs,0);
+        //printf("num_rows: %ld, num_cols: %ld, num_rels: %ld, total_num_nnzs: %ld\n", this->num_rows, this->num_cols, this->num_rels, this->total_num_nnzs);
 
         for (int64_t IdxRelationship = 0; IdxRelationship < this->num_rels; IdxRelationship++){
             for (int64_t IdxRow =0; IdxRow<this->num_rows; IdxRow++){
@@ -136,9 +139,9 @@ public:
                     assert(this->row_ptr[IdxRow+IdxRelationship*this->num_rows+1]==this->row_ptr[IdxRelationship*this->num_rows]+cusp_csrs[IdxRelationship].row_offsets[IdxRow+1]);
                 }
             }
-            printf("relationship id %d\n",IdxRelationship);
-            printf("row_ptr[%d]=%d\n",(1+IdxRelationship)*this->num_rows,this->row_ptr[(1+IdxRelationship)*this->num_rows]);
-            printf("myaccumulate=%d\n",my_accumulate<>(num_nnzs.begin(), std::next(num_nnzs.begin(),IdxRelationship+1), 0));
+            //printf("relationship id %d\n",IdxRelationship);
+            //printf("row_ptr[%d]=%d\n",(1+IdxRelationship)*this->num_rows,this->row_ptr[(1+IdxRelationship)*this->num_rows]);
+            //printf("myaccumulate=%d\n",my_accumulate<>(num_nnzs.begin(), std::next(num_nnzs.begin(),IdxRelationship+1), 0));
             assert(this->row_ptr[(1+IdxRelationship)*this->num_rows]== my_accumulate<>(num_nnzs.begin(), std::next(num_nnzs.begin(),IdxRelationship+1), 0));
             for (int64_t IdxEdgeThisRelationship = 0; IdxEdgeThisRelationship<cusp_csrs[IdxRelationship].num_entries;IdxEdgeThisRelationship++){
                 this->col_idx[this->row_ptr[IdxRelationship*this->num_rows]+IdxEdgeThisRelationship]=cusp_csrs[IdxRelationship].column_indices[IdxEdgeThisRelationship];
@@ -688,26 +691,28 @@ bool IsEqual(const MyHyb<IdxType, std::allocator<IdxType>, CSRType>& myhyb1, con
     }
     // ELL physical width could be different
     for (int64_t IdxNode = 0; IdxNode<myhyb1.HybIndexMax; IdxNode++){
-        std::set<std::pair<IdxType,IdxType>> DestNodeRelTypeSet;
+        std::set<std::pair<IdxType,std::pair<IdxType,IdxType>>> DestNodeRelTypeEidsSet;
         for (int64_t IdxElement = IdxNode*myhyb1.ELL_physical_width; IdxElement < IdxNode*myhyb1.ELL_physical_width+myhyb1.ELL_logical_width; IdxElement++){
             IdxType IdxDestNode = myhyb1.ELLColIdx[IdxElement];
             IdxType IdxRelationship = myhyb1.ELLRelType[IdxElement];
+            IdxType IdxEids = myhyb1.ELLEids[IdxElement];
             if (IdxDestNode == MyHyb_NONEXISTENT_ELEMENT){
                 continue;
             }
-            DestNodeRelTypeSet.insert(std::make_pair(IdxDestNode, IdxRelationship));
+            DestNodeRelTypeEidsSet.insert(std::make_pair(IdxDestNode, std::make_pair<>(IdxRelationship,IdxEids)));
         }
-        int64_t NumEdgesFromThisSourceNode1 = DestNodeRelTypeSet.size();
+        int64_t NumEdgesFromThisSourceNode1 = DestNodeRelTypeEidsSet.size();
         for (int64_t IdxElement = IdxNode*myhyb2.ELL_physical_width; IdxElement < IdxNode*myhyb2.ELL_physical_width+myhyb2.ELL_logical_width; IdxElement++){
             IdxType IdxDestNode = myhyb2.ELLColIdx[IdxElement];
             IdxType IdxRelationship = myhyb2.ELLRelType[IdxElement];
+            IdxType IdxEids = myhyb2.ELLEids[IdxElement];
             if (IdxDestNode == MyHyb_NONEXISTENT_ELEMENT){
                 continue;
             }
-            DestNodeRelTypeSet.insert(std::make_pair(IdxDestNode, IdxRelationship));
+            DestNodeRelTypeEidsSet.insert(std::make_pair(IdxDestNode, std::make_pair(IdxRelationship,IdxEids)));
         }
         // check if the number of edges from this source node is the same
-        if (DestNodeRelTypeSet.size() != NumEdgesFromThisSourceNode1){
+        if (DestNodeRelTypeEidsSet.size() != NumEdgesFromThisSourceNode1){
             return false;
         }
     }

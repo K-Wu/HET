@@ -104,6 +104,9 @@ int main(){
     thrust::host_vector<int> eids(total_num_nnzs);
     thrust::sequence<>(eids.begin(), eids.end(), 0);
     MyHeteroSeparateCSR<int, std::allocator<int>> myHeteroSeparateCSR(csr_matrices, eids);
+    //printf("myHeteroSeparateCSR.num_rows: %d\n", myHeteroSeparateCSR.num_rows);
+    //printf("myHeteroSeparateCSR.num_cols: %d\n", myHeteroSeparateCSR.num_cols);
+    //printf("myHeteroSeparateCSR.total_num_nnzs: %d\n", myHeteroSeparateCSR.total_num_nnzs);
 
     MyHeteroIntegratedCSR<int, std::allocator<int>> myHeteroIntegratedCSR = ToIntegratedCSR<std::allocator<int>, std::allocator<int>, int>(myHeteroSeparateCSR);
     MyHeteroIntegratedCSR<int, std::allocator<int>> myHeteroIntegratedCSR_transposed(myHeteroIntegratedCSR);
