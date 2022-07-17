@@ -44,7 +44,7 @@ thrust::host_vector<IdxType> TransposeCSR(thrust::detail::vector_base<IdxType, s
     }
 
     new_row_ptr[0] = 0;
-    for (int64_t idxNode = 0; idxNode< row_ptr.size() - 1; idxNode++) { // assert num_rows == num_cols
+    for (int64_t idxNode = 0; idxNode< row_ptr.size(); idxNode++) { // assert num_rows == num_cols
         new_row_ptr[idxNode+1] = new_row_ptr[idxNode] + col_row_map[idxNode].size();
         for (int64_t idxEdgeForCurrNode = 0; idxEdgeForCurrNode< col_row_map[idxNode].size(); idxEdgeForCurrNode++) {
             new_col_idx[new_row_ptr[idxNode] + idxEdgeForCurrNode] = col_row_map[idxNode][idxEdgeForCurrNode].first;
@@ -136,6 +136,9 @@ public:
                     assert(this->row_ptr[IdxRow+IdxRelationship*this->num_rows+1]==this->row_ptr[IdxRelationship*this->num_rows]+cusp_csrs[IdxRelationship].row_offsets[IdxRow+1]);
                 }
             }
+            printf("relationship id %d\n",IdxRelationship);
+            printf("row_ptr[%d]=%d\n",(1+IdxRelationship)*this->num_rows,this->row_ptr[(1+IdxRelationship)*this->num_rows]);
+            printf("myaccumulate=%d\n",my_accumulate<>(num_nnzs.begin(), std::next(num_nnzs.begin(),IdxRelationship+1), 0));
             assert(this->row_ptr[(1+IdxRelationship)*this->num_rows]== my_accumulate<>(num_nnzs.begin(), std::next(num_nnzs.begin(),IdxRelationship+1), 0));
             for (int64_t IdxEdgeThisRelationship = 0; IdxEdgeThisRelationship<cusp_csrs[IdxRelationship].num_entries;IdxEdgeThisRelationship++){
                 this->col_idx[this->row_ptr[IdxRelationship*this->num_rows]+IdxEdgeThisRelationship]=cusp_csrs[IdxRelationship].column_indices[IdxEdgeThisRelationship];
@@ -791,9 +794,11 @@ MyHyb<IdxType, std::allocator<IdxType>, MyHeteroIntegratedCSR<IdxType, std::allo
     thrust::host_vector<IdxType> result_rel_type(csr.total_num_nnzs, 0);
     thrust::host_vector<IdxType> result_eids(csr.total_num_nnzs, 0);
     // TODO: implement here
-
+    printf("csr_total_num_nnzs: %ld\n", csr.total_num_nnzs);
+    printf("csr.num_rows: %ld\n", csr.num_rows);
     //std::vector<std::vector<std::vector<IdxType>>> residue_csr_rel_type_to_edges(csr.num_rels,std::vector<std::vector<IdxType>>(csr.num_rows,std::vector<IdxType>()));
-    std::vector<std::vector<std::pair<IdxType, std::pair<IdxType, IdxType>>>> residue_csr_src_nodes_to_dests_with_rel_type_and_eids(csr.num_rows);
+    thrust::host_vector<thrust::host_vector<std::pair<IdxType, std::pair<IdxType, IdxType>>>> residue_csr_src_nodes_to_dests_with_rel_type_and_eids;//(csr.num_rows,std::vector<std::pair<IdxType, std::pair<IdxType, IdxType>>>(0));
+    residue_csr_src_nodes_to_dests_with_rel_type_and_eids.resize(csr.num_rows);
     for (int64_t IdxRow =0; IdxRow < csr.num_rows; IdxRow++){
         for (IdxType IdxEdge = csr.row_ptr[IdxRow]; IdxEdge < csr.row_ptr[IdxRow+1]; IdxEdge++){
             
@@ -824,7 +829,7 @@ MyHyb<IdxType, std::allocator<IdxType>, MyHeteroIntegratedCSR<IdxType, std::allo
             result_col_idx[result_row_ptr[IdxRow+1]] = residue_csr_src_nodes_to_dests_with_rel_type_and_eids[IdxRow][IdxElement].first;
             result_rel_type[result_row_ptr[IdxRow+1]] = residue_csr_src_nodes_to_dests_with_rel_type_and_eids[IdxRow][IdxElement].second.first;
             result_eids[result_row_ptr[IdxRow+1]] = residue_csr_src_nodes_to_dests_with_rel_type_and_eids[IdxRow][IdxElement].second.second;
-            result_row_ptr[csr.num_rows+IdxRow+1]+=1;
+            result_row_ptr[IdxRow+1]+=1;
             csr_total_num_nnz+=1;
         }
     }
@@ -832,6 +837,7 @@ MyHyb<IdxType, std::allocator<IdxType>, MyHeteroIntegratedCSR<IdxType, std::allo
     //resize
     result_eids.resize(csr_total_num_nnz);
     result_col_idx.resize(csr_total_num_nnz);
+    result_rel_type.resize(csr_total_num_nnz);
         
 
     MyHeteroIntegratedCSR<IdxType, std::allocator<IdxType>> resultCSR(csr.num_rows, csr.num_cols, csr.num_rels, csr.num_nnzs, /*result_rel_ptr,*/ result_row_ptr, result_col_idx, result_rel_type, result_eids);

@@ -32,6 +32,8 @@ __global__ void RgcnLayer1BackwardMyHYBKernelImpl(const Idx* ellcolidx_data,
             DType agg = 0.;
             for(; ellbeg < ellend; ellbeg++) {
                 Idx dst_id = __ldg(ellcolidx_data + ellbeg);
+                if (dst_id==MyHyb_NONEXISTENT_ELEMENT)
+                    break;
                 Idx eid = __ldg(elleids_data + ellbeg);
                 Idx type_id = __ldg(ellreltype_data + ellbeg);
                 DType g = __ldg(grad_out + dst_id * feat_len_x + th);

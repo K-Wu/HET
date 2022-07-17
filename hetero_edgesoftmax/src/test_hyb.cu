@@ -106,6 +106,12 @@ int main(){
     MyHeteroSeparateCSR<int, std::allocator<int>> myHeteroSeparateCSR(csr_matrices, eids);
 
     MyHeteroIntegratedCSR<int, std::allocator<int>> myHeteroIntegratedCSR = ToIntegratedCSR<std::allocator<int>, std::allocator<int>, int>(myHeteroSeparateCSR);
+    MyHeteroIntegratedCSR<int, std::allocator<int>> myHeteroIntegratedCSR_transposed(myHeteroIntegratedCSR);
+    myHeteroIntegratedCSR_transposed.Transpose();
+    MyHeteroIntegratedCSR<int, std::allocator<int>> myHeteroIntegratedCSR2(myHeteroIntegratedCSR_transposed);
+    myHeteroIntegratedCSR2.Transpose();
+    assert(IsEqual<>(myHeteroIntegratedCSR,myHeteroIntegratedCSR2));
+    
     MyHeteroSeparateCSR<int, std::allocator<int>> myHeteroSeparateCSR2 = ToSeparateCSR<std::allocator<int>, std::allocator<int>, int>(myHeteroIntegratedCSR);
     assert(IsEqual<>(myHeteroSeparateCSR, myHeteroSeparateCSR2));
     MyHyb<int, std::allocator<int>, MyHeteroSeparateCSR<int, std::allocator<int>>> myhyb=IntegratedCSRToHyb_CPU<int>(myHeteroIntegratedCSR, 5, 5, 10000);

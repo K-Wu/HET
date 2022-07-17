@@ -33,7 +33,7 @@ __global__ void RgcnLayer1MyHYBKernelImpl(const Idx* ellcolidx_data,
         for(;ell_beg<ell_end; ell_beg++) {
             Idx src_id = __ldg(ellcolidx_data + ell_beg);
             if (src_id == MyHyb_NONEXISTENT_ELEMENT)
-                continue;
+                break;
             Idx eid = __ldg(elleids_data + ell_beg);
             Idx type_id = __ldg(ellreltype_data + ell_beg);
             if (type_id != cur_type_id) {

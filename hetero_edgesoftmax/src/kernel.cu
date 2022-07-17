@@ -87,7 +87,7 @@ int basic_correctness_test()
     std::vector<unsigned long> citing_shape;
     std::vector<unsigned long> writing_shape;
 
-    bool fortran_order;
+    bool fortran_order = false;
     std::vector<int> written_by_data;
     std::vector<int> has_data;
     std::vector<int> is_about_data;
