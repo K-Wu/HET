@@ -100,6 +100,10 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(){
 int _RGCNLayer1Profiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph, int64_t in_feat, int64_t out_feat, bool flagUseMyHyb, bool flagCheckCorrect){
     typedef int32_t Idx;
     typedef float DType;
+    if (flagCheckCorrect){
+        std::cout<<"Warning: flagCheckCorrect is true in _RGCNLayer1Profiling_main, ignoring flagUseMyHyb and both myhyb and the original kernels will be run."<<std::endl;
+    }
+
     // load data
     //MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr;
     //MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids({csr.total_num_nnzs});
@@ -141,36 +145,35 @@ int _RGCNLayer1Profiling_main(cusp::csr_matrix<int, int, cusp::host_memory> grap
         transposed_csr = transposed_csr_h;
     }
 
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden=GenerateRandomNDArray<DType>({myhyb.num_rows,in_feat}); // TODO: assuming hidden is x. need to verify if that is correct
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> weight=GenerateRandomNDArray<DType>({myhyb.num_rels, in_feat, out_feat});
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden=GenerateRandomNDArray<DType>({csr_h.num_rows,in_feat}); // TODO: assuming hidden is x. need to verify if that is correct
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> weight=GenerateRandomNDArray<DType>({csr_h.num_rels, in_feat, out_feat});
     // asuming num_bases == num_rels
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> norm=GenerateRandomNDArray<DType>({myhyb.total_num_nnzs,1});
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> norm=GenerateRandomNDArray<DType>({csr_h.total_num_nnzs,1});
     MySimpleNDArray<DType, thrust::device_allocator<DType>> ret;//=GenerateRandomNDArray<DType>({myhyb.num_rows, out_feat});
     MySimpleNDArray<DType, thrust::device_allocator<DType>> ret2;//=GenerateRandomNDArray<DType>({csr.num_rows, out_feat});
     
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_out=GenerateRandomNDArray<DType>({myhyb.num_rows, out_feat});// TODO: verify if the assumption that the shape is the same as ret is correct
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_out=GenerateRandomNDArray<DType>({csr_h.num_rows, out_feat});// TODO: verify if the assumption that the shape is the same as ret is correct
     MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_hidden;//=GenerateRandomNDArray<DType>({myhyb.total_num_nnzs,in_feat});
     MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_weight;//=GenerateRandomNDArray<DType>({myhyb.num_rels, in_feat, out_feat});
     MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_hidden2;//=GenerateRandomNDArray<DType>({myhyb.total_num_nnzs,in_feat});
     MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_weight2;//=GenerateRandomNDArray<DType>({myhyb.num_rels, in_feat, out_feat});
 
     if ((!flagUseMyHyb)|| flagCheckCorrect) {
-        ret=GenerateRandomNDArray<DType>({myhyb.num_rows, out_feat});
-        grad_hidden=GenerateRandomNDArray<DType>({myhyb.total_num_nnzs,in_feat});
-        grad_weight=GenerateRandomNDArray<DType>({myhyb.num_rels, in_feat, out_feat});
+        ret=GenerateRandomNDArray<DType>({csr_h.num_rows, out_feat});
+        grad_hidden=GenerateRandomNDArray<DType>({csr_h.total_num_nnzs,in_feat});
+        grad_weight=GenerateRandomNDArray<DType>({csr_h.num_rels, in_feat, out_feat});
+        RgcnLayer1Impl<Idx, DType>(csr, hidden, weight, norm, ret);
+        RgcnLayer1BackwardImpl<Idx, DType>(transposed_csr, hidden, weight, norm, grad_out, grad_hidden, grad_weight);
     }
     if (flagUseMyHyb || flagCheckCorrect) {
-        ret2 = GenerateRandomNDArray<DType>({csr.num_rows, out_feat});
-        grad_hidden2=GenerateRandomNDArray<DType>({myhyb.total_num_nnzs,in_feat});
-        grad_weight2=GenerateRandomNDArray<DType>({myhyb.num_rels, in_feat, out_feat});
+        ret2 = GenerateRandomNDArray<DType>({csr_h.num_rows, out_feat});
+        grad_hidden2=GenerateRandomNDArray<DType>({csr_h.total_num_nnzs,in_feat});
+        grad_weight2=GenerateRandomNDArray<DType>({csr_h.num_rels, in_feat, out_feat});
+        
+        RgcnLayer1MyHYBImpl<Idx, DType, 4, 4>(myhyb, hidden, weight, norm, ret2);
+        RgcnLayer1BackwardMyHYBImpl<Idx, DType, 4, 4>(transposed_myhyb, hidden, weight, norm, grad_out, grad_hidden2, grad_weight2);
     }
     
-    // sort edges according to relationship type
-
-    RgcnLayer1MyHYBImpl<Idx, DType, 4, 4>(myhyb, hidden, weight, norm, ret);
-    RgcnLayer1BackwardMyHYBImpl<Idx, DType, 4, 4>(transposed_myhyb, hidden, weight, norm, grad_out, grad_hidden, grad_weight);
-    RgcnLayer1Impl<Idx, DType>(csr, hidden, weight, norm, ret2);
-    RgcnLayer1BackwardImpl<Idx, DType>(transposed_csr, hidden, weight, norm, grad_out, grad_hidden2, grad_weight2);
 
     if (flagCheckCorrect){
         std::cout<<"check correctness in _RGCNLayer1Profiling_main"<<std::endl;
