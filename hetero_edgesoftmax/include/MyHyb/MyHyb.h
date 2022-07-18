@@ -36,7 +36,7 @@ thrust::host_vector<IdxType> TransposeCSR(thrust::detail::vector_base<IdxType, s
 
     std::map<IdxType, std::vector<std::pair<IdxType, IdxType>>> col_row_map;
 
-    for (int64_t i = 0; i < row_ptr.size() - 1; i++) {
+    for (int64_t i = 0; i < row_ptr.size() - 1; i++) { // TODO: possible loss of precision here as loop variable is int64_t but the indices in matrix is IdxType
         for (int64_t j = row_ptr[i]; j < row_ptr[i + 1]; j++) {
             assert(col_idx[j]<row_ptr.size()-1);
             col_row_map[col_idx[j]].push_back(std::make_pair(i, permutation[j]));
@@ -102,7 +102,7 @@ public:
         this->num_cols = num_cols;
         this->num_rels = num_rels;
         this->num_nnzs = num_nnzs;
-        this->total_num_nnzs = my_accumulate<>(num_nnzs.begin(), num_nnzs.end(), 0);
+        this->total_num_nnzs = my_accumulate<>(num_nnzs.begin(), num_nnzs.end(), 0LL);
         //this->rel_ptr = rel_ptr;
         this->row_ptr = row_ptr;
         this->col_idx = col_idx;
@@ -123,7 +123,7 @@ public:
         }
         this->num_rels = cusp_csrs.size();
         this->total_num_nnzs = my_accumulate<>(num_nnzs.begin(), num_nnzs.end(), 0);
-        this->row_ptr = thrust::detail::vector_base<IdxType, Alloc>(this->num_rels*this->num_rows+1,0);
+        this->row_ptr = thrust::detail::vector_base<IdxType, Alloc>(this->num_rels*this->num_rows+1,0LL);
         this->col_idx = thrust::detail::vector_base<IdxType, Alloc>(this->total_num_nnzs,0);
         //printf("num_rows: %ld, num_cols: %ld, num_rels: %ld, total_num_nnzs: %ld\n", this->num_rows, this->num_cols, this->num_rels, this->total_num_nnzs);
 
@@ -142,7 +142,7 @@ public:
             //printf("relationship id %d\n",IdxRelationship);
             //printf("row_ptr[%d]=%d\n",(1+IdxRelationship)*this->num_rows,this->row_ptr[(1+IdxRelationship)*this->num_rows]);
             //printf("myaccumulate=%d\n",my_accumulate<>(num_nnzs.begin(), std::next(num_nnzs.begin(),IdxRelationship+1), 0));
-            assert(this->row_ptr[(1+IdxRelationship)*this->num_rows]== my_accumulate<>(num_nnzs.begin(), std::next(num_nnzs.begin(),IdxRelationship+1), 0));
+            assert(this->row_ptr[(1+IdxRelationship)*this->num_rows]== my_accumulate<>(num_nnzs.begin(), std::next(num_nnzs.begin(),IdxRelationship+1), 0LL));
             for (int64_t IdxEdgeThisRelationship = 0; IdxEdgeThisRelationship<cusp_csrs[IdxRelationship].num_entries;IdxEdgeThisRelationship++){
                 this->col_idx[this->row_ptr[IdxRelationship*this->num_rows]+IdxEdgeThisRelationship]=cusp_csrs[IdxRelationship].column_indices[IdxEdgeThisRelationship];
             }                        
@@ -215,7 +215,7 @@ public:
                             const thrust::detail::vector_base<IdxType, OtherAlloc>& col_idx,
                             const thrust::detail::vector_base<IdxType, OtherAlloc>& rel_type,
                             const thrust::detail::vector_base<IdxType, OtherAlloc>& eids){
-        this->total_num_nnzs = my_accumulate<>(num_nnzs.begin(), num_nnzs.end(), 0);
+        this->total_num_nnzs = my_accumulate<>(num_nnzs.begin(), num_nnzs.end(), 0LL);
         this->num_rows = num_rows;
         this->num_cols = num_cols;
         this->num_rels = num_rels;
@@ -386,6 +386,8 @@ public:
     thrust::detail::vector_base<IdxType, Alloc> ELLRelType;
     thrust::detail::vector_base<IdxType, Alloc> ELLEids;
 
+    MyHyb() = default;
+
     MyHyb(const int64_t HybIndexMax, const int64_t ELL_logical_width, const int64_t ELL_physical_width, const CSRType& csr,
     const thrust::detail::vector_base<IdxType, Alloc>& ELLColIdx,
     const thrust::detail::vector_base<IdxType, Alloc>& ELLRelType,
@@ -403,7 +405,7 @@ public:
         this->num_cols = num_cols;
         this->num_rels = num_rels;
         this->num_nnzs=num_nnzs;
-        this->total_num_nnzs = my_accumulate<>(num_nnzs.begin(), num_nnzs.end(), 0);
+        this->total_num_nnzs = my_accumulate<>(num_nnzs.begin(), num_nnzs.end(), 0LL);
     }
 
     template<typename OtherAlloc, typename OtherCSRType>
@@ -462,7 +464,7 @@ MyHeteroIntegratedCSR<IdxType, std::allocator<IdxType>> ToIntegratedCSR_CPU(cons
     //csr.rel_ptr;
     //csr.row_ptr;
     //csr.col_idx;
-    int64_t total_num_nnzs = my_accumulate<>(csr.num_nnzs.begin(), csr.num_nnzs.end(), 0);
+    int64_t total_num_nnzs = my_accumulate<>(csr.num_nnzs.begin(), csr.num_nnzs.end(), 0LL);
 
     std::vector<std::map<IdxType,  std::vector<std::pair<IdxType, IdxType>>>> edge_to_rel_type_and_eid(csr.num_rows);
 

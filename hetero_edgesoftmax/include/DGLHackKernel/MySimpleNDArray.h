@@ -17,6 +17,7 @@ public:
         }
         data.resize(element_num);
     }
+    MySimpleNDArray() = default;
     template<typename OtherAlloc>
     MySimpleNDArray(std::vector<int64_t> shape, thrust::detail::vector_base<DType, OtherAlloc> data){
         this->shape = shape;
@@ -40,7 +41,18 @@ public:
     //    return static_cast<const T*>(thrust::raw_pointer_cast(data.data()));
     //}
 
-
+    template <typename OtherAlloc>
+    bool IsEqual(const MySimpleNDArray<DType, OtherAlloc>& other) const {
+        if (shape.size() != other.shape.size()) {
+            return false;
+        }
+        for (int64_t i = 0; i < shape.size(); i++) {
+            if (shape[i] != other.shape[i]) {
+                return false;
+            }
+        }
+        return thrust::equal(data.begin(), data.end(), other.data.begin());
+    }
 
     int64_t ComputeXLength() {
         int64_t ret = 1;
