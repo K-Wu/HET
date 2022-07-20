@@ -1,9 +1,6 @@
 #pragma once
+// TODO: we may impl EdgeAttentionCSR.h some time in future
 //#include "EdgeAttentionCSR.h"
-#include "EdgeAttentionCOO_128_16.h"
-#include "EdgeAttentionCOO_128_8.h"
-#include "EdgeAttentionCOO_256_8.h"
-#include "EdgeAttentionCOO_256_32.h"
-#include "EdgeAttentionCOO_512_32.h"
-#include "EdgeAttentionCOO_512_32_asyncmemcpy.h"
-#include "EdgeAttentionCOO_512_32_A100.h"
+#include "EdgeAttentionCOO.h"
+
+//TODO: refactor these kernels in headers into template specializations, as instructed in hetero_edgesoftmax\include\EdgeAttention_4\EdgeAttentionCOO_128_8.h
