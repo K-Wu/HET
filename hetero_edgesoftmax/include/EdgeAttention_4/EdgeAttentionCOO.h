@@ -106,8 +106,8 @@ class mysgemm_functor
 public:
     __device__   __forceinline__ static  void exec_function(int m, int n, int k, float *A, float *B, float *C, int *dest_node_index_unique, int BcolBias)
     {
-        assert(0);
-        static_assert(0, "not implemented");
+        assert(0&&"not implemented");
+        //static_assert(0, "not implemented");
     }
 };
 
@@ -1111,6 +1111,7 @@ thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_128_16(std
     return EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel<128,16,256,4>(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue);
 }
 
+// FIXME: enable the ignored FlagEqualWorkPartitionForBlocks flag
 thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_256_32(std::vector<cusp::coo_matrix<int, int, cusp::device_memory>> coo_matrices, cusp::coo_matrix<int, int, cusp::device_memory> concatenated_coo_matrix, int num_relations, bool FlagInitWithRandomValue, bool FlagEqualWorkPartitionForBlocks)
 {
     std::cout<<"WARNING: FlagEqualWorkPartitionForBlocks IGNORED!!"<<std::endl;
@@ -1122,6 +1123,7 @@ thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_256_32(std
     return EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel<256,32,256,4>(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue);
 }
 
+// FIXME: enable the ignored FlagEqualWorkPartitionForBlocks flag
 thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_256_8(std::vector<cusp::coo_matrix<int, int, cusp::device_memory>> coo_matrices, cusp::coo_matrix<int, int, cusp::device_memory> concatenated_coo_matrix, int num_relations, bool FlagInitWithRandomValue, bool FlagEqualWorkPartitionForBlocks)
 {   
     std::cout<<"WARNING: FlagEqualWorkPartitionForBlocks IGNORED!!"<<std::endl;
@@ -1133,6 +1135,8 @@ thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_256_8(std:
     return EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel<256,8,256,4>(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue);
 }
 
+// FIXME: enable the ignored FlagEqualWorkPartitionForBlocks flag
+// FIXME: this is giving incorrect results, possibly because the difference in the driver code, especially the grid, block configuration is different from the one used here
 thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_512_32(std::vector<cusp::coo_matrix<int, int, cusp::device_memory>> coo_matrices, cusp::coo_matrix<int, int, cusp::device_memory> concatenated_coo_matrix, int num_relations, bool FlagInitWithRandomValue, bool FlagEqualWorkPartitionForBlocks)
 {   
     std::cout<<"WARNING: FlagEqualWorkPartitionForBlocks IGNORED!!"<<std::endl;
