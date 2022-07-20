@@ -1135,17 +1135,192 @@ thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_256_8(std:
     return EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel<256,8,256,4>(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue);
 }
 
+template <int OUT_DIM /*256*/, int NUM_HEADS /*4*/>
+thrust::device_vector<float4> EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_512_32(int num_nodes, cusp::coo_matrix<int, int, cusp::device_memory>::row_indices_array_type concatenated_coo_matrix_row_indices, cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type concatenated_coo_matrix_column_indices, std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices, cusp::coo_matrix<int, int, cusp::device_memory>::values_array_type concatenated_coo_matrix_values, int num_relations, bool FlagInitWithRandomValue)
+{
+    constexpr int TILE_SZ_A=512;
+    constexpr int TILE_SZ_B=32;
+    constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
+    constexpr int COARSE_SGEMM_BLOCKSIZE = (TILE_SZ_A);
+    constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
+
+    std::vector<thrust::device_vector<float>> intermediate_node_vect(num_relations);
+    thrust::device_vector<float *> intermediate_node_vect_d;
+    thrust::device_vector<float4> outEdges_vect(concatenated_coo_matrix_column_indices.size(), make_float4(0.0f, 0.0f, 0.0f, 0.0f));
+
+    std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices_unique(num_relations);
+    thrust::device_vector<int *> unique_indices_to_column_indices_per_relation_d;
+    thrust::device_vector<int> num_unique_indices_to_column_indices_per_relation(num_relations, -1);
+
+    std::vector<thrust::device_vector<int>> dest_node_to_unique_index_per_relation = std::vector<thrust::device_vector<int>>(num_relations, thrust::device_vector<int>(num_nodes, -1));
+    thrust::device_vector<int *> dest_node_to_unique_index_per_relation_d;
+
+    for (int idx_relation = 0; idx_relation < num_relations; idx_relation++)
+    {
+        dest_node_to_unique_index_per_relation_d.push_back(thrust::raw_pointer_cast(dest_node_to_unique_index_per_relation[idx_relation].data()));
+    }
+
+    for (int idx_relation = 0; idx_relation < num_relations; idx_relation++)
+    {
+        coo_matrices_column_indices_unique[idx_relation] = coo_matrices_column_indices[idx_relation];
+        std::cout << "curr_coo_matrix_column_indices_unique address" << thrust::raw_pointer_cast(coo_matrices_column_indices_unique[idx_relation].data()) << " original address: " << thrust::raw_pointer_cast(coo_matrices_column_indices[idx_relation].data()) << std::endl;
+        thrust::sort(thrust::device, coo_matrices_column_indices_unique[idx_relation].begin(), coo_matrices_column_indices_unique[idx_relation].end());
+        auto curr_unique_vector_end = thrust::unique(thrust::device, coo_matrices_column_indices_unique[idx_relation].begin(), coo_matrices_column_indices_unique[idx_relation].end());
+        coo_matrices_column_indices_unique[idx_relation].resize(thrust::distance(coo_matrices_column_indices_unique[idx_relation].begin(), curr_unique_vector_end));
+    }
+
+    /*for (int idx_relation = 0; idx_relation < num_relations; idx_relation++) {
+        std::cout << "relation " << idx_relation << " coo_matrices_column_indices_unique" <<std::endl;
+        thrust::copy(coo_matrices_column_indices_unique[idx_relation].begin(), coo_matrices_column_indices_unique[idx_relation].end(), std::ostream_iterator<int>(std::cout, ","));
+    }*/
+
+    for (int idx_relation = 0; idx_relation < num_relations; idx_relation++)
+    {
+        thrust::counting_iterator<int> first_counting_iter(0);
+        thrust::counting_iterator<int> last_counting_iter = first_counting_iter + coo_matrices_column_indices_unique[idx_relation].size();
+
+        int *curr_dest_node_to_unique_index_per_relation_d = dest_node_to_unique_index_per_relation_d[idx_relation];
+        /*thrust::for_each(thrust::device, coo_matrices_column_indices_unique[idx_relation].begin(),
+            coo_matrices_column_indices_unique[idx_relation].end(),
+            [=]__host__ __device__(int t) {
+            curr_dest_node_to_unique_index_per_relation_d[t] = 1;
+        });*/
+        thrust::for_each(thrust::device, thrust::make_zip_iterator(thrust::make_tuple(coo_matrices_column_indices_unique[idx_relation].begin(), first_counting_iter)),
+                         thrust::make_zip_iterator(thrust::make_tuple(coo_matrices_column_indices_unique[idx_relation].end(), last_counting_iter)),
+                         [=] __host__ __device__(thrust::tuple<int, int> t)
+                         {
+                             curr_dest_node_to_unique_index_per_relation_d[thrust::get<0>(t)] = thrust::get<1>(t);
+                         });
+        std::cout << "relation " << idx_relation << " dest_node_to_unique_index_per_relation_d[idx_relation] address: " << dest_node_to_unique_index_per_relation_d[idx_relation] << std::endl;
+        /*thrust::copy(dest_node_to_unique_index_per_relation[idx_relation].begin(), dest_node_to_unique_index_per_relation[idx_relation].end(),std::ostream_iterator<int>(std::cout, ","));*/
+    }
+
+    for (int idx_relation = 0; idx_relation < num_relations; idx_relation++)
+    {
+        intermediate_node_vect[idx_relation].resize(coo_matrices_column_indices_unique[idx_relation].size() * OUT_DIM);
+    }
+
+    for (int idx_relation = 0; idx_relation < num_relations; idx_relation++)
+    {
+        intermediate_node_vect_d.push_back(thrust::raw_pointer_cast(intermediate_node_vect[idx_relation].data()));
+    }
+
+    for (int idx_relation = 0; idx_relation < num_relations; idx_relation++)
+    {
+        unique_indices_to_column_indices_per_relation_d.push_back(thrust::raw_pointer_cast(coo_matrices_column_indices_unique[idx_relation].data()));
+        num_unique_indices_to_column_indices_per_relation[idx_relation] = coo_matrices_column_indices_unique[idx_relation].size();
+    }
+
+    // float *outEdges;
+    // float *mus;
+
+    float *node_input_data;
+    float *relation_attention_matrices;
+    cudaMalloc((void **)&node_input_data, sizeof(float) * num_nodes * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD);
+    cudaMalloc((void **)&relation_attention_matrices, sizeof(float) * num_relations * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD);
+    // cudaMalloc((void **)&mus, sizeof(float) * num_relations);
+    // cudaMalloc((void **)&outEdges, sizeof(float) * concatenated_coo_matrix_column_indices.size());
+
+    if (FlagInitWithRandomValue)
+    {
+        curandGenerator_t m_prng;
+        // Create a new generator
+        curandCreateGenerator(&m_prng, CURAND_RNG_PSEUDO_DEFAULT);
+        // Set the generator options
+        curandSetPseudoRandomGeneratorSeed(m_prng, (unsigned long)0);
+        // Generate random numbers
+        // curandGenerateUniform(m_prng, mus, num_relations);
+        curandGenerateUniform(m_prng, node_input_data, num_nodes * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD);
+        curandGenerateUniform(m_prng, relation_attention_matrices, num_relations * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD);
+    }
+    else
+    {
+        // cudaMemset(mus, 1, sizeof(float) * num_relations);
+        cudaMemset(node_input_data, 64, sizeof(float) * num_nodes * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD);
+        cudaMemset(relation_attention_matrices, 64, sizeof(float) * num_relations * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD);
+    }
+
+    thrust::device_vector<int> num_blocks_xdim_for_same_relation_per_block_vect;
+    thrust::device_vector<int> blockid_relation_id_vect;
+    thrust::device_vector<int> beg_node_entry_idxes_vect;
+    std::vector<int> num_blocks_xdim_for_same_relation_vect;
+    std::vector<int> num_blocks_xdim_for_all_prev_relation_vect;
+
+    std::chrono::high_resolution_clock::time_point t1;
+    // for ease of programming equally partition the workload to different blocks at this moment.
+    //if (FlagEqualWorkPartitionForBlocks)
+    //{
+        num_blocks_xdim_for_all_prev_relation_vect.push_back(0);
+        for (int idx_relationship = 0; idx_relationship < num_relations; idx_relationship++)
+        {
+            int num_blocks_xdim_for_this_and_prev_relation = (idx_relationship + 1 + 0.0) / (num_relations + 0.0) * RTX_3090_GRIDSIZE;
+            num_blocks_xdim_for_all_prev_relation_vect.push_back(num_blocks_xdim_for_this_and_prev_relation);
+        }
+        for (int idx_relationship = 0; idx_relationship < num_relations; idx_relationship++)
+        {
+            num_blocks_xdim_for_same_relation_vect.push_back(num_blocks_xdim_for_all_prev_relation_vect[idx_relationship + 1] - num_blocks_xdim_for_all_prev_relation_vect[idx_relationship]);
+        }
+        num_blocks_xdim_for_all_prev_relation_vect.erase(num_blocks_xdim_for_all_prev_relation_vect.begin());
+        int idx_curr_relation = 0;
+        int curr_beg_node_entry_idx = 0;
+
+        // grid and thread configuration of the first stage
+        //   block (0,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16 nodes); block(1,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16 nodes); ... block(BLOCKDIM_X-1,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16 nodes);
+        //   block (0,1): (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes); block(1,1): (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes); ... block(BLOCKDIM_X-1,1): (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes);
+
+        for (int idx_block = 0; idx_block < RTX_3090_GRIDSIZE; idx_block++)
+        {
+            if (idx_curr_relation < num_blocks_xdim_for_all_prev_relation_vect.size() - 1 && idx_block >= num_blocks_xdim_for_all_prev_relation_vect[idx_curr_relation])
+            {
+                assert(curr_beg_node_entry_idx / COARSE_SGEMM_NODES_PER_BLOCK == num_blocks_xdim_for_same_relation_vect[idx_curr_relation]);
+                idx_curr_relation++;
+                curr_beg_node_entry_idx = 0;
+            }
+            blockid_relation_id_vect.push_back(idx_curr_relation);
+            beg_node_entry_idxes_vect.push_back(curr_beg_node_entry_idx);
+            curr_beg_node_entry_idx += COARSE_SGEMM_NODES_PER_BLOCK;
+            num_blocks_xdim_for_same_relation_per_block_vect.push_back(num_blocks_xdim_for_same_relation_vect[idx_curr_relation]);
+        }
+
+        dim3 block(COARSE_SGEMM_BLOCKSIZE, 1, 1);
+        dim3 grid(RTX_3090_GRIDSIZE, 1, 1);
+        t1 = std::chrono::high_resolution_clock::now();
+        // EdgeAttentionConcatenatedCOOKernel<<<grid, block>>>( thrust::raw_pointer_cast(outEdges_per_relation_vect.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()), node_input_data);
+        EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel<512,32,256,4><<<grid, block>>>(thrust::raw_pointer_cast(intermediate_node_vect_d.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
+                                                                                          node_input_data, relation_attention_matrices, thrust::raw_pointer_cast(dest_node_to_unique_index_per_relation_d.data()), thrust::raw_pointer_cast(unique_indices_to_column_indices_per_relation_d.data()), thrust::raw_pointer_cast(num_unique_indices_to_column_indices_per_relation.data()), num_relations, thrust::raw_pointer_cast(num_blocks_xdim_for_same_relation_per_block_vect.data()), thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()), thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
+    //}
+    
+
+    dim3 block2(RTX_3090_BLOCKSIZE, 1, 1);
+    dim3 grid2(RTX_3090_GRIDSIZE, 1, 1);
+    EdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel<<<grid2, block2>>>(thrust::raw_pointer_cast(outEdges_vect.data()), concatenated_coo_matrix_column_indices.size(), thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_row_indices.data()), thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
+                                                                                                   node_input_data, thrust::raw_pointer_cast(intermediate_node_vect_d.data()), thrust::raw_pointer_cast(dest_node_to_unique_index_per_relation_d.data()));
+
+    // for (int idx_relation = 0; idx_relation < num_relations; idx_relation++)
+    // {
+    //     std::cout << "intermediate_node_vect[" << idx_relation << "]" << std::endl;
+    //     thrust::copy(intermediate_node_vect[idx_relation].begin(), intermediate_node_vect[idx_relation].end(), std::ostream_iterator<float>(std::cout, ","));
+    // }
+    cuda_err_chk(cudaPeekAtLastError());
+    cuda_err_chk(cudaDeviceSynchronize());
+    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+    std::cout << "GPU doGPUEdgeAttentionConcatenatedCOO_512_32 Kernel time: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() << " us" << std::endl;
+    // cudaFree(outEdges);
+    cudaFree(node_input_data);
+    cudaFree(relation_attention_matrices);
+    return outEdges_vect;
+}
+
 // FIXME: enable the ignored FlagEqualWorkPartitionForBlocks flag
-// FIXME: this is giving incorrect results, possibly because the difference in the driver code, especially the grid, block configuration is different from the one used here
 thrust::device_vector<float4> doGPUEdgeAttentionConcatenatedCOOKernel_512_32(std::vector<cusp::coo_matrix<int, int, cusp::device_memory>> coo_matrices, cusp::coo_matrix<int, int, cusp::device_memory> concatenated_coo_matrix, int num_relations, bool FlagInitWithRandomValue, bool FlagEqualWorkPartitionForBlocks)
 {   
-    std::cout<<"WARNING: FlagEqualWorkPartitionForBlocks IGNORED!!"<<std::endl;
+    std::cout<<"ignoring FlagEqualWorkPartitionForBlocks"<<std::endl;
     std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices;
     for (int idx_relation = 0; idx_relation < coo_matrices.size(); idx_relation++)
     {
         coo_matrices_column_indices.push_back(coo_matrices[idx_relation].column_indices);
     }
-    return EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel<512,32,256,4>(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue);
+    return EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_512_32<256,4>(concatenated_coo_matrix.num_rows, concatenated_coo_matrix.row_indices, concatenated_coo_matrix.column_indices, coo_matrices_column_indices, concatenated_coo_matrix.values, num_relations, FlagInitWithRandomValue);
 }
 
 // #undef COARSE_SGEMM_BLOCKSIZE
