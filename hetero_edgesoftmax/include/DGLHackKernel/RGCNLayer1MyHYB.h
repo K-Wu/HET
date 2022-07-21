@@ -85,7 +85,7 @@ void RgcnLayer1MyHYBImpl(
         //assert(csr.IsSortedByEdgeType_CPU());
         //typedef int32_t Idx;
         //typedef float DType;
-        //auto csr = graph->GetCsrSortedByEdgeType(false); //TODO: implement this API
+        //auto csr = graph->GetCsrSortedByEdgeType(false); 
         //auto ranges = csr[0];
         //auto ids = csr[1];
         //auto eids = csr[2];

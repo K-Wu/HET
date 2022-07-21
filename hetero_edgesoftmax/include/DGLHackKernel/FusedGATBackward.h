@@ -95,7 +95,6 @@ __global__ void fusedGatBackwardGradElEr(BackwardGatFusedData<Idx, DType> gdata,
 
 template </*int XPU, */typename Idx, typename DType>
 void BackwardFusedGatKernelImpl(
-    //const CSRWrapper& graph, //TODO: remove CSRWrapper
     // create CSR in driver code
     MyHeteroSeparateCSR<Idx, thrust::device_allocator<Idx>> outcsr,
     MySimpleNDArray<DType,thrust::device_allocator<DType>> feat_src,

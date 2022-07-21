@@ -98,7 +98,6 @@ const Idx* row_offsets, const Idx* column_indices, int64_t num_rows) {
 
 template </*int XPU, */typename Idx, typename DType>
 void FusedGatKernelImpl(
-    //const HeteroGraphPtr& graph, //TODO: remove heterographptr
     MyHeteroSeparateCSR<Idx, thrust::device_allocator<Idx>> incsr, // create incsr in the driver logic
     MySimpleNDArray<DType, thrust::device_allocator<DType>> feat_src,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> el,
@@ -140,7 +139,7 @@ void FusedGatKernelImpl(
         //printf("!!!!!%d, %d, %d\n",graph->NumVertices(0), graph->NumVertexTypes(), graph->NumEdgeTypes());
         //aten::CSRMatrix incsr(graph->NumVertices(0), graph->NumVertices(0), incsr_elements[0], incsr_elements[1], incsr_elements[2]);
 
-        //gdata.eids = incsr.data.Ptr<Idx>(); //TODO: generate eid for this
+        //gdata.eids = incsr.data.Ptr<Idx>(); 
         //gdata.eids = eids.Ptr();
         gdata.eids = static_cast<Idx*>(thrust::raw_pointer_cast(incsr.eids.data()));
 

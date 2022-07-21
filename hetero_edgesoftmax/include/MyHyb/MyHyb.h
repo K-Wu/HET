@@ -71,10 +71,11 @@ bool IsHostVector(const thrust::detail::vector_base<IdxType, Alloc>& vec)
     return std::is_same<typename thrust::host_vector<IdxType>::allocator_type,Alloc>::value;
 }
 
-
+// TODO: implement unique src/dst index API for HGT model 
 template<typename IdxType, typename Alloc>
 class MyHeteroIntegratedCSR;
 
+// TODO: implement unique src/dst index API for HGT model 
 template<typename IdxType, typename Alloc>
 class MyHeteroSeparateCSR{
 public:
@@ -191,6 +192,44 @@ public:
     bool IsDataOnCPU() const {
         return IsHostVector(row_ptr);
     }
+    template <typename OtherAlloc>
+    std::vector<thrust::detail::vector_base<IdxType, OtherAlloc>> GetUniqueSrcNodeIdxForEachRelation() {
+        std::vector<thrust::detail::vector_base<IdxType, OtherAlloc>> result;
+        for (int64_t IdxRelation = 0; IdxRelation < num_rels; IdxRelation++) {
+            thrust::detail::vector_base<thrust::pair<IdxType, IdxType>, Alloc> adjacent_rowptr_differences(num_rows+1);
+            thrust::adjacent_difference(row_ptr.begin()+IdxRelation*num_rows, row_ptr.begin()+(IdxRelation+1)*num_rows+1, adjacent_rowptr_differences.begin());
+
+            // From https://stackoverflow.com/a/29848688/5555077
+            // find out the row indices where row_ptr[idx+1]- row_ptr[idx] is non-zero
+            thrust::device_vector<int> indices(num_rows);
+            thrust::device_vector<int>::iterator end = thrust::copy_if(thrust::make_counting_iterator(0),
+                                                                        thrust::make_counting_iterator(num_rows),
+                                                                        std::next(row_ptr.begin(),1),
+                                                                        indices.begin(), 
+                                                                        thrust::placeholders::_1 > 0);
+            int size = end-indices.begin();
+            indices.resize(size);
+            result.emplace_back(indices);
+        }
+        thrust::detail::vector_base<IdxType, Alloc> curr_result;
+        return result;
+        
+    }
+    template <typename OtherAlloc>
+    std::vector<thrust::detail::vector_base<IdxType, OtherAlloc>> GetUniqueDestNodeIdxForEachRelation() {
+        std::vector<thrust::detail::vector_base<IdxType, OtherAlloc>> result;
+        for (int64_t IdxRelation = 0; IdxRelation < num_rels; IdxRelation++) {
+            thrust::detail::vector_base<IdxType, Alloc> dest_node_idx_for_this_relation;
+            dest_node_idx_for_this_relation.resize(num_nnzs[IdxRelation]);
+            thrust::copy(col_idx.begin() + row_ptr[IdxRelation], col_idx.begin() + row_ptr[IdxRelation + 1], dest_node_idx_for_this_relation.begin());
+            thrust::sort(dest_node_idx_for_this_relation.begin(), dest_node_idx_for_this_relation.end());
+            auto new_end = thrust::unique(dest_node_idx_for_this_relation.begin(), dest_node_idx_for_this_relation.end());
+            result.emplace_back(dest_node_idx_for_this_relation.begin(), new_end);
+        }
+        thrust::detail::vector_base<IdxType, Alloc> curr_result;
+        return result;
+    }
+
 };
 
 template<typename IdxType, typename Alloc>
@@ -365,7 +404,95 @@ public:
     }
 };
 
+template<typename IdxType, typename Alloc, typename CSRType>
+class MySegmentCSR{
+    public:
+    int64_t NonCutoffMaxNodeIndex;
+    int64_t num_rows;
+    int64_t num_cols;
+    int64_t num_rels;
+    std::vector<int64_t> num_nnzs;
+    std::vector<int64_t> dense_num_nnzs;
+    int64_t dense_total_num_nnzs;
+    int64_t total_num_nnzs;
+    CSRType csr;
+    thrust::detail::vector_base<IdxType, Alloc> maximal_edge_num_per_src_node;
+    thrust::detail::vector_base<IdxType, Alloc> padded_exclusive_scan_maximal_edge_num_per_src_node;
+    thrust::detail::vector_base<IdxType, Alloc> maximal_edge_type_per_src_node;
+    thrust::detail::vector_base<IdxType, Alloc> src_node_per_edge_type;
+    thrust::detail::vector_base<IdxType, Alloc> num_src_nodes_per_edge_type;
+    thrust::detail::vector_base<IdxType, Alloc> exclusive_scan_num_src_nodes_per_edge_type;
+    thrust::detail::vector_base<IdxType, Alloc> padded_dense_edges;
 
+    template <typename OtherAlloc, typename OtherAlloc2>
+    MySegmentCSR(const int64_t num_rows, const inst64_t num_cols, const int64_t maximal_non_cutoff_node_idx, 
+    const thrust::detail::vector_base<IdxType, OtherAlloc>& maximal_edge_num_per_src_node, 
+    const thrust::detail::vector_base<IdxType, OtherAlloc>& maximal_edge_type_per_src_node, 
+    const thrust::detail::vector_base<IdxType, OtherAlloc>& src_node_per_edge_type, 
+    const thrust::detail::vector_base<IdxType, OtherAlloc>& num_src_nodes_per_edge_type, 
+    const thrust::detail::vector_base<IdxType, OtherAlloc2>& padded_dense_edges, 
+    const thrust::detail::vector_base<IdxType, OtherAlloc2>& padded_exclusive_scan_maximal_edge_num_per_src_node,
+    const CSRType& residue_coo_matrix_h){
+        this->num_rows = num_rows;
+        this->num_cols = num_cols;
+        this->num_rels = src_node_per_edge_type.size();
+        this->NonCutoffMaxNodeIndex = maximal_non_cutoff_node_idx;
+        this->csr = residue_coo_matrix_h;
+        this->maximal_edge_num_per_src_node = maximal_edge_num_per_src_node;
+        this->maximal_edge_type_per_src_node = maximal_edge_type_per_src_node;
+        this->src_node_per_edge_type = src_node_per_edge_type;
+        this->num_src_nodes_per_edge_type = num_src_nodes_per_edge_type;
+        this->padded_dense_edges = padded_dense_edges;
+        this->padded_exclusive_scan_maximal_edge_num_per_src_node = padded_exclusive_scan_maximal_edge_num_per_src_node;
+        this->num_nnzs.resize(this->num_rels);
+
+        // count dense region num nnzs and total_num_nnzs
+        dense_num_nnzs.resize(this->num_rels);
+        num_nnzs.resize(this->num_rels);
+        for (int IdxRelationship = 0; IdxRelationship < num_nnzs.size(); IdxRelationship++){
+            dense_num_nnzs[IdxRelationship] = 0;
+            // iterates source node with the maximal edge type and count the number of edges there
+            for (int IdxSourceNode = 0; IdxSourceNode < num_src_nodes_per_edge_type[IdxRelationship]; IdxSourceNode++){
+                dense_num_nnzs[IdxRelationship] += maximal_edge_num_per_src_node[IdxSourceNode];
+            }
+            this->num_nnzs[IdxRelationship] = dense_num_nnzs[IdxRelationship] + this->csr.num_nnzs[IdxRelationship];
+        }
+        this-> dense_total_num_nnzs= my_accumulate<>(this->num_nnzs.begin(), this->num_nnzs.end(), 0LL);
+        this->total_num_nnzs = this->dense_total_num_nnzs+this->csr.total_num_nnzs;
+    }
+};
+
+template <typename Idx>
+Idx my_ceil_div(Idx a, Idx b){
+    return (a+b-1)/b;
+}
+
+template <typename Idx, typename Alloc>
+std::pair<thrust::host_vector<Idx>, thrust::host_vector<Idx>> MySegmentCSRPadDenseEdges(const thrust::detail::vector_base<DType, Alloc>& dense_edges,
+                                                    const thrust::detail::vector_base<DType, Alloc>& dense_edges_num_per_src_node,
+                                                    const int padding_factor){
+int64_t num_rows = dense_edges_num_per_src_node.size();
+thrust::host_vector<Idx> padded_exclusive_scan_dense_edge_num_per_src_node(dense_edges_num_per_src_node.size()+1);
+thrust::host_vector<Idx> padded_dense_edges;
+// Each element idx in this array serves as the starting position of of source node idx in dense_edges
+padded_exclusive_scan_dense_edge_num_per_src_node[0] = 0;
+for (int64_t IdxSourceNode = 0; IdxSourceNode < num_rows; IdxSourceNode++){
+    int64_t num_edges_for_curr_node = dense_edges_num_per_src_node[IdxSourceNode];
+    int64_t padded_num_edges_for_curr_node = my_ceil_div(num_edges_for_curr_node, padding_factor)*padding_factor;
+    int64_t starting_position_of_curr_node = padded_exclusive_scan_dense_edge_num_per_src_node[IdxSourceNode];
+    for (int64_t IdxEdge = 0; IdxEdge<num_edges_for_curr_node; IdxEdge++){
+        padded_dense_edges.push_back(dense_edges[starting_position_of_curr_node+IdxEdge]);
+    }
+    for (int64_t IdxPaddingElement = 0; IdxPaddingElement < padded_num_edges_for_curr_node-num_edges_for_curr_node; IdxPaddingElement++){
+        padded_dense_edges.push_back(MyHyb_NONEXISTENT_ELEMENT);
+    }
+    padded_exclusive_scan_dense_edge_num_per_src_node[IdxSourceNode+1] = padded_exclusive_scan_dense_edge_num_per_src_node[IdxSourceNode]+padded_num_edges_for_curr_node;
+    assert(padded_exclusive_scan_dense_edge_num_per_src_node[IdxSourceNode+1] == padded_dense_edges.size());    
+}
+    return std::make_pair(padded_exclusive_scan_dense_edge_num_per_src_node, padded_dense_edges);
+}
+
+//TODO: implement AOS for eids, rel_types and col_idx
 template<typename IdxType, typename Alloc, typename CSRType>
 class MyHyb{
     //[0,HybIndexMax] has both ELL and CSR format
@@ -697,7 +824,7 @@ bool IsEqual(const MyHyb<IdxType, std::allocator<IdxType>, CSRType>& myhyb1, con
             if (IdxDestNode == MyHyb_NONEXISTENT_ELEMENT){
                 continue;
             }
-            DestNodeRelTypeEidsSet.insert(std::make_pair(IdxDestNode, std::make_pair<>(IdxRelationship,IdxEids)));
+            DestNodeRelTypeEidsSet.insert(std::make_pair(IdxDestNode, std::make_pair(IdxRelationship,IdxEids)));
         }
         int64_t NumEdgesFromThisSourceNode1 = DestNodeRelTypeEidsSet.size();
         for (int64_t IdxElement = IdxNode*myhyb2.ELL_physical_width; IdxElement < IdxNode*myhyb2.ELL_physical_width+myhyb2.ELL_logical_width; IdxElement++){

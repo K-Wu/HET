@@ -31,7 +31,7 @@
 // grid and thread configuration of the first stage
 //   block (0,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16 nodes); block(1,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16 nodes); ... block(BLOCKDIM_X-1,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16 nodes);
 //   block (0,1): (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes); block(1,1): (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes); ... block(BLOCKDIM_X-1,1): (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes);
-// TODO: problem definition
+//  problem definition
 //#define TILE_SZ_A 128
 //#define TILE_SZ_B 8
 //#define OUT_DIM (256)
@@ -49,7 +49,7 @@
 // TODO: extract this kernel mysgemm_ into template specialization
 // constant static __device__ class function is allowed by CUDA spec https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#const-variables
 
-// TODO: extract his common code to a function in a dedicated header file
+
 __global__ void EdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel(float4 *__restrict__ outEdges, int nnz, int *__restrict__ matCols, int *__restrict__ matRows, int *__restrict__ matRelation,
                                                                                             float *__restrict__ node_input_data, float **__restrict__ intermediate_node_vect_per_relation, int **__restrict__ dest_node_to_unique_index_per_relation)
 {
@@ -920,7 +920,7 @@ __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel(float 
     }
 }
 
-// TODO:
+
 // template <int NODE_INPUT_DIM_PER_HEAD/*derived from OUT_DIM and NUM_HEADS*/, NUM_HEADS, OUT_DIM, COARSE_SGEMM_NODES_PER_BLOCK /*derived from  TILE_SZ_B*/, COARSE_SGEMM_BLOCKSIZE /*derived fromTILE_SZ_A*/>
 template <int TILE_SZ_A /*128*/, int TILE_SZ_B /*8*/, int OUT_DIM /*256*/, int NUM_HEADS /*4*/>
 thrust::device_vector<float4> EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel(int num_nodes, cusp::coo_matrix<int, int, cusp::device_memory>::row_indices_array_type concatenated_coo_matrix_row_indices, cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type concatenated_coo_matrix_column_indices, std::vector<cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type> coo_matrices_column_indices, cusp::coo_matrix<int, int, cusp::device_memory>::values_array_type concatenated_coo_matrix_values, int num_relations, bool FlagInitWithRandomValue)
