@@ -41,7 +41,8 @@ int FusetGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph, 
 
     FusedGatKernelImpl<Idx, DType>(incsr, feat_src, el, er, sum, exp, ret, slope);
     // TODO: check if transpsoed eid is needed here
-    BackwardFusedGatKernelImpl<Idx, DType>(outcsr, feat_src, el, er, sum, exp, ret, grad_out, grad_feat_src, grad_el, grad_er, slope);
+    BackwardFusedGatKernelImpl<Idx, DType, true>(outcsr, feat_src, el, er, sum, exp, ret, grad_out, grad_feat_src, grad_el, grad_er, slope);
+    BackwardFusedGatKernelImpl<Idx, DType, false>(outcsr, feat_src, el, er, sum, exp, ret, grad_out, grad_feat_src, grad_el, grad_er, slope);
     return 0;
 }
 // TODO: implement thrust::vector Transpose(CSRType, eids) with optional eid as output

@@ -164,6 +164,8 @@ void FusedGatKernelImpl(
         //aten::CSRMatrix incsr(graph->NumVertices(), graph->NumVertices(), incsr_elements[0], incsr_elements[1], incsr_elements[2]);
         //print_gdata<Idx, DType>(feat_src,el,er,sum,exp,ret,el_xlen, feat_src_xlen, graph->NumVertices(0),incsr_elements[1].NumElements(), incsr_elements[0], incsr_elements[1], incsr_elements[2]);
         //gatExpLeakyReluSumKernel<<<nblks, nthrs, el_xlen*sizeof(DType), thr_entry->stream>>>(gdata, csr);
+        cuda_err_chk(cudaDeviceSynchronize());
+        std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
         gatExpLeakyReluSumKernel<Idx, DType><<<nblks, nthrs/*, 0, thr_entry->stream*/>>>(gdata, static_cast<Idx*>(thrust::raw_pointer_cast(incsr.row_ptr.data())), static_cast<Idx*>(thrust::raw_pointer_cast(incsr.col_idx.data())), incsr.num_rows );
         //CUDA_KERNEL_CALL(gatExpLeakyReluSumKernel, nblks, nthrs, 0, thr_entry->stream, gdata, incsr.indptr.Ptr<Idx>(), incsr.indices.Ptr<Idx>(), incsr.num_rows );
         //print_gdata<Idx, DType>(feat_src,el,er,sum,exp,ret,el_xlen, feat_src_xlen, graph->NumVertices(0), incsr_elements[1].NumElements(), incsr_elements[0], incsr_elements[1], incsr_elements[2]);
@@ -175,7 +177,11 @@ void FusedGatKernelImpl(
         const dim3 nblks2(nblks_x, nblks_y);
         //LOG(INFO) << "kernel2 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:" <<nthrs_x << "*" << nthrs_y;
         gatSumProdZipDivKernel<Idx, DType><<<nblks2, nthrs2/*, 0, thr_entry->stream*/>>>(gdata, static_cast<Idx*>(thrust::raw_pointer_cast(incsr.row_ptr.data())), static_cast<Idx*>(thrust::raw_pointer_cast(incsr.col_idx.data())), incsr.num_rows);
-        
+        cuda_err_chk(cudaPeekAtLastError());
+        cuda_err_chk(cudaDeviceSynchronize());
+        std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+        std::cout << "FusedGatKernelImpl fused<"<<0<<"> time: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " ms"<<std::endl;
+
         //LOG(INFO) << "kernel2 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:" <<nthrs_x << "*" << nthrs_y;
         //    printf("n_rows: %d\n", incsr.num_rows);
         //    printf("e_xlen: %d\n", gdata.e_xlen);
