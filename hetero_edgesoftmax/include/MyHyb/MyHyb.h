@@ -412,7 +412,9 @@ class MySegmentCSR{
     int64_t num_cols;
     int64_t num_rels;
     std::vector<int64_t> num_nnzs;
+    std::vector<int64_t> exclusive_scan_num_nnzs;
     std::vector<int64_t> dense_num_nnzs;
+    std::vector<int64_t> exclusive_scan_dense_num_nnzs;
     int64_t dense_total_num_nnzs;
     int64_t total_num_nnzs;
     CSRType csr;
@@ -423,16 +425,18 @@ class MySegmentCSR{
     thrust::detail::vector_base<IdxType, Alloc> num_src_nodes_per_edge_type;
     thrust::detail::vector_base<IdxType, Alloc> exclusive_scan_num_src_nodes_per_edge_type;
     thrust::detail::vector_base<IdxType, Alloc> padded_dense_edges;
+    thrust::detail::vector_base<IdxType, Alloc> padded_dense_edges_eids;
 
     template <typename OtherAlloc, typename OtherAlloc2>
-    MySegmentCSR(const int64_t num_rows, const inst64_t num_cols, const int64_t maximal_non_cutoff_node_idx, 
+    MySegmentCSR(const int64_t num_rows, const int64_t num_cols, const int64_t maximal_non_cutoff_node_idx, 
     const thrust::detail::vector_base<IdxType, OtherAlloc>& maximal_edge_num_per_src_node, 
     const thrust::detail::vector_base<IdxType, OtherAlloc>& maximal_edge_type_per_src_node, 
     const thrust::detail::vector_base<IdxType, OtherAlloc>& src_node_per_edge_type, 
     const thrust::detail::vector_base<IdxType, OtherAlloc>& num_src_nodes_per_edge_type, 
     const thrust::detail::vector_base<IdxType, OtherAlloc2>& padded_dense_edges, 
     const thrust::detail::vector_base<IdxType, OtherAlloc2>& padded_exclusive_scan_maximal_edge_num_per_src_node,
-    const CSRType& residue_coo_matrix_h){
+    const CSRType& residue_coo_matrix_h,
+    const thrust::detail::vector_base<IdxType, OtherAlloc2>& padded_dense_edges_eids){
         this->num_rows = num_rows;
         this->num_cols = num_cols;
         this->num_rels = src_node_per_edge_type.size();
@@ -445,6 +449,7 @@ class MySegmentCSR{
         this->padded_dense_edges = padded_dense_edges;
         this->padded_exclusive_scan_maximal_edge_num_per_src_node = padded_exclusive_scan_maximal_edge_num_per_src_node;
         this->num_nnzs.resize(this->num_rels);
+        this->padded_dense_edges_eids = padded_dense_edges_eids;
 
         // count dense region num nnzs and total_num_nnzs
         dense_num_nnzs.resize(this->num_rels);
@@ -457,19 +462,52 @@ class MySegmentCSR{
             }
             this->num_nnzs[IdxRelationship] = dense_num_nnzs[IdxRelationship] + this->csr.num_nnzs[IdxRelationship];
         }
+
+        // exclusive scan
+        this->exclusive_scan_dense_num_nnzs.resize(this->num_rels+1);
+        this->exclusive_scan_num_nnzs.resize(this->num_rels);
+        this->exclusive_scan_num_nnzs[0] = 0;
+        this->exclusive_scan_dense_num_nnzs[0] = 0;
+        for (int IdxRelationship = 0; IdxRelationship < this->num_rels; IdxRelationship++){
+            this->exclusive_scan_num_nnzs[IdxRelationship+1] = this->exclusive_scan_num_nnzs[IdxRelationship] + this->num_nnzs[IdxRelationship];
+            this->exclusive_scan_dense_num_nnzs[IdxRelationship+1] = this->exclusive_scan_dense_num_nnzs[IdxRelationship] + dense_num_nnzs[IdxRelationship];
+        }
+
         this-> dense_total_num_nnzs= my_accumulate<>(this->num_nnzs.begin(), this->num_nnzs.end(), 0LL);
         this->total_num_nnzs = this->dense_total_num_nnzs+this->csr.total_num_nnzs;
+    }
+
+    template <typename OtherAlloc, typename OtherCSRType>
+    MySegmentCSR(const MySegmentCSR<IdxType, OtherAlloc, OtherCSRType>& other){
+        this->csr=other.csr;
+        this->num_rows = other.num_rows;
+        this->num_cols = other.num_cols;
+        this->num_rels = other.num_rels;
+        this->NonCutoffMaxNodeIndex = other.NonCutoffMaxNodeIndex;
+        this->num_nnzs = other.num_nnzs;
+        this->dense_num_nnzs = other.dense_num_nnzs;
+        this->exclusive_scan_num_nnzs = other.exclusive_scan_num_nnzs;
+        this->exclusive_scan_dense_num_nnzs = other.exclusive_scan_dense_num_nnzs;
+        this->dense_total_num_nnzs = other.dense_total_num_nnzs;
+        this->total_num_nnzs = other.total_num_nnzs;
+        this->maximal_edge_num_per_src_node = other.maximal_edge_num_per_src_node;
+        this->maximal_edge_type_per_src_node = other.maximal_edge_type_per_src_node;
+        this->src_node_per_edge_type = other.src_node_per_edge_type;
+        this->num_src_nodes_per_edge_type = other.num_src_nodes_per_edge_type;
+        this->exclusive_scan_num_src_nodes_per_edge_type = other.exclusive_scan_num_src_nodes_per_edge_type;
+        this->padded_dense_edges = other.padded_dense_edges;
+        this->padded_exclusive_scan_maximal_edge_num_per_src_node = other.padded_exclusive_scan_maximal_edge_num_per_src_node;
     }
 };
 
 template <typename Idx>
-Idx my_ceil_div(Idx a, Idx b){
+Idx my_ceil_div(const Idx a, const Idx b){
     return (a+b-1)/b;
 }
 
 template <typename Idx, typename Alloc>
-std::pair<thrust::host_vector<Idx>, thrust::host_vector<Idx>> MySegmentCSRPadDenseEdges(const thrust::detail::vector_base<DType, Alloc>& dense_edges,
-                                                    const thrust::detail::vector_base<DType, Alloc>& dense_edges_num_per_src_node,
+std::pair<thrust::host_vector<Idx>, thrust::host_vector<Idx>> MySegmentCSRPadDenseEdges(const thrust::detail::vector_base<Idx, Alloc>& dense_edges,
+                                                    const thrust::detail::vector_base<Idx, Alloc>& dense_edges_num_per_src_node,
                                                     const int padding_factor){
 int64_t num_rows = dense_edges_num_per_src_node.size();
 thrust::host_vector<Idx> padded_exclusive_scan_dense_edge_num_per_src_node(dense_edges_num_per_src_node.size()+1);
@@ -478,7 +516,7 @@ thrust::host_vector<Idx> padded_dense_edges;
 padded_exclusive_scan_dense_edge_num_per_src_node[0] = 0;
 for (int64_t IdxSourceNode = 0; IdxSourceNode < num_rows; IdxSourceNode++){
     int64_t num_edges_for_curr_node = dense_edges_num_per_src_node[IdxSourceNode];
-    int64_t padded_num_edges_for_curr_node = my_ceil_div(num_edges_for_curr_node, padding_factor)*padding_factor;
+    int64_t padded_num_edges_for_curr_node = my_ceil_div<int>(num_edges_for_curr_node, padding_factor)*padding_factor;
     int64_t starting_position_of_curr_node = padded_exclusive_scan_dense_edge_num_per_src_node[IdxSourceNode];
     for (int64_t IdxEdge = 0; IdxEdge<num_edges_for_curr_node; IdxEdge++){
         padded_dense_edges.push_back(dense_edges[starting_position_of_curr_node+IdxEdge]);

@@ -14,4 +14,5 @@
 #include "RGCNLayer1Backward.h"
 #include "RGCNLayer1MyHYB.h"
 #include "RGCNLayer1BackwardMyHYB.h"
+#include "HGTExperimental.h"
 #include "DGLHackKernelInit.h"

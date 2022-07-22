@@ -5,6 +5,7 @@
 #include <vector>
 #include <thrust/random.h>
 
+// TODO: implement transpose (probably using permutation functionality if provided by thrust) and padding.
 template <typename DType, typename Alloc>
 class MySimpleNDArray{
 public:
@@ -22,6 +23,11 @@ public:
     MySimpleNDArray(std::vector<int64_t> shape, thrust::detail::vector_base<DType, OtherAlloc> data){
         this->shape = shape;
         this->data = data;
+    }
+    template<typename OtherAlloc>
+    MySimpleNDArray(thrust::detail::vector_base<DType, OtherAlloc> data){
+        this->data = data;
+        this->shape = {data.size()};
     }
     template<typename OtherAlloc>
     MySimpleNDArray(const MySimpleNDArray<DType, OtherAlloc>& other) : shape(other.shape), data(other.data) {}
@@ -62,6 +68,24 @@ public:
         return ret;
         }
 };
+
+template <typename DType, typename Alloc, typename FileDType>
+MySimpleNDArray<DType, Alloc> LoadMySimpleNDArrayFromNumpy(const std::string &filename){
+    std::vector<unsigned long> shape;
+    bool fortran_order = false;
+    std::vector<FileDType> data;
+    npy::LoadArrayFromNumpy(filename, shape, fortran_order, data);
+
+    thrust::host_vector<DType> myndarray_data;
+    std::vector<int64_t> myndarray_shape;
+    for (int64_t i = 0; i < shape.size(); i++) {
+        myndarray_shape.push_back(shape[i]);
+    }
+    for (int64_t i = 0; i < data.size(); i++) {
+        myndarray_data.push_back(data[i]);
+    }
+    return MySimpleNDArray<DType, Alloc>(myndarray_shape, myndarray_data);
+}
 
 //random vectorizer generator code from https://gist.github.com/ashwin/7245048
 template <typename DType>
