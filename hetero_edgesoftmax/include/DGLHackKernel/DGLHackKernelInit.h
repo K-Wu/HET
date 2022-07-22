@@ -184,7 +184,7 @@ int _HGTExperimental_main(MySegmentCSR<int, std::allocator<int>, MyHeteroSeparat
     MySimpleNDArray<DType, thrust::device_allocator<DType>> node_features = GenerateRandomNDArray<DType>({graph.num_rows, num_heads, in_feat});
     MySimpleNDArray<DType, thrust::device_allocator<DType>> weight=GenerateRandomNDArray<DType>({graph.num_rels, num_heads, in_feat, out_feat});
     //MySimpleNDArray<DType, thrust::device_allocator<DType>> intermediate_vectors=GenerateRandomNDArray<DType>({graph.num_rels, graph.num_rows, num_heads, out_feat});
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> attention = GenerateRandomNDArray<DType>({graph.total_num_nnzs, 1});
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> attention = GenerateRandomNDArray<DType>({graph.total_num_nnzs, 4});
     HGTForwardImpl(deivce_graph, num_heads, in_feat, out_feat, node_features, weight, attention);
     return 0;
 }
