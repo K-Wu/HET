@@ -465,7 +465,7 @@ class MySegmentCSR{
 
         // exclusive scan
         this->exclusive_scan_dense_num_nnzs.resize(this->num_rels+1);
-        this->exclusive_scan_num_nnzs.resize(this->num_rels);
+        this->exclusive_scan_num_nnzs.resize(this->num_rels+1);
         this->exclusive_scan_num_nnzs[0] = 0;
         this->exclusive_scan_dense_num_nnzs[0] = 0;
         for (int IdxRelationship = 0; IdxRelationship < this->num_rels; IdxRelationship++){
@@ -511,13 +511,15 @@ std::pair<thrust::host_vector<Idx>, thrust::host_vector<Idx>> MySegmentCSRPadDen
                                                     const int padding_factor){
 int64_t num_rows = dense_edges_num_per_src_node.size();
 thrust::host_vector<Idx> padded_exclusive_scan_dense_edge_num_per_src_node(dense_edges_num_per_src_node.size()+1);
+thrust::host_vector<Idx> exclusive_scan_dense_edge_num_per_src_node(dense_edges_num_per_src_node.size() + 1);
 thrust::host_vector<Idx> padded_dense_edges;
 // Each element idx in this array serves as the starting position of of source node idx in dense_edges
 padded_exclusive_scan_dense_edge_num_per_src_node[0] = 0;
+exclusive_scan_dense_edge_num_per_src_node[0] = 0;
 for (int64_t IdxSourceNode = 0; IdxSourceNode < num_rows; IdxSourceNode++){
     int64_t num_edges_for_curr_node = dense_edges_num_per_src_node[IdxSourceNode];
     int64_t padded_num_edges_for_curr_node = my_ceil_div<int>(num_edges_for_curr_node, padding_factor)*padding_factor;
-    int64_t starting_position_of_curr_node = padded_exclusive_scan_dense_edge_num_per_src_node[IdxSourceNode];
+    int64_t starting_position_of_curr_node = exclusive_scan_dense_edge_num_per_src_node[IdxSourceNode];
     for (int64_t IdxEdge = 0; IdxEdge<num_edges_for_curr_node; IdxEdge++){
         padded_dense_edges.push_back(dense_edges[starting_position_of_curr_node+IdxEdge]);
     }
@@ -525,6 +527,7 @@ for (int64_t IdxSourceNode = 0; IdxSourceNode < num_rows; IdxSourceNode++){
         padded_dense_edges.push_back(MyHyb_NONEXISTENT_ELEMENT);
     }
     padded_exclusive_scan_dense_edge_num_per_src_node[IdxSourceNode+1] = padded_exclusive_scan_dense_edge_num_per_src_node[IdxSourceNode]+padded_num_edges_for_curr_node;
+    exclusive_scan_dense_edge_num_per_src_node[IdxSourceNode + 1] = exclusive_scan_dense_edge_num_per_src_node[IdxSourceNode] + num_edges_for_curr_node;
     assert(padded_exclusive_scan_dense_edge_num_per_src_node[IdxSourceNode+1] == padded_dense_edges.size());    
 }
     return std::make_pair(padded_exclusive_scan_dense_edge_num_per_src_node, padded_dense_edges);

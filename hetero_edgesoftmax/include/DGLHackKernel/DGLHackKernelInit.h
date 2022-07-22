@@ -117,22 +117,22 @@ MySegmentCSR<int, std::allocator<int>, MyHeteroSeparateCSR<int, std::allocator<i
     //std::vector<unsigned long> maximal_edge_num_per_src_node_shape, maximal_edge_type_per_src_node_shape;
     //npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_0.edge_nums.npy", maximal_edge_num_per_src_node_shape, fortran_order, maximal_edge_num_per_src_node);
     //npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_0.edge_types.npy", maximal_edge_type_per_src_node_shape, fortran_order, maximal_edge_type_per_src_node);
-    auto maximal_edge_num_per_src_node = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("ogbn_mag.segment_csr.part_0.edge_nums.npy");
-    auto maximal_edge_types_per_src_node = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("ogbn_mag.segment_csr.part_0.edge_types.npy");
+    auto maximal_edge_num_per_src_node = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_0.edge_nums.npy");
+    auto maximal_edge_types_per_src_node = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_0.edge_types.npy");
 
     //std::vector<int64_t> src_node_per_edge_type, num_src_nodes_per_edge_type;
     //std::vector<unsigned long> src_node_per_edge_type_shape, num_src_nodes_per_edge_type_shape;
     //npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_1.edge_type_num.npy", src_node_per_edge_type_shape, fortran_order, src_node_per_edge_type);
     //npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_1.src_node_per_edge_type.npy", num_src_nodes_per_edge_type_shape, fortran_order, num_src_nodes_per_edge_type);
-    auto src_node_per_edge_type = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("ogbn_mag.segment_csr.part_1.edge_type_num.npy");
-    auto num_src_nodes_per_edge_type = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("ogbn_mag.segment_csr.part_1.src_node_per_edge_type.npy");
+    auto src_node_per_edge_type = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_1.edge_type_num.npy");
+    auto num_src_nodes_per_edge_type = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_1.src_node_per_edge_type.npy");
 
     //std::vector<int64_t> dense_edges;
     //std::vector<unsigned long> dense_edges_shape;
     //npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_2.maximal_edges.npy", dense_edges_shape, fortran_order, dense_edges);
     // TODO: needs padding
     // TODO: when padding, both dense_edges and offset_num_src_nodes_per_edge_type (or num_src_nodes_per_edge_type) needs to be padded.
-    auto dense_edges = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("ogbn_mag.segment_csr.part_2.maximal_edges.npy");
+    auto dense_edges = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_2.edges.npy");
     
     //std::vector<int64_t> residue_srcs_data, residue_dsts_data, residue_etypes_data;
     //std::vector<unsigned long> residue_srcs_shape, residue_dsts_shape, residue_etypes_shape;
@@ -157,7 +157,7 @@ MySegmentCSR<int, std::allocator<int>, MyHeteroSeparateCSR<int, std::allocator<i
     thrust::host_vector<Idx> dense_edges_eids(dense_edges.data.size());
     thrust::sequence<>(dense_edges_eids.begin(), dense_edges_eids.end(), residue_srcs_data.data.size());
 
-    MyHeteroIntegratedCSR<Idx, std::allocator<Idx>> residude_csr_integrated(residue_csr_matrix_h.num_rows, residue_csr_matrix_h.num_cols, residue_csr_matrix_h.num_entries,
+    MyHeteroIntegratedCSR<Idx, std::allocator<Idx>> residude_csr_integrated(residue_csr_matrix_h.num_rows, residue_csr_matrix_h.num_cols, num_rels,
         residue_num_nnzs,
         residue_csr_matrix_h.row_offsets,
         residue_csr_matrix_h.column_indices,
@@ -186,6 +186,7 @@ int _HGTExperimental_main(MySegmentCSR<int, std::allocator<int>, MyHeteroSeparat
     //MySimpleNDArray<DType, thrust::device_allocator<DType>> intermediate_vectors=GenerateRandomNDArray<DType>({graph.num_rels, graph.num_rows, num_heads, out_feat});
     MySimpleNDArray<DType, thrust::device_allocator<DType>> attention = GenerateRandomNDArray<DType>({graph.total_num_nnzs, 1});
     HGTForwardImpl(deivce_graph, num_heads, in_feat, out_feat, node_features, weight, attention);
+    return 0;
 }
 
 int _RGCNLayer1Profiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph, int64_t in_feat, int64_t out_feat, bool flagUseMyHyb, bool flagCheckCorrect){

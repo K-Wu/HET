@@ -377,11 +377,13 @@ MySimpleNDArray<float, thrust::device_allocator<float>>& attention
         num_blocks_per_relationship_h[IdxRelation]= my_ceil_div<int>(graph.num_src_nodes_per_edge_type[IdxRelation],32);
         exclusive_scan_numBlocks_per_relationship_h[IdxRelation+1] = exclusive_scan_numBlocks_per_relationship_h[IdxRelation] + num_blocks_per_relationship_h[IdxRelation];
     }
-    thrust::device_vector<int> exclusive_scan_numBlocks_per_relationship(exclusive_scan_numBlocks_per_relationship_h.begin(),exclusive_scan_numBlocks_per_relationship_h.end());
+    thrust::device_vector<int> exclusive_scan_numBlocks_per_relationship(exclusive_scan_numBlocks_per_relationship_h);
     
     dim3 block(512, 1, 1);
     dim3 grid(exclusive_scan_numBlocks_per_relationship_h[exclusive_scan_numBlocks_per_relationship_h.size()-1], 1, 1);
     
+    cuda_err_chk(cudaDeviceSynchronize());
+    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     HGTExperimentalEdgeAttentionFusedCOOKernel_512_32<256, 4><<<grid, block>>>(graph.num_rels, attention.Ptr(), node_features.Ptr(), weight.Ptr(),
     static_cast<int*>(thrust::raw_pointer_cast(graph.num_src_nodes_per_edge_type.data())), 
     static_cast<int*>(thrust::raw_pointer_cast(graph.exclusive_scan_num_src_nodes_per_edge_type.data())),
@@ -391,6 +393,12 @@ MySimpleNDArray<float, thrust::device_allocator<float>>& attention
     static_cast<int*>(thrust::raw_pointer_cast(graph.maximal_edge_num_per_src_node.data())), 
     static_cast<int*>(thrust::raw_pointer_cast(graph.padded_exclusive_scan_maximal_edge_num_per_src_node.data())), 
     static_cast<int*>(thrust::raw_pointer_cast(graph.padded_dense_edges_eids.data())));
+    cuda_err_chk(cudaPeekAtLastError());
+    cuda_err_chk(cudaDeviceSynchronize());
+    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+    std::cout << "HGT Kernel 1 forward time: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " ms" << std::endl;
+
+
     //int num_relations, float *__restrict__ node_input_data, float *__restrict__ relation_attention_matrices, 
     //                                                            int *__restrict__ num_src_nodes_per_edge_type, int *__restrict__ exclusive_scan_num_blocks_per_relation, int* __restrict__ src_node_per_edge_type, 
     //                                                            int* dense_edges_per_src_node, int* num_dense_edges_per_src_node,int* starting_pos_dense_edges_per_src_node,int* eids
@@ -402,15 +410,16 @@ MySimpleNDArray<float, thrust::device_allocator<float>>& attention
         residual_exclusive_scan_numBlocks_per_relationship_h[IdxRelation+1] = residual_exclusive_scan_numBlocks_per_relationship_h[IdxRelation] + residual_num_blocks_per_relationship_h[IdxRelation];
     }
 
-    thrust::device_vector<int> residual_exclusive_scan_numBlocks_per_relationship(residual_exclusive_scan_numBlocks_per_relationship_h.begin(),residual_exclusive_scan_numBlocks_per_relationship_h.end());
-    thrust::device_vector<int> residual_num_nnzs_per_relation_device(graph.csr.num_nnzs.begin(),graph.csr.num_nnzs.end());
+    thrust::device_vector<int> residual_exclusive_scan_numBlocks_per_relationship(residual_exclusive_scan_numBlocks_per_relationship_h);
+    thrust::device_vector<int> residual_num_nnzs_per_relation_device(graph.csr.num_nnzs);
     thrust::device_vector<int> exclusive_scan_residual_num_nnzs_per_relation_device(graph.csr.num_rels);
     thrust::exclusive_scan(residual_num_nnzs_per_relation_device.begin(),residual_num_nnzs_per_relation_device.end(),exclusive_scan_residual_num_nnzs_per_relation_device.begin());
 
     dim3 block_residual(256, 1, 1);
     dim3 grid_residual(residual_exclusive_scan_numBlocks_per_relationship_h[residual_exclusive_scan_numBlocks_per_relationship_h.size()-1],1,1);
 
-
+    cuda_err_chk(cudaDeviceSynchronize());
+    std::chrono::high_resolution_clock::time_point t1second = std::chrono::high_resolution_clock::now();
     HGTExperimentalEdgeAttentionResidueCSR<256, 4><<<grid_residual, block_residual>>>(graph.csr.num_rels, graph.csr.num_rows, attention.Ptr(), node_features.Ptr(), weight.Ptr(), 
     static_cast<int*>(thrust::raw_pointer_cast(residual_num_nnzs_per_relation_device.data())),
     static_cast<int*>(thrust::raw_pointer_cast(exclusive_scan_residual_num_nnzs_per_relation_device.data())),
@@ -418,6 +427,10 @@ MySimpleNDArray<float, thrust::device_allocator<float>>& attention
     static_cast<int*>(thrust::raw_pointer_cast(graph.csr.col_idx.data())),
     static_cast<int*>(thrust::raw_pointer_cast(graph.csr.eids.data())),
     static_cast<int*>(thrust::raw_pointer_cast(residual_exclusive_scan_numBlocks_per_relationship.data())));
+    cuda_err_chk(cudaPeekAtLastError());
+    cuda_err_chk(cudaDeviceSynchronize());
+    std::chrono::high_resolution_clock::time_point t2second = std::chrono::high_resolution_clock::now();
+    std::cout << "HGT Kernel 2 forward time: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2second - t1second).count() << " ms" << std::endl;
 
 
 }

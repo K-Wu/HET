@@ -2,6 +2,7 @@
 #include <optional>
 #include <cusp/coo_matrix.h>
 #include <cusp/csr_matrix.h>
+#include <npy.hpp>
 #include "MySimpleNDArray.h"
 #include "../utils.h"
 #include "../MyHyb/MyHyb.h"
