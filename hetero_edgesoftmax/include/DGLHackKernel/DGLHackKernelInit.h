@@ -101,7 +101,7 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(){
 MySegmentCSR<int, std::allocator<int>, MyHeteroSeparateCSR<int, std::allocator<int>>> LoadSegmentCSR_OGBN_MAG(){
     typedef int Idx;
 
-    bool fortran_order = false;
+
     // problem definition
     int num_nodes=1939743;// 1134649 authors + 59965 field of studies + 8740 institution + 736389 papers
     int num_cutoff_nodes=400000;

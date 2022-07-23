@@ -11,7 +11,7 @@
 // dim3 block(COARSE_SGEMM_BLOCKSIZE, 1, 1);
 // dim3 grid(RTX_3090_GRIDSIZE, 1, 1);
 template <int OUT_DIM, int NUM_HEADS>
-__device__ __forceinline__ static void func512_32_mysgemm_exec(int m, int n, int k, float*  attention, float *Adata, float *Bdata, float *Cdata, int *node_indices, int* dense_edges_per_src_node, int* num_dense_edges_per_src_node, int* starting_pos_dense_edges_per_src_node, int* eids, int BcolBias)
+__device__ __forceinline__ static void func512_32_mysgemm_exec(int m, int n, int k, float* __restrict__  attention, float * __restrict__ Adata, float * __restrict__ Bdata, float * __restrict__ Cdata, int * __restrict__ node_indices, int* __restrict__ dense_edges_per_src_node, int* __restrict__ num_dense_edges_per_src_node, int* __restrict__ starting_pos_dense_edges_per_src_node, int* __restrict__ eids, int BcolBias)
     {
     assert(OUT_DIM == 256);
     assert(NUM_HEADS == 4);
@@ -91,6 +91,8 @@ __device__ __forceinline__ static void func512_32_mysgemm_exec(int m, int n, int
         int shdmemLDBrowIdx = 0 /*i*/ * 8 + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8);
         int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8);
         int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
+        //printf("ArowIdx: %d, shdmemColIdxBias: %d, shdmemLDBrowIdx: %d, shdmemLDBcolIdx: %d, shdmemLDBheadIdx: %d\n", ArowIdx, shdmemColIdxBias, shdmemLDBrowIdx, shdmemLDBcolIdx, shdmemLDBheadIdx);
+        //printf("Adata: %p, Bdata: %p, Cdata: %p\n", Adata, Bdata, Cdata);
         shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < K && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
         shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 16][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < K && shdmemLDBcolIdx + 16 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx + 16) : 0.0f;
 
@@ -218,7 +220,6 @@ __device__ __forceinline__ static void func512_32_mysgemm_exec(int m, int n, int
 
 __device__ __forceinline__ int binary_search(int num_elements, int * __restrict__ arr, int target){
     int lo = 0, hi = num_elements - 1;
-    int mid;
     // This below check covers all cases , so need to check
     // for mid=lo-(hi-lo)/2
     while (hi - lo > 1) {

@@ -5,3 +5,4 @@ build/
 *.log
 *.ncu-rep
 *.do_not_use
+*.cubin

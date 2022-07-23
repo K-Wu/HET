@@ -95,19 +95,19 @@ int basic_correctness_test()
     std::vector<int> citing_data;
     std::vector<int> writing_data;
 
-    // npy::LoadArrayFromNumpy("data/ogbn_mag/written-by_coo_1.npy", written_by_shape, fortran_order, written_by_data);
-    // npy::LoadArrayFromNumpy("data/ogbn_mag/has_coo_1.npy", has_shape, fortran_order, has_data);
-    // npy::LoadArrayFromNumpy("data/ogbn_mag/is-about_coo_1.npy", is_about_shape, fortran_order, is_about_data);
-    // npy::LoadArrayFromNumpy("data/ogbn_mag/cited_coo_1.npy", cited_shape, fortran_order, cited_data);
-    // npy::LoadArrayFromNumpy("data/ogbn_mag/citing_coo_1.npy", citing_shape, fortran_order, citing_data);
-    // npy::LoadArrayFromNumpy("data/ogbn_mag/writing_coo_1.npy", writing_shape, fortran_order, writing_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/written-by_coo_1.npy", written_by_shape, fortran_order, written_by_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/has_coo_1.npy", has_shape, fortran_order, has_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/is-about_coo_1.npy", is_about_shape, fortran_order, is_about_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/cited_coo_1.npy", cited_shape, fortran_order, cited_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/citing_coo_1.npy", citing_shape, fortran_order, citing_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/writing_coo_1.npy", writing_shape, fortran_order, writing_data);
 
-    npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/written-by_coo_2.npy", written_by_shape, fortran_order, written_by_data);
-    npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/has_coo_2.npy", has_shape, fortran_order, has_data);
-    npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/is-about_coo_2.npy", is_about_shape, fortran_order, is_about_data);
-    npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/cited_coo_2.npy", cited_shape, fortran_order, cited_data);
-    npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/citing_coo_2.npy", citing_shape, fortran_order, citing_data);
-    npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/writing_coo_2.npy", writing_shape, fortran_order, writing_data);
+    // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/written-by_coo_2.npy", written_by_shape, fortran_order, written_by_data);
+    // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/has_coo_2.npy", has_shape, fortran_order, has_data);
+    // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/is-about_coo_2.npy", is_about_shape, fortran_order, is_about_data);
+    // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/cited_coo_2.npy", cited_shape, fortran_order, cited_data);
+    // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/citing_coo_2.npy", citing_shape, fortran_order, citing_data);
+    // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/writing_coo_2.npy", writing_shape, fortran_order, writing_data);
 
     std::vector<int> max_idxes;
     max_idxes.push_back(*std::max_element(written_by_data.begin(), written_by_data.end()));
