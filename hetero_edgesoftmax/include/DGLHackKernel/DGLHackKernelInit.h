@@ -168,9 +168,9 @@ MySegmentCSR<int, std::allocator<int>, MyHeteroSeparateCSR<int, std::allocator<i
 
     auto pad_result = MySegmentCSRPadDenseEdges(dense_edges.data, maximal_edge_num_per_src_node.data, 8);
     auto pad_result2 = MySegmentCSRPadDenseEdges(dense_edges_eids, maximal_edge_num_per_src_node.data, 8);
-    auto padded_dense_edges = pad_result.first;
-    auto padded_exclusive_scan_maximal_edge_num_per_src_node = pad_result.second;
-    auto padded_dense_edges_eids = pad_result2.first;
+    auto padded_dense_edges = pad_result.second;
+    auto padded_exclusive_scan_maximal_edge_num_per_src_node = pad_result.first;
+    auto padded_dense_edges_eids = pad_result2.second;
 
     MySegmentCSR<Idx, std::allocator<Idx>, MyHeteroSeparateCSR<Idx, std::allocator<Idx>>> mysegmentcsr(num_nodes, num_nodes, maximal_non_cutoff_node_idx, maximal_edge_num_per_src_node.data, maximal_edge_types_per_src_node.data, src_node_per_edge_type.data, num_src_nodes_per_edge_type.data, padded_dense_edges, padded_exclusive_scan_maximal_edge_num_per_src_node, residue_csr, padded_dense_edges_eids);
     return mysegmentcsr;
