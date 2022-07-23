@@ -432,7 +432,7 @@ class MySegmentCSR{
     const thrust::detail::vector_base<IdxType, OtherAlloc>& maximal_edge_num_per_src_node, 
     const thrust::detail::vector_base<IdxType, OtherAlloc>& maximal_edge_type_per_src_node, 
     const thrust::detail::vector_base<IdxType, OtherAlloc>& src_node_per_edge_type, 
-    const thrust::detail::vector_base<IdxType, OtherAlloc>& num_src_nodes_per_edge_type, 
+    const thrust::detail::vector_base<IdxType, OtherAlloc>& num_src_nodes_per_edge_type,
     const thrust::detail::vector_base<IdxType, OtherAlloc2>& padded_dense_edges, 
     const thrust::detail::vector_base<IdxType, OtherAlloc2>& padded_exclusive_scan_maximal_edge_num_per_src_node,
     const CSRType& residue_coo_matrix_h,
@@ -473,6 +473,12 @@ class MySegmentCSR{
             this->exclusive_scan_dense_num_nnzs[IdxRelationship+1] = this->exclusive_scan_dense_num_nnzs[IdxRelationship] + dense_num_nnzs[IdxRelationship];
         }
 
+        this->exclusive_scan_num_src_nodes_per_edge_type.resize(this->num_rels+1);
+        this->exclusive_scan_num_src_nodes_per_edge_type[0] = 0;
+        for (int IdxRelationship = 0; IdxRelationship < this->num_rels; IdxRelationship++){
+            this->exclusive_scan_num_src_nodes_per_edge_type[IdxRelationship+1] = this->exclusive_scan_num_src_nodes_per_edge_type[IdxRelationship] + num_src_nodes_per_edge_type[IdxRelationship];
+        }
+
         this-> dense_total_num_nnzs= my_accumulate<>(this->num_nnzs.begin(), this->num_nnzs.end(), 0LL);
         this->total_num_nnzs = this->dense_total_num_nnzs+this->csr.total_num_nnzs;
     }
@@ -497,6 +503,7 @@ class MySegmentCSR{
         this->exclusive_scan_num_src_nodes_per_edge_type = other.exclusive_scan_num_src_nodes_per_edge_type;
         this->padded_dense_edges = other.padded_dense_edges;
         this->padded_exclusive_scan_maximal_edge_num_per_src_node = other.padded_exclusive_scan_maximal_edge_num_per_src_node;
+        this->padded_dense_edges_eids = other.padded_dense_edges_eids;
     }
 };
 

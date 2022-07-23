@@ -244,10 +244,17 @@ __global__ void HGTExperimentalEdgeAttentionFusedCOOKernel_512_32(int num_relati
     constexpr int TILE_SZ_B = 32;
     constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
     constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
-
+    
     int relation_idx = binary_search(num_relations, exclusive_scan_num_blocks_per_relation, blockIdx.x);
+
     assert( blockIdx.x>=exclusive_scan_num_blocks_per_relation[relation_idx]&&(relation_idx== num_relations -1  || blockIdx.x<exclusive_scan_num_blocks_per_relation[relation_idx+1]));
     int node_entry_idx = (blockIdx.x - exclusive_scan_num_blocks_per_relation[relation_idx]) * TILE_SZ_B;
+
+
+    printf("relation_idx %d, node_entry_idx %d\n", relation_idx, node_entry_idx);
+    printf("arguments of this function are: num_relations %d, attention %p, node_input_data %p, relation_attention_matrices %p, num_src_nodes_per_edge_type %p, exclusive_scan_num_src_nodes_per_edge_type %p, exclusive_scan_num_blocks_per_relation %p, src_node_per_edge_type %p, dense_edges_per_src_node %p, num_dense_edges_per_src_node %p, starting_pos_dense_edges_per_src_node %p, eids %p\n", num_relations, attention, node_input_data, relation_attention_matrices, num_src_nodes_per_edge_type, exclusive_scan_num_src_nodes_per_edge_type, exclusive_scan_num_blocks_per_relation, src_node_per_edge_type, dense_edges_per_src_node, num_dense_edges_per_src_node, starting_pos_dense_edges_per_src_node, eids);
+
+
     //TODO: check source node boundary during the logic
     func512_32_mysgemm_exec<OUT_DIM, NUM_HEADS>(OUT_DIM, num_src_nodes_per_edge_type[relation_idx], NODE_INPUT_DIM_PER_HEAD, 
     attention, &relation_attention_matrices[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD], node_input_data, 
