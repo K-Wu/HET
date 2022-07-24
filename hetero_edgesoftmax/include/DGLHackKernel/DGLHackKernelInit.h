@@ -124,8 +124,8 @@ MySegmentCSR<int, std::allocator<int>, MyHeteroSeparateCSR<int, std::allocator<i
     //std::vector<unsigned long> src_node_per_edge_type_shape, num_src_nodes_per_edge_type_shape;
     //npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_1.edge_type_num.npy", src_node_per_edge_type_shape, fortran_order, src_node_per_edge_type);
     //npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_1.src_node_per_edge_type.npy", num_src_nodes_per_edge_type_shape, fortran_order, num_src_nodes_per_edge_type);
-    auto src_node_per_edge_type = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_1.edge_type_num.npy");
-    auto num_src_nodes_per_edge_type = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_1.src_node_per_edge_type.npy");
+    auto num_src_nodes_per_edge_type = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_1.edge_type_num.npy");
+    auto src_node_per_edge_type = LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,int64_t>("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_1.src_node_per_edge_type.npy");
 
     //std::vector<int64_t> dense_edges;
     //std::vector<unsigned long> dense_edges_shape;
@@ -176,7 +176,7 @@ MySegmentCSR<int, std::allocator<int>, MyHeteroSeparateCSR<int, std::allocator<i
     return mysegmentcsr;
 }
 
-int _HGTExperimental_main(MySegmentCSR<int, std::allocator<int>, MyHeteroSeparateCSR<int, std::allocator<int>>>& graph, int num_heads, int in_feat, int out_feat){
+int _HGTExperimental_main(MySegmentCSR<int, std::allocator<int>, MyHeteroSeparateCSR<int, std::allocator<int>>>& graph, int num_heads, int in_feat, int out_feat) {//noexcept(false) {
     assert(num_heads == 4);
     typedef int32_t Idx;
     typedef float DType;
