@@ -11,20 +11,20 @@
 // dim3 block(COARSE_SGEMM_BLOCKSIZE, 1, 1);
 // dim3 grid(RTX_3090_GRIDSIZE, 1, 1);
 template <int OUT_DIM, int NUM_HEADS>
-__device__ __forceinline__ static void func512_32_mysgemm_exec(int m, int n, int k, float* __restrict__  attention, float * __restrict__ Adata, float * __restrict__ Bdata, float * __restrict__ Cdata, int * __restrict__ node_indices, int* __restrict__ dense_edges_per_src_node, int* __restrict__ num_dense_edges_per_src_node, int* __restrict__ starting_pos_dense_edges_per_src_node, int* __restrict__ eids, int BcolBias)
-    {
+__device__ __forceinline__ static void func512_32_mysgemm_exec(int m, int n, int k, float *__restrict__ attention, float *__restrict__ Adata, float *__restrict__ Bdata, float *__restrict__ Cdata, int *__restrict__ node_indices, int *__restrict__ dense_edges_per_src_node, int *__restrict__ num_dense_edges_per_src_node, int *__restrict__ starting_pos_dense_edges_per_src_node, int *__restrict__ eids, int BcolBias)
+{
     assert(OUT_DIM == 256);
     assert(NUM_HEADS == 4);
-        constexpr int TILE_SZ_A = 512;
-        constexpr int TILE_SZ_B = 32;
-        constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
-        constexpr int TILE_NUM_HEAD = 4;
-        constexpr int TILE_SZ_RATIO = TILE_SZ_A / TILE_SZ_B;
-        constexpr int K = 64;
-        static_assert(TILE_SZ_RATIO % TILE_NUM_HEAD == 0, "");
-        assert(k == 64);
-        assert(m == OUT_DIM);
-        assert(m==256); // TODO: make the routine more general
+    constexpr int TILE_SZ_A = 512;
+    constexpr int TILE_SZ_B = 32;
+    constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
+    constexpr int TILE_NUM_HEAD = 4;
+    constexpr int TILE_SZ_RATIO = TILE_SZ_A / TILE_SZ_B;
+    constexpr int K = 64;
+    static_assert(TILE_SZ_RATIO % TILE_NUM_HEAD == 0, "");
+    assert(k == 64);
+    assert(m == OUT_DIM);
+    assert(m == 256); // TODO: make the routine more general
 /********************************************************************
  *
  * Compute C = A x B
@@ -72,162 +72,170 @@ __device__ __forceinline__ static void func512_32_mysgemm_exec(int m, int n, int
 // TODO: distinguish IN_DIM and OUT_DIM to generalize the kernel
 #define A(idx_head, row, col) Adata[(idx_head * K) + (row) + (col)*OUT_DIM]
 #define B(idx_head, row, col) Bdata[(idx_head * K) + (row) + (node_indices[col]) * OUT_DIM]
-#define T(idx_head, row, col) Bdata[(idx_head * K) + (row) + (col) * OUT_DIM]
+#define T(idx_head, row, col) Bdata[(idx_head * K) + (row) + (col)*OUT_DIM]
 #define C(idx_head, row, col) Cdata[(idx_head * K) + (row) + (col)*OUT_DIM]
 
-        __shared__ float shmem[2 /*double buffering*/][TILE_NUM_HEAD][TILE_SZ_B][8];
-        __shared__ float shmem_output[16 /*node idx*/][16 /*element idx in 4 heads*/][2 /*node idx 2nd part*/][16 /*element idx in 4 heads 2nd part*/];
-        for (int idx = 0; idx < 16; idx++)
-        {
-            shmem_output[idx][threadIdx.x / 32][threadIdx.x % 32 / 16][threadIdx.x % 16] = 0.0f;
-        }
-        static_assert(TILE_SZ_RATIO / TILE_NUM_HEAD == 4, "");
-        static_assert(TILE_SZ_RATIO % TILE_NUM_HEAD == 0, "");
-        // each thread should load 8/(TILE_SZ_RATIO / TILE_NUM_HEAD) times per iteration
+    __shared__ float shmem[2 /*double buffering*/][TILE_NUM_HEAD][TILE_SZ_B][8];
+    __shared__ float shmem_output[16 /*node idx*/][16 /*element idx in 4 heads*/][2 /*node idx 2nd part*/][16 /*element idx in 4 heads 2nd part*/];
+    for (int idx = 0; idx < 16; idx++)
+    {
+        shmem_output[idx][threadIdx.x / 32][threadIdx.x % 32 / 16][threadIdx.x % 16] = 0.0f;
+    }
+    static_assert(TILE_SZ_RATIO / TILE_NUM_HEAD == 4, "");
+    static_assert(TILE_SZ_RATIO % TILE_NUM_HEAD == 0, "");
+    // each thread should load 8/(TILE_SZ_RATIO / TILE_NUM_HEAD) times per iteration
 
-        int ArowIdx = threadIdx.x / 32 * 16 + ((threadIdx.x % 32) < 16 ? ((threadIdx.x % 32)) : ((threadIdx.x % 32) - 16));
-        int shdmemColIdxBias = (threadIdx.x % 32) < 16 ? 0 : 16;
+    int ArowIdx = threadIdx.x / 32 * 16 + ((threadIdx.x % 32) < 16 ? ((threadIdx.x % 32)) : ((threadIdx.x % 32) - 16));
+    int shdmemColIdxBias = (threadIdx.x % 32) < 16 ? 0 : 16;
 
-        int shdmemLDBrowIdx = 0 /*i*/ * 8 + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8);
+    int shdmemLDBrowIdx = 0 /*i*/ * 8 + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8);
+    int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8);
+    int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
+    // printf("ArowIdx: %d, shdmemColIdxBias: %d, shdmemLDBrowIdx: %d, shdmemLDBcolIdx: %d, shdmemLDBheadIdx: %d\n", ArowIdx, shdmemColIdxBias, shdmemLDBrowIdx, shdmemLDBcolIdx, shdmemLDBheadIdx);
+    // printf("Adata: %p, Bdata: %p, Cdata: %p\n", Adata, Bdata, Cdata);
+    shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < K && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
+    shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 16][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < K && shdmemLDBcolIdx + 16 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx + 16) : 0.0f;
+
+    __syncthreads();
+
+    float reg0;
+    float reg1;
+    float reg2;
+    float reg3;
+    float reg4;
+    float reg5;
+    float reg6;
+    float reg7;
+
+    for (int i = 0; i < (K + 8 - 1) / (8); i++)
+    {
+        reg0 = (ArowIdx < OUT_DIM && K > i * 8) ? A(ArowIdx / K, ArowIdx % K, i * 8) : 0.0f;
+        reg1 = (ArowIdx < OUT_DIM && K > i * 8 + 1) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 1) : 0.0f;
+        reg2 = (ArowIdx < OUT_DIM && K > i * 8 + 2) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 2) : 0.0f;
+        reg3 = (ArowIdx < OUT_DIM && K > i * 8 + 3) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 3) : 0.0f;
+        reg4 = (ArowIdx < OUT_DIM && K > i * 8 + 4) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 4) : 0.0f;
+        reg5 = (ArowIdx < OUT_DIM && K > i * 8 + 5) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 5) : 0.0f;
+        reg6 = (ArowIdx < OUT_DIM && K > i * 8 + 6) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 6) : 0.0f;
+        reg7 = (ArowIdx < OUT_DIM && K > i * 8 + 7) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 7) : 0.0f;
+
+        // load B in shared memory
+        // the loading scheme is adjusted to fit B's column-major layout
+        int shdmemLDBrowIdx = i * 8 + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8);
         int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8);
         int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
-        //printf("ArowIdx: %d, shdmemColIdxBias: %d, shdmemLDBrowIdx: %d, shdmemLDBcolIdx: %d, shdmemLDBheadIdx: %d\n", ArowIdx, shdmemColIdxBias, shdmemLDBrowIdx, shdmemLDBcolIdx, shdmemLDBheadIdx);
-        //printf("Adata: %p, Bdata: %p, Cdata: %p\n", Adata, Bdata, Cdata);
-        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < K && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
-        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 16][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < K && shdmemLDBcolIdx + 16 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx + 16) : 0.0f;
 
-        __syncthreads();
+        float next_iter_shmem_val_0 = (shdmemLDBrowIdx + 8 < K && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx) : 0.0f;
+        float next_iter_shmem_val_2 = (shdmemLDBrowIdx + 8 < K && shdmemLDBcolIdx + 16 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 16) : 0.0f;
 
-        float reg0;
-        float reg1;
-        float reg2;
-        float reg3;
-        float reg4;
-        float reg5;
-        float reg6;
-        float reg7;
-
-        for (int i = 0; i < (K + 8 - 1) / (8); i++)
+        // compute C
+        if (ArowIdx < OUT_DIM)
         {
-            reg0 = (ArowIdx < OUT_DIM && K > i * 8) ? A(ArowIdx / K, ArowIdx % K, i * 8) : 0.0f;
-            reg1 = (ArowIdx < OUT_DIM && K > i * 8 + 1) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 1) : 0.0f;
-            reg2 = (ArowIdx < OUT_DIM && K > i * 8 + 2) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 2) : 0.0f;
-            reg3 = (ArowIdx < OUT_DIM && K > i * 8 + 3) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 3) : 0.0f;
-            reg4 = (ArowIdx < OUT_DIM && K > i * 8 + 4) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 4) : 0.0f;
-            reg5 = (ArowIdx < OUT_DIM && K > i * 8 + 5) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 5) : 0.0f;
-            reg6 = (ArowIdx < OUT_DIM && K > i * 8 + 6) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 6) : 0.0f;
-            reg7 = (ArowIdx < OUT_DIM && K > i * 8 + 7) ? A(ArowIdx / K, ArowIdx % K, i * 8 + 7) : 0.0f;
-
-            // load B in shared memory
-            // the loading scheme is adjusted to fit B's column-major layout
-            int shdmemLDBrowIdx = i * 8 + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8);
-            int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8);
-            int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
-
-            float next_iter_shmem_val_0 = (shdmemLDBrowIdx + 8 < K && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx) : 0.0f;
-            float next_iter_shmem_val_2 = (shdmemLDBrowIdx + 8 < K && shdmemLDBcolIdx + 16 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 16) : 0.0f;
-
-            // compute C
-            if (ArowIdx < OUT_DIM)
-            {
 #pragma unroll 2
-                for (int shdmemColIdx = 0; shdmemColIdx < 16; shdmemColIdx++)
-                {
-                    int CcolIdx = shdmemColIdx + /*blockIdx.x * TILE_SZ_B*/ BcolBias + shdmemColIdxBias;
+            for (int shdmemColIdx = 0; shdmemColIdx < 16; shdmemColIdx++)
+            {
+                int CcolIdx = shdmemColIdx + /*blockIdx.x * TILE_SZ_B*/ BcolBias + shdmemColIdxBias;
 
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg0 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][0] /*shmem_val0[shdmemColIdx % 2]*/;
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg1 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][1] /*shmem_val1[shdmemColIdx % 2]*/;
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg2 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][2] /*shmem_val2[shdmemColIdx % 2]*/;
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg3 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][3] /*shmem_val3[shdmemColIdx % 2]*/;
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg4 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][4] /*shmem_val4[shdmemColIdx % 2]*/;
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg5 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][5] /*shmem_val5[shdmemColIdx % 2]*/;
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg6 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][6] /*shmem_val6[shdmemColIdx % 2]*/;
-                    /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg7 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][7] /*shmem_val7[shdmemColIdx % 2]*/;
-                }
-            }
-            shmem[(i + 1) % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = next_iter_shmem_val_0;
-            shmem[(i + 1) % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 16][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = next_iter_shmem_val_2;
-            __syncthreads();
-        }
-
-        // TODO: optimize thread mapping to improve access pattern
-        // Disabling storage in fused kernel 
-        // for (int store_iter = 0; store_iter < 256 * 32 / TILE_SZ_A; store_iter++)
-        // {
-        //     int node_idx_1 = store_iter;
-        //     int ele_idx_1 = ArowIdx / 16;
-        //     int ele_idx_2 = ArowIdx % 16;
-        //     int CcolIdx = store_iter + /*blockIdx.x * TILE_SZ_B*/ BcolBias + shdmemColIdxBias;
-        //     if (CcolIdx < n)
-        //     {
-        //         // C(ele_idx_1 * 16 / 64, ele_idx_2 + ele_idx_1 * 16 % 64, BcolBias + node_idx_1 + shdmemColIdxBias) = shmem_output[node_idx_1][ele_idx_1][shdmemColIdxBias / 16][ele_idx_2];
-
-        //     }
-        // }
-        
-
-        // now, each 256 thread is in charge of one source node, wherein each warp is in charge of one destination node at each time.
-        for (int second_stage_node_idx = threadIdx.x / (OUT_DIM); second_stage_node_idx < TILE_SZ_B; second_stage_node_idx+= (blockDim.x/OUT_DIM)){
-            // load dest node indices
-            if (BcolBias+second_stage_node_idx>=n)
-                break;
-            int curr_source_node_index = node_indices[BcolBias+second_stage_node_idx];
-            
-            
-            int num_dense_edge_for_curr_source_node = num_dense_edges_per_src_node[curr_source_node_index];
-            int starting_index_dense_edge_for_curr_source_node = starting_pos_dense_edges_per_src_node[curr_source_node_index];
-
-            for (int idx_dense_edge_for_curr_source_node = (threadIdx.x % (OUT_DIM)) / 32; idx_dense_edge_for_curr_source_node< num_dense_edge_for_curr_source_node; idx_dense_edge_for_curr_source_node+=((OUT_DIM)/32)){
-                int curr_eid = eids[starting_index_dense_edge_for_curr_source_node + idx_dense_edge_for_curr_source_node];
-                int curr_dest_node_index = dense_edges_per_src_node[starting_index_dense_edge_for_curr_source_node + idx_dense_edge_for_curr_source_node];
-                
-
-                int src_node_shmem_idx_1 = second_stage_node_idx/2;
-                int src_node_shmem_idx_2 = second_stage_node_idx%2;
-                
-                float att_val =0.; float att_val_2 = 0.; float att_val_3 = 0.; float att_val_4 = 0.;
-                for (int idx_feat = 0; idx_feat<64; idx_feat+=32){
-                    int element_shmem_idx_1 = idx_feat / 16;
-                    int element_shmem_idx_2 = idx_feat % 16;
-                    // asserting IN_DIM==OUT_DIM
-                    att_val += shmem_output[src_node_shmem_idx_1][element_shmem_idx_1][src_node_shmem_idx_2][element_shmem_idx_2] * Bdata[curr_dest_node_index *OUT_DIM + idx_feat];
-                    att_val_2 += shmem_output[src_node_shmem_idx_1][element_shmem_idx_1+4][src_node_shmem_idx_2][element_shmem_idx_2] * Bdata[curr_dest_node_index * OUT_DIM + idx_feat + 1 * (OUT_DIM /NUM_HEADS)];
-                    att_val_3 += shmem_output[src_node_shmem_idx_1][element_shmem_idx_1+8][src_node_shmem_idx_2][element_shmem_idx_2] * Bdata[curr_dest_node_index * OUT_DIM + idx_feat + 2 * (OUT_DIM /NUM_HEADS)];
-                    att_val_4 += shmem_output[src_node_shmem_idx_1][element_shmem_idx_1+12][src_node_shmem_idx_2][element_shmem_idx_2] * Bdata[curr_dest_node_index * OUT_DIM + idx_feat + 3 * (OUT_DIM /NUM_HEADS)];
-                }
-
-                // reduction
-                for (int i_reduction=16; i_reduction>0; i_reduction=i_reduction/2){
-                    att_val += __shfl_down_sync(-1, att_val, i_reduction);
-                    att_val_2 += __shfl_down_sync(-1, att_val_2, i_reduction);
-                    att_val_3 += __shfl_down_sync(-1, att_val_3, i_reduction);
-                    att_val_4 += __shfl_down_sync(-1, att_val_4, i_reduction);
-                }
-                if (threadIdx.x%32==0){
-                    attention[curr_eid *4+0] += att_val;
-                    attention[curr_eid *4+1] += att_val_2;
-                    attention[curr_eid *4+2] += att_val_3;
-                    attention[curr_eid *4+3] += att_val_4;
-                }
+                /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg0 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][0] /*shmem_val0[shdmemColIdx % 2]*/;
+                /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg1 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][1] /*shmem_val1[shdmemColIdx % 2]*/;
+                /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg2 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][2] /*shmem_val2[shdmemColIdx % 2]*/;
+                /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg3 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][3] /*shmem_val3[shdmemColIdx % 2]*/;
+                /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg4 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][4] /*shmem_val4[shdmemColIdx % 2]*/;
+                /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg5 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][5] /*shmem_val5[shdmemColIdx % 2]*/;
+                /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg6 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][6] /*shmem_val6[shdmemColIdx % 2]*/;
+                /*C(ArowIdx / k, ArowIdx % k, CcolIdx)*/ shmem_output[shdmemColIdx][ArowIdx / 16][shdmemColIdxBias / 16][ArowIdx % 16] += reg7 * shmem[i % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][shdmemColIdx + shdmemColIdxBias][7] /*shmem_val7[shdmemColIdx % 2]*/;
             }
         }
+        shmem[(i + 1) % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = next_iter_shmem_val_0;
+        shmem[(i + 1) % 2][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 16][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = next_iter_shmem_val_2;
+        __syncthreads();
+    }
 
+    // TODO: optimize thread mapping to improve access pattern
+    // Disabling storage in fused kernel
+    // for (int store_iter = 0; store_iter < 256 * 32 / TILE_SZ_A; store_iter++)
+    // {
+    //     int node_idx_1 = store_iter;
+    //     int ele_idx_1 = ArowIdx / 16;
+    //     int ele_idx_2 = ArowIdx % 16;
+    //     int CcolIdx = store_iter + /*blockIdx.x * TILE_SZ_B*/ BcolBias + shdmemColIdxBias;
+    //     if (CcolIdx < n)
+    //     {
+    //         // C(ele_idx_1 * 16 / 64, ele_idx_2 + ele_idx_1 * 16 % 64, BcolBias + node_idx_1 + shdmemColIdxBias) = shmem_output[node_idx_1][ele_idx_1][shdmemColIdxBias / 16][ele_idx_2];
+
+    //     }
+    // }
+
+    // now, each 256 thread is in charge of one source node, wherein each warp is in charge of one destination node at each time.
+    for (int second_stage_node_idx = threadIdx.x / (OUT_DIM); second_stage_node_idx < TILE_SZ_B; second_stage_node_idx += (blockDim.x / OUT_DIM))
+    {
+        // load dest node indices
+        if (BcolBias + second_stage_node_idx >= n)
+            break;
+        int curr_source_node_index = node_indices[BcolBias + second_stage_node_idx];
+
+        int num_dense_edge_for_curr_source_node = num_dense_edges_per_src_node[curr_source_node_index];
+        int starting_index_dense_edge_for_curr_source_node = starting_pos_dense_edges_per_src_node[curr_source_node_index];
+
+        for (int idx_dense_edge_for_curr_source_node = (threadIdx.x % (OUT_DIM)) / 32; idx_dense_edge_for_curr_source_node < num_dense_edge_for_curr_source_node; idx_dense_edge_for_curr_source_node += ((OUT_DIM) / 32))
+        {
+            int curr_eid = eids[starting_index_dense_edge_for_curr_source_node + idx_dense_edge_for_curr_source_node];
+            int curr_dest_node_index = dense_edges_per_src_node[starting_index_dense_edge_for_curr_source_node + idx_dense_edge_for_curr_source_node];
+
+            int src_node_shmem_idx_1 = second_stage_node_idx / 2;
+            int src_node_shmem_idx_2 = second_stage_node_idx % 2;
+
+            float att_val = 0.;
+            float att_val_2 = 0.;
+            float att_val_3 = 0.;
+            float att_val_4 = 0.;
+            for (int idx_feat = 0; idx_feat < 64; idx_feat += 32)
+            {
+                int element_shmem_idx_1 = idx_feat / 16;
+                int element_shmem_idx_2 = idx_feat % 16;
+                // asserting IN_DIM==OUT_DIM
+                att_val += shmem_output[src_node_shmem_idx_1][element_shmem_idx_1][src_node_shmem_idx_2][element_shmem_idx_2] * Bdata[curr_dest_node_index * OUT_DIM + idx_feat];
+                att_val_2 += shmem_output[src_node_shmem_idx_1][element_shmem_idx_1 + 4][src_node_shmem_idx_2][element_shmem_idx_2] * Bdata[curr_dest_node_index * OUT_DIM + idx_feat + 1 * (OUT_DIM / NUM_HEADS)];
+                att_val_3 += shmem_output[src_node_shmem_idx_1][element_shmem_idx_1 + 8][src_node_shmem_idx_2][element_shmem_idx_2] * Bdata[curr_dest_node_index * OUT_DIM + idx_feat + 2 * (OUT_DIM / NUM_HEADS)];
+                att_val_4 += shmem_output[src_node_shmem_idx_1][element_shmem_idx_1 + 12][src_node_shmem_idx_2][element_shmem_idx_2] * Bdata[curr_dest_node_index * OUT_DIM + idx_feat + 3 * (OUT_DIM / NUM_HEADS)];
+            }
+
+            // reduction
+            for (int i_reduction = 16; i_reduction > 0; i_reduction = i_reduction / 2)
+            {
+                att_val += __shfl_down_sync(-1, att_val, i_reduction);
+                att_val_2 += __shfl_down_sync(-1, att_val_2, i_reduction);
+                att_val_3 += __shfl_down_sync(-1, att_val_3, i_reduction);
+                att_val_4 += __shfl_down_sync(-1, att_val_4, i_reduction);
+            }
+            if (threadIdx.x % 32 == 0)
+            {
+                attention[curr_eid * 4 + 0] += att_val;
+                attention[curr_eid * 4 + 1] += att_val_2;
+                attention[curr_eid * 4 + 2] += att_val_3;
+                attention[curr_eid * 4 + 3] += att_val_4;
+            }
+        }
+    }
 
 #undef A
 #undef B
 #undef C
-    }
+}
 
-__device__ __forceinline__ int binary_search(int num_elements, int * __restrict__ arr, int target){
-    int lo = 0, hi = num_elements - 1;
+__device__ __forceinline__ int binary_search(int num_elements, int *__restrict__ arr, int target)
+{
+    int lo = 0, hi = num_elements;
     // This below check covers all cases , so need to check
     // for mid=lo-(hi-lo)/2
-    while (hi - lo > 1) {
+    while (hi - lo > 1)
+    {
         int mid = (hi + lo) / 2;
-        if (arr[mid] < target) {
-            lo = mid + 1;
+        if (arr[mid] <= target)
+        {
+            lo = mid;
         }
-        else {
+        else
+        {
             hi = mid;
         }
     }
@@ -236,82 +244,83 @@ __device__ __forceinline__ int binary_search(int num_elements, int * __restrict_
 
 // grid size equals num
 template <int OUT_DIM, int NUM_HEADS>
-__global__ void HGTExperimentalEdgeAttentionFusedCOOKernel_512_32(int num_relations, float* __restrict__ attention, float *__restrict__ node_input_data, float *__restrict__ relation_attention_matrices, 
-                                                                int *__restrict__ num_src_nodes_per_edge_type, int* __restrict__ exclusive_scan_num_src_nodes_per_edge_type, int *__restrict__ exclusive_scan_num_blocks_per_relation, int* __restrict__ src_node_per_edge_type,
-                                                                int* __restrict__ dense_edges_per_src_node, int* __restrict__ num_dense_edges_per_src_node, int* __restrict__ starting_pos_dense_edges_per_src_node,int* __restrict__ eids)
+__global__ void HGTExperimentalEdgeAttentionFusedCOOKernel_512_32(int num_relations, float *__restrict__ attention, float *__restrict__ node_input_data, float *__restrict__ relation_attention_matrices,
+                                                                  int *__restrict__ num_src_nodes_per_edge_type, int *__restrict__ exclusive_scan_num_src_nodes_per_edge_type, int *__restrict__ exclusive_scan_num_blocks_per_relation, int *__restrict__ src_node_per_edge_type,
+                                                                  int *__restrict__ dense_edges_per_src_node, int *__restrict__ num_dense_edges_per_src_node, int *__restrict__ starting_pos_dense_edges_per_src_node, int *__restrict__ eids)
 {
     constexpr int TILE_SZ_A = 512;
     constexpr int TILE_SZ_B = 32;
     constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
     constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
-    
-    int relation_idx = binary_search(num_relations, exclusive_scan_num_blocks_per_relation, blockIdx.x);
 
-    assert( blockIdx.x>=exclusive_scan_num_blocks_per_relation[relation_idx]&&(relation_idx== num_relations -1  || blockIdx.x<exclusive_scan_num_blocks_per_relation[relation_idx+1]));
+    int relation_idx = binary_search(num_relations, exclusive_scan_num_blocks_per_relation, blockIdx.x);
+    // printf("blockIdx.x%d relation_idx %d,  exclusive_scan_num_blocks_per_relation[relation_idx] %d, exclusive_scan_num_blocks_per_relation[relation_idx+1] %d\n", blockIdx.x, relation_idx,  exclusive_scan_num_blocks_per_relation[relation_idx], exclusive_scan_num_blocks_per_relation[relation_idx+1]);
+    assert(blockIdx.x >= exclusive_scan_num_blocks_per_relation[relation_idx] && (relation_idx == num_relations - 1 || blockIdx.x < exclusive_scan_num_blocks_per_relation[relation_idx + 1]));
     int node_entry_idx = (blockIdx.x - exclusive_scan_num_blocks_per_relation[relation_idx]) * TILE_SZ_B;
 
+    // printf("arguments of this function are: num_relations %d, attention %p, node_input_data %p, relation_attention_matrices %p, num_src_nodes_per_edge_type %p, exclusive_scan_num_src_nodes_per_edge_type %p, exclusive_scan_num_blocks_per_relation %p, src_node_per_edge_type %p, dense_edges_per_src_node %p, num_dense_edges_per_src_node %p, starting_pos_dense_edges_per_src_node %p, eids %p\n", num_relations, attention, node_input_data, relation_attention_matrices, num_src_nodes_per_edge_type, exclusive_scan_num_src_nodes_per_edge_type, exclusive_scan_num_blocks_per_relation, src_node_per_edge_type, dense_edges_per_src_node, num_dense_edges_per_src_node, starting_pos_dense_edges_per_src_node, eids);
 
-    printf("relation_idx %d, node_entry_idx %d\n", relation_idx, node_entry_idx);
-    printf("arguments of this function are: num_relations %d, attention %p, node_input_data %p, relation_attention_matrices %p, num_src_nodes_per_edge_type %p, exclusive_scan_num_src_nodes_per_edge_type %p, exclusive_scan_num_blocks_per_relation %p, src_node_per_edge_type %p, dense_edges_per_src_node %p, num_dense_edges_per_src_node %p, starting_pos_dense_edges_per_src_node %p, eids %p\n", num_relations, attention, node_input_data, relation_attention_matrices, num_src_nodes_per_edge_type, exclusive_scan_num_src_nodes_per_edge_type, exclusive_scan_num_blocks_per_relation, src_node_per_edge_type, dense_edges_per_src_node, num_dense_edges_per_src_node, starting_pos_dense_edges_per_src_node, eids);
-
-
-    //TODO: check source node boundary during the logic
-    func512_32_mysgemm_exec<OUT_DIM, NUM_HEADS>(OUT_DIM, num_src_nodes_per_edge_type[relation_idx], NODE_INPUT_DIM_PER_HEAD, 
-    attention, &relation_attention_matrices[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD], node_input_data, 
-    nullptr,&src_node_per_edge_type[exclusive_scan_num_src_nodes_per_edge_type[relation_idx]],dense_edges_per_src_node,num_dense_edges_per_src_node,starting_pos_dense_edges_per_src_node,eids,
-    node_entry_idx);
+    // TODO: check source node boundary during the logic
+    func512_32_mysgemm_exec<OUT_DIM, NUM_HEADS>(OUT_DIM, num_src_nodes_per_edge_type[relation_idx], NODE_INPUT_DIM_PER_HEAD,
+                                                attention, &relation_attention_matrices[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD], node_input_data,
+                                                nullptr, &src_node_per_edge_type[exclusive_scan_num_src_nodes_per_edge_type[relation_idx]], dense_edges_per_src_node, num_dense_edges_per_src_node, starting_pos_dense_edges_per_src_node, eids,
+                                                node_entry_idx);
 }
 
 template <int OUT_DIM, int NUM_HEADS>
-__global__ void HGTExperimentalEdgeAttentionResidueCSR(int num_relations, int num_rows, float* __restrict__ attention, float *__restrict__ node_input_data, float *__restrict__ weights, int* __restrict__ num_nnzs_per_relation, int* __restrict__ rel_ptr, int* __restrict__ row_ptr, int* __restrict__ col_idx, int* __restrict__ eids, int* __restrict__ exclusive_scan_numBlocks_per_relationship){
-    assert(OUT_DIM==256);
-    assert(NUM_HEADS==4);
+__global__ void HGTExperimentalEdgeAttentionResidueCSR(int num_relations, int num_rows, float *__restrict__ attention, float *__restrict__ node_input_data, float *__restrict__ weights, int *__restrict__ num_nnzs_per_relation, int *__restrict__ rel_ptr, int *__restrict__ row_ptr, int *__restrict__ col_idx, int *__restrict__ eids, int *__restrict__ exclusive_scan_numBlocks_per_relationship)
+{
+    assert(OUT_DIM == 256);
+    assert(NUM_HEADS == 4);
     // asserting IN_DIM == OUT_DIM
     // each block is in charge of one edge at a time and 32 edges in total
     int relation_idx = binary_search(num_relations, exclusive_scan_numBlocks_per_relationship, blockIdx.x);
-    assert( blockIdx.x>=exclusive_scan_numBlocks_per_relationship[relation_idx]&&(relation_idx== num_relations -1  || blockIdx.x<exclusive_scan_numBlocks_per_relationship[relation_idx+1]));
+    assert(blockIdx.x >= exclusive_scan_numBlocks_per_relationship[relation_idx] && (relation_idx == num_relations - 1 || blockIdx.x < exclusive_scan_numBlocks_per_relationship[relation_idx + 1]));
 
-    int srcIdx = binary_search(num_rows,row_ptr,blockIdx.x * 32 - num_nnzs_per_relation[relation_idx]);
+    int srcIdx = binary_search(num_rows, row_ptr, blockIdx.x * 32 - rel_ptr[relation_idx]); // Fixme: the negative term should be exclusive scan of num_nnzs_per_relation[relation_idx]
     bool flagSrcIdxChanged = true;
 
     float intermediate_val = 0.0f;
-    
 
-    for (int edgeIdx = blockIdx.x * 32 - rel_ptr[relation_idx]; edgeIdx < num_nnzs_per_relation[relation_idx]; edgeIdx++){
+    for (int edgeIdx = blockIdx.x * 32 - rel_ptr[relation_idx]; edgeIdx < num_nnzs_per_relation[relation_idx]; edgeIdx++)
+    {
         float att_val = 0.0f;
-        while (edgeIdx+rel_ptr[relation_idx]>=row_ptr[relation_idx*num_rows+srcIdx+1]){
+        while (edgeIdx + rel_ptr[relation_idx] >= row_ptr[relation_idx * num_rows + srcIdx + 1])
+        {
             srcIdx++;
             flagSrcIdxChanged = true;
             intermediate_val = 0.0f;
         }
-        int dest_node_idx = col_idx[edgeIdx+rel_ptr[relation_idx]];
-        int curr_eid = eids[edgeIdx+rel_ptr[relation_idx]];
-        //calculate the index of the destination node feature (also the index of the intermedaite vector element)
-        int idxHead = threadIdx.x / (OUT_DIM/NUM_HEADS);
-        int idxElementWithinHead = threadIdx.x % (OUT_DIM/NUM_HEADS);
-        if (flagSrcIdxChanged){
-            for (int k=0; k<OUT_DIM/NUM_HEADS;k++){
+        int dest_node_idx = col_idx[edgeIdx + rel_ptr[relation_idx]];
+        int curr_eid = eids[edgeIdx + rel_ptr[relation_idx]];
+        // calculate the index of the destination node feature (also the index of the intermedaite vector element)
+        int idxHead = threadIdx.x / (OUT_DIM / NUM_HEADS);
+        int idxElementWithinHead = threadIdx.x % (OUT_DIM / NUM_HEADS);
+        if (flagSrcIdxChanged)
+        {
+            for (int k = 0; k < OUT_DIM / NUM_HEADS; k++)
+            {
                 // NB: all matrices are column major
                 intermediate_val += (node_input_data[(srcIdx * OUT_DIM) + idxHead * NUM_HEADS + k] * weights[relation_idx * NUM_HEADS * (OUT_DIM / NUM_HEADS) * (OUT_DIM / NUM_HEADS) + (idxHead) * (OUT_DIM / NUM_HEADS) * (OUT_DIM / NUM_HEADS) + idxElementWithinHead * (OUT_DIM / NUM_HEADS) + k]);
             }
         }
-        
-        att_val += intermediate_val * node_input_data[dest_node_idx*OUT_DIM + idxHead*(OUT_DIM/NUM_HEADS) + idxElementWithinHead];
-        for (int i_reduction=16; i_reduction>0; i_reduction=i_reduction/2){
+
+        att_val += intermediate_val * node_input_data[dest_node_idx * OUT_DIM + idxHead * (OUT_DIM / NUM_HEADS) + idxElementWithinHead];
+        for (int i_reduction = 16; i_reduction > 0; i_reduction = i_reduction / 2)
+        {
             att_val += __shfl_down_sync(-1, att_val, i_reduction);
         }
-        if (threadIdx.x%32==0){
-            atomicAdd(&attention[curr_eid *4+idxHead], att_val); // TODO: needs to clear to zero at the beginning
+        if (threadIdx.x % 32 == 0)
+        {
+            atomicAdd(&attention[curr_eid * 4 + idxHead], att_val); // TODO: needs to clear to zero at the beginning
         }
-        flagSrcIdxChanged=false; // we may reuse the intermediate data
+        flagSrcIdxChanged = false; // we may reuse the intermediate data
     }
-    
-
 }
 
 // TODO: implement float4
 __global__ void HGTExpermentalEdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel(float *__restrict__ outEdges, int nnz, int *__restrict__ matCols, int *__restrict__ matRows, int *__restrict__ matRelation,
-                                                                                            float *__restrict__ node_input_data, float **__restrict__ intermediate_node_vect_per_relation, int **__restrict__ dest_node_to_unique_index_per_relation)
+                                                                                                          float *__restrict__ node_input_data, float **__restrict__ intermediate_node_vect_per_relation, int **__restrict__ dest_node_to_unique_index_per_relation)
 {
     // each warp is in charge of an edge
     int beg_edge_idx = (blockIdx.x * blockDim.x + threadIdx.x) / WARP_SIZE;
@@ -356,89 +365,81 @@ __global__ void HGTExpermentalEdgeAttentionConcatenatedSecondStageSrcInnerProduc
             product_4 += __shfl_down_sync(FULL_MASK, product_4, offset);
         if (lane_idx == 0)
         {
-            outEdges[edge_idx*4] = product_1;
-            outEdges[edge_idx*4+1] = product_2;
-            outEdges[edge_idx*4+2] = product_3;
-            outEdges[edge_idx*4+3] = product_4;
+            outEdges[edge_idx * 4] = product_1;
+            outEdges[edge_idx * 4 + 1] = product_2;
+            outEdges[edge_idx * 4 + 2] = product_3;
+            outEdges[edge_idx * 4 + 3] = product_4;
         }
     }
 }
 
-
-void HGTForwardImpl(MySegmentCSR<int, thrust::device_allocator<int>, MyHeteroSeparateCSR<int, thrust::device_allocator<int>>>& graph,
-const int num_heads, const int in_feat, const int out_feat,
-MySimpleNDArray<float, thrust::device_allocator<float>>& node_features,
-MySimpleNDArray<float, thrust::device_allocator<float>>& weight,
-MySimpleNDArray<float, thrust::device_allocator<float>>& attention
-){
+void HGTForwardImpl(MySegmentCSR<int, thrust::device_allocator<int>, MyHeteroSeparateCSR<int, thrust::device_allocator<int>>> &graph,
+                    const int num_heads, const int in_feat, const int out_feat,
+                    MySimpleNDArray<float, thrust::device_allocator<float>> &node_features,
+                    MySimpleNDArray<float, thrust::device_allocator<float>> &weight,
+                    MySimpleNDArray<float, thrust::device_allocator<float>> &attention)
+{
     assert(num_heads == 4 && "other cases not implemented");
-    std::cout<<"WARNING: notice that in|out_feat is per_head but OUT_DIM is out_feat * num_heads"<<std::endl;
-    assert(in_feat ==64 && "other cases not implemented");
+    std::cout << "WARNING: notice that in|out_feat is per_head but OUT_DIM is out_feat * num_heads" << std::endl;
+    assert(in_feat == 64 && "other cases not implemented");
     assert(out_feat == 64 && "other cases not implemented");
 
-
-    
     std::vector<int> num_blocks_per_relationship_h(graph.num_rels);
-    std::vector<int> exclusive_scan_numBlocks_per_relationship_h(graph.num_rels+1);
+    std::vector<int> exclusive_scan_numBlocks_per_relationship_h(graph.num_rels + 1);
     exclusive_scan_numBlocks_per_relationship_h[0] = 0;
-    for (int IdxRelation = 0; IdxRelation<graph.num_rels;IdxRelation++){
-        num_blocks_per_relationship_h[IdxRelation]= my_ceil_div<int>(graph.num_src_nodes_per_edge_type[IdxRelation],32);
-        exclusive_scan_numBlocks_per_relationship_h[IdxRelation+1] = exclusive_scan_numBlocks_per_relationship_h[IdxRelation] + num_blocks_per_relationship_h[IdxRelation];
+    for (int IdxRelation = 0; IdxRelation < graph.num_rels; IdxRelation++)
+    {
+        num_blocks_per_relationship_h[IdxRelation] = my_ceil_div<int>(graph.num_src_nodes_per_edge_type[IdxRelation], 32);
+        exclusive_scan_numBlocks_per_relationship_h[IdxRelation + 1] = exclusive_scan_numBlocks_per_relationship_h[IdxRelation] + num_blocks_per_relationship_h[IdxRelation];
     }
     thrust::device_vector<int> exclusive_scan_numBlocks_per_relationship(exclusive_scan_numBlocks_per_relationship_h);
-    //print_range("exclusive_scan_numBlocks_per_relationship", exclusive_scan_numBlocks_per_relationship.begin(), exclusive_scan_numBlocks_per_relationship.end());
+    // print_range("exclusive_scan_numBlocks_per_relationship", exclusive_scan_numBlocks_per_relationship.begin(), exclusive_scan_numBlocks_per_relationship.end());
     dim3 block(512, 1, 1);
-    dim3 grid(exclusive_scan_numBlocks_per_relationship_h[exclusive_scan_numBlocks_per_relationship_h.size()-1], 1, 1);
-    
+    dim3 grid(exclusive_scan_numBlocks_per_relationship_h[exclusive_scan_numBlocks_per_relationship_h.size() - 1], 1, 1);
+
     cuda_err_chk(cudaDeviceSynchronize());
     std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     HGTExperimentalEdgeAttentionFusedCOOKernel_512_32<256, 4><<<grid, block>>>(graph.num_rels, attention.Ptr(), node_features.Ptr(), weight.Ptr(),
-    static_cast<int*>(thrust::raw_pointer_cast(graph.num_src_nodes_per_edge_type.data())), 
-    static_cast<int*>(thrust::raw_pointer_cast(graph.exclusive_scan_num_src_nodes_per_edge_type.data())),
-    static_cast<int*>(thrust::raw_pointer_cast(exclusive_scan_numBlocks_per_relationship.data())),
-    static_cast<int*>(thrust::raw_pointer_cast(graph.src_node_per_edge_type.data())), 
-    static_cast<int*>(thrust::raw_pointer_cast(graph.padded_dense_edges.data())), 
-    static_cast<int*>(thrust::raw_pointer_cast(graph.maximal_edge_num_per_src_node.data())), 
-    static_cast<int*>(thrust::raw_pointer_cast(graph.padded_exclusive_scan_maximal_edge_num_per_src_node.data())), 
-    static_cast<int*>(thrust::raw_pointer_cast(graph.padded_dense_edges_eids.data())));
+                                                                               static_cast<int *>(thrust::raw_pointer_cast(graph.num_src_nodes_per_edge_type.data())),
+                                                                               static_cast<int *>(thrust::raw_pointer_cast(graph.exclusive_scan_num_src_nodes_per_edge_type.data())),
+                                                                               static_cast<int *>(thrust::raw_pointer_cast(exclusive_scan_numBlocks_per_relationship.data())),
+                                                                               static_cast<int *>(thrust::raw_pointer_cast(graph.src_node_per_edge_type.data())),
+                                                                               static_cast<int *>(thrust::raw_pointer_cast(graph.padded_dense_edges.data())),
+                                                                               static_cast<int *>(thrust::raw_pointer_cast(graph.maximal_edge_num_per_src_node.data())),
+                                                                               static_cast<int *>(thrust::raw_pointer_cast(graph.padded_exclusive_scan_maximal_edge_num_per_src_node.data())),
+                                                                               static_cast<int *>(thrust::raw_pointer_cast(graph.padded_dense_edges_eids.data())));
     cuda_err_chk(cudaPeekAtLastError());
     cuda_err_chk(cudaDeviceSynchronize());
     std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
     std::cout << "HGT Kernel 1 forward time: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " ms" << std::endl;
 
-
-    //int num_relations, float *__restrict__ node_input_data, float *__restrict__ relation_attention_matrices, 
-    //                                                            int *__restrict__ num_src_nodes_per_edge_type, int *__restrict__ exclusive_scan_num_blocks_per_relation, int* __restrict__ src_node_per_edge_type, 
-    //                                                            int* dense_edges_per_src_node, int* num_dense_edges_per_src_node,int* starting_pos_dense_edges_per_src_node,int* eids
-
     std::vector<int> residual_num_blocks_per_relationship_h(graph.num_rels);
-    std::vector<int> residual_exclusive_scan_numBlocks_per_relationship_h(graph.num_rels+1);
-    for (int IdxRelation = 0; IdxRelation<graph.num_rels; IdxRelation++){
-        residual_num_blocks_per_relationship_h[IdxRelation]=my_ceil_div<int>(graph.csr.num_nnzs[IdxRelation],32);
-        residual_exclusive_scan_numBlocks_per_relationship_h[IdxRelation+1] = residual_exclusive_scan_numBlocks_per_relationship_h[IdxRelation] + residual_num_blocks_per_relationship_h[IdxRelation];
+    std::vector<int> residual_exclusive_scan_numBlocks_per_relationship_h(graph.num_rels + 1);
+    for (int IdxRelation = 0; IdxRelation < graph.num_rels; IdxRelation++)
+    {
+        residual_num_blocks_per_relationship_h[IdxRelation] = my_ceil_div<int>(graph.csr.num_nnzs[IdxRelation], 32);
+        residual_exclusive_scan_numBlocks_per_relationship_h[IdxRelation + 1] = residual_exclusive_scan_numBlocks_per_relationship_h[IdxRelation] + residual_num_blocks_per_relationship_h[IdxRelation];
     }
 
     thrust::device_vector<int> residual_exclusive_scan_numBlocks_per_relationship(residual_exclusive_scan_numBlocks_per_relationship_h);
     thrust::device_vector<int> residual_num_nnzs_per_relation_device(graph.csr.num_nnzs);
     thrust::device_vector<int> exclusive_scan_residual_num_nnzs_per_relation_device(graph.csr.num_rels);
-    thrust::exclusive_scan(residual_num_nnzs_per_relation_device.begin(),residual_num_nnzs_per_relation_device.end(),exclusive_scan_residual_num_nnzs_per_relation_device.begin());
+    thrust::exclusive_scan(residual_num_nnzs_per_relation_device.begin(), residual_num_nnzs_per_relation_device.end(), exclusive_scan_residual_num_nnzs_per_relation_device.begin());
 
     dim3 block_residual(256, 1, 1);
-    dim3 grid_residual(residual_exclusive_scan_numBlocks_per_relationship_h[residual_exclusive_scan_numBlocks_per_relationship_h.size()-1],1,1);
+    dim3 grid_residual(residual_exclusive_scan_numBlocks_per_relationship_h[residual_exclusive_scan_numBlocks_per_relationship_h.size() - 1], 1, 1);
 
     cuda_err_chk(cudaDeviceSynchronize());
     std::chrono::high_resolution_clock::time_point t1second = std::chrono::high_resolution_clock::now();
-    HGTExperimentalEdgeAttentionResidueCSR<256, 4><<<grid_residual, block_residual>>>(graph.csr.num_rels, graph.csr.num_rows, attention.Ptr(), node_features.Ptr(), weight.Ptr(), 
-    static_cast<int*>(thrust::raw_pointer_cast(residual_num_nnzs_per_relation_device.data())),
-    static_cast<int*>(thrust::raw_pointer_cast(exclusive_scan_residual_num_nnzs_per_relation_device.data())),
-    static_cast<int*>(thrust::raw_pointer_cast(graph.csr.row_ptr.data())),
-    static_cast<int*>(thrust::raw_pointer_cast(graph.csr.col_idx.data())),
-    static_cast<int*>(thrust::raw_pointer_cast(graph.csr.eids.data())),
-    static_cast<int*>(thrust::raw_pointer_cast(residual_exclusive_scan_numBlocks_per_relationship.data())));
+    HGTExperimentalEdgeAttentionResidueCSR<256, 4><<<grid_residual, block_residual>>>(graph.csr.num_rels, graph.csr.num_rows, attention.Ptr(), node_features.Ptr(), weight.Ptr(),
+                                                                                      static_cast<int *>(thrust::raw_pointer_cast(residual_num_nnzs_per_relation_device.data())),
+                                                                                      static_cast<int *>(thrust::raw_pointer_cast(exclusive_scan_residual_num_nnzs_per_relation_device.data())),
+                                                                                      static_cast<int *>(thrust::raw_pointer_cast(graph.csr.row_ptr.data())),
+                                                                                      static_cast<int *>(thrust::raw_pointer_cast(graph.csr.col_idx.data())),
+                                                                                      static_cast<int *>(thrust::raw_pointer_cast(graph.csr.eids.data())),
+                                                                                      static_cast<int *>(thrust::raw_pointer_cast(residual_exclusive_scan_numBlocks_per_relationship.data())));
     cuda_err_chk(cudaPeekAtLastError());
     cuda_err_chk(cudaDeviceSynchronize());
     std::chrono::high_resolution_clock::time_point t2second = std::chrono::high_resolution_clock::now();
     std::cout << "HGT Kernel 2 forward time: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2second - t1second).count() << " ms" << std::endl;
-
-
 }
