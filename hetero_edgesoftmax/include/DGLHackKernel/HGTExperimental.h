@@ -277,8 +277,8 @@ __global__ void HGTExperimentalEdgeAttentionResidueCSR(int num_relations, int nu
     // each block is in charge of one edge at a time and 32 edges in total
     int relation_idx = binary_search(num_relations, exclusive_scan_numBlocks_per_relationship, blockIdx.x);
     assert(blockIdx.x >= exclusive_scan_numBlocks_per_relationship[relation_idx] && (relation_idx == num_relations - 1 || blockIdx.x < exclusive_scan_numBlocks_per_relationship[relation_idx + 1]));
-
-    int srcIdx = binary_search(num_rows, row_ptr, blockIdx.x * 32 - rel_ptr[relation_idx]); // Fixme: the negative term should be exclusive scan of num_nnzs_per_relation[relation_idx]
+    assert(rel_ptr[relation_idx] == row_ptr[relation_idx * num_rows]);
+    int srcIdx = binary_search(num_rows, &row_ptr[relation_idx * num_rows], blockIdx.x * 32 - rel_ptr[relation_idx]);
     bool flagSrcIdxChanged = true;
 
     float intermediate_val = 0.0f;
@@ -290,7 +290,6 @@ __global__ void HGTExperimentalEdgeAttentionResidueCSR(int num_relations, int nu
         {
             srcIdx++;
             flagSrcIdxChanged = true;
-            intermediate_val = 0.0f;
         }
         int dest_node_idx = col_idx[edgeIdx + rel_ptr[relation_idx]];
         int curr_eid = eids[edgeIdx + rel_ptr[relation_idx]];
@@ -299,6 +298,7 @@ __global__ void HGTExperimentalEdgeAttentionResidueCSR(int num_relations, int nu
         int idxElementWithinHead = threadIdx.x % (OUT_DIM / NUM_HEADS);
         if (flagSrcIdxChanged)
         {
+            intermediate_val = 0.0f;
             for (int k = 0; k < OUT_DIM / NUM_HEADS; k++)
             {
                 // NB: all matrices are column major
