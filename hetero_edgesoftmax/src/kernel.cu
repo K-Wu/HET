@@ -80,27 +80,21 @@ void print_range(const std::string &name, Iterator first, Iterator last)
 int basic_correctness_test()
 {
 
-    std::vector<unsigned long> written_by_shape;
-    std::vector<unsigned long> has_shape;
     std::vector<unsigned long> is_about_shape;
-    std::vector<unsigned long> cited_shape;
+    std::vector<unsigned long> affliated_with_shape;
     std::vector<unsigned long> citing_shape;
     std::vector<unsigned long> writing_shape;
 
     bool fortran_order = false;
-    std::vector<int> written_by_data;
-    std::vector<int> has_data;
     std::vector<int> is_about_data;
-    std::vector<int> cited_data;
+    std::vector<int> affliated_with_data;
     std::vector<int> citing_data;
     std::vector<int> writing_data;
 
-    npy::LoadArrayFromNumpy("data/ogbn_mag/written-by_coo_1.npy", written_by_shape, fortran_order, written_by_data);
-    npy::LoadArrayFromNumpy("data/ogbn_mag/has_coo_1.npy", has_shape, fortran_order, has_data);
     npy::LoadArrayFromNumpy("data/ogbn_mag/is-about_coo_1.npy", is_about_shape, fortran_order, is_about_data);
-    npy::LoadArrayFromNumpy("data/ogbn_mag/cited_coo_1.npy", cited_shape, fortran_order, cited_data);
     npy::LoadArrayFromNumpy("data/ogbn_mag/citing_coo_1.npy", citing_shape, fortran_order, citing_data);
     npy::LoadArrayFromNumpy("data/ogbn_mag/writing_coo_1.npy", writing_shape, fortran_order, writing_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/affliated_with_1.npy", affliated_with_shape, fortran_order, affliated_with_data);
 
     // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/written-by_coo_2.npy", written_by_shape, fortran_order, written_by_data);
     // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/has_coo_2.npy", has_shape, fortran_order, has_data);
@@ -110,28 +104,14 @@ int basic_correctness_test()
     // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/writing_coo_2.npy", writing_shape, fortran_order, writing_data);
 
     std::vector<int> max_idxes;
-    max_idxes.push_back(*std::max_element(written_by_data.begin(), written_by_data.end()));
-    max_idxes.push_back(*std::max_element(has_data.begin(), has_data.end()));
     max_idxes.push_back(*std::max_element(is_about_data.begin(), is_about_data.end()));
-    max_idxes.push_back(*std::max_element(cited_data.begin(), cited_data.end()));
+    max_idxes.push_back(*std::max_element(affliated_with_data.begin(), affliated_with_data.end()));
     max_idxes.push_back(*std::max_element(citing_data.begin(), citing_data.end()));
     max_idxes.push_back(*std::max_element(writing_data.begin(), writing_data.end()));
     int max_idx = *std::max_element(max_idxes.begin(), max_idxes.end());
 
     // cusp::csr_matrix<int, int, cusp::host_memory> csr_host(5, 8, 12);
-    cusp::coo_matrix<int, int, cusp::host_memory> written_by_coo_h(max_idx + 1, max_idx + 1, written_by_data.size() / 2);
-    for (int idx = 0; idx < written_by_data.size() / 2; idx++)
-    {
-        written_by_coo_h.row_indices[idx] = written_by_data[idx];
-        written_by_coo_h.column_indices[idx] = written_by_data[idx + written_by_data.size() / 2];
-    }
-
-    cusp::coo_matrix<int, int, cusp::host_memory> has_coo_h(max_idx + 1, max_idx + 1, has_data.size() / 2);
-    for (int idx = 0; idx < has_data.size() / 2; idx++)
-    {
-        has_coo_h.row_indices[idx] = has_data[idx];
-        has_coo_h.column_indices[idx] = has_data[idx + has_data.size() / 2];
-    }
+    
 
     cusp::coo_matrix<int, int, cusp::host_memory> is_about_coo_h(max_idx + 1, max_idx + 1, is_about_data.size() / 2);
     for (int idx = 0; idx < is_about_data.size() / 2; idx++)
@@ -140,11 +120,11 @@ int basic_correctness_test()
         is_about_coo_h.column_indices[idx] = is_about_data[idx + is_about_data.size() / 2];
     }
 
-    cusp::coo_matrix<int, int, cusp::host_memory> cited_coo_h(max_idx + 1, max_idx + 1, cited_data.size() / 2);
-    for (int idx = 0; idx < cited_data.size() / 2; idx++)
+    cusp::coo_matrix<int, int, cusp::host_memory> affliated_with_coo_h(max_idx + 1, max_idx + 1, affliated_with_data.size() / 2);
+    for (int idx = 0; idx < affliated_with_data.size() / 2; idx++)
     {
-        cited_coo_h.row_indices[idx] = cited_data[idx];
-        cited_coo_h.column_indices[idx] = cited_data[idx + cited_data.size() / 2];
+        affliated_with_coo_h.row_indices[idx] = affliated_with_data[idx];
+        affliated_with_coo_h.column_indices[idx] = affliated_with_data[idx + affliated_with_data.size() / 2];
     }
 
     cusp::coo_matrix<int, int, cusp::host_memory> citing_coo_h(max_idx + 1, max_idx + 1, citing_data.size() / 2);
@@ -161,21 +141,19 @@ int basic_correctness_test()
         writing_coo_h.column_indices[idx] = writing_data[idx + writing_data.size() / 2];
     }
 
-    written_by_coo_h.sort_by_row_and_column();
-    has_coo_h.sort_by_row_and_column();
+
     is_about_coo_h.sort_by_row_and_column();
-    cited_coo_h.sort_by_row_and_column();
+    affliated_with_coo_h.sort_by_row_and_column();
     citing_coo_h.sort_by_row_and_column();
     writing_coo_h.sort_by_row_and_column();
 
-    cusp::csr_matrix<int, int, cusp::host_memory> written_by_csr_h(written_by_coo_h);
-    cusp::csr_matrix<int, int, cusp::host_memory> has_csr_h(has_coo_h);
+    
     cusp::csr_matrix<int, int, cusp::host_memory> is_about_csr_h(is_about_coo_h);
-    cusp::csr_matrix<int, int, cusp::host_memory> cited_csr_h(cited_coo_h);
+    cusp::csr_matrix<int, int, cusp::host_memory> affliated_with_csr_h(affliated_with_coo_h);
     cusp::csr_matrix<int, int, cusp::host_memory> citing_csr_h(citing_coo_h);
     cusp::csr_matrix<int, int, cusp::host_memory> writing_csr_h(writing_coo_h);
 
-    std::vector<std::vector<int>> coo_matrices_data = {written_by_data, has_data, is_about_data, cited_data, citing_data, writing_data};
+    std::vector<std::vector<int>> coo_matrices_data = {affliated_with_data, is_about_data, citing_data, writing_data};
     std::pair<std::pair<std::vector<int>, std::vector<int>>, std::vector<int>> concatenated_coo_result = generate_concatenate_coo_format(coo_matrices_data);
     std::vector<int> concatenated_coo_row_indices = concatenated_coo_result.first.first;
     std::vector<int> concatenated_coo_column_indices = concatenated_coo_result.first.second;
@@ -203,39 +181,33 @@ int basic_correctness_test()
 
     cusp::coo_matrix<int, int, cusp::device_memory> concatenated_coo_d(concatenated_coo_h);
 
-    cusp::coo_matrix<int, int, cusp::device_memory> writing_coo_d(writing_coo_h);
-    cusp::coo_matrix<int, int, cusp::device_memory> has_coo_d(has_coo_h);
-    cusp::coo_matrix<int, int, cusp::device_memory> cited_coo_d(cited_coo_h);
+    
+    cusp::coo_matrix<int, int, cusp::device_memory> affliated_with_coo_d(affliated_with_coo_h);
     cusp::coo_matrix<int, int, cusp::device_memory> is_about_coo_d(is_about_coo_h);
-    cusp::coo_matrix<int, int, cusp::device_memory> written_by_coo_d(written_by_coo_h);
+    cusp::coo_matrix<int, int, cusp::device_memory> writing_coo_d(writing_coo_h);
     cusp::coo_matrix<int, int, cusp::device_memory> citing_coo_d(citing_coo_h);
 
-    cusp::csr_matrix<int, int, cusp::device_memory> written_by_csr_d;
-    cusp::csr_matrix<int, int, cusp::device_memory> has_csr_d;
+    
     cusp::csr_matrix<int, int, cusp::device_memory> is_about_csr_d;
-    cusp::csr_matrix<int, int, cusp::device_memory> cited_csr_d;
+    cusp::csr_matrix<int, int, cusp::device_memory> affliated_with_csr_d;
     cusp::csr_matrix<int, int, cusp::device_memory> citing_csr_d;
     cusp::csr_matrix<int, int, cusp::device_memory> writing_csr_d;
 
-    cusp::convert(written_by_coo_d, written_by_csr_d);
-    cusp::convert(has_coo_d, has_csr_d);
-    cusp::convert(cited_coo_d, cited_csr_d);
+
+    cusp::convert(affliated_with_coo_d, affliated_with_csr_d);
     cusp::convert(is_about_coo_d, is_about_csr_d);
     cusp::convert(citing_coo_d, citing_csr_d);
     cusp::convert(writing_coo_d, writing_csr_d);
 
-    cusp::csr_matrix<int, int, cusp::device_memory> written_by_csc_d;
-    cusp::csr_matrix<int, int, cusp::device_memory> has_csc_d;
     cusp::csr_matrix<int, int, cusp::device_memory> is_about_csc_d;
-    cusp::csr_matrix<int, int, cusp::device_memory> cited_csc_d;
+    cusp::csr_matrix<int, int, cusp::device_memory> affliated_with_csc_d;
     cusp::csr_matrix<int, int, cusp::device_memory> citing_csc_d;
     cusp::csr_matrix<int, int, cusp::device_memory> writing_csc_d;
     cusp::csr_matrix<int, int, cusp::device_memory> concatenated_csc_d;
 
-    cusp::transpose(written_by_csr_d, written_by_csc_d);
-    cusp::transpose(has_csr_d, has_csc_d);
+
     cusp::transpose(is_about_csr_d, is_about_csc_d);
-    cusp::transpose(cited_csr_d, cited_csc_d);
+    cusp::transpose(affliated_with_csr_d, affliated_with_csc_d);
     cusp::transpose(citing_csr_d, citing_csc_d);
     cusp::transpose(writing_csr_d, writing_csc_d);
     cusp::transpose(concatenated_csr_d, concatenated_csc_d);
@@ -262,26 +234,26 @@ int basic_correctness_test()
     // for (int idx = 0; idx < concatenated_coo_values.size(); idx++) {
     //     std::cout << concatenated_csr_h.values[idx] << ",";
     // }
-    std::vector<thrust::device_vector<float>> MultiCSRoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxMultiCSRsKernel({written_by_csr_d, has_csr_d, is_about_csr_d, cited_csr_d, citing_csr_d, writing_csr_d}, false);
+    std::vector<thrust::device_vector<float>> MultiCSRoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxMultiCSRsKernel({affliated_with_csr_d, is_about_csr_d, citing_csr_d, writing_csr_d}, false);
     std::vector<thrust::device_vector<float>> CSRoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxConcatenatedCSRKernel(concatenated_csr_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
     // std::vector<thrust::device_vector<float>> MultiCSRoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxMultiCSRsKernel({written_by_csr_d, has_csr_d, is_about_csr_d, cited_csr_d, citing_csr_d, writing_csr_d}, false);
     std::vector<thrust::device_vector<float>> CSCoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxConcatenatedCSCKernel(concatenated_csc_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
     std::vector<thrust::device_vector<float>> COOoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxConcatenatedCOOKernel(concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
     std::vector<thrust::device_vector<float4>> COOoutNodes_4_per_relation_vect_vect = doGPUEdgeSoftmax_4ConcatenatedCOOKernel(concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
 
-    std::vector<thrust::device_vector<float>> MultiCSCoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxMultiCSCsKernel({written_by_csc_d, has_csc_d, is_about_csc_d, cited_csc_d, citing_csc_d, writing_csc_d}, false);
-    std::vector<thrust::device_vector<float>> MultiCOOoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxMultiCOOsKernel<cusp::coo_matrix<int, int, cusp::device_memory>>({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, false);
+    std::vector<thrust::device_vector<float>> MultiCSCoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxMultiCSCsKernel({affliated_with_csc_d, is_about_csc_d, citing_csc_d, writing_csc_d}, false);
+    std::vector<thrust::device_vector<float>> MultiCOOoutNodes_per_relation_vect_vect = doGPUEdgeSoftmaxMultiCOOsKernel<cusp::coo_matrix<int, int, cusp::device_memory>>({affliated_with_coo_d, is_about_coo_d, citing_coo_d, writing_coo_d}, false);
 
-    thrust::device_vector<float4> COOOutEdgeAttention_per_relation = doGPUEdgeAttentionConcatenatedCOOKernel_128_16({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
-    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_128_8 = doGPUEdgeAttentionConcatenatedCOOKernel_128_8({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
-    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_256_8 = doGPUEdgeAttentionConcatenatedCOOKernel_256_8({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, false);
-    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_256_8_2 = doGPUEdgeAttentionConcatenatedCOOKernel_256_8({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, true);
-    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_256_32 = doGPUEdgeAttentionConcatenatedCOOKernel_256_32({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, false);
-    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_256_32_2 = doGPUEdgeAttentionConcatenatedCOOKernel_256_32({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, true);
-    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_512_32 = doGPUEdgeAttentionConcatenatedCOOKernel_512_32({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, false);
+    thrust::device_vector<float4> COOOutEdgeAttention_per_relation = doGPUEdgeAttentionConcatenatedCOOKernel_128_16({affliated_with_coo_d, is_about_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
+    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_128_8 = doGPUEdgeAttentionConcatenatedCOOKernel_128_8({affliated_with_coo_d, is_about_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false);
+    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_256_8 = doGPUEdgeAttentionConcatenatedCOOKernel_256_8({affliated_with_coo_d, is_about_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, false);
+    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_256_8_2 = doGPUEdgeAttentionConcatenatedCOOKernel_256_8({affliated_with_coo_d, is_about_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, true);
+    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_256_32 = doGPUEdgeAttentionConcatenatedCOOKernel_256_32({affliated_with_coo_d, is_about_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, false);
+    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_256_32_2 = doGPUEdgeAttentionConcatenatedCOOKernel_256_32({affliated_with_coo_d, is_about_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, true);
+    thrust::device_vector<float4> COOOutEdgeAttention_per_relation_512_32 = doGPUEdgeAttentionConcatenatedCOOKernel_512_32({affliated_with_coo_d, is_about_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, false);
     
 
-    // thrust::device_vector<float4> COOOutEdgeAttention_per_relation_512_32_2 = doGPUEdgeAttentionConcatenatedCOOKernel_512_32({written_by_coo_d, has_coo_d, is_about_coo_d, cited_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, true);
+    // thrust::device_vector<float4> COOOutEdgeAttention_per_relation_512_32_2 = doGPUEdgeAttentionConcatenatedCOOKernel_512_32({affliated_with_coo_d, is_about_coo_d, citing_coo_d, writing_coo_d}, concatenated_coo_d, MultiCSRoutNodes_per_relation_vect_vect.size(), false, true);
 
     for (int idx = 0; idx < MultiCSRoutNodes_per_relation_vect_vect.size(); idx++)
     {
