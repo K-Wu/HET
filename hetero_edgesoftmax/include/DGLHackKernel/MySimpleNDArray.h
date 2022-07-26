@@ -101,6 +101,19 @@ struct GenRand
     }
 };
 
+template <>
+struct GenRand<float4>
+{
+    __device__
+    float4 operator () (int idx)
+    {
+        thrust::default_random_engine randEng;
+        thrust::uniform_real_distribution<float> uniDist;
+        randEng.discard(4*idx);
+        return make_float4(uniDist(randEng),uniDist(randEng),uniDist(randEng),uniDist(randEng));
+    }
+};
+
 template <typename DType>
 MySimpleNDArray<DType, thrust::device_allocator<DType>> GenerateRandomNDArray(std::vector<int64_t> shape){
     int64_t element_num = 1;
@@ -119,4 +132,3 @@ MySimpleNDArray<DType, thrust::device_allocator<DType>> GenerateRandomNDArray(st
 
     return MySimpleNDArray<DType, thrust::device_allocator<DType>>(shape, rVec);
 }
-
