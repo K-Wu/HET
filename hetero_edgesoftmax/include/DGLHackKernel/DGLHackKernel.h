@@ -16,4 +16,5 @@
 #include "RGCNLayer1MyHYB.h"
 #include "RGCNLayer1BackwardMyHYB.h"
 #include "HGTExperimental.h"
+#include "HGTBackPropGradientSmAFusion.h"
 #include "DGLHackKernelInit.h"

@@ -46,6 +46,36 @@ int FusetGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph, 
     return 0;
 }
 
+int HGTBackPropGradientSMAFusionProfiling_main(MyHeteroIntegratedCSR<int32_t, std::allocator<int32_t>> csr_h, int64_t num_heads, int64_t num_feat_per_head){
+    typedef int32_t Idx;
+    typedef float DType;
+
+    MyHeteroIntegratedCSR<Idx, std::allocator<Idx>> transposed_csr_h(csr_h);
+
+    //transposed_csr_h.Transpose<>(std::optional<std::reference_wrapper<typename thrust::detail::vector_base<Idx, std::allocator<Idx>>>>{transposed_eids_h.data});
+    transposed_csr_h.Transpose();
+
+    // copy CSR+eid data to device
+    MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> transposed_csr(transposed_csr_h);
+    //MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids(eids_h);
+    //MySimpleNDArray<Idx, thrust::device_allocator<Idx>> transposed_eids(transposed_eids_h);
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_sm_first_stage=GenerateRandomNDArray<DType>({csr_h.num_rows, csr_h.num_rels, num_heads, num_feat_per_head});
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_a=GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, num_heads});
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_t_neighbour=GenerateRandomNDArray<DType>({csr_h.num_rows, num_heads, num_feat_per_head});
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> message=GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, num_heads, num_feat_per_head});
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> sigmas=GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, num_heads});
+
+    HGTBackPropGradientSMAFusion<Idx, DType>(
+    transposed_csr,
+    grad_sm_first_stage,//|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
+    grad_a, // |E| * N_HEADS
+    grad_t_neighbour,//|V| * N_HEADS * DIM_PER_HEAD
+    message,//|E| * N_HEADS * DIM_PER_HEAD
+    sigmas);//|E| * N_HEADS
+    return 0;
+}
+
+
 cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(){
     typedef int Idx;
     std::vector<unsigned long> srcs_shape;
@@ -96,6 +126,87 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(){
         coo_matrix_h.values[i] = etypes_data[i];
     }
     return coo_matrix_h;
+}
+
+MyHeteroIntegratedCSR<int, std::allocator<int>> LoadOGBN_MAG(){
+    std::vector<unsigned long> is_about_shape;
+    std::vector<unsigned long> affliated_with_shape;
+    std::vector<unsigned long> citing_shape;
+    std::vector<unsigned long> writing_shape;
+
+    bool fortran_order = false;
+    std::vector<int> is_about_data;
+    std::vector<int> affliated_with_data;
+    std::vector<int> citing_data;
+    std::vector<int> writing_data;
+
+    npy::LoadArrayFromNumpy("data/ogbn_mag/is-about_coo_1.npy", is_about_shape, fortran_order, is_about_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/citing_coo_1.npy", citing_shape, fortran_order, citing_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/writing_coo_1.npy", writing_shape, fortran_order, writing_data);
+    npy::LoadArrayFromNumpy("data/ogbn_mag/affliated_with_1.npy", affliated_with_shape, fortran_order, affliated_with_data);
+
+    // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/written-by_coo_2.npy", written_by_shape, fortran_order, written_by_data);
+    // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/has_coo_2.npy", has_shape, fortran_order, has_data);
+    // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/is-about_coo_2.npy", is_about_shape, fortran_order, is_about_data);
+    // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/cited_coo_2.npy", cited_shape, fortran_order, cited_data);
+    // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/citing_coo_2.npy", citing_shape, fortran_order, citing_data);
+    // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/writing_coo_2.npy", writing_shape, fortran_order, writing_data);
+
+    std::vector<int> max_idxes;
+    max_idxes.push_back(*std::max_element(is_about_data.begin(), is_about_data.end()));
+    max_idxes.push_back(*std::max_element(affliated_with_data.begin(), affliated_with_data.end()));
+    max_idxes.push_back(*std::max_element(citing_data.begin(), citing_data.end()));
+    max_idxes.push_back(*std::max_element(writing_data.begin(), writing_data.end()));
+    int max_idx = *std::max_element(max_idxes.begin(), max_idxes.end());
+
+    // cusp::csr_matrix<int, int, cusp::host_memory> csr_host(5, 8, 12);
+    
+
+    cusp::coo_matrix<int, int, cusp::host_memory> is_about_coo_h(max_idx + 1, max_idx + 1, is_about_data.size() / 2);
+    for (int idx = 0; idx < is_about_data.size() / 2; idx++)
+    {
+        is_about_coo_h.row_indices[idx] = is_about_data[idx];
+        is_about_coo_h.column_indices[idx] = is_about_data[idx + is_about_data.size() / 2];
+    }
+
+    cusp::coo_matrix<int, int, cusp::host_memory> affliated_with_coo_h(max_idx + 1, max_idx + 1, affliated_with_data.size() / 2);
+    for (int idx = 0; idx < affliated_with_data.size() / 2; idx++)
+    {
+        affliated_with_coo_h.row_indices[idx] = affliated_with_data[idx];
+        affliated_with_coo_h.column_indices[idx] = affliated_with_data[idx + affliated_with_data.size() / 2];
+    }
+
+    cusp::coo_matrix<int, int, cusp::host_memory> citing_coo_h(max_idx + 1, max_idx + 1, citing_data.size() / 2);
+    for (int idx = 0; idx < citing_data.size() / 2; idx++)
+    {
+        citing_coo_h.row_indices[idx] = citing_data[idx];
+        citing_coo_h.column_indices[idx] = citing_data[idx + citing_data.size() / 2];
+    }
+
+    cusp::coo_matrix<int, int, cusp::host_memory> writing_coo_h(max_idx + 1, max_idx + 1, writing_data.size() / 2);
+    for (int idx = 0; idx < writing_data.size() / 2; idx++)
+    {
+        writing_coo_h.row_indices[idx] = writing_data[idx];
+        writing_coo_h.column_indices[idx] = writing_data[idx + writing_data.size() / 2];
+    }
+
+    is_about_coo_h.sort_by_row_and_column();
+    affliated_with_coo_h.sort_by_row_and_column();
+    citing_coo_h.sort_by_row_and_column();
+    writing_coo_h.sort_by_row_and_column();
+
+    cusp::csr_matrix<int, int, cusp::host_memory> is_about_csr_h(is_about_coo_h);
+    cusp::csr_matrix<int, int, cusp::host_memory> affliated_with_csr_h(affliated_with_coo_h);
+    cusp::csr_matrix<int, int, cusp::host_memory> citing_csr_h(citing_coo_h);
+    cusp::csr_matrix<int, int, cusp::host_memory> writing_csr_h(writing_coo_h);
+
+     MySimpleNDArray<int, std::allocator<int>> eids_h(std::vector<int64_t>{(int64_t) (is_about_data.size() / 2+affliated_with_data.size() / 2+ citing_data.size() / 2+ writing_data.size() / 2)});
+    thrust::sequence<>(eids_h.data.begin(),eids_h.data.end(), 0);
+
+    MyHeteroSeparateCSR<int, std::allocator<int>> my_hetero_separate_csr_h(std::vector<cusp::csr_matrix<int, int, cusp::host_memory>>{is_about_csr_h, affliated_with_csr_h, citing_csr_h, writing_csr_h}, eids_h.data);
+
+    MyHeteroIntegratedCSR<int, std::allocator<int>> my_hetero_integrated_csr_h = ToIntegratedCSR_CPU<int>(my_hetero_separate_csr_h);
+    return my_hetero_integrated_csr_h;
 }
 
 MySegmentCSR<int, std::allocator<int>, MyHeteroSeparateCSR<int, std::allocator<int>>> LoadSegmentCSR_OGBN_MAG(){

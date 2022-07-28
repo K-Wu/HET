@@ -77,9 +77,11 @@ void print_range(const std::string &name, Iterator first, Iterator last)
     std::cout << "\n";
 }
 
+
+
 int basic_correctness_test()
 {
-
+    // TODO: code migrated to include/DGLHackKernel/DGLHackKernelInit.h remove the duplicate code here
     std::vector<unsigned long> is_about_shape;
     std::vector<unsigned long> affliated_with_shape;
     std::vector<unsigned long> citing_shape;

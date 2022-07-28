@@ -245,106 +245,164 @@ __device__ __forceinline__ static void func512_32_mysgemm_exec(int m, int n, int
     // now, each warp is in charge of one destination node at each time, and the number of warps in charge of each source node becomes a parameter.
     // NB: Originally each 256 thread is in charge of one source node, i.e., a non-1 increment being applied to the outer loop variable in each iteration. no more artificial segragation of this. Instead, we assign each destination node to one warp
     // TODO: transpose this portion to reuse the destination node
-    constexpr int NUM_WARP_PER_SRC_NODE = 4;
+    constexpr int NUM_WARP_PER_SRC_NODE = 1;
+    const int TOTAL_NUM_WARP_SECOND_STAGE_ACTIVATED=blockDim.x/WARP_SIZE;
     const int lane_idx = threadIdx.x % 32;
     
     // atomic ticket scheme disabled
     //while(1)        
 
     //TODO: software pipelining to hide global memory latency
-    for (int second_stage_node_idx = (threadIdx.x)/(32*NUM_WARP_PER_SRC_NODE); second_stage_node_idx < TILE_SZ_B; second_stage_node_idx += (blockDim.x/32/NUM_WARP_PER_SRC_NODE))
-    {
-        //atomic ticket scheme disabled
-        // int second_stage_node_ticket;
-        // if (lane_idx == 0){
-        //     second_stage_node_ticket = atomicAdd(&src_node_ticket,1);
-        // }
-        // second_stage_node_ticket = __shfl_sync(0xffffffff, second_stage_node_ticket, 0);
-        // int second_stage_node_idx = second_stage_node_ticket/NUM_WARP_PER_SRC_NODE;
-        // if (second_stage_node_idx >= TILE_SZ_B)
-        //     break;
-        // load dest node indices
-        if (BcolBias + second_stage_node_idx >= n)
-            break;
-
-        // NB: cache this TILE_SZ_B-long array in advance
-        //int curr_source_node_index = node_indices[BcolBias + second_stage_node_idx];
-        // NB: cache this TILE_SZ_B-long array in advance
-        //int num_dense_edge_for_curr_source_node = num_dense_edges_per_src_node[curr_source_node_index];
-        // NB: cache this TILE_SZ_B-long array in advance
-        //int starting_index_dense_edge_for_curr_source_node = starting_pos_dense_edges_per_src_node[curr_source_node_index];
-
-        int curr_source_node_index = node_indices_shmem[second_stage_node_idx];
-        int num_dense_edge_for_curr_source_node = num_dense_edges_per_src_node_shmem[second_stage_node_idx];
-        int starting_index_dense_edge_for_curr_source_node = starting_pos_dense_edges_per_src_node_shmem[second_stage_node_idx];
-
-        //int src_node_shmem_idx_1 = second_stage_node_idx / 2;
-        //int src_node_shmem_idx_2 = second_stage_node_idx % 2;
-
-        float shmem_output_reg0 = shmem_easy_output[second_stage_node_idx][lane_idx];//shmem_output[src_node_shmem_idx_1][lane_idx / 16][src_node_shmem_idx_2][lane_idx % 16];
-        float shmem_output_reg1 = shmem_easy_output[second_stage_node_idx][lane_idx+64];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 4][src_node_shmem_idx_2][lane_idx % 16];
-        float shmem_output_reg2 = shmem_easy_output[second_stage_node_idx][lane_idx+128];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 8][src_node_shmem_idx_2][lane_idx % 16];
-        float shmem_output_reg3 = shmem_easy_output[second_stage_node_idx][lane_idx+192];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 12][src_node_shmem_idx_2][lane_idx % 16];
-        float shmem_output_reg4 = shmem_easy_output[second_stage_node_idx][lane_idx+32];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 2][src_node_shmem_idx_2][lane_idx % 16];
-        float shmem_output_reg5 = shmem_easy_output[second_stage_node_idx][lane_idx+96];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 6][src_node_shmem_idx_2][lane_idx % 16];
-        float shmem_output_reg6 = shmem_easy_output[second_stage_node_idx][lane_idx+160];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 10][src_node_shmem_idx_2][lane_idx % 16];
-        float shmem_output_reg7 = shmem_easy_output[second_stage_node_idx][lane_idx+224];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 14][src_node_shmem_idx_2][lane_idx % 16];
-
-        //atomic ticket scheme disabled
-        //for (int idx_dense_edge_for_curr_source_node = second_stage_node_ticket-NUM_WARP_PER_SRC_NODE*second_stage_node_idx; idx_dense_edge_for_curr_source_node < num_dense_edge_for_curr_source_node; idx_dense_edge_for_curr_source_node += NUM_WARP_PER_SRC_NODE)
-        #pragma unroll 2
-        for (int idx_dense_edge_for_curr_source_node = (threadIdx.x%(NUM_WARP_PER_SRC_NODE*32) ) / 32; idx_dense_edge_for_curr_source_node < num_dense_edge_for_curr_source_node; idx_dense_edge_for_curr_source_node += NUM_WARP_PER_SRC_NODE)
+    //if (threadIdx.x<TOTAL_NUM_WARP_SECOND_STAGE_ACTIVATED*WARP_SIZE){
+        for (int second_stage_node_idx = (threadIdx.x)/(32*NUM_WARP_PER_SRC_NODE); second_stage_node_idx < TILE_SZ_B; second_stage_node_idx += (TOTAL_NUM_WARP_SECOND_STAGE_ACTIVATED/NUM_WARP_PER_SRC_NODE))
         {
-            
-            int curr_eid = eids[starting_index_dense_edge_for_curr_source_node + idx_dense_edge_for_curr_source_node];
-            //printf("blockIdx.x %d threadIdx.x %d curr_eid = %d\n",blockIdx.x, threadIdx.x, curr_eid);
-            // assuming curr_eid equals to the index of the dense edge in the dense edge list
-            //int curr_eid = starting_index_dense_edge_for_curr_source_node + idx_dense_edge_for_curr_source_node; // TODO: notice that the starting index here is padded, need to figure out the non-padded starting index
-            
-            int curr_dest_node_index = dense_edges_per_src_node[starting_index_dense_edge_for_curr_source_node + idx_dense_edge_for_curr_source_node];
+            //atomic ticket scheme disabled
+            // int second_stage_node_ticket;
+            // if (lane_idx == 0){
+            //     second_stage_node_ticket = atomicAdd(&src_node_ticket,1);
+            // }
+            // second_stage_node_ticket = __shfl_sync(0xffffffff, second_stage_node_ticket, 0);
+            // int second_stage_node_idx = second_stage_node_ticket/NUM_WARP_PER_SRC_NODE;
+            // if (second_stage_node_idx >= TILE_SZ_B)
+            //     break;
+            // load dest node indices
+            if (BcolBias + second_stage_node_idx >= n)
+                break;
 
-            
+            // NB: cache this TILE_SZ_B-long array in advance
+            //int curr_source_node_index = node_indices[BcolBias + second_stage_node_idx];
+            // NB: cache this TILE_SZ_B-long array in advance
+            //int num_dense_edge_for_curr_source_node = num_dense_edges_per_src_node[curr_source_node_index];
+            // NB: cache this TILE_SZ_B-long array in advance
+            //int starting_index_dense_edge_for_curr_source_node = starting_pos_dense_edges_per_src_node[curr_source_node_index];
 
-            float att_val = 0.0f;
-            float att_val_2 = 0.0f;
-            float att_val_3 = 0.0f;
-            float att_val_4 = 0.0f;
-            
-            
-            // asserting IN_DIM==OUT_DIM
-            att_val += shmem_output_reg0 * Bdata[curr_dest_node_index * OUT_DIM + lane_idx];
-            att_val_2 += shmem_output_reg1 * Bdata[curr_dest_node_index * OUT_DIM + lane_idx + 1 * (OUT_DIM / NUM_HEADS)];
-            att_val_3 += shmem_output_reg2 * Bdata[curr_dest_node_index * OUT_DIM + lane_idx + 2 * (OUT_DIM / NUM_HEADS)];
-            att_val_4 += shmem_output_reg3 * Bdata[curr_dest_node_index * OUT_DIM + lane_idx + 3 * (OUT_DIM / NUM_HEADS)];
+            int curr_source_node_index = node_indices_shmem[second_stage_node_idx];
+            int num_dense_edge_for_curr_source_node = num_dense_edges_per_src_node_shmem[second_stage_node_idx];
+            int starting_index_dense_edge_for_curr_source_node = starting_pos_dense_edges_per_src_node_shmem[second_stage_node_idx];
 
+            //int src_node_shmem_idx_1 = second_stage_node_idx / 2;
+            //int src_node_shmem_idx_2 = second_stage_node_idx % 2;
+
+            float shmem_output_reg0 = shmem_easy_output[second_stage_node_idx][lane_idx];//shmem_output[src_node_shmem_idx_1][lane_idx / 16][src_node_shmem_idx_2][lane_idx % 16];
+            float shmem_output_reg1 = shmem_easy_output[second_stage_node_idx][lane_idx+64];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 4][src_node_shmem_idx_2][lane_idx % 16];
+            float shmem_output_reg2 = shmem_easy_output[second_stage_node_idx][lane_idx+128];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 8][src_node_shmem_idx_2][lane_idx % 16];
+            float shmem_output_reg3 = shmem_easy_output[second_stage_node_idx][lane_idx+192];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 12][src_node_shmem_idx_2][lane_idx % 16];
+            float shmem_output_reg4 = shmem_easy_output[second_stage_node_idx][lane_idx+32];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 2][src_node_shmem_idx_2][lane_idx % 16];
+            float shmem_output_reg5 = shmem_easy_output[second_stage_node_idx][lane_idx+96];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 6][src_node_shmem_idx_2][lane_idx % 16];
+            float shmem_output_reg6 = shmem_easy_output[second_stage_node_idx][lane_idx+160];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 10][src_node_shmem_idx_2][lane_idx % 16];
+            float shmem_output_reg7 = shmem_easy_output[second_stage_node_idx][lane_idx+224];//shmem_output[src_node_shmem_idx_1][lane_idx / 16 + 14][src_node_shmem_idx_2][lane_idx % 16];
+
+            // TODO: implement second stage thread num reduction
+            //atomic ticket scheme disabled
+            //for (int idx_dense_edge_for_curr_source_node = second_stage_node_ticket-NUM_WARP_PER_SRC_NODE*second_stage_node_idx; idx_dense_edge_for_curr_source_node < num_dense_edge_for_curr_source_node; idx_dense_edge_for_curr_source_node += NUM_WARP_PER_SRC_NODE)
             
-            att_val += shmem_output_reg4 * Bdata[curr_dest_node_index * OUT_DIM + lane_idx+WARP_SIZE];
-            att_val_2 += shmem_output_reg5 * Bdata[curr_dest_node_index * OUT_DIM + lane_idx+WARP_SIZE + 1 * (OUT_DIM / NUM_HEADS)];
-            att_val_3 += shmem_output_reg6 * Bdata[curr_dest_node_index * OUT_DIM + lane_idx+WARP_SIZE + 2 * (OUT_DIM / NUM_HEADS)];
-            att_val_4 += shmem_output_reg7 * Bdata[curr_dest_node_index * OUT_DIM + lane_idx+WARP_SIZE + 3 * (OUT_DIM / NUM_HEADS)];
+            // int beginning_idx_dense_edge_for_curr_source_node = (threadIdx.x%(NUM_WARP_PER_SRC_NODE*32) ) / 32;
+            // int next_eid;
+            // int next_dest_node_index;
+            // float next_Bdata0;
+            // float next_Bdata1;
+            // float next_Bdata2;
+            // float next_Bdata3;
+            // float next_Bdata4;
+            // float next_Bdata5;
+            // float next_Bdata6;
+            // float next_Bdata7;
+            // if (beginning_idx_dense_edge_for_curr_source_node<num_dense_edge_for_curr_source_node){
+            //     next_eid = eids[starting_index_dense_edge_for_curr_source_node + beginning_idx_dense_edge_for_curr_source_node];
+            //     next_dest_node_index = dense_edges_per_src_node[starting_index_dense_edge_for_curr_source_node + beginning_idx_dense_edge_for_curr_source_node];
+            //     next_Bdata0 = Bdata[next_dest_node_index * OUT_DIM + lane_idx];
+            //     next_Bdata1 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + 1 * (OUT_DIM / NUM_HEADS)];
+            //     next_Bdata2 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + 2 * (OUT_DIM / NUM_HEADS)];
+            //     next_Bdata3 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + 3 * (OUT_DIM / NUM_HEADS)];
+            //     next_Bdata4 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + WARP_SIZE];
+            //     next_Bdata5 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + 1 * (OUT_DIM / NUM_HEADS) + WARP_SIZE];
+            //     next_Bdata6 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + 2 * (OUT_DIM / NUM_HEADS) + WARP_SIZE];
+            //     next_Bdata7 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + 3 * (OUT_DIM / NUM_HEADS) + WARP_SIZE];
+            // }
+            for (int idx_dense_edge_for_curr_source_node = (threadIdx.x%(NUM_WARP_PER_SRC_NODE*32) ) / 32; idx_dense_edge_for_curr_source_node < num_dense_edge_for_curr_source_node; idx_dense_edge_for_curr_source_node += NUM_WARP_PER_SRC_NODE)
+            {       
+                int curr_eid = eids[starting_index_dense_edge_for_curr_source_node + idx_dense_edge_for_curr_source_node];
+                int curr_dest_node_index = dense_edges_per_src_node[starting_index_dense_edge_for_curr_source_node + idx_dense_edge_for_curr_source_node];
+                int curr_Bdata0 = Bdata[curr_dest_node_index * OUT_DIM + lane_idx];
+                int curr_Bdata1 = Bdata[curr_dest_node_index * OUT_DIM + lane_idx + 1 * (OUT_DIM / NUM_HEADS)];
+                int curr_Bdata2 = Bdata[curr_dest_node_index * OUT_DIM + lane_idx + 2 * (OUT_DIM / NUM_HEADS)];
+                int curr_Bdata3 = Bdata[curr_dest_node_index * OUT_DIM + lane_idx + 3 * (OUT_DIM / NUM_HEADS)];
+                int curr_Bdata4 = Bdata[curr_dest_node_index * OUT_DIM + lane_idx + WARP_SIZE];
+                int curr_Bdata5 = Bdata[curr_dest_node_index * OUT_DIM + lane_idx + 1 * (OUT_DIM / NUM_HEADS) + WARP_SIZE];
+                int curr_Bdata6 = Bdata[curr_dest_node_index * OUT_DIM + lane_idx + 2 * (OUT_DIM / NUM_HEADS) + WARP_SIZE];
+                int curr_Bdata7 = Bdata[curr_dest_node_index * OUT_DIM + lane_idx + 3 * (OUT_DIM / NUM_HEADS) + WARP_SIZE];         
+                // int curr_eid = next_eid;
+                // int curr_dest_node_index = next_dest_node_index;
+                // int curr_Bdata0 = next_Bdata0;
+                // int curr_Bdata1 = next_Bdata1;
+                // int curr_Bdata2 = next_Bdata2;
+                // int curr_Bdata3 = next_Bdata3;
+                // int curr_Bdata4 = next_Bdata4;
+                // int curr_Bdata5 = next_Bdata5;
+                // int curr_Bdata6 = next_Bdata6;
+                // int curr_Bdata7 = next_Bdata7;
+                // if (idx_dense_edge_for_curr_source_node+NUM_WARP_PER_SRC_NODE<num_dense_edge_for_curr_source_node){
+                //     next_eid =                 eids[starting_index_dense_edge_for_curr_source_node + idx_dense_edge_for_curr_source_node+NUM_WARP_PER_SRC_NODE];
+                //     next_dest_node_index= dense_edges_per_src_node[starting_index_dense_edge_for_curr_source_node + idx_dense_edge_for_curr_source_node +NUM_WARP_PER_SRC_NODE];
+                //     next_Bdata0 = Bdata[next_dest_node_index * OUT_DIM + lane_idx];
+                //     next_Bdata1 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + 1 * (OUT_DIM / NUM_HEADS)];
+                //     next_Bdata2 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + 2 * (OUT_DIM / NUM_HEADS)];
+                //     next_Bdata3 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + 3 * (OUT_DIM / NUM_HEADS)];
+                //     next_Bdata4 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + WARP_SIZE];
+                //     next_Bdata5 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + 1 * (OUT_DIM / NUM_HEADS) + WARP_SIZE];
+                //     next_Bdata6 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + 2 * (OUT_DIM / NUM_HEADS) + WARP_SIZE];
+                //     next_Bdata7 = Bdata[next_dest_node_index * OUT_DIM + lane_idx + 3 * (OUT_DIM / NUM_HEADS) + WARP_SIZE];
+                // }
 
-
-            // reduction
-            #pragma unroll
-            for (int i_reduction = 16; i_reduction > 0; i_reduction = i_reduction / 2)
-            {
-                att_val += __shfl_down_sync(-1, att_val, i_reduction);
-                att_val_2 += __shfl_down_sync(-1, att_val_2, i_reduction);
-                att_val_3 += __shfl_down_sync(-1, att_val_3, i_reduction);
-                att_val_4 += __shfl_down_sync(-1, att_val_4, i_reduction);
-            }
-            if (threadIdx.x % 32 == 0)
-            {
-                //TODO: use float4
-                //attention[curr_eid * 4 + 0] = att_val;
-                //attention[curr_eid * 4 + 1] = att_val_2;
-                //attention[curr_eid * 4 + 2] = att_val_3;
-                //attention[curr_eid * 4 + 3] = att_val_4;
-                //*reinterpret_cast<float4*>(&attention[curr_eid * 4 + 0]) = make_float4(att_val, att_val_2, att_val_3, att_val_4);
-                attention[curr_eid] = make_float4(att_val, att_val_2, att_val_3, att_val_4);
+                //printf("blockIdx.x %d threadIdx.x %d curr_eid = %d\n",blockIdx.x, threadIdx.x, curr_eid);
+                // assuming curr_eid equals to the index of the dense edge in the dense edge list
+                //int curr_eid = starting_index_dense_edge_for_curr_source_node + idx_dense_edge_for_curr_source_node; // TODO: notice that the starting index here is padded, need to figure out the non-padded starting index
                 
+               
+
+                
+
+                float att_val = 0.0f;
+                float att_val_2 = 0.0f;
+                float att_val_3 = 0.0f;
+                float att_val_4 = 0.0f;
+                
+                
+                // asserting IN_DIM==OUT_DIM
+                att_val += shmem_output_reg0 * curr_Bdata0;
+                att_val_2 += shmem_output_reg1 * curr_Bdata1;
+                att_val_3 += shmem_output_reg2 * curr_Bdata2;
+                att_val_4 += shmem_output_reg3 * curr_Bdata3;
+
+                
+                att_val += shmem_output_reg4 * curr_Bdata4;
+                att_val_2 += shmem_output_reg5 * curr_Bdata5;
+                att_val_3 += shmem_output_reg6 * curr_Bdata6;
+                att_val_4 += shmem_output_reg7 * curr_Bdata7;
+
+
+                // reduction
+                #pragma unroll
+                for (int i_reduction = 16; i_reduction > 0; i_reduction = i_reduction / 2)
+                {
+                    att_val += __shfl_down_sync(-1, att_val, i_reduction);
+                    att_val_2 += __shfl_down_sync(-1, att_val_2, i_reduction);
+                    att_val_3 += __shfl_down_sync(-1, att_val_3, i_reduction);
+                    att_val_4 += __shfl_down_sync(-1, att_val_4, i_reduction);
+                }
+                if (threadIdx.x % 32 == 0)
+                {
+                    //TODO: use float4
+                    //attention[curr_eid * 4 + 0] = att_val;
+                    //attention[curr_eid * 4 + 1] = att_val_2;
+                    //attention[curr_eid * 4 + 2] = att_val_3;
+                    //attention[curr_eid * 4 + 3] = att_val_4;
+                    //*reinterpret_cast<float4*>(&attention[curr_eid * 4 + 0]) = make_float4(att_val, att_val_2, att_val_3, att_val_4);
+                    attention[curr_eid] = make_float4(att_val, att_val_2, att_val_3, att_val_4);
+                    
+                }
             }
-        }
+        //}
     }
 
 #undef A

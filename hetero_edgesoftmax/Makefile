@@ -4,9 +4,9 @@ TARGET_EXEC ?= a.out
 #FREESTAND_DIR ?= ./freestanding
 BUILD_DIR ?= ./build
 SRC_DIRS ?= ./src
-INC_DIRS ?= ./include
-INC_DIRS ?= ./cusplibrary
-INC_DIRS ?= ./libnpy/include
+#INC_DIRS ?= ./include
+#INC_DIRS ?= ./cusplibrary
+#INC_DIRS ?= ./libnpy/include
 EXE_DIR ?= $(BUILD_DIR)/exec
 
 SRCS := $(shell find $(SRC_DIRS) -name *.cpp -or -name *.c -or -name *.s -or -name *.cu)
@@ -19,7 +19,7 @@ HEADER_OBJS := $(HEADER_SRCS_NAMES:%=$(BUILD_DIR)/include/obj/%.o)
 HEADER_DEPS := $(HEADER_OBJS:.o=.d)
 
 #INCL_DIRS := $(shell find $(INC_DIRS) -type d) ./include $(FREESTAND_DIR)/include 
-INCL_DIRS := ./include ./cusplibrary ./libnpy/include
+INCL_DIRS := ./include ./cusplibrary ./libnpy/include /home/ubuntu/cutlass/include /home/ubuntu/cutlass/examples/common /home/ubuntu/cutlass/tools/util/include
 #
 #$(FREESTAND_DIR)/include 
 INC_FLAGS := $(addprefix -I,$(INCL_DIRS))
