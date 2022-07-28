@@ -59,7 +59,9 @@ int HGTBackPropGradientSMAFusionProfiling_main(MyHeteroIntegratedCSR<int32_t, st
     MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> transposed_csr(transposed_csr_h);
     //MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids(eids_h);
     //MySimpleNDArray<Idx, thrust::device_allocator<Idx>> transposed_eids(transposed_eids_h);
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_sm_first_stage=GenerateRandomNDArray<DType>({csr_h.num_rows, csr_h.num_rels, num_heads, num_feat_per_head});
+
+    assert(csr_h.num_rels==4); // memory footprint 50% reduction hack for grad_sm_first_stage only effective for ogbn-mag
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_sm_first_stage=GenerateRandomNDArray<DType>({csr_h.num_rows, 2 /*memory footprint hack only effective for ogbn-mag*/, num_heads, num_feat_per_head});
     MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_a=GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, num_heads});
     MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_t_neighbour=GenerateRandomNDArray<DType>({csr_h.num_rows, num_heads, num_feat_per_head});
     MySimpleNDArray<DType, thrust::device_allocator<DType>> message=GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, num_heads, num_feat_per_head});

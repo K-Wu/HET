@@ -14,6 +14,7 @@ __global__ void HGTBackwardFusedGradientSmFirstPartGradientAImpl(Idx* ranges,
   Idx num_heads, 
   Idx feat_dim_per_head, 
   Idx n_rel_types) {
+    assert(n_rel_types==2);
     // delta a = delta t_neighbour^(l+1) * sigma^-1 * m^T
     int lane_idx = threadIdx.x%32;
     if (blockIdx.x < num_nodes) {
@@ -27,7 +28,8 @@ __global__ void HGTBackwardFusedGradientSmFirstPartGradientAImpl(Idx* ranges,
             Idx tidx_ele_in_head = tx % feat_dim_per_head;
             // load delta t neighbor 
             DType delta_t_neighbour_ele = __ldg(grad_t_neighbour + blockIdx.x*num_heads*feat_dim_per_head + tidx_head*feat_dim_per_head+tidx_ele_in_head);
-            DType agg = 0.;
+            DType agg0 = 0.;
+            DType agg1 = 0.;
             for(;beg<end;beg++) {
                 // dealing with each edge
                 // broadcast sigma. each thread load one element from m.
@@ -36,7 +38,12 @@ __global__ void HGTBackwardFusedGradientSmFirstPartGradientAImpl(Idx* ranges,
                 Idx type_id = __ldg(types + beg);
                 DType msg_ele = __ldg(message + eid * num_heads * feat_dim_per_head + tidx_head*feat_dim_per_head+tidx_ele_in_head);
                 DType sigma = __ldg(sigmas + eid * num_heads + tidx_head);
-                agg += sigma*msg_ele*delta_t_neighbour_ele;
+                if (type_id<2){
+                    agg0 += sigma*msg_ele*delta_t_neighbour_ele;
+                }
+                else{
+                    agg1 += sigma*msg_ele*delta_t_neighbour_ele;
+                }
                 DType inner_agg = sigma*(1-sigma) * msg_ele * delta_t_neighbour_ele;
                 //agg += g*w*n;
                 #pragma unroll
@@ -49,7 +56,8 @@ __global__ void HGTBackwardFusedGradientSmFirstPartGradientAImpl(Idx* ranges,
                     atomicAdd(grad_a + eid*num_heads+tidx_head, inner_agg);
                 }
             }
-            atomicAdd(grad_sm_first_stage + num_nodes * n_rel_types * num_heads* feat_dim_per_head + blockIdx.x * num_heads* feat_dim_per_head + tx, agg);
+            atomicAdd(grad_sm_first_stage + blockIdx.x * n_rel_types * num_heads* feat_dim_per_head + 0 * num_heads* feat_dim_per_head + tx, agg0);
+            atomicAdd(grad_sm_first_stage + blockIdx.x * n_rel_types * num_heads* feat_dim_per_head + 1 * num_heads* feat_dim_per_head + tx, agg1);
         }
     }
 }
@@ -67,6 +75,8 @@ __global__ void HGTBackwardGradientAImpl(Idx* ranges,
   Idx num_heads, 
   Idx feat_dim_per_head, 
   Idx n_rel_types) {
+        assert(n_rel_types==2);
+
     // delta a = delta t_neighbour^(l+1) * sigma^-1 * m^T
     int lane_idx = threadIdx.x%32;
     if (blockIdx.x < num_nodes) {
@@ -119,6 +129,8 @@ __global__ void HGTBackwardGradientSmFirstPartImpl(Idx* ranges,
   Idx num_heads, 
   Idx feat_dim_per_head, 
   Idx n_rel_types) {
+        assert(n_rel_types==2);
+
     // delta Sm = \Sum_outgoing (m * delta t_neighbour^(l+1) * sigma) 
     // We need to store one delta Sm for each relationship type
     if (blockIdx.x < num_nodes) {
@@ -132,7 +144,10 @@ __global__ void HGTBackwardGradientSmFirstPartImpl(Idx* ranges,
             Idx tidx_ele_in_head = tx % feat_dim_per_head;
             // load delta t neighbor 
             DType delta_t_neighbour_ele = __ldg(grad_t_neighbour + blockIdx.x*num_heads*feat_dim_per_head + tidx_head*feat_dim_per_head+tidx_ele_in_head);
-            DType agg = 0.;
+
+            // simple hack here effective for OGBN MAG: for grad_sm_first_stage, map relaationship 0, 1 to first half and relationship type 2,3 to the second half, thus reducing 50% footprint
+            DType agg0 = 0.;
+            DType agg1 = 0.;
             for(;beg<end;beg++) {
                 // dealing with each edge
                 //  broadcast sigma
@@ -141,10 +156,16 @@ __global__ void HGTBackwardGradientSmFirstPartImpl(Idx* ranges,
                 Idx type_id = __ldg(types + beg);
                 DType msg_ele = __ldg(message + eid * num_heads * feat_dim_per_head + tidx_head*feat_dim_per_head+tidx_ele_in_head);
                 DType sigma = __ldg(sigmas + eid * num_heads + tidx_head);
-                agg += sigma*msg_ele*delta_t_neighbour_ele;
+                if (type_id<2){
+                agg0 += sigma*msg_ele*delta_t_neighbour_ele;
+                }
+                else{
+                    agg1 += sigma*msg_ele*delta_t_neighbour_ele;
+                }
                 //atomicAdd();
             }
-            atomicAdd(grad_sm_first_stage + num_nodes * n_rel_types * num_heads* feat_dim_per_head + blockIdx.x * num_heads* feat_dim_per_head + tx, agg);
+            atomicAdd(grad_sm_first_stage + blockIdx.x * n_rel_types * num_heads* feat_dim_per_head + 0 * num_heads* feat_dim_per_head + tx, agg0);
+            atomicAdd(grad_sm_first_stage + blockIdx.x * n_rel_types * num_heads* feat_dim_per_head + 1 * num_heads* feat_dim_per_head + tx, agg1);
         }
     }
 }
@@ -212,4 +233,14 @@ void HGTBackPropGradientSMAFusion(
         cuda_err_chk(cudaDeviceSynchronize());
         std::chrono::high_resolution_clock::time_point t2_kernel2 = std::chrono::high_resolution_clock::now();
         std::cout << "HGTBackwardGradientAImpl time: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2_kernel2 - t1_kernel2).count() << " ms"<<std::endl;
+
+
+        cuda_err_chk(cudaDeviceSynchronize());
+        std::chrono::high_resolution_clock::time_point t1_kernel3 = std::chrono::high_resolution_clock::now();
+
+        HGTBackwardFusedGradientSmFirstPartGradientAImpl<Idx, DType><<<nblks, nthrs/*, 0, thr_entry->stream*/>>>(range_data, ids_data, eids_data, typeids_data, grad_a_data,grad_sm_first_stage_data,grad_t_neighbour_data,message_data,sigmas_data,num_nodes, num_heads, feat_dim_per_head, n_rel_types);
+        cuda_err_chk(cudaPeekAtLastError());
+        cuda_err_chk(cudaDeviceSynchronize());
+        std::chrono::high_resolution_clock::time_point t2_kernel3 = std::chrono::high_resolution_clock::now();
+        std::cout << "HGTBackwardFusedGradientSmFirstPartGradientAImpl time: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2_kernel3 - t1_kernel3).count() << " ms"<<std::endl;
     }
