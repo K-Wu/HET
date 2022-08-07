@@ -1,4 +1,5 @@
 #pragma once
+#include "../hetero_edgesoftmax.h"
 #include <thrust/random.h>
 #include <thrust/device_vector.h>
 #include <thrust/transform.h>
@@ -169,6 +170,7 @@ public:
     // template<typename OtherType, typename OtherAlloc>
     void Transpose(/*std::optional<typename std::reference_wrapper<typename thrust::detail::vector_base<OtherType, OtherAlloc>>> eids*/)
     {
+        // FIXME: this transpose CSR only works for single-relationship CSR. Needs to execute one relationship by one relationship in this heteroseparateCSR case
         thrust::host_vector<IdxType> permutation = TransposeCSR(row_ptr, col_idx);
         assert(num_rows == num_cols);
         // if (eids.has_value()){
@@ -176,12 +178,15 @@ public:
         thrust::detail::vector_base<IdxType, Alloc> new_eids(eids.size());
         typedef typename thrust::detail::vector_base<IdxType, Alloc>::iterator ElementIterator;
         typedef typename thrust::host_vector<IdxType>::iterator IndexIterator;
+        //thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter_temp(eids.begin(), permutation.begin());
+        //print_range("permute_iter_temp",permute_iter_temp, permute_iter_temp + eids.size());
         thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter(eids.begin(), permutation.begin());
         // for (int64_t idx = 0; idx < eids_ref.size(); idx++) {
         //     new_eids[idx] = *permute_iter;
         //     permute_iter++;
         // }
         thrust::copy(permute_iter, permute_iter + eids.size(), new_eids.begin());
+        //print_range("new_eids",new_eids.begin(), new_eids.end());
         thrust::copy(new_eids.begin(), new_eids.end(), eids.begin());
         //}
     }
@@ -350,14 +355,18 @@ public:
         typedef typename thrust::detail::vector_base<IdxType, Alloc>::iterator ElementIterator;
         typedef typename thrust::host_vector<IdxType>::iterator IndexIterator;
         thrust::detail::vector_base<IdxType, Alloc> new_rel_types(permutation.size());
+        //thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter_temp(eids.begin(), permutation.begin());
+        //print_range("permute_iter_temp",permute_iter_temp, permute_iter_temp + eids.size());
         thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter(rel_type.begin(), permutation.begin());
         thrust::copy(permute_iter, permute_iter + permutation.size(), new_rel_types.begin());
+        
         thrust::copy(new_rel_types.begin(), new_rel_types.end(), rel_type.begin());
 
         // work on eids
         thrust::detail::vector_base<IdxType, Alloc> new_eids(permutation.size());
         thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter_eids(this->eids.begin(), permutation.begin());
         thrust::copy(permute_iter_eids, permute_iter_eids + permutation.size(), new_eids.begin());
+        //print_range("new_eids",new_eids.begin(), new_eids.end());
         thrust::copy(new_eids.begin(), new_eids.end(), this->eids.begin());
     }
 
@@ -1026,12 +1035,12 @@ MyHyb<IdxType, std::allocator<IdxType>, MyHeteroSeparateCSR<IdxType, std::alloca
             IdxType IdxDestNode = csr.col_idx[IdxEdge];
             IdxType IdxRelationshipEdge = csr.rel_type[IdxEdge];
             IdxType IdxEids = csr.eids[IdxEdge];
-            if (IdxEdge < ELL_logical_width && IdxRow < ELLMaxIndex)
+            if (IdxEdge-csr.row_ptr[IdxRow] < ELL_logical_width && IdxRow < ELLMaxIndex)
             {
                 // store the edge in the ELL
-                ELLColIdx[IdxRow * ELL_physical_width + IdxEdge] = IdxDestNode;
-                ELLRelType[IdxRow * ELL_physical_width + IdxEdge] = IdxRelationshipEdge;
-                ELLEids[IdxRow * ELL_physical_width + IdxEdge] = IdxEids;
+                ELLColIdx[IdxRow * ELL_physical_width + IdxEdge-csr.row_ptr[IdxRow]] = IdxDestNode;
+                ELLRelType[IdxRow * ELL_physical_width + IdxEdge-csr.row_ptr[IdxRow]] = IdxRelationshipEdge;
+                ELLEids[IdxRow * ELL_physical_width + IdxEdge-csr.row_ptr[IdxRow]] = IdxEids;
             }
             else
             {
@@ -1098,12 +1107,12 @@ MyHyb<IdxType, std::allocator<IdxType>, MyHeteroIntegratedCSR<IdxType, std::allo
             IdxType IdxDestNode = csr.col_idx[IdxEdge];
             IdxType IdxRelationshipEdge = csr.rel_type[IdxEdge];
             IdxType IdxEid = csr.eids[IdxEdge];
-            if (IdxEdge < ELL_logical_width && IdxRow < ELLMaxIndex)
+            if (IdxEdge-csr.row_ptr[IdxRow] < ELL_logical_width && IdxRow < ELLMaxIndex)
             {
                 // store the edge in the ELL
-                ELLColIdx[IdxRow * ELL_physical_width + IdxEdge] = IdxDestNode;
-                ELLRelType[IdxRow * ELL_physical_width + IdxEdge] = IdxRelationshipEdge;
-                ELLEids[IdxRow * ELL_physical_width + IdxEdge] = IdxEid;
+                ELLColIdx[IdxRow * ELL_physical_width + IdxEdge-csr.row_ptr[IdxRow]] = IdxDestNode;
+                ELLRelType[IdxRow * ELL_physical_width + IdxEdge-csr.row_ptr[IdxRow]] = IdxRelationshipEdge;
+                ELLEids[IdxRow * ELL_physical_width + IdxEdge-csr.row_ptr[IdxRow]] = IdxEid;
             }
             else
             {

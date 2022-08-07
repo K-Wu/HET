@@ -23,6 +23,18 @@ namespace cg = cooperative_groups;
 #include <thrust/transform.h>
 #include <thrust/functional.h>
 
+
+template <typename Iterator>
+void print_range(const std::string &name, Iterator first, Iterator last)
+{
+    // from thrust example
+    typedef typename std::iterator_traits<Iterator>::value_type T;
+
+    std::cout << name << ": (" << std::distance(first, last) << ")";
+    thrust::copy(first, last, std::ostream_iterator<T>(std::cout, " "));
+    std::cout << "\n";
+}
+
 #define WARP_SIZE (32)
 
 #define RTX_3090_MAX_BLOCKSIZE 1024

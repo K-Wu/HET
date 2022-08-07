@@ -66,16 +66,6 @@ std::pair<std::pair<std::vector<int>, std::vector<int>>, std::vector<int>> gener
     return std::make_pair(std::make_pair(result_row_indices, result_col_indices), result_data);
 }
 
-template <typename Iterator>
-void print_range(const std::string &name, Iterator first, Iterator last)
-{
-    // from thrust example
-    typedef typename std::iterator_traits<Iterator>::value_type T;
-
-    std::cout << name << ": (" << std::distance(first, last) << ")";
-    thrust::copy(first, last, std::ostream_iterator<T>(std::cout, " "));
-    std::cout << "\n";
-}
 
 
 
