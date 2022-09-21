@@ -9,8 +9,8 @@ SRC_DIRS ?= ./src
 #INC_DIRS ?= ./libnpy/include
 EXE_DIR ?= $(BUILD_DIR)/exec
 
-SRCS := $(shell find $(SRC_DIRS) -name *.cpp -or -name *.c -or -name *.s -or -name *.cu)
-SRCS_NAMES := $(shell find $(SRC_DIRS) -name *.cpp -or -name *.c -or -name *.s -or -name *.cu -printf "%f\n")
+SRCS := $(shell find $(SRC_DIRS) -name *.cpp -or -name *.c -or -name *.s -or -name *.cu.cc)
+SRCS_NAMES := $(shell find $(SRC_DIRS) -name *.cpp -or -name *.c -or -name *.s -or -name *.cu.cc -printf "%f\n")
 HEADER_SRCS_NAMES := $(shell find ./include/src -name *.cpp -printf "%f\n")
 OBJS := $(SRCS:%=$(BUILD_DIR)/obj/%.o)
 EXES := $(SRCS:%=$(BUILD_DIR)/exe/%.exe)
@@ -18,12 +18,17 @@ DEPS := $(OBJS:.o=.d)
 HEADER_OBJS := $(HEADER_SRCS_NAMES:%=$(BUILD_DIR)/include/obj/%.o)
 HEADER_DEPS := $(HEADER_OBJS:.o=.d)
 
-#INCL_DIRS := $(shell find $(INC_DIRS) -type d) ./include $(FREESTAND_DIR)/include 
-INCL_DIRS := ./include ./cusplibrary ./libnpy/include /home/ubuntu/cutlass/include /home/ubuntu/cutlass/examples/common /home/ubuntu/cutlass/tools/util/include
+#INCL_DIRS := $(shell find $(INC_DIRS) -type d) ./include $(FREESTAND_DIR)/include
+# ACTION: set cutlass path here
+# TODO: ACTION: set sputnik path here 
+#CUTLASS_ROOT = /home/ubuntu/cutlass
+CUTLASS_ROOT = /home/kwu/cutlass
+SPUTNIK_INSTALL_ROOT = /home/kwu/sputnik/build/install
+INCL_DIRS := ./include ../third_party/cusplibrary ../third_party/libnpy/include $(CUTLASS_ROOT)/include $(CUTLASS_ROOT)/examples/common $(CUTLASS_ROOT)/tools/util/include $(SPUTNIK_INSTALL_ROOT)/include
 #
 #$(FREESTAND_DIR)/include 
 INC_FLAGS := $(addprefix -I,$(INCL_DIRS))
-LDFLAGS :=  -lcurand
+LDFLAGS :=  -lcurand -L$(SPUTNIK_INSTALL_ROOT)/libsputnik.so -llibsputnik
 CPPFLAGS ?= $(INC_FLAGS) -Wall -pthread -MMD -MP -shared -fPIC -std=c++17 -O3 -mavx -ftree-vectorize -fopt-info-vec
 CUDAFLAGS = $(INC_FLAGS) -maxrregcount 128 -res-usage -g -lineinfo --restrict --extended-lambda -std=c++17 -O3 -DCUDA -DNOT_IMPL -arch=sm_70 -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70
 # -opt-info inline -res-usage
@@ -64,7 +69,7 @@ $(BUILD_DIR)/include/obj/%.cpp.o: include/src/%.cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 # cuda source
-$(BUILD_DIR)/obj/%.cu.o: %.cu
+$(BUILD_DIR)/obj/%.cu.cc.o: %.cu.cc
 	$(MKDIR_P) $(dir $@)
 	$(NVCC) $(CUDAFLAGS) -c $< -o $@
 

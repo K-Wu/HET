@@ -2,6 +2,9 @@
 #include "EdgeSoftmax_1/EdgeSoftmax_1.h"
 #include "EdgeSoftmax_4/EdgeSoftmax_4.h"
 #include "EdgeAttention_4/EdgeAttention_4.h"
+// TODO: update the relative path to dataset to reflect the changes from makefile build system to cmake
+// TODO: update the msvc project file to reflect the changes due to switch from makefile build system to cmake
+// TODO: add cutlass into third-party folder
 
 struct identity_firstfloat
 {

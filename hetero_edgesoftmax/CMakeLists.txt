@@ -1,0 +1,122 @@
+# From sputnik/sputnik/CMakeLists.txt
+# For use in subdirs.
+set(HETEROEDGESOFTMAX_SRCS)
+set(HETEROEDGESOFTMAX_INCLUDE_FILES)
+add_subdirectory(include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+# include_directories("${PROJECT_SOURCE_DIR}")
+
+
+##
+### Filter files that we don't want in the main library.
+##
+# set(FILTER_SRCS)
+# foreach(FILE ${FILTER_SRCS})
+#   list(REMOVE_ITEM DIR_SRCS ${FILE})
+# endforeach(FILE)
+
+##
+### Add the sources to the build.
+##
+# list(APPEND HETEROEDGESOFTMAX_SRCS ${DIR_SRCS})
+
+##
+### Set .cu.cc files to be compiled as CUDA.
+##
+set(HETEROEDGESOFTMAX_CUDA_SRCS ${HETEROEDGESOFTMAX_SRCS})
+list(FILTER HETEROEDGESOFTMAX_CUDA_SRCS INCLUDE REGEX "\.cu\.cc")
+set_source_files_properties(${HETEROEDGESOFTMAX_CUDA_SRCS} PROPERTIES LANGUAGE CUDA)
+
+##
+### Create lib_hetero_edgesoftmax if applicable.
+##
+# add_library(hetero_edgesoftmax SHARED ${HETEROEDGESOFTMAX_SRCS})
+# target_link_libraries(hetero_edgesoftmax ${HETEROEDGESOFTMAX_LIBS})
+
+##
+### Library installation.
+##
+# install(TARGETS sputnik)
+# set(INSTALL_BASE "include/sputnik")
+# install(FILES "cuda_utils.h" DESTINATION ${INSTALL_BASE})
+# install(FILES "sputnik.h" DESTINATION ${INSTALL_BASE})
+# install(FILES "bias_relu/bias_relu.h" DESTINATION "${INSTALL_BASE}/bias_relu")
+# install(FILES "depthwise/cuda_depthwise.h" DESTINATION "${INSTALL_BASE}/depthwise")
+# install(FILES "spmm/cuda_spmm.h" DESTINATION "${INSTALL_BASE}/spmm")
+# install(FILES "sddmm/cuda_sddmm.h" DESTINATION "${INSTALL_BASE}/sddmm")
+# install(FILES "softmax/softmax.h" DESTINATION "${INSTALL_BASE}/softmax")
+# install(FILES "softmax/sparse_softmax.h" DESTINATION "${INSTALL_BASE}/softmax")
+# install(FILES "utils/index_format.h" DESTINATION "${INSTALL_BASE}/utils")
+
+##
+### build the .cu.cc files in the src directory.
+##
+# build kernel.cu.cc
+set(HETEROEDGESOFTMAX_KERNEL_CU_CC_SRCS)
+list(APPEND HETEROEDGESOFTMAX_KERNEL_CU_CC_SRCS ${HETEROEDGESOFTMAX_INCLUDE_FILES})
+list(APPEND HETEROEDGESOFTMAX_KERNEL_CU_CC_SRCS "src/kernel.cu.cc")
+set(HETEROEDGESOFTMAX_KERNEL_CU_CC_CUDA_SRCS ${HETEROEDGESOFTMAX_KERNEL_CU_CC_SRCS})
+list(FILTER HETEROEDGESOFTMAX_KERNEL_CU_CC_CUDA_SRCS INCLUDE REGEX "\.cu\.cc")
+set_source_files_properties(${HETEROEDGESOFTMAX_KERNEL_CU_CC_CUDA_SRCS} PROPERTIES LANGUAGE CUDA)  
+add_executable(kernel_cu_cc ${HETEROEDGESOFTMAX_KERNEL_CU_CC_SRCS})
+target_link_libraries(kernel_cu_cc ${HETEROEDGESOFTMAX_LIBS})
+
+# build test_compiler_discover_sputnik_library.cu.cc
+set(HETEROEDGESOFTMAX_TEST_SPUTNIK_CU_CC_SRCS)
+# We need to involve test utilities sources from sputnik repo.
+set(SPUTNIK_TEST_SRCS)
+file(GLOB TMP ${PROJECT_SOURCE_DIR}/third_party/sputnik/sputnik/matrix_utils*)
+list(APPEND SPUTNIK_TEST_SRCS ${TMP})
+file(GLOB TMP ${PROJECT_SOURCE_DIR}/third_party/sputnik/sputnik/test_utils*)
+list(APPEND SPUTNIK_TEST_SRCS ${TMP})
+list(APPEND HETEROEDGESOFTMAX_TEST_SPUTNIK_CU_CC_SRCS ${SPUTNIK_TEST_SRCS})
+list(APPEND HETEROEDGESOFTMAX_TEST_SPUTNIK_CU_CC_SRCS ${HETEROEDGESOFTMAX_INCLUDE_FILES})
+list(APPEND HETEROEDGESOFTMAX_TEST_SPUTNIK_CU_CC_SRCS "tests_src/test_compiler_discover_sputnik_library.cu.cc")
+set(HETEROEDGESOFTMAX_TEST_SPUTNIK_CU_CC_CUDA_SRCS ${HETEROEDGESOFTMAX_TEST_SPUTNIK_CU_CC_SRCS})
+list(FILTER HETEROEDGESOFTMAX_TEST_SPUTNIK_CU_CC_CUDA_SRCS INCLUDE REGEX "\.cu\.cc")
+set_source_files_properties(${HETEROEDGESOFTMAX_TEST_SPUTNIK_CU_CC_CUDA_SRCS} PROPERTIES LANGUAGE CUDA)  
+add_executable(test_compiler_discover_sputnik_library_cu_cc ${HETEROEDGESOFTMAX_TEST_SPUTNIK_CU_CC_SRCS})
+# we need to link it to libraries involving gtest, abseil, and sputnik. Thus we have a dedicated new variable HETEROEDGESOFTMAX_TEST_LIBS here
+target_link_libraries(test_compiler_discover_sputnik_library_cu_cc ${HETEROEDGESOFTMAX_TEST_LIBS})
+
+# build test_compiler_discover_cutlass_library.cu.cc
+set(HETEROEDGESOFTMAX_TEST_CUTLASS_CU_CC_SRCS)
+list(APPEND HETEROEDGESOFTMAX_TEST_CUTLASS_CU_CC_SRCS ${HETEROEDGESOFTMAX_INCLUDE_FILES})
+list(APPEND HETEROEDGESOFTMAX_TEST_CUTLASS_CU_CC_SRCS "src/test_compiler_discover_cutlass_library.cu.cc")
+set(HETEROEDGESOFTMAX_TEST_CUTLASS_CU_CC_CUDA_SRCS ${HETEROEDGESOFTMAX_TEST_CUTLASS_CU_CC_SRCS})
+list(FILTER HETEROEDGESOFTMAX_TEST_CUTLASS_CU_CC_CUDA_SRCS INCLUDE REGEX "\.cu\.cc")
+set_source_files_properties(${HETEROEDGESOFTMAX_TEST_CUTLASS_CU_CC_CUDA_SRCS} PROPERTIES LANGUAGE CUDA)  
+add_executable(test_compiler_discover_cutlass_library_cu_cc ${HETEROEDGESOFTMAX_TEST_CUTLASS_CU_CC_SRCS})
+target_link_libraries(test_compiler_discover_cutlass_library_cu_cc ${HETEROEDGESOFTMAX_LIBS})
+
+# build test_DGLHackHGTBackwardFusion.cu.cc
+set(HETEROEDGESOFTMAX_TEST_DGLHACKHGTBACKWARDFUSION_CU_CC_SRCS)
+list(APPEND HETEROEDGESOFTMAX_TEST_DGLHACKHGTBACKWARDFUSION_CU_CC_SRCS ${HETEROEDGESOFTMAX_INCLUDE_FILES})
+list(APPEND HETEROEDGESOFTMAX_TEST_DGLHACKHGTBACKWARDFUSION_CU_CC_SRCS "src/test_DGLHackHGTBackwardFusion.cu.cc")
+set(HETEROEDGESOFTMAX_TEST_DGLHACKHGTBACKWARDFUSION_CU_CC_CUDA_SRCS ${HETEROEDGESOFTMAX_TEST_DGLHACKHGTBACKWARDFUSION_CU_CC_SRCS})
+list(FILTER HETEROEDGESOFTMAX_TEST_DGLHACKHGTBACKWARDFUSION_CU_CC_CUDA_SRCS INCLUDE REGEX "\.cu\.cc")
+set_source_files_properties(${HETEROEDGESOFTMAX_TEST_DGLHACKHGTBACKWARDFUSION_CU_CC_CUDA_SRCS} PROPERTIES LANGUAGE CUDA)  
+add_executable(test_DGLHackHGTBackwardFusion_cu_cc ${HETEROEDGESOFTMAX_TEST_DGLHACKHGTBACKWARDFUSION_CU_CC_SRCS})
+target_link_libraries(test_DGLHackHGTBackwardFusion_cu_cc ${HETEROEDGESOFTMAX_LIBS})
+
+# build test_DGLHackKernel.cu.cc
+set(HETEROEDGESOFTMAX_TEST_DGLHACKKERNEL_CU_CC_SRCS)
+list(APPEND HETEROEDGESOFTMAX_TEST_DGLHACKKERNEL_CU_CC_SRCS ${HETEROEDGESOFTMAX_INCLUDE_FILES})
+list(APPEND HETEROEDGESOFTMAX_TEST_DGLHACKKERNEL_CU_CC_SRCS "src/test_DGLHackKernel.cu.cc")
+set(HETEROEDGESOFTMAX_TEST_DGLHACKKERNEL_CU_CC_CUDA_SRCS ${HETEROEDGESOFTMAX_TEST_DGLHACKKERNEL_CU_CC_SRCS})
+list(FILTER HETEROEDGESOFTMAX_TEST_DGLHACKKERNEL_CU_CC_CUDA_SRCS INCLUDE REGEX "\.cu\.cc")
+set_source_files_properties(${HETEROEDGESOFTMAX_TEST_DGLHACKKERNEL_CU_CC_CUDA_SRCS} PROPERTIES LANGUAGE CUDA)  
+add_executable(test_DGLHackKernel_cu_cc ${HETEROEDGESOFTMAX_TEST_DGLHACKKERNEL_CU_CC_SRCS})
+target_link_libraries(test_DGLHackKernel_cu_cc ${HETEROEDGESOFTMAX_LIBS})
+
+# build test_hyb.cu.cc
+set(HETEROEDGESOFTMAX_TEST_HYB_CU_CC_SRCS)
+list(APPEND HETEROEDGESOFTMAX_TEST_HYB_CU_CC_SRCS ${HETEROEDGESOFTMAX_INCLUDE_FILES})
+list(APPEND HETEROEDGESOFTMAX_TEST_HYB_CU_CC_SRCS "src/test_hyb.cu.cc")
+set(HETEROEDGESOFTMAX_TEST_HYB_CU_CC_CUDA_SRCS ${HETEROEDGESOFTMAX_TEST_HYB_CU_CC_SRCS})
+list(FILTER HETEROEDGESOFTMAX_TEST_HYB_CU_CC_CUDA_SRCS INCLUDE REGEX "\.cu\.cc")
+set_source_files_properties(${HETEROEDGESOFTMAX_TEST_HYB_CU_CC_CUDA_SRCS} PROPERTIES LANGUAGE CUDA)  
+add_executable(test_hyb_cu_cc ${HETEROEDGESOFTMAX_TEST_HYB_CU_CC_SRCS})
+# TODO: clean up this hacky code
+set(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH} ${CMAKE_BINARY_DIR}/sputnik)
+target_link_libraries(test_hyb_cu_cc ${HETEROEDGESOFTMAX_LIBS})

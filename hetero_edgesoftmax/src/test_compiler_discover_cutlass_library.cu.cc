@@ -1,3 +1,4 @@
+// code from cutlass repo example 36_gather_scatter_fusion example
 /***************************************************************************************************
  * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause

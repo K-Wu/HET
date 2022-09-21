@@ -1,8 +1,8 @@
 [submodule "hetero_edgesoftmax/libnpy"]
-	path = hetero_edgesoftmax/libnpy
+	path = third_party/libnpy
 	url = https://github.com/llohse/libnpy/
 [submodule "hetero_edgesoftmax/cusplibrary"]
-	path = hetero_edgesoftmax/cusplibrary
+	path = third_party/cusplibrary
 	url = https://github.com/cusplibrary/cusplibrary
 [submodule "hetero_edgesoftmax/data/ogbn_mag"]
 	path = hetero_edgesoftmax/data/ogbn_mag
@@ -10,3 +10,6 @@
 [submodule "hetero_edgesoftmax/data/MyHybData"]
 	path = hetero_edgesoftmax/data/MyHybData
 	url = https://tony_wukun_worker:PxXRTULrXSd7w4vAXygq@bitbucket.org/tonywuk/myhyb_dataset.git
+[submodule "third_party/sputnik"]
+	path = third_party/sputnik
+	url = git@github.com:K-Wu/sputnik_experimental.git
