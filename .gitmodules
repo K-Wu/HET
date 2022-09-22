@@ -13,3 +13,6 @@
 [submodule "third_party/sputnik"]
 	path = third_party/sputnik
 	url = git@github.com:K-Wu/sputnik_experimental.git
+[submodule "third_party/cutlass"]
+	path = third_party/cutlass
+	url = https://github.com/NVIDIA/cutlass

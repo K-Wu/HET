@@ -1,12 +1,10 @@
 # hetero_edgesoftmax
 
 ## Dependencies
-Please download CUTLASS and sputnik and set their paths in the Makefile.
+The following repos, as submodules in `third_party/`, are required. Please recursively clone these submodules.
 
 [CUTLASS](https://github.com/NVIDIA/cutlass)
 [sputnik](https://github.com/google-research/sputnik)
-
-You should append `$(SPUTNIK_INSTALL_ROOT)/libsputnik.so` to the  `LD_LIBRARY_PATH` to run the program.
 
 ## Code Quality
 [![CodeFactor](https://www.codefactor.io/repository/github/k-wu/hetero_edgesoftmax/badge?s=34a94a8b3a8b3d83b6582edc6e24b1e5d0a207b9)](https://www.codefactor.io/repository/github/k-wu/hetero_edgesoftmax)

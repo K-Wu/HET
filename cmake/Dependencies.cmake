@@ -20,11 +20,9 @@ include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third_party/cusplibrary)
 include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third_party/libnpy/include)
 
 # Header-only libraries CUTLASS.
-# TODO: put cutlass in third-party subdirectory as well.
-set(CUTLASS_ROOT "/home/kwu/cutlass")
-include_directories(SYSTEM ${CUTLASS_ROOT}/include)
-include_directories(SYSTEM ${CUTLASS_ROOT}/examples/common)
-include_directories(SYSTEM ${CUTLASS_ROOT}/tools/util/include)
+include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third_party/cutlass/include)
+include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third_party/cutlass/examples/common)
+include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third_party/cutlass/tools/util/include)
 
 
 # Google-Research Sputnik.
