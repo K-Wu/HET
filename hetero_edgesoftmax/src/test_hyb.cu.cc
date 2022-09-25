@@ -3,6 +3,7 @@
 #include "EdgeSoftmax_4/EdgeSoftmax_4.h"
 #include "EdgeAttention_4/EdgeAttention_4.h"
 #include "MyHyb/MyHyb.h"
+// TODO: update relative path since switch from make to cmake. Search for npy::LoadArrayFromNumpy() invocations. 1/3 in kernel.cu.cc, test_hypb.cu.cc, DGLHackKernelInit.h
 
 
 int main(){

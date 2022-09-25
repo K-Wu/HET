@@ -1,6 +1,6 @@
 #pragma once
 #include "DGLHackKernel.h"
-
+// TODO: update relative path since switch from make to cmake. Search for npy::LoadArrayFromNumpy() invocations. 1/3 in kernel.cu.cc, test_hypb.cu.cc, DGLHackKernelInit.h
 
 int FusetGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph, int64_t num_heads, int64_t num_hidden){
     typedef int32_t Idx;
@@ -78,7 +78,7 @@ int HGTBackPropGradientSMAFusionProfiling_main(MyHeteroIntegratedCSR<int32_t, st
 }
 
 
-cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(){
+cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(bool sorted=false, bool sorted_by_src=false){
     typedef int Idx;
     std::vector<unsigned long> srcs_shape;
     std::vector<unsigned long> dsts_shape;
@@ -91,11 +91,25 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(){
 
     int num_nodes = 14541;
     int num_edges = 620232;
-
-    npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.srcs.npy", srcs_shape, fortran_order, srcs_data);
-    npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.dsts.npy", dsts_shape, fortran_order, dsts_data);
-    npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.etypes.npy", etypes_shape, fortran_order, etypes_data);
+    if (sorted){
+        if (sorted_by_src){
+            npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.sorted.by_srcs_outgoing_freq.srcs.npy", srcs_shape, fortran_order, srcs_data);
+            npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.sorted.by_srcs_outgoing_freq.dsts.npy", dsts_shape, fortran_order, dsts_data);
+            npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.sorted.by_srcs_outgoing_freq.etypes.npy", etypes_shape, fortran_order, etypes_data);
+        }
+        else{
+            npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.sorted.by_etype_freq.srcs.npy", srcs_shape, fortran_order, srcs_data);
+            npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.sorted.by_etype_freq.dsts.npy", dsts_shape, fortran_order, dsts_data);
+            npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.sorted.by_etype_freq.etypes.npy", etypes_shape, fortran_order, etypes_data);
+        }
+    }
+    else{
+        npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.srcs.npy", srcs_shape, fortran_order, srcs_data);
+        npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.dsts.npy", dsts_shape, fortran_order, dsts_data);
+        npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.etypes.npy", etypes_shape, fortran_order, etypes_data);
+    }
     cusp::coo_matrix<Idx, Idx, cusp::host_memory> coo_matrix_h(num_nodes, num_nodes, srcs_data.size());
+    // in this step, the raw data in int64_t is implicitly converted to the target int32_t Idx type
     for (int64_t i = 0; i < srcs_data.size(); i++) {
         coo_matrix_h.row_indices[i] = srcs_data[i];
         coo_matrix_h.column_indices[i] = dsts_data[i];
@@ -104,7 +118,9 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(){
     return coo_matrix_h;
 }
 
-cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(){
+
+
+cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(bool sorted=false){
     typedef int Idx;
     std::vector<unsigned long> srcs_shape;
     std::vector<unsigned long> dsts_shape;
@@ -117,10 +133,17 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(){
 
     int num_nodes = 2500604;
     int num_edges = 16109182;
-
-    npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.coo.srcs.npy", srcs_shape, fortran_order, srcs_data);
-    npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.coo.dsts.npy", dsts_shape, fortran_order, dsts_data);
-    npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.coo.etypes.npy", etypes_shape, fortran_order, etypes_data);
+    // num_relationship: 535
+    if (sorted){
+        npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.sorted.coo.srcs.npy", srcs_shape, fortran_order, srcs_data);
+        npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.sorted.coo.dsts.npy", dsts_shape, fortran_order, dsts_data);
+        npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.sorted.coo.etypes.npy", etypes_shape, fortran_order, etypes_data);
+    }
+    else{
+        npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.coo.srcs.npy", srcs_shape, fortran_order, srcs_data);
+        npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.coo.dsts.npy", dsts_shape, fortran_order, dsts_data);
+        npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.coo.etypes.npy", etypes_shape, fortran_order, etypes_data);
+    }
     cusp::coo_matrix<Idx, Idx, cusp::host_memory> coo_matrix_h(num_nodes, num_nodes, srcs_data.size());
     for (int64_t i = 0; i < srcs_data.size(); i++) {
         coo_matrix_h.row_indices[i] = srcs_data[i];

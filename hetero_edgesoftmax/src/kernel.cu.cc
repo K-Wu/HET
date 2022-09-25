@@ -5,6 +5,8 @@
 // TODO: update the relative path to dataset to reflect the changes from makefile build system to cmake
 // TODO: update the msvc project file to reflect the changes due to switch from makefile build system to cmake
 // TODO: add cutlass into third-party folder
+// TODO: update relative path since switch from make to cmake. Search for npy::LoadArrayFromNumpy() invocations. 1/3 in kernel.cu.cc, test_hypb.cu.cc, DGLHackKernelInit.h
+
 
 struct identity_firstfloat
 {

@@ -22,13 +22,13 @@ HEADER_DEPS := $(HEADER_OBJS:.o=.d)
 # ACTION: set cutlass path here
 # TODO: ACTION: set sputnik path here 
 #CUTLASS_ROOT = /home/ubuntu/cutlass
-CUTLASS_ROOT = /home/kwu/cutlass
-SPUTNIK_INSTALL_ROOT = /home/kwu/sputnik/build/install
-INCL_DIRS := ./include ../third_party/cusplibrary ../third_party/libnpy/include $(CUTLASS_ROOT)/include $(CUTLASS_ROOT)/examples/common $(CUTLASS_ROOT)/tools/util/include $(SPUTNIK_INSTALL_ROOT)/include
+#CUTLASS_ROOT = /home/kwu/cutlass
+#SPUTNIK_INSTALL_ROOT = /home/kwu/sputnik/build/install
+INCL_DIRS := ./include ../third_party/cusplibrary ../third_party/libnpy/include ../third_party/cutlass/include ../third_party/cutlass/examples/common ../third_party/cutlass/tools/util/include# $(SPUTNIK_INSTALL_ROOT)/include
 #
 #$(FREESTAND_DIR)/include 
 INC_FLAGS := $(addprefix -I,$(INCL_DIRS))
-LDFLAGS :=  -lcurand -L$(SPUTNIK_INSTALL_ROOT)/libsputnik.so -llibsputnik
+LDFLAGS :=  -lcurand# -L$(SPUTNIK_INSTALL_ROOT)/libsputnik.so -llibsputnik
 CPPFLAGS ?= $(INC_FLAGS) -Wall -pthread -MMD -MP -shared -fPIC -std=c++17 -O3 -mavx -ftree-vectorize -fopt-info-vec
 CUDAFLAGS = $(INC_FLAGS) -maxrregcount 128 -res-usage -g -lineinfo --restrict --extended-lambda -std=c++17 -O3 -DCUDA -DNOT_IMPL -arch=sm_70 -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70
 # -opt-info inline -res-usage

@@ -25,6 +25,7 @@
 // #include "sputnik_test_discovery/spmm/spmm_config.h"
 // #include "sputnik_test_discovery/test_utils.h"
 
+#include "DGLHackKernel/DGLHackKernel.h"
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -121,6 +122,13 @@ void TestFn(FloatSpmmFn spmm_fn, SpmmTest<Problem> *obj) {
   // With the addition of the reverse offset memory alignment trick we
   // no longer need to pad rows of the sparse matrix to use vector memory
   // instruction.
+
+  cusp::csr_matrix<int, int, cusp::host_memory> fb15k237_graph = LoadFB15k237Data(false, false);
+  cusp::csr_matrix<int, int, cusp::host_memory> fb15k237_graph_sorted_by_srcs = LoadFB15k237Data(true, true);
+
+  RGCNLayer1Profiling_main(fb15k237_graph, 32, 32);
+  RGCNLayer1Profiling_main(fb15k237_graph_sorted_by_srcs, 32, 32);
+
   const int kRowPadding = 0;
 
   // Create the sparse matrix on cpu & gpu.
