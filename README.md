@@ -16,7 +16,7 @@ We need to set BUILD_TEST and BUILD_BENCHMARK as they will be passed on to sub-r
 ```
 mkdir build
 cd build
-cmake .. -DCUDA_ARCHS="70;75" -DBUILD_TEST=ON -DBUILD_BENCHMARK=ON
+cmake .. -DCUDA_ARCHS="70;75" -DBUILD_TEST=ON -DBUILD_BENCHMARK=ON -DBUILD_GENERATED=ON
 ```
 
 for debugging purpose, you may invoke the following command after cmake configuration.
