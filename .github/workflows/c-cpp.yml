@@ -27,7 +27,7 @@ jobs:
     # - run: echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
     - run: nvcc -V
     - name: install glog
-      run: apt-get install -y libgflags-dev libgoogle-glog-dev
+      run: sudo apt-get install -y libgflags-dev libgoogle-glog-dev
     - name: make
       run: |
         mkdir build
