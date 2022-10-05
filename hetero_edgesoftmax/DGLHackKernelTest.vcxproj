@@ -41,11 +41,11 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(ProjectDir)\cusplibrary;$(ProjectDir)\libnpy\include;$(ProjectDir)\include</IncludePath>
+    <IncludePath>$(ProjectDir)\..\third_party\cusplibrary;$(ProjectDir)\..\third_party\libnpy\include;$(ProjectDir)\include</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(ProjectDir)\cusplibrary;$(ProjectDir)\libnpy\include;$(ProjectDir)\include</IncludePath>
+    <IncludePath>$(ProjectDir)\..\third_party\cusplibrary;$(ProjectDir)\..\third_party\libnpy\include;$(ProjectDir)\include</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -87,7 +87,7 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <CudaCompile Include="src\test_DGLHackKernel.cu" />
+    <CudaCompile Include="src\test_DGLHackKernel.cu.cc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
