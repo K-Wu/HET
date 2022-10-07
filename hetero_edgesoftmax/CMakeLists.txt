@@ -99,6 +99,16 @@ set_source_files_properties(${HETEROEDGESOFTMAX_TEST_CUBLAS_CU_CC_CUDA_SRCS} PRO
 add_executable(test_compiler_discover_cublas_cu_cc ${HETEROEDGESOFTMAX_TEST_CUBLAS_CU_CC_SRCS})
 target_link_libraries(test_compiler_discover_cublas_cu_cc ${HETEROEDGESOFTMAX_LIBS})
 
+# build test_compiler_discover_cublaslt.cu.cc
+set(HETEROEDGESOFTMAX_TEST_CUBLASLT_CU_CC_SRCS)
+list(APPEND HETEROEDGESOFTMAX_TEST_CUBLASLT_CU_CC_SRCS ${HETEROEDGESOFTMAX_INCLUDE_FILES})
+list(APPEND HETEROEDGESOFTMAX_TEST_CUBLASLT_CU_CC_SRCS "src/test_compiler_discover_cublaslt.cu.cc")
+set(HETEROEDGESOFTMAX_TEST_CUBLASLT_CU_CC_CUDA_SRCS ${HETEROEDGESOFTMAX_TEST_CUBLASLT_CU_CC_SRCS})
+list(FILTER HETEROEDGESOFTMAX_TEST_CUBLASLT_CU_CC_CUDA_SRCS INCLUDE REGEX "\.cu\.cc")
+set_source_files_properties(${HETEROEDGESOFTMAX_TEST_CUBLASLT_CU_CC_CUDA_SRCS} PROPERTIES LANGUAGE CUDA)  
+add_executable(test_compiler_discover_cublaslt_cu_cc ${HETEROEDGESOFTMAX_TEST_CUBLASLT_CU_CC_SRCS})
+target_link_libraries(test_compiler_discover_cublaslt_cu_cc ${HETEROEDGESOFTMAX_LIBS})
+
 
 # build test_DGLHackHGTBackwardFusion.cu.cc
 set(HETEROEDGESOFTMAX_TEST_DGLHACKHGTBACKWARDFUSION_CU_CC_SRCS)
