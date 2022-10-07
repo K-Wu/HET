@@ -2,7 +2,7 @@
 #include "DGLHackKernel.h"
 // TODO: update relative path since switch from make to cmake. Search for npy::LoadArrayFromNumpy() invocations. 1/3 in kernel.cu.cc, test_hypb.cu.cc, DGLHackKernelInit.h
 
-int FusetGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph, int64_t num_heads, int64_t num_hidden){
+int FusedGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph, int64_t num_heads, int64_t num_hidden){
     typedef int32_t Idx;
     typedef float DType;
 
@@ -40,7 +40,7 @@ int FusetGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph, 
     float slope=0.2;
 
     FusedGatKernelImpl<Idx, DType>(incsr, feat_src, el, er, sum, exp, ret, slope);
-    // TODO: check if transpsoed eid is needed here
+    // TODO: check if transposed eid is needed here
     BackwardFusedGatKernelImpl<Idx, DType, true>(outcsr, feat_src, el, er, sum, exp, ret, grad_out, grad_feat_src, grad_el, grad_er, slope);
     BackwardFusedGatKernelImpl<Idx, DType, false>(outcsr, feat_src, el, er, sum, exp, ret, grad_out, grad_feat_src, grad_el, grad_er, slope);
     return 0;
@@ -327,6 +327,7 @@ int _HGTExperimental_main(MySegmentCSR<int, std::allocator<int>, MyHeteroSeparat
     return 0;
 }
 
+// profiling involve both forward and backward in this function
 int _RGCNLayer1Profiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph, int64_t in_feat, int64_t out_feat, bool flagUseMyHyb, bool flagCheckCorrect){
     typedef int32_t Idx;
     typedef float DType;

@@ -49,6 +49,16 @@
 // TODO: extract this kernel mysgemm_ into template specialization
 // constant static __device__ class function is allowed by CUDA spec https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#const-variables
 
+template<bool dest_node_index_unique_flag, int OUT_DIM>
+__device__ __forceinline__ static float GetBEle(float* B, int *dest_node_index_unique, int K, int idx_head, int row, int col){
+    if constexpr (dest_node_index_unique_flag){
+        return B[(idx_head * K) + (row) + (dest_node_index_unique[col]) * OUT_DIM];
+    }
+    else{
+        return B[(idx_head * K) + (row) + (col) * OUT_DIM];
+    }   
+}
+
 
 __global__ void EdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel(float4 *__restrict__ outEdges, int nnz, int *__restrict__ matCols, int *__restrict__ matRows, int *__restrict__ matRelation,
                                                                                             float *__restrict__ node_input_data, float **__restrict__ intermediate_node_vect_per_relation, int **__restrict__ dest_node_to_unique_index_per_relation)
@@ -100,10 +110,10 @@ __global__ void EdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemedia
         }
     }
 }
-template <int TILE_SZ_A, int TILE_SZ_B, int OUT_DIM, int NUM_HEADS>
+template <int TILE_SZ_A, int TILE_SZ_B, int OUT_DIM, int NUM_HEADS, bool dest_node_index_unique_flag>
 class mysgemm_functor
 {
-public:
+public:    
     __device__   __forceinline__ static  void exec_function(int m, int n, int k, float *A, float *B, float *C, int *dest_node_index_unique, int BcolBias)
     {
         assert(0&&"not implemented");
@@ -111,8 +121,8 @@ public:
     }
 };
 
-template <int OUT_DIM, int NUM_HEADS>
-class mysgemm_functor<512, 32, OUT_DIM, NUM_HEADS>
+template <int OUT_DIM, int NUM_HEADS, bool dest_node_index_unique_flag>
+class mysgemm_functor<512, 32, OUT_DIM, NUM_HEADS, dest_node_index_unique_flag>
 {
 public:
     __device__ __forceinline__ static void exec_function(int m, int n, int k, float *A, float *B, float *C, int *dest_node_index_unique, int BcolBias)
@@ -171,7 +181,6 @@ public:
 
 // Macros for accessing flattened matrices
 #define A(idx_head, row, col) A[(idx_head * K) + (row) + (col)*OUT_DIM]
-#define B(idx_head, row, col) B[(idx_head * K) + (row) + (dest_node_index_unique[col]) * OUT_DIM]
 #define C(idx_head, row, col) C[(idx_head * K) + (row) + (col)*OUT_DIM]
 
         __shared__ float shmem[2 /*double buffering*/][TILE_NUM_HEAD][TILE_SZ_B][8];
@@ -193,8 +202,8 @@ public:
         int shdmemLDBrowIdx = 0 /*i*/ * 8 + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8);
         int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8);
         int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
-        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < K && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
-        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 16][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < K && shdmemLDBcolIdx + 16 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx + 16) : 0.0f;
+        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < K && shdmemLDBcolIdx < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, K,shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
+        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 16][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < K && shdmemLDBcolIdx + 16 < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, K,shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx + 16) : 0.0f;
 
         __syncthreads();
 
@@ -255,8 +264,8 @@ public:
             int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8);
             int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
 
-            float next_iter_shmem_val_0 = (shdmemLDBrowIdx + 8 < K && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx) : 0.0f;
-            float next_iter_shmem_val_2 = (shdmemLDBrowIdx + 8 < K && shdmemLDBcolIdx + 16 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 16) : 0.0f;
+            float next_iter_shmem_val_0 = (shdmemLDBrowIdx + 8 < K && shdmemLDBcolIdx < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, K, shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx)  : 0.0f;
+            float next_iter_shmem_val_2 = (shdmemLDBrowIdx + 8 < K && shdmemLDBcolIdx + 16 < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, K,shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 16) : 0.0f;
 
             // compute C
             if (ArowIdx < OUT_DIM)
@@ -330,13 +339,12 @@ public:
         // before doing the computation.  This approach seems to be slightly
         // faster than the alternative.
 #undef A
-#undef B
 #undef C
     }
 };
 
-template <int OUT_DIM, int NUM_HEADS>
-class mysgemm_functor<256, 8, OUT_DIM, NUM_HEADS>
+template <int OUT_DIM, int NUM_HEADS, bool dest_node_index_unique_flag>
+class mysgemm_functor<256, 8, OUT_DIM, NUM_HEADS, dest_node_index_unique_flag>
 {
 public:
     __device__ __forceinline__ static void exec_function(int m, int n, int k, float *A, float *B, float *C, int *dest_node_index_unique, int BcolBias)
@@ -393,7 +401,6 @@ public:
 
 // Macros for accessing flattened matrices
 #define A(idx_head, row, col) A[(idx_head * k) + (row) + (col)*m]
-#define B(idx_head, row, col) B[(idx_head * k) + (row) + (dest_node_index_unique[col]) * m]
 #define C(idx_head, row, col) C[(idx_head * k) + (row) + (col)*m]
 
         __shared__ float shmem[2 /*double buffering*/][TILE_NUM_HEAD][TILE_SZ_B][TILE_SZ_RATIO / TILE_NUM_HEAD];
@@ -406,7 +413,7 @@ public:
         int shdmemLDBrowIdx = 0 /*i*/ * TILE_SZ_RATIO / TILE_NUM_HEAD + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD);
         int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD);
         int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
-        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
+        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
         __syncthreads();
         for (int i = 0; i < (k + TILE_SZ_RATIO / TILE_NUM_HEAD - 1) / (TILE_SZ_RATIO / TILE_NUM_HEAD); i++)
         {
@@ -440,7 +447,7 @@ public:
             int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD);
             int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
 
-            float next_iter_shmem_val = (shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD < k && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD, shdmemLDBcolIdx) : 0.0f;
+            float next_iter_shmem_val = (shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD < k && shdmemLDBcolIdx < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD, shdmemLDBcolIdx) : 0.0f;
 
             // compute C
             if (ArowIdx < m)
@@ -471,13 +478,12 @@ public:
         // before doing the computation.  This approach seems to be slightly
         // faster than the alternative.
 #undef A
-#undef B
 #undef C
     }
 };
 
-template <int OUT_DIM, int NUM_HEADS>
-class mysgemm_functor<256, 32, OUT_DIM, NUM_HEADS>
+template <int OUT_DIM, int NUM_HEADS, bool dest_node_index_unique_flag>
+class mysgemm_functor<256, 32, OUT_DIM, NUM_HEADS, dest_node_index_unique_flag>
 {
 public:
     __device__ __forceinline__ static void exec_function(int m, int n, int k, float *A, float *B, float *C, int *dest_node_index_unique, int BcolBias)
@@ -534,7 +540,6 @@ public:
 
 // Macros for accessing flattened matrices
 #define A(idx_head, row, col) A[(idx_head * k) + (row) + (col)*m]
-#define B(idx_head, row, col) B[(idx_head * k) + (row) + (dest_node_index_unique[col]) * m]
 #define C(idx_head, row, col) C[(idx_head * k) + (row) + (col)*m]
 
         __shared__ float shmem[2 /*double buffering*/][TILE_NUM_HEAD][TILE_SZ_B][8];
@@ -549,10 +554,10 @@ public:
         int shdmemLDBrowIdx = 0 /*i*/ * 8 + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8);
         int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8);
         int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
-        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
-        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 8][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx + 8 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx + 8) : 0.0f;
-        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 16][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx + 16 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx + 16) : 0.0f;
-        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 24][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx + 24 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx + 24) : 0.0f;
+        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
+        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 8][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx + 8 < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx + 8) : 0.0f;
+        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 16][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx + 16 < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx + 16) : 0.0f;
+        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 24][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx + 24 < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx + 24) : 0.0f;
 
         __syncthreads();
         for (int i = 0; i < (k + 8 - 1) / (8); i++)
@@ -587,10 +592,10 @@ public:
             int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8);
             int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
 
-            float next_iter_shmem_val_0 = (shdmemLDBrowIdx + 8 < k && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx) : 0.0f;
-            float next_iter_shmem_val_1 = (shdmemLDBrowIdx + 8 < k && shdmemLDBcolIdx + 8 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 8) : 0.0f;
-            float next_iter_shmem_val_2 = (shdmemLDBrowIdx + 8 < k && shdmemLDBcolIdx + 16 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 16) : 0.0f;
-            float next_iter_shmem_val_3 = (shdmemLDBrowIdx + 8 < k && shdmemLDBcolIdx + 24 < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 24) : 0.0f;
+            float next_iter_shmem_val_0 = (shdmemLDBrowIdx + 8 < k && shdmemLDBcolIdx < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx) : 0.0f;
+            float next_iter_shmem_val_1 = (shdmemLDBrowIdx + 8 < k && shdmemLDBcolIdx + 8 < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 8) : 0.0f;
+            float next_iter_shmem_val_2 = (shdmemLDBrowIdx + 8 < k && shdmemLDBcolIdx + 16 < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 16) : 0.0f;
+            float next_iter_shmem_val_3 = (shdmemLDBrowIdx + 8 < k && shdmemLDBcolIdx + 24 < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 24) : 0.0f;
 
             // compute C
             if (ArowIdx < m)
@@ -624,13 +629,12 @@ public:
         // before doing the computation.  This approach seems to be slightly
         // faster than the alternative.
 #undef A
-#undef B
 #undef C
     }
 };
 
-template <int OUT_DIM, int NUM_HEADS>
-class mysgemm_functor<128, 16, OUT_DIM, NUM_HEADS>
+template <int OUT_DIM, int NUM_HEADS, bool dest_node_index_unique_flag>
+class mysgemm_functor<128, 16, OUT_DIM, NUM_HEADS, dest_node_index_unique_flag>
 {
 public:
     __device__ __forceinline__ static void exec_function(int m, int n, int k, float *A, float *B, float *C, int *dest_node_index_unique, int BcolBias)
@@ -687,7 +691,6 @@ public:
 
 // Macros for accessing flattened matrices
 #define A(idx_head, row, col) A[(idx_head * k) + (row) + (col)*m]
-#define B(idx_head, row, col) B[(idx_head * k) + (row) + (dest_node_index_unique[col]) * m]
 #define C(idx_head, row, col) C[(idx_head * k) + (row) + (col)*m]
         __shared__ float shmem[TILE_NUM_HEAD][TILE_SZ_RATIO / TILE_NUM_HEAD][TILE_SZ_B];
 
@@ -722,7 +725,7 @@ public:
             int shdmemLDBrowIdx = i * TILE_SZ_RATIO / TILE_NUM_HEAD + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD);
             int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD);
             int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
-            shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
+            shmem[threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
 
             __syncthreads();
             // compute C
@@ -753,13 +756,12 @@ public:
         // before doing the computation.  This approach seems to be slightly
         // faster than the alternative.
 #undef A
-#undef B
 #undef C
     }
 };
 
-template <int OUT_DIM, int NUM_HEADS>
-class mysgemm_functor<128, 8, OUT_DIM, NUM_HEADS>
+template <int OUT_DIM, int NUM_HEADS, bool dest_node_index_unique_flag>
+class mysgemm_functor<128, 8, OUT_DIM, NUM_HEADS, dest_node_index_unique_flag>
 {
 public:
     __device__ __forceinline__ static void exec_function(int m, int n, int k, float *A, float *B, float *C, int *dest_node_index_unique, int BcolBias)
@@ -816,7 +818,6 @@ public:
 
 // Macros for accessing flattened matrices
 #define A(idx_head, row, col) A[(idx_head * k) + (row) + (col)*m]
-#define B(idx_head, row, col) B[(idx_head * k) + (row) + (dest_node_index_unique[col]) * m]
 #define C(idx_head, row, col) C[(idx_head * k) + (row) + (col)*m]
         __shared__ float shmem[2 /*double buffering*/][TILE_NUM_HEAD][TILE_SZ_B][TILE_SZ_RATIO / TILE_NUM_HEAD];
 
@@ -827,7 +828,7 @@ public:
         int shdmemLDBrowIdx = 0 /*i*/ * TILE_SZ_RATIO / TILE_NUM_HEAD + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD);
         int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD);
         int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
-        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
+        shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD)][(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (TILE_SZ_RATIO / TILE_NUM_HEAD)] = (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx, shdmemLDBcolIdx) : 0.0f;
         __syncthreads();
         for (int i = 0; i < (k + TILE_SZ_RATIO / TILE_NUM_HEAD - 1) / (TILE_SZ_RATIO / TILE_NUM_HEAD); i++)
         {
@@ -861,7 +862,7 @@ public:
             int shdmemLDBcolIdx = /*blockIdx.x * TILE_SZ_B*/ BcolBias + (threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (TILE_SZ_RATIO / TILE_NUM_HEAD);
             int shdmemLDBheadIdx = blockIdx.y * TILE_NUM_HEAD + threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD);
 
-            float next_iter_shmem_val = (shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD < k && shdmemLDBcolIdx < n) ? B(shdmemLDBheadIdx, shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD, shdmemLDBcolIdx) : 0.0f;
+            float next_iter_shmem_val = (shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD < k && shdmemLDBcolIdx < n) ? GetBEle<dest_node_index_unique_flag, OUT_DIM>(B, dest_node_index_unique, k,shdmemLDBheadIdx, shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD, shdmemLDBcolIdx) : 0.0f;
 
             // compute C
             if (ArowIdx < m)
@@ -892,7 +893,6 @@ public:
         // before doing the computation.  This approach seems to be slightly
         // faster than the alternative.
 #undef A
-#undef B
 #undef C
         // refactor the following 4 macros soly used in this kernel into constexprs expressed in template integers
         //#undef TILE_NUM_HEAD
@@ -916,7 +916,7 @@ __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel(float 
 
     for (int node_entry_idx = beg_node_entry_idx; node_entry_idx < sizes_unique_index_to_dest_node_per_relation[relation_idx]; node_entry_idx += stride)
     {
-        mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS>::exec_function(OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx], NODE_INPUT_DIM_PER_HEAD, &relation_attention_matrices[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD], node_input_data, intermediate_node_vect[relation_idx], unique_index_to_dest_node_per_relation[relation_idx], node_entry_idx);
+        mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, true>::exec_function(OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx], NODE_INPUT_DIM_PER_HEAD, &relation_attention_matrices[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD * NODE_INPUT_DIM_PER_HEAD], node_input_data, intermediate_node_vect[relation_idx], unique_index_to_dest_node_per_relation[relation_idx], node_entry_idx);
     }
 }
 

@@ -13,6 +13,8 @@
 #include <tuple>
 #include "cuda.h"
 
+#define _HOST_DEVICE_METHOD_QUALIFIER __host__ __device__
+
 #define cuda_err_chk(ans)                     \
     {                                         \
         gpuAssert((ans), __FILE__, __LINE__); \

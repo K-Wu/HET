@@ -1,7 +1,30 @@
 #pragma once
 #include "DGLHackKernel.h"
 
+// TODO: the layer 0 and 1 may ends with bias and activation
+// the referential implementation from seastar
 
+template<typename Idx, typename DType>
+__global__ void RgcnLayer0KernelImpl(Idx* ranges, Idx* src_ids, Idx* eids, Idx* types, DType* weight, DType* norm, DType* ret, Idx num_nodes, Idx feat_len, Idx ntypes) {
+    if (blockIdx.x < num_nodes) {
+        Idx beg = __ldg(ranges + blockIdx.x);
+        Idx end = __ldg(ranges + blockIdx.x + 1);
+        Idx tx = threadIdx.x;
+        for (;tx<feat_len; tx += blockDim.x) {
+            DType agg_val = 0.;
+            for(;beg<end;beg++) {
+                Idx src_id = __ldg(src_ids + beg);
+                Idx eid = __ldg(eids + beg);
+                Idx type_id = __ldg(types + beg);
+                DType w = __ldg(weight + type_id*ntypes*feat_len + src_id*feat_len + tx);
+                DType n = __ldg(norm + eid);
+                agg_val += w * n;
+                //printf("w:%f norm:%f agg_val:%f\n", w, n, agg_val);
+            }
+            ret[blockIdx.x*feat_len + tx] = agg_val;
+        }
+    }
+}
 
 // bgs:
 template<typename Idx, typename DType>
@@ -41,14 +64,17 @@ __global__ void RgcnLayer1KernelImpl(const Idx* ranges,
     }
 }
 
+
+// the referential implementation from seastar
 template </*int XPU, */typename Idx, typename DType>
-void RgcnLayer1Impl(
+void _RgcnLayerImpl(
     //GraphRef graph,
     MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> weight,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> norm,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> ret){
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> ret,
+    bool layer1_flag){
         //LOG(INFO) << "Calling implementation of rgn layer 1 forward";
         //assert(csr.IsSortedByEdgeType_CPU());
         //typedef int32_t Idx;
@@ -75,19 +101,49 @@ void RgcnLayer1Impl(
         // Idx num_edges = eids->shape[0];
         Idx num_nodes = csr.num_rows;
         Idx num_edges = csr.col_idx.size();
-        Idx ntypes = weight.shape[0];
-        Idx feat_len_y = weight.shape[1];
-        Idx feat_len_x = weight.shape[2];
         int nblks = num_nodes;
-        int nthrs = feat_len_y * feat_len_x;
         //auto* thr_entry = runtime::CUDAThreadEntry::ThreadLocal();
         cuda_err_chk(cudaDeviceSynchronize());
         std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+        if (layer1_flag){
+        Idx ntypes = weight.shape[0];
+        Idx feat_len_y = weight.shape[1];
+        Idx feat_len_x = weight.shape[2];
+        int nthrs = feat_len_y * feat_len_x;
         RgcnLayer1KernelImpl<Idx, DType><<<nblks, nthrs/*, 0, thr_entry->stream*/>>>
             (range_data, ids_data, eids_data, typeids_data, hidden_data, weight_data, norm_data, ret_data, num_nodes, feat_len_y, feat_len_x, ntypes);
+        }
+        else {
+        Idx ntypes = weight.shape[1];
+        Idx feat_len = weight.shape[2];
+        int nthrs = feat_len;
+        RgcnLayer0KernelImpl<Idx, DType><<<nblks, nthrs/*, 0, thr_entry->stream*/>>>
+            (range_data, ids_data, eids_data, typeids_data, weight_data, norm_data, ret_data, num_nodes, feat_len, ntypes);
+        }
         cuda_err_chk(cudaPeekAtLastError());
         cuda_err_chk(cudaDeviceSynchronize());
         std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
         std::cout << "RGCN Layer 1 forward time: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " ms"<<std::endl;
 
     }
+
+template </*int XPU, */typename Idx, typename DType>
+void RgcnLayer0Impl(
+    //GraphRef graph,
+    MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> weight,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> norm,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> ret){
+    _RgcnLayerImpl<Idx, DType>(csr, MySimpleNDArray<DType, thrust::device_allocator<DType>>({},nullptr), weight, norm, ret, false);
+}
+
+template </*int XPU, */typename Idx, typename DType>
+void RgcnLayer1Impl(
+    //GraphRef graph,
+    MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> weight,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> norm,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> ret){
+    _RgcnLayerImpl<Idx, DType>(csr, hidden, weight, norm, ret, true);
+}

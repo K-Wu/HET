@@ -11,8 +11,8 @@
 #include "FusedGAT.h"
 #include "FusedGATBackward.h"
 
-#include "RGCNLayer1.h"
-#include "RGCNLayer1Backward.h"
+#include "RGCNLayers.h"
+#include "RGCNLayersBackward.h"
 #include "RGCNLayer1MyHYB.h"
 #include "RGCNLayer1BackwardMyHYB.h"
 #include "HGTExperimental.h"

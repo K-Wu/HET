@@ -6,6 +6,9 @@
 #include <thrust/random.h>
 
 // TODO: implement transpose (probably using permutation functionality if provided by thrust) and padding.
+// NB: destruction where memory is reclaimed should be taken care of by thrust::detail::vector_base
+// NB: pass-by-value arguments are deeply copied， so we should pass by reference
+// TODO: switch all MySimpleNDArray argument passage to pass-by-reference
 template <typename DType, typename Alloc>
 class MySimpleNDArray{
 public:
