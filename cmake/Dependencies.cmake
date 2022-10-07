@@ -8,7 +8,7 @@ include(cmake/Cuda.cmake)
 #cuda_find_library(CUDART_LIBRARY cudart_static)
 #cuda_find_library(CUBLAS_LIBRARY cublas_static)
 #cuda_find_library(CUSPARSE_LIBRARY cusparse_static)
-list(APPEND HETEROEDGESOFTMAX_LIBS "cudart_static;cublas_static;cusparse_static;culibos;cublasLt_static")
+list(APPEND HETEROEDGESOFTMAX_LIBS "cudart_static;cublas_static;cusparse_static;cublasLt_static;culibos")
 list(APPEND HETEROEDGESOFTMAX_LIBS "curand")
 
 # Google Glog.
