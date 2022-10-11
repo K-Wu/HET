@@ -160,11 +160,11 @@ void RgcnLayer1BackwardImpl(
     MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_out,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_hidden,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_weight) {
-  _RgcnLayerBackwardImpl<Idx, DType>(
-      transposed_csr, hidden, weight, norm, grad_out, grad_hidden, grad_weight,
-      MySimpleNDArray<DType, thrust::device_allocator<DType>>(
-          std::vector<int64_t>({})),
-      true);
+  MySimpleNDArray<DType, thrust::device_allocator<DType>> ret_dummy(
+      std::vector<int64_t>({}));
+  _RgcnLayerBackwardImpl<Idx, DType>(transposed_csr, hidden, weight, norm,
+                                     grad_out, grad_hidden, grad_weight,
+                                     ret_dummy, true);
 }
 
 template </*int XPU, */ typename Idx, typename DType>
@@ -175,16 +175,16 @@ void RgcnLayer0BackwardImpl(
     MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_out,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> &norm,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> &ret) {
-  _RgcnLayerBackwardImpl<Idx, DType>(
-      transposed_csr,
-      MySimpleNDArray<DType, thrust::device_allocator<DType>>(
-          std::vector<int64_t>({})),
-      MySimpleNDArray<DType, thrust::device_allocator<DType>>(
-          std::vector<int64_t>({})),
-      norm, grad_out,
-      MySimpleNDArray<DType, thrust::device_allocator<DType>>(
-          std::vector<int64_t>({})),
-      MySimpleNDArray<DType, thrust::device_allocator<DType>>(
-          std::vector<int64_t>({})),
-      ret, false);
+  MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden_dummy(
+      std::vector<int64_t>({}));
+  MySimpleNDArray<DType, thrust::device_allocator<DType>> weight_dummy(
+      std::vector<int64_t>({}));
+  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_hidden_dummy(
+      std::vector<int64_t>({}));
+  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_weight_dummy(
+      std::vector<int64_t>({}));
+
+  _RgcnLayerBackwardImpl<Idx, DType>(transposed_csr, hidden_dummy, weight_dummy,
+                                     norm, grad_out, grad_hidden_dummy,
+                                     grad_weight_dummy, ret, false);
 }
