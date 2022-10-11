@@ -11,6 +11,10 @@ include(cmake/Cuda.cmake)
 list(APPEND HETEROEDGESOFTMAX_LIBS "cudart_static;cublas_static;cusparse_static;cublasLt_static;culibos")
 list(APPEND HETEROEDGESOFTMAX_LIBS "curand")
 
+# find torch and python3-dev to build the shared library that provides pytorch API
+find_package(Torch REQUIRED)
+find_package(Python REQUIRED COMPONENTS Development)
+
 # Google Glog.
 find_package(Glog REQUIRED)
 list(APPEND HETEROEDGESOFTMAX_LIBS ${GLOG_LIBRARIES})

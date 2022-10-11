@@ -65,13 +65,13 @@ void _RgcnLayerBackwardImpl(
     // GraphRef graph,
     MyHeteroIntegratedCSR<int32_t, thrust::device_allocator<int32_t>>
         transposed_csr,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> weight,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> norm,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_out,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_hidden,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_weight,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> ret,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &hidden,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &weight,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &norm,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_out,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_hidden,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_weight,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &ret,
     bool layer1_flag) {
   // assert(csr.IsSortedByEdgeType_CPU());
   // cudaDeviceSynchronize();
@@ -122,19 +122,17 @@ void _RgcnLayerBackwardImpl(
     Idx feat_len_y = weight.shape[1];
     Idx feat_len_x = weight.shape[2];
     int nthrs = feat_len_y * feat_len_x;
-    RgcnLayer1BackwardKernelImpl
-        <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-            range_data, ids_data, eids_data, typeids_data, hidden_data,
-            weight_data, norm_data, grad_out_data, grad_hidden_data,
-            grad_weight_data, num_nodes, feat_len_y, feat_len_x, ntypes);
+    RgcnLayer1BackwardKernelImpl<<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+        range_data, ids_data, eids_data, typeids_data, hidden_data, weight_data,
+        norm_data, grad_out_data, grad_hidden_data, grad_weight_data, num_nodes,
+        feat_len_y, feat_len_x, ntypes);
   } else {
     Idx ntypes = weight.shape[1];
     Idx feat_len = ret.shape[2];
     int nthrs = feat_len;
-    RgcnLayer0BackwardKernelImpl
-        <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-            range_data, ids_data, eids_data, typeids_data, grad_out_data,
-            norm_data, ret_data, num_nodes, feat_len, ntypes);
+    RgcnLayer0BackwardKernelImpl<<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+        range_data, ids_data, eids_data, typeids_data, grad_out_data, norm_data,
+        ret_data, num_nodes, feat_len, ntypes);
   }
   // cudaDeviceSynchronize();
   // auto t2 = std::chrono::steady_clock::now();
@@ -156,15 +154,16 @@ void RgcnLayer1BackwardImpl(
     // GraphRef graph,
     MyHeteroIntegratedCSR<int32_t, thrust::device_allocator<int32_t>>
         transposed_csr,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> weight,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> norm,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_out,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_hidden,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_weight) {
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &hidden,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &weight,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &norm,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_out,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_hidden,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_weight) {
   _RgcnLayerBackwardImpl<Idx, DType>(
       transposed_csr, hidden, weight, norm, grad_out, grad_hidden, grad_weight,
-      MySimpleNDArray<DType, thrust::device_allocator<DType>>(std::vector<int64_t>({})),
+      MySimpleNDArray<DType, thrust::device_allocator<DType>>(
+          std::vector<int64_t>({})),
       true);
 }
 
@@ -173,15 +172,19 @@ void RgcnLayer0BackwardImpl(
     // GraphRef graph,
     MyHeteroIntegratedCSR<int32_t, thrust::device_allocator<int32_t>>
         transposed_csr,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_out,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> norm,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>> ret) {
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_out,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &norm,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &ret) {
   _RgcnLayerBackwardImpl<Idx, DType>(
       transposed_csr,
-      MySimpleNDArray<DType, thrust::device_allocator<DType>>(std::vector<int64_t>({})),
-      MySimpleNDArray<DType, thrust::device_allocator<DType>>(std::vector<int64_t>({})),
+      MySimpleNDArray<DType, thrust::device_allocator<DType>>(
+          std::vector<int64_t>({})),
+      MySimpleNDArray<DType, thrust::device_allocator<DType>>(
+          std::vector<int64_t>({})),
       norm, grad_out,
-      MySimpleNDArray<DType, thrust::device_allocator<DType>>(std::vector<int64_t>({})),
-      MySimpleNDArray<DType, thrust::device_allocator<DType>>(std::vector<int64_t>({})), ret,
-      false);
+      MySimpleNDArray<DType, thrust::device_allocator<DType>>(
+          std::vector<int64_t>({})),
+      MySimpleNDArray<DType, thrust::device_allocator<DType>>(
+          std::vector<int64_t>({})),
+      ret, false);
 }

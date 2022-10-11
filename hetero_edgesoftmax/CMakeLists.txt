@@ -48,6 +48,8 @@ set_source_files_properties(${HETEROEDGESOFTMAX_CUDA_SRCS} PROPERTIES LANGUAGE C
 # install(FILES "softmax/sparse_softmax.h" DESTINATION "${INSTALL_BASE}/softmax")
 # install(FILES "utils/index_format.h" DESTINATION "${INSTALL_BASE}/utils")
 
+
+
 ##
 ### build the .cu.cc files in the src directory.
 ##
@@ -151,3 +153,22 @@ add_executable(test_hyb_cu_cc ${HETEROEDGESOFTMAX_TEST_HYB_CU_CC_SRCS})
 # TODO: clean up this hacky code
 set(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH} ${CMAKE_BINARY_DIR}/sputnik)
 target_link_libraries(test_hyb_cu_cc ${HETEROEDGESOFTMAX_LIBS})
+
+
+
+# build exported to pytorch
+# partially from https://stackoverflow.com/questions/68401650/how-can-i-make-a-pytorch-extension-with-cmake
+set(TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS)
+list(APPEND TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS ${HETEROEDGESOFTMAX_INCLUDE_FILES})
+list(APPEND TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS "src/export/torch/op.cu.cc")
+set(TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_CUDA_SRCS ${TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS})
+list(FILTER TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_CUDA_SRCS INCLUDE REGEX "\.cu\.cc")
+set_source_files_properties(${TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_CUDA_SRCS} PROPERTIES LANGUAGE CUDA)
+add_library(torch_hetero_edgesoftmax SHARED ${TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS})
+target_compile_features(torch_hetero_edgesoftmax PRIVATE cxx_std_14)
+target_link_libraries(torch_hetero_edgesoftmax ${HETEROEDGESOFTMAX_LIBS} ${TORCH_LIBRARIES} Python::Python)
+# Use if the default GCC version gives issues.
+# Similar syntax is used if we need better compilation flags.
+target_compile_options(torch_hetero_edgesoftmax PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-ccbin g++-9>)
+# Use a variant of this if you're on an earlier cmake than 3.18
+# target_compile_options(torch_hetero_edgesoftmax PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-gencode arch=compute_61,code=sm_61>)

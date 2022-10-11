@@ -24,7 +24,7 @@ include(cmake/Dependencies.cmake)
 # Requires C++17.
 set(CMAKE_CXX_STANDARD 17)
 
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -maxrregcount 128 -res-usage -g -lineinfo --restrict --extended-lambda -std=c++17 -O3 -DCUDA -DNOT_IMPL ")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -maxrregcount 128 -res-usage -g -lineinfo --restrict --extended-lambda -std=c++17 -O3")
 
 #if(BUILD_TEST)
 #  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSPUTNIK_BUILD_TEST")
