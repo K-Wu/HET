@@ -3,10 +3,13 @@
 #include <c10/cuda/CUDAException.h>
 #include <torch/extension.h>
 #include <torch/library.h>
-//#include "DGLHackKernel/DGLHackKernel.h"
-//#include "hetero_edgesoftmax.h"
+#include <iostream>
+#include "DGLHackKernel/DGLHackKernel.h"
+#include "hetero_edgesoftmax.h"
 
 at::Tensor dummy_warp_perspective(at::Tensor image, at::Tensor warp) {
+  std::cout << "image device: " << image.device() << std::endl;
+  std::cout << "warp device: " << warp.device() << std::endl;
   return image.clone();
 }
 
