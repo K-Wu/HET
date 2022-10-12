@@ -26,14 +26,13 @@ jobs:
     # - run: echo "Installed cuda version is: ${{steps.cuda-toolkit.outputs.cuda}}"
     # - run: echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
     - run: nvcc -V
-    - name: install glog and libpython-dev
-    # in ubuntu 20.04, by default there is only python3 installed and there is no library called libpython-dev but only libpython2-dev
-      run: sudo apt-get install -y libgflags-dev libgoogle-glog-dev libpython3-dev
+    - name: install glog
+      run: sudo apt-get install -y libgflags-dev libgoogle-glog-dev
     # there might be -DCMAKE_PREFIX_PATH=`python -c 'import torch;print(torch.utils.cmake_prefix_path)'` needed when doing cmake configure for building purpose. We ignored it here in order not to install pytorch in this simple ci test.
     - name: make
       run: |
         mkdir build
         cd build
-        cmake .. -DCUDA_ARCHS="75;80" -DBUILD_TEST=ON -DBUILD_BENCHMARK=ON -DBUILD_GENERATED=ON 
+        cmake .. -DCUDA_ARCHS="75;80" -DBUILD_TEST=ON -DBUILD_BENCHMARK=ON -DBUILD_GENERATED=ON -DBUILD_TORCH_API=OFF
         make
         make DESTDIR=./install install

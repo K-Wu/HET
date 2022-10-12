@@ -158,6 +158,7 @@ target_link_libraries(test_hyb_cu_cc ${HETEROEDGESOFTMAX_LIBS})
 
 # build exported to pytorch
 # partially from https://stackoverflow.com/questions/68401650/how-can-i-make-a-pytorch-extension-with-cmake
+if (BUILD_TORCH_API)
 set(TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS)
 list(APPEND TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS ${HETEROEDGESOFTMAX_INCLUDE_FILES})
 list(APPEND TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS "src/export/torch/op.cu.cc")
@@ -172,3 +173,4 @@ target_link_libraries(torch_hetero_edgesoftmax ${HETEROEDGESOFTMAX_LIBS} ${TORCH
 target_compile_options(torch_hetero_edgesoftmax PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-ccbin g++-9>)
 # Use a variant of this if you're on an earlier cmake than 3.18
 # target_compile_options(torch_hetero_edgesoftmax PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-gencode arch=compute_61,code=sm_61>)
+endif()

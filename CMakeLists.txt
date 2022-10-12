@@ -9,6 +9,10 @@ cmake_policy(SET CMP0104 OLD)
 ### Build options.
 ##
 # option(BUILD_TEST "Build test suite" OFF)
+option(BUILD_TEST "build sputnik test suite" ON)
+option(BUILD_BENCHMARK "build sputnik benchmark suite" ON)
+option(BUILD_GENERATED "build sputnik-based generated op code" ON)
+option(BUILD_TORCH_API "build torch api library" OFF)
 
 ##
 ### Handle Dependencies.
