@@ -103,7 +103,7 @@ def train(args):
     elif isinstance(g, DGLGraph):
         g = transform.add_self_loop(g)
 
-    n_edges = g.number_of_edges()
+    # n_edges = g.number_of_edges()
     # create model
     heads = ([args.num_heads] * args.num_layers) + [args.num_out_heads]
     model = EglGAT(g,

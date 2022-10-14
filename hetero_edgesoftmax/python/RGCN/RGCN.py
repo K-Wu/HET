@@ -25,7 +25,7 @@ from functools import partial
 # pylint: disable= no-member, arguments-differ, invalid-name
 import torch as th
 from torch import nn
-class EglRelGraphConv(nn.Module):
+class HET_EglRelGraphConv(nn.Module):
     def __init__(self,
                  in_feat,
                  out_feat,
@@ -38,7 +38,7 @@ class EglRelGraphConv(nn.Module):
                  self_loop=False,
                  dropout=0.0,
                  layer_type=0):
-        super(EglRelGraphConv, self).__init__()
+        super(HET_EglRelGraphConv, self).__init__()
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.num_rels = num_rels
@@ -76,7 +76,7 @@ class EglRelGraphConv(nn.Module):
 
         Parameters
         ----------
-        g : DGLGraph
+        g : HET_DGLGraph
             The graph.
         x : torch.Tensor
             Input node features. Could be either
@@ -111,10 +111,10 @@ class EglRelGraphConv(nn.Module):
         #t2 = time.time()
 
         if self.layer_type == 0:
-            node_repr = B.rgcn_layer0(g, weight, norm) #TODO: replace with my own rgcn_layer0
+            node_repr = B.rgcn_layer0_csr(g, weight, norm) #TODO: replace with my own rgcn_layer0
             #print('output of layer 0', node_repr)
         else:
-            node_repr = B.rgcn_layer1(g, x, weight, norm) #TODO: replace with my own rgcn_layer1
+            node_repr = B.rgcn_layer1_csr(g, x, weight, norm) #TODO: replace with my own rgcn_layer1
         #torch.cuda.synchronize()
         #t3 = time.time()
             #print('output of layer 1', node_repr)
@@ -131,10 +131,10 @@ class EglRelGraphConv(nn.Module):
         #print('rest takes:',t4-t3, 's', (t4-t3)/(t4-t1),'%')
         return node_repr
 
-class EGLRGCNModel(nn.Module):
+class HET_EGLRGCNModel(nn.Module):
     def __init__(self, num_nodes, hidden_dim, out_dim, num_rels, num_edges, num_bases, dropout, activation):
-        super(EGLRGCNModel, self).__init__()
-        self.layer1 = EglRelGraphConv(num_nodes,
+        super(HET_EGLRGCNModel, self).__init__()
+        self.layer1 = HET_EglRelGraphConv(num_nodes,
                                  hidden_dim,
                                  num_rels,
                                  num_edges,
@@ -142,7 +142,7 @@ class EGLRGCNModel(nn.Module):
                                  dropout=dropout,
                                  activation=activation,
                                  layer_type=0)
-        self.layer2 = EglRelGraphConv(hidden_dim,
+        self.layer2 = HET_EglRelGraphConv(hidden_dim,
                                  out_dim,
                                  num_rels,
                                  num_edges,
@@ -218,7 +218,7 @@ def main(args):
     #r_forward = compute_e_to_distict_t(tu_forward)
     #r_backward = compute_e_to_distict_t(tu_backward)
     #print('ratio forward:', r_forward, 'ratio_backward:', r_backward)
-    model = EGLRGCNModel(num_nodes,
+    model = HET_EGLRGCNModel(num_nodes,
                         args.hidden_size,
                         num_classes,
                         num_rels,

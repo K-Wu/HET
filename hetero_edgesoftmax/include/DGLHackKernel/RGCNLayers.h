@@ -1,6 +1,8 @@
 #pragma once
 #include "DGLHackKernel.h"
-
+// NB: A wrapper version for python api export is implemented at
+// hetero_edgesoftmax/src/export/torch/op.cu.cc. Please update accordingly
+// whenever there is update.
 // TODO: the layer 0 and 1 may ends with bias and activation
 // the referential implementation from seastar
 
