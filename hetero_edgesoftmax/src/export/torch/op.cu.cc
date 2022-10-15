@@ -58,21 +58,21 @@ void _RgcnLayerImpl_wrapper_integratedcsr(
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer0Impl_wrapper_integratedcsr(at::Tensor& csr_rowptr,
+bool RgcnLayer0Impl_wrapper_integratedcsr(at::Tensor& csr_rowptr,
                                           at::Tensor& csr_col_idx,
                                           at::Tensor& csr_eids,
                                           at::Tensor& csr_reltypes,
                                           at::Tensor& weight, at::Tensor& norm,
                                           at::Tensor& ret) {
-  at::Tensor dummy_tensor;
   // NB: graphiler, seastar by default uses int64_t
   _RgcnLayerImpl_wrapper_integratedcsr<int64_t, float>(
-      csr_rowptr, csr_col_idx, csr_eids, csr_reltypes, dummy_tensor, weight,
-      norm, ret, false);
+      csr_rowptr, csr_col_idx, csr_eids, csr_reltypes, /*dummy_tensor*/ weight,
+      weight, norm, ret, false);
+  return false;
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer1Impl_wrapper_integratedcsr(
+bool RgcnLayer1Impl_wrapper_integratedcsr(
     at::Tensor& csr_rowptr, at::Tensor& csr_col_idx, at::Tensor& csr_eids,
     at::Tensor& csr_reltypes, at::Tensor& hidden, at::Tensor& weight,
     at::Tensor& norm, at::Tensor& ret) {
@@ -80,6 +80,7 @@ void RgcnLayer1Impl_wrapper_integratedcsr(
   _RgcnLayerImpl_wrapper_integratedcsr<int64_t, float>(
       csr_rowptr, csr_col_idx, csr_eids, csr_reltypes, hidden, weight, norm,
       ret, true);
+  return false;
 }
 
 // the referential implementation from seastar
@@ -127,7 +128,7 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcsr(
   Idx num_edges = transposed_csr_col_idx.numel();
   int nblks = num_nodes;
   // auto* thr_entry = runtime::CUDAThreadEntry::ThreadLocal();
-  cuda_err_chk(cudaDeviceSynchronize());
+  // cuda_err_chk(cudaDeviceSynchronize());
   if (layer1_flag) {
     Idx ntypes = weight.size(0);
     Idx feat_len_y = weight.size(1);
@@ -150,40 +151,38 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcsr(
   // LOG(INFO) << "layer 1 backward kernel takes:" <<
   // std::chrono::duration_cast<std::chrono::milliseconds>(t2
   // -t1).count()/1000.0 << " s";
-  cuda_err_chk(cudaPeekAtLastError());
-  cuda_err_chk(cudaDeviceSynchronize());
+  // cuda_err_chk(cudaPeekAtLastError());
+  // cuda_err_chk(cudaDeviceSynchronize());
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer0BackwardImpl_wrapper_integratedcsr(
+bool RgcnLayer0BackwardImpl_wrapper_integratedcsr(
     // GraphRef graph,
     at::Tensor& transposed_csr_rowptr, at::Tensor& transposed_csr_col_idx,
     at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
     at::Tensor& grad_out, at::Tensor& norm, at::Tensor& ret) {
-  at::Tensor hidden_dummy;
-  at::Tensor weight_dummy;
-  at::Tensor grad_hidden_dummy;
-  at::Tensor grad_weight_dummy;
   // NB: graphiler, seastar by default uses int64_t
   _RgcnLayerBackwardImpl_wrapper_integratedcsr<int64_t, float>(
       transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
-      transposed_csr_reltypes, hidden_dummy, weight_dummy, norm, grad_out,
-      grad_hidden_dummy, grad_weight_dummy, ret, false);
+      transposed_csr_reltypes, /*hidden_dummy*/ ret, /*weight_dummy*/ ret, norm,
+      grad_out,
+      /*grad_hidden_dummy*/ ret, /*grad_weight_dummy*/ ret, ret, false);
+  return false;
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer1BackwardImpl_wrapper_integratedcsr(
+bool RgcnLayer1BackwardImpl_wrapper_integratedcsr(
     // GraphRef graph,
     at::Tensor& transposed_csr_rowptr, at::Tensor& transposed_csr_col_idx,
     at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
     at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
     at::Tensor& grad_out, at::Tensor& grad_hidden, at::Tensor& grad_weight) {
-  at::Tensor ret_dummy;
   // NB: graphiler, seastar by default uses int64_t
   _RgcnLayerBackwardImpl_wrapper_integratedcsr<int64_t, float>(
       transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
       transposed_csr_reltypes, hidden, weight, norm, grad_out, grad_hidden,
-      grad_weight, ret_dummy, true);
+      grad_weight, /*ret_dummy*/ grad_weight, true);
+  return false;
 }
 
 std::vector<at::Tensor> biops_tensor_info(at::Tensor& one_tensor,
@@ -281,6 +280,29 @@ std::vector<at::Tensor> transpose_csr(at::Tensor& csr_rowptr,
   return result;
 }
 
+void test_argument_takein(std::string str, bool flag) {
+  std::cout << "test_string_takein: " << str << std::endl;
+  std::cout << "test_bool_takein: " << flag << std::endl;
+}
+
+// std::vector<at::Tensor> load_fb15k237(bool sorted, bool sorted_by_src,
+// std::string data_path_prefix){
+//   cusp::csr_matrix<int, int, cusp::host_memory> fb15k237_graph =
+//   LoadFB15k237Data(sorted, sorted_by_src, data_path_prefix);
+// }
+
+// std::vector<at::Tensor> load_ogbn_wikikg2(bool sorted, std::string
+// data_path_prefix){
+//   cusp::csr_matrix<int, int, cusp::host_memory> ogbn_wikikg2_graph =
+//   LoadOGBNWikiKG2Data(sorted, data_path_prefix);
+// }
+
+// std::vector<at::Tensor> load_mag(std::string data_path_prefix){
+//   MyHeteroIntegratedCSR<int, std::allocator<int>>  mag_graph =
+//   LoadOGBN_MAG(data_path_prefix);
+
+// }
+
 TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("biops_tensor_info", biops_tensor_info);
   m.def("tensor_info", tensor_info);
@@ -291,4 +313,8 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("rgcn_layer1_backward_csr",
         RgcnLayer1BackwardImpl_wrapper_integratedcsr);
   m.def("transpose_csr", transpose_csr);
+  m.def("test_argument_takein", test_argument_takein);
+  // m.def("load_fb15k237", load_fb15k237);
+  // m.def("load_ogbn_wikikg2", load_ogbn_wikikg2);
+  // m.def("load_mag", load_mag);
 }

@@ -15,9 +15,10 @@ import numpy as np
 import time
 import torch
 import torch.nn.functional as F
-from dgl import DGLGraph
-from dgl.contrib.data import load_data
+#from dgl import DGLGraph
+#from dgl.contrib.data import load_data
 from .. import backend as B
+from .. import utils
 from functools import partial
 
 
@@ -158,13 +159,28 @@ class HET_EGLRGCNModel(nn.Module):
 
 def main(args):
     # load graph data
-    data = load_data(args.dataset, bfs_level=args.bfs_level, relabel=args.relabel)
-    num_nodes = data.num_nodes
-    num_rels = data.num_rels
-    num_classes = data.num_classes
-    labels = data.labels
-    train_idx = data.train_idx
-    test_idx = data.test_idx
+    
+    data_rowptr, data_colidx, data_reltypes, data_eids = utils.pyutils_load_fb15k237("data/MyHybData", True, True, False)
+    transposed_data_rowptr, transposed_data_colidx, transposed_data_reltypes, transposed_data_eids = utils.pyutils_load_fb15k237("data/MyHybData", True, True, True)
+    data_rowptr = th.from_numpy(data_rowptr).long()
+    data_colidx = th.from_numpy(data_colidx).long()
+    data_reltypes = th.from_numpy(data_reltypes).long()
+    data_eids = th.from_numpy(data_eids).long()
+    transposed_data_rowptr = th.from_numpy(transposed_data_rowptr).long()
+    transposed_data_colidx = th.from_numpy(transposed_data_colidx).long()
+    transposed_data_reltypes = th.from_numpy(transposed_data_reltypes).long()
+    transposed_data_eids = th.from_numpy(transposed_data_eids).long()
+    num_nodes = data_rowptr.numel()-1
+    num_rels = int(data_reltypes.max().item())+1
+
+    #TODO: argument specify num_classes, len(train_idx), len(test_idx) for now. 
+    # aifb len(labels) == 8285, num_nodes == 8285, num_relations == 91, num_edges == 66371, len(train_idx) == 140, len(test_idx) == 36, num_classes = 4
+    # mutag len(labels) == 23644, num_nodes == 23644, num_relations == 47, num_edges == 172098, len(train_idx) == 272, len(test_idx) == 68, num_classes = 2
+    # bgs len(labels) == 333845, num_nodes == 333845, num_relations == 207, num_edges == 2166243, len(train_idx) == 117, len(test_idx) == 29, num_classes = 2
+    num_classes = args.num_classes
+    labels = np.random.randint(0, num_classes, num_nodes)
+    train_idx = torch.randint(0, num_nodes, (args.train_size,))
+    test_idx = torch.randint(0, num_nodes, (args.test_size,))
 
     # split dataset into train, validate, test
     if args.validation:
@@ -177,23 +193,42 @@ def main(args):
     feats = torch.arange(num_nodes)
 
     # edge type and normalization factor
-    edge_type = torch.from_numpy(data.edge_type).long()
-    edge_norm = torch.from_numpy(data.edge_norm).unsqueeze(1).float()
+    edge_type = data_reltypes
+    edge_norm = torch.randn(data_eids.numel())
     labels = torch.from_numpy(labels).view(-1).long()
 
     # check cuda
     use_cuda = args.gpu >= 0 and torch.cuda.is_available()
     if use_cuda:
         torch.cuda.set_device(args.gpu)
+        data_rowptr = data_rowptr.cuda()
+        data_colidx = data_colidx.cuda()
+        data_reltypes = data_reltypes.cuda()
+        data_eids = data_eids.cuda()
+        transposed_data_rowptr = transposed_data_rowptr.cuda()
+        transposed_data_colidx = transposed_data_colidx.cuda()
+        transposed_data_reltypes = transposed_data_reltypes.cuda()
+        transposed_data_eids = transposed_data_eids.cuda()
         feats = feats.cuda()
         edge_type = edge_type.cuda()
         edge_norm = edge_norm.cuda()
         labels = labels.cuda()
 
     # create graph
-    g = DGLGraph()
-    g.add_nodes(num_nodes)
-    g.add_edges_with_type(data.edge_src, data.edge_dst, data.edge_type)
+    g = dict()
+    g['original']=dict()
+    g['original']['row_ptr'] = data_rowptr
+    g['original']['col_idx'] = data_colidx
+    g['original']['rel_types'] = data_reltypes
+    g['original']['eids'] = data_eids
+    
+    g['transposed']=dict()
+    g['transposed']['row_ptr'] = transposed_data_rowptr
+    g['transposed']['col_idx'] = transposed_data_colidx
+    g['transposed']['rel_types'] = transposed_data_reltypes
+    g['transposed']['eids'] = transposed_data_eids
+
+
     #tu_forward = sorted(list(zip(data.edge_src, data.edge_dst, data.edge_type)), key=lambda x : (x[1], x[2]))
     #tu_backward = sorted(list(zip(data.edge_dst, data.edge_src,  data.edge_type)), key=lambda x : (x[1], x[2]))
     #def compute_e_to_distict_t(tu):
@@ -305,6 +340,9 @@ if __name__ == '__main__':
             help="remove untouched nodes and relabel")
     parser.add_argument("--use-self-loop", default=False, action='store_true',
             help="include self feature as a special relation")
+    parser.add_argument("--train_size", type=int, default=256)
+    parser.add_argument("--test_size", type=int, default=64)
+    parser.add_argument("--num_classes", type=int, default=4)
     fp = parser.add_mutually_exclusive_group(required=False)
     fp.add_argument('--validation', dest='validation', action='store_true')
     fp.add_argument('--testing', dest='validation', action='store_false')

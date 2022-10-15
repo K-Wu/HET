@@ -3,7 +3,7 @@
 import scipy # Weird bug in new pytorch when import scipy after import torch
 import torch as th
 
-import kernels as K
+from . import kernels as K
 
 class RgcnFirstLayer(th.autograd.Function):
     @staticmethod
@@ -51,16 +51,17 @@ class RgcnFirstLayerCSR(th.autograd.Function):
     @staticmethod
     def forward(ctx, row_ptr, col_idx, eids, reltypes, weight, norm, ret):
 
-        ctx.save_for_backward(row_ptr, col_idx, eids, reltypes, weight.size(), norm)
+        ctx.save_for_backward(row_ptr, col_idx, eids, reltypes, weight, norm)
         K.rgcn_layer0_csr(row_ptr, col_idx, eids, reltypes, weight, norm, ret) 
         return ret
 
     @staticmethod
     def backward(ctx, gradout):
-        row_ptr, col_idx, eids, reltypes, weight_size, norm = ctx.saved_tensors
-        grad_weight = th.zeros(weight_size, dtype=norm.dtype, device=norm.device) 
+        row_ptr, col_idx, eids, reltypes, weight, norm = ctx.saved_tensors
+        print(weight.numel())
+        grad_weight = th.zeros_like(weight) 
         K.rgcn_layer0_backward_csr(row_ptr, col_idx, eids, reltypes, gradout, norm, grad_weight)
-        return None, grad_weight, None, None
+        return None, None, None, None, grad_weight, None, None
 
 
 def rgcn_layer0_csr(graph, weight, norm):
@@ -85,7 +86,7 @@ class RgcnSecondLayerCSR(th.autograd.Function):
         grad_x = th.zeros_like(x) 
         grad_weight = th.zeros_like(weight) 
         K.rgcn_layer1_backward_csr(row_ptr, col_idx, eids, reltypes, x, weight, norm, gradout, grad_x, grad_weight)
-        return None, grad_x, None, None, None
+        return None,None, None, None, grad_x, None, None, None
 
 def rgcn_layer1_csr(graph, x, weight, norm):
     row_ptr = graph['transposed']['row_ptr']

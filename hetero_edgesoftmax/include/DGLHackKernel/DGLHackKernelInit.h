@@ -119,7 +119,8 @@ int HGTBackPropGradientSMAFusionProfiling_main(
 }
 
 cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(
-    bool sorted = false, bool sorted_by_src = false) {
+    bool sorted = false, bool sorted_by_src = false,
+    std::string data_path_prefix = "data/MyHybData/") {
   typedef int Idx;
   std::vector<unsigned long> srcs_shape;
   std::vector<unsigned long> dsts_shape;
@@ -135,32 +136,44 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(
   if (sorted) {
     if (sorted_by_src) {
       npy::LoadArrayFromNumpy(
-          "data/MyHybData/fb15k237.coo.sorted.by_srcs_outgoing_freq.srcs.npy",
+          (data_path_prefix +
+           "fb15k237.coo.sorted.by_srcs_outgoing_freq.srcs.npy")
+              .c_str(),
           srcs_shape, fortran_order, srcs_data);
       npy::LoadArrayFromNumpy(
-          "data/MyHybData/fb15k237.coo.sorted.by_srcs_outgoing_freq.dsts.npy",
+          (data_path_prefix +
+           "fb15k237.coo.sorted.by_srcs_outgoing_freq.dsts.npy")
+              .c_str(),
           dsts_shape, fortran_order, dsts_data);
       npy::LoadArrayFromNumpy(
-          "data/MyHybData/fb15k237.coo.sorted.by_srcs_outgoing_freq.etypes.npy",
+          (data_path_prefix +
+           "fb15k237.coo.sorted.by_srcs_outgoing_freq.etypes.npy")
+              .c_str(),
           etypes_shape, fortran_order, etypes_data);
     } else {
       npy::LoadArrayFromNumpy(
-          "data/MyHybData/fb15k237.coo.sorted.by_etype_freq.srcs.npy",
+          (data_path_prefix + "fb15k237.coo.sorted.by_etype_freq.srcs.npy")
+              .c_str(),
           srcs_shape, fortran_order, srcs_data);
       npy::LoadArrayFromNumpy(
-          "data/MyHybData/fb15k237.coo.sorted.by_etype_freq.dsts.npy",
+          (data_path_prefix + "fb15k237.coo.sorted.by_etype_freq.dsts.npy")
+              .c_str(),
           dsts_shape, fortran_order, dsts_data);
       npy::LoadArrayFromNumpy(
-          "data/MyHybData/fb15k237.coo.sorted.by_etype_freq.etypes.npy",
+          (data_path_prefix + "fb15k237.coo.sorted.by_etype_freq.etypes.npy")
+              .c_str(),
           etypes_shape, fortran_order, etypes_data);
     }
   } else {
-    npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.srcs.npy", srcs_shape,
-                            fortran_order, srcs_data);
-    npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.dsts.npy", dsts_shape,
-                            fortran_order, dsts_data);
-    npy::LoadArrayFromNumpy("data/MyHybData/fb15k237.coo.etypes.npy",
-                            etypes_shape, fortran_order, etypes_data);
+    npy::LoadArrayFromNumpy(
+        (data_path_prefix + "fb15k237.coo.srcs.npy").c_str(), srcs_shape,
+        fortran_order, srcs_data);
+    npy::LoadArrayFromNumpy(
+        (data_path_prefix + "fb15k237.coo.dsts.npy").c_str(), dsts_shape,
+        fortran_order, dsts_data);
+    npy::LoadArrayFromNumpy(
+        (data_path_prefix + "fb15k237.coo.etypes.npy").c_str(), etypes_shape,
+        fortran_order, etypes_data);
   }
   cusp::coo_matrix<Idx, Idx, cusp::host_memory> coo_matrix_h(
       num_nodes, num_nodes, srcs_data.size());
@@ -175,7 +188,7 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(
 }
 
 cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(
-    bool sorted = false) {
+    bool sorted = false, std::string data_path_prefix = "data/MyHybData/") {
   typedef int Idx;
   std::vector<unsigned long> srcs_shape;
   std::vector<unsigned long> dsts_shape;
@@ -190,19 +203,25 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(
   int num_edges = 16109182;
   // num_relationship: 535
   if (sorted) {
-    npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.sorted.coo.srcs.npy",
-                            srcs_shape, fortran_order, srcs_data);
-    npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.sorted.coo.dsts.npy",
-                            dsts_shape, fortran_order, dsts_data);
-    npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.sorted.coo.etypes.npy",
-                            etypes_shape, fortran_order, etypes_data);
+    npy::LoadArrayFromNumpy(
+        (data_path_prefix + "ogbn-wikikg2.sorted.coo.srcs.npy").c_str(),
+        srcs_shape, fortran_order, srcs_data);
+    npy::LoadArrayFromNumpy(
+        (data_path_prefix + "ogbn-wikikg2.sorted.coo.dsts.npy").c_str(),
+        dsts_shape, fortran_order, dsts_data);
+    npy::LoadArrayFromNumpy(
+        (data_path_prefix + "ogbn-wikikg2.sorted.coo.etypes.npy").c_str(),
+        etypes_shape, fortran_order, etypes_data);
   } else {
-    npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.coo.srcs.npy",
-                            srcs_shape, fortran_order, srcs_data);
-    npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.coo.dsts.npy",
-                            dsts_shape, fortran_order, dsts_data);
-    npy::LoadArrayFromNumpy("data/MyHybData/ogbn-wikikg2.coo.etypes.npy",
-                            etypes_shape, fortran_order, etypes_data);
+    npy::LoadArrayFromNumpy(
+        (data_path_prefix + "ogbn-wikikg2.coo.srcs.npy").c_str(), srcs_shape,
+        fortran_order, srcs_data);
+    npy::LoadArrayFromNumpy(
+        (data_path_prefix + "ogbn-wikikg2.coo.dsts.npy").c_str(), dsts_shape,
+        fortran_order, dsts_data);
+    npy::LoadArrayFromNumpy(
+        (data_path_prefix + "ogbn-wikikg2.coo.etypes.npy").c_str(),
+        etypes_shape, fortran_order, etypes_data);
   }
   cusp::coo_matrix<Idx, Idx, cusp::host_memory> coo_matrix_h(
       num_nodes, num_nodes, srcs_data.size());
@@ -214,7 +233,8 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(
   return coo_matrix_h;
 }
 
-MyHeteroIntegratedCSR<int, std::allocator<int>> LoadOGBN_MAG() {
+MyHeteroIntegratedCSR<int, std::allocator<int>> LoadOGBN_MAG(
+    std::string data_path_prefix = "data/ogbn_mag/") {
   std::vector<unsigned long> is_about_shape;
   std::vector<unsigned long> affliated_with_shape;
   std::vector<unsigned long> citing_shape;
@@ -226,13 +246,13 @@ MyHeteroIntegratedCSR<int, std::allocator<int>> LoadOGBN_MAG() {
   std::vector<int> citing_data;
   std::vector<int> writing_data;
 
-  npy::LoadArrayFromNumpy("data/ogbn_mag/is-about_coo_1.npy", is_about_shape,
-                          fortran_order, is_about_data);
-  npy::LoadArrayFromNumpy("data/ogbn_mag/citing_coo_1.npy", citing_shape,
-                          fortran_order, citing_data);
-  npy::LoadArrayFromNumpy("data/ogbn_mag/writing_coo_1.npy", writing_shape,
-                          fortran_order, writing_data);
-  npy::LoadArrayFromNumpy("data/ogbn_mag/affliated_with_1.npy",
+  npy::LoadArrayFromNumpy((data_path_prefix + "is-about_coo_1.npy").c_str(),
+                          is_about_shape, fortran_order, is_about_data);
+  npy::LoadArrayFromNumpy((data_path_prefix + "citing_coo_1.npy").c_str(),
+                          citing_shape, fortran_order, citing_data);
+  npy::LoadArrayFromNumpy((data_path_prefix + "writing_coo_1.npy").c_str(),
+                          writing_shape, fortran_order, writing_data);
+  npy::LoadArrayFromNumpy((data_path_prefix + "affliated_with_1.npy").c_str(),
                           affliated_with_shape, fortran_order,
                           affliated_with_data);
 
