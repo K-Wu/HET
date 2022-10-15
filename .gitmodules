@@ -16,3 +16,6 @@
 [submodule "third_party/cutlass"]
 	path = third_party/cutlass
 	url = https://github.com/NVIDIA/cutlass
+[submodule "hetero_edgesoftmax/data/MyWikiKG2"]
+	path = hetero_edgesoftmax/data/MyWikiKG2
+	url = https://tony_wukun_worker:PxXRTULrXSd7w4vAXygq@bitbucket.org/tonywuk/mywikikg2_dataset
