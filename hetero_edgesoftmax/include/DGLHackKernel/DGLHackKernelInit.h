@@ -1,5 +1,5 @@
 #pragma once
-#include "DGLHackKernel.h"
+#include "DGLHackKernel/DGLHackKernel.h"
 // TODO: update relative path since switch from make to cmake. Search for
 // npy::LoadArrayFromNumpy() invocations. 1/3 in kernel.cu.cc, test_hypb.cu.cc,
 // DGLHackKernelInit.h

@@ -1,5 +1,7 @@
+#!/usr/bin/env python3
 import numpy as np
 import os
+
 def pyutils_load_fb15k237(dataset_path_prefix, sorted, sorted_by_srcs,transposed):
     transposed_prefix = "transposed." if transposed else ''
     sorted_suffix = ".sorted" if sorted else ''
@@ -22,3 +24,5 @@ def pyutils_load_wikikg2(dataset_path_prefix, sorted, sorted_by_srcs,transposed)
     edge_etypes = np.load(os.path.join(dataset_path_prefix, (transposed_prefix + "ogbn-wikikg2.coo"+sorted_suffix+".etypes.npy")), allow_pickle=True)
     edge_referential_eids = np.load(os.path.join(dataset_path_prefix, (transposed_prefix + "ogbn-wikikg2.coo"+sorted_suffix+".referential_eids.npy")), allow_pickle=True)
     return edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
+
+

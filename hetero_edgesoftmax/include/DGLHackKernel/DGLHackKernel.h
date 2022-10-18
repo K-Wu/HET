@@ -17,12 +17,14 @@
 #include "DGLHackUtils.h"
 #include "FusedGAT.h"
 #include "FusedGATBackward.h"
+#include "OpPrototyping/HGTOps.h"
+#include "OpPrototyping/RGCNOps.h"
 #include "RGCNLayer1BackwardMyHYB.h"
 #include "RGCNLayer1MyHYB.h"
-#include "RGCNLayers.h"
-#include "RGCNLayersBackward.h"
+#include "RGCNLayersBackwardKernels.cu.h"
+#include "RGCNLayersKernels.cu.h"
 
-#include "HGTBackPropGradientSmAFusion.h"
 #include "HGTExperimental.h"
+#include "HGTLayersBackwardKernels.cu.h"
 
 #include "DGLHackKernelInit.h"

@@ -2,6 +2,7 @@ x64/
 .vs/
 .vscode/
 build/
+build2/
 *.log
 *.ncu-rep
 *.do_not_use

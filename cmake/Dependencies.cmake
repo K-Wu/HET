@@ -10,6 +10,7 @@ include(cmake/Cuda.cmake)
 #cuda_find_library(CUSPARSE_LIBRARY cusparse_static)
 list(APPEND HETEROEDGESOFTMAX_LIBS "cudart_static;cublas_static;cusparse_static;cublasLt_static;culibos")
 list(APPEND HETEROEDGESOFTMAX_LIBS "curand")
+list(APPEND HETEROEDGESOFTMAX_TEST_LIBS "cudart_static;cublas_static;cusparse_static;cublasLt_static;culibos;curand")
 
 # find torch and python3-dev to build the shared library that provides pytorch API
 if (BUILD_TORCH_API)

@@ -1,5 +1,5 @@
 #pragma once
-#include "DGLHackKernel.h"
+#include "DGLHackKernel/DGLHackKernel.h"
 
 template <typename Idx, typename DType, int ELL_logical_width,
           int ELL_physical_width>

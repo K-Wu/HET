@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # From seastar-paper-version\exp\rgcn\seastar\train.py
 # the paper copy of seastar can be obtained from www.cse.cuhk.edu.hk/~jcheng/papers/seastar_eurosys21.pdf
 """
@@ -158,8 +159,9 @@ class HET_EGLRGCNModel(nn.Module):
         return h
 
 def main(args):
+
+    # TODO: add args for dataset, and refactor these following lines into dedicated load data function
     # load graph data
-    
     data_rowptr, data_colidx, data_reltypes, data_eids = utils.pyutils_load_fb15k237("data/MyHybData", True, True, False)
     transposed_data_rowptr, transposed_data_colidx, transposed_data_reltypes, transposed_data_eids = utils.pyutils_load_fb15k237("data/MyHybData", True, True, True)
     data_rowptr = th.from_numpy(data_rowptr).long()
@@ -172,6 +174,21 @@ def main(args):
     transposed_data_eids = th.from_numpy(transposed_data_eids).long()
     num_nodes = data_rowptr.numel()-1
     num_rels = int(data_reltypes.max().item())+1
+
+
+    # create graph
+    g = dict()
+    g['original']=dict()
+    g['original']['row_ptr'] = data_rowptr
+    g['original']['col_idx'] = data_colidx
+    g['original']['rel_types'] = data_reltypes
+    g['original']['eids'] = data_eids
+    
+    g['transposed']=dict()
+    g['transposed']['row_ptr'] = transposed_data_rowptr
+    g['transposed']['col_idx'] = transposed_data_colidx
+    g['transposed']['rel_types'] = transposed_data_reltypes
+    g['transposed']['eids'] = transposed_data_eids
 
     #TODO: argument specify num_classes, len(train_idx), len(test_idx) for now. 
     # aifb len(labels) == 8285, num_nodes == 8285, num_relations == 91, num_edges == 66371, len(train_idx) == 140, len(test_idx) == 36, num_classes = 4
@@ -193,40 +210,23 @@ def main(args):
     feats = torch.arange(num_nodes)
 
     # edge type and normalization factor
-    edge_type = data_reltypes
-    edge_norm = torch.randn(data_eids.numel())
+    edge_type = g['original']['rel_types']
+    edge_norm = g['original']['eids']
     labels = torch.from_numpy(labels).view(-1).long()
 
     # check cuda
     use_cuda = args.gpu >= 0 and torch.cuda.is_available()
     if use_cuda:
         torch.cuda.set_device(args.gpu)
-        data_rowptr = data_rowptr.cuda()
-        data_colidx = data_colidx.cuda()
-        data_reltypes = data_reltypes.cuda()
-        data_eids = data_eids.cuda()
-        transposed_data_rowptr = transposed_data_rowptr.cuda()
-        transposed_data_colidx = transposed_data_colidx.cuda()
-        transposed_data_reltypes = transposed_data_reltypes.cuda()
-        transposed_data_eids = transposed_data_eids.cuda()
+        for key in g:
+            for key2 in g[key]:
+                g[key][key2] = g[key][key2].cuda()
         feats = feats.cuda()
         edge_type = edge_type.cuda()
         edge_norm = edge_norm.cuda()
         labels = labels.cuda()
 
-    # create graph
-    g = dict()
-    g['original']=dict()
-    g['original']['row_ptr'] = data_rowptr
-    g['original']['col_idx'] = data_colidx
-    g['original']['rel_types'] = data_reltypes
-    g['original']['eids'] = data_eids
     
-    g['transposed']=dict()
-    g['transposed']['row_ptr'] = transposed_data_rowptr
-    g['transposed']['col_idx'] = transposed_data_colidx
-    g['transposed']['rel_types'] = transposed_data_reltypes
-    g['transposed']['eids'] = transposed_data_eids
 
 
     #tu_forward = sorted(list(zip(data.edge_src, data.edge_dst, data.edge_type)), key=lambda x : (x[1], x[2]))

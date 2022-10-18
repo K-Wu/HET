@@ -1,5 +1,5 @@
 #pragma once
-#include "DGLHackKernel.h"
+#include "DGLHackKernel/DGLHackKernel.h"
 
 template <typename Idx, typename DType>
 struct BackwardGatFusedData {

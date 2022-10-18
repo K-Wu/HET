@@ -3,7 +3,7 @@
 #include <thrust/host_vector.h>
 #include <thrust/random.h>
 #include <vector>
-#include "DGLHackKernel.h"
+#include "DGLHackKernel/DGLHackKernel.h"
 
 // random vectorizer generator code from https://gist.github.com/ashwin/7245048
 template <typename DType>

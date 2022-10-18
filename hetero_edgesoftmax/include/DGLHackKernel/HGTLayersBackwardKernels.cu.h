@@ -1,4 +1,5 @@
-#include "DGLHackKernel.h"
+#pragma once
+#include "DGLHackKernel/DGLHackKernel.h"
 
 template <typename Idx, typename DType>
 __global__ void HGTBackwardFusedGradientSmFirstPartGradientAImpl(
