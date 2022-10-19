@@ -15,12 +15,20 @@ DEFAULT_DIM = 64
 DGL_PATH = str(Path.home()) + "/.dgl/"
 torch.classes.load_library(DGL_PATH + "libgraphiler.so")
 
-homo_dataset = {"cora": 1433, "pubmed": 500, "ppi": 50, "arxiv": 128, "reddit": 602}
+# values are the dimension of the predefined features of the datasets provided by DGL. Notice that "proteins" are from ogbn and may not come with predefined features.
+GRAPHILER_HOMO_DATASET = {
+    "cora": 1433,
+    "pubmed": 500,
+    "ppi": 50,
+    "arxiv": 128,
+    "reddit": 602,
+    "proteins": -1,
+}
 
-hetero_dataset = ["aifb", "mutag", "bgs", "biokg", "am"]
+GRAPHILER_HETERO_DATASET = ["aifb", "mutag", "bgs", "biokg", "am", "mag", "wikikg2"]
 
 
-def load_data(name, feat_dim=DEFAULT_DIM, prepare=True, to_homo=True):
+def graphiler_load_data(name, feat_dim=DEFAULT_DIM, prepare=True, to_homo=True):
     if name == "arxiv":
         dataset = DglNodePropPredDataset(name="ogbn-arxiv")
         g = dataset[0][0]
@@ -90,23 +98,27 @@ def load_data(name, feat_dim=DEFAULT_DIM, prepare=True, to_homo=True):
 
     node_feats = torch.rand([g.number_of_nodes(), feat_dim])
 
-    if name in hetero_dataset:
+    if name in GRAPHILER_HETERO_DATASET:
         if to_homo:
             g = dgl.to_homogeneous(g)
 
-    return g, node_feats
+    return (
+        g,
+        node_feats,
+        g.etypes,
+    )  # returning etype for [HeteroGraphConv](https://docs.dgl.ai/en/0.8.x/generated/dgl.nn.pytorch.HeteroGraphConv.html) use.
 
 
-def setup(device="cuda:0"):
-    torch.manual_seed(42)
-    assert torch.cuda.is_available()
-    device = torch.device(device)
-    return device
+# def setup(device="cuda:0"):
+#     torch.manual_seed(42)
+#     assert torch.cuda.is_available()
+#     device = torch.device(device)
+#     return device
 
 
 if __name__ == "__main__":
     # a place for testing data loading
-    for dataset in homo_dataset:
-        load_data(dataset)
-    for dataset in hetero_dataset:
-        load_data(dataset)
+    for dataset in GRAPHILER_HOMO_DATASET:
+        graphiler_load_data(dataset)
+    for dataset in GRAPHILER_HETERO_DATASET:
+        graphiler_load_data(dataset)

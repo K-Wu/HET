@@ -189,48 +189,84 @@ class HET_EGLRGCNModel(nn.Module):
         return h
 
 
-def main(args):
+def get_model(args, mydglgraph):
+    num_nodes = mydglgraph["original"]["row_ptr"].numel() - 1
+    num_rels = int(mydglgraph["original"]["rel_types"].max().item()) + 1
+    num_edges = mydglgraph["original"]["rel_types"].numel()
+    num_classes = args.num_classes
+    model = HET_EGLRGCNModel(
+        num_nodes,
+        args.hidden_size,
+        num_classes,
+        num_rels,
+        num_edges,
+        num_bases=args.num_bases,
+        activation=F.relu,
+        dropout=args.dropout,
+    )
+    return model
 
+
+def get_mydgl_graph(args):
     # TODO: add args for dataset, and refactor these following lines into dedicated load data function
     # load graph data
-    data_rowptr, data_colidx, data_reltypes, data_eids = utils.pyutils_load_fb15k237(
-        "data/MyHybData", True, True, False
+    # data_rowptr, data_colidx, data_reltypes, data_eids
+    # transposed_data_rowptr, transposed_data_colidx, transposed_data_reltypes, transposed_data_eids,
+    (
+        edge_srcs,
+        edge_dsts,
+        edge_etypes,
+        edge_referential_eids,
+    ) = utils.load_fb15k237("data/MyHybData", True, True, False)
+    (
+        transposed_edge_srcs,
+        transposed_edge_dsts,
+        transposed_edge_etypes,
+        transposed_edge_referential_eids,
+    ) = utils.load_fb15k237("data/MyHybData", True, True, True)
+    # coo to csr conversion
+    (data_rowptr, data_colidx, data_reltypes, data_eids) = utils.coo2csr(
+        edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
     )
     (
         transposed_data_rowptr,
         transposed_data_colidx,
         transposed_data_reltypes,
         transposed_data_eids,
-    ) = utils.pyutils_load_fb15k237("data/MyHybData", True, True, True)
-    data_rowptr = th.from_numpy(data_rowptr).long()
-    data_colidx = th.from_numpy(data_colidx).long()
-    data_reltypes = th.from_numpy(data_reltypes).long()
-    data_eids = th.from_numpy(data_eids).long()
-    transposed_data_rowptr = th.from_numpy(transposed_data_rowptr).long()
-    transposed_data_colidx = th.from_numpy(transposed_data_colidx).long()
-    transposed_data_reltypes = th.from_numpy(transposed_data_reltypes).long()
-    transposed_data_eids = th.from_numpy(transposed_data_eids).long()
-    num_nodes = data_rowptr.numel() - 1
-    num_rels = int(data_reltypes.max().item()) + 1
-
+    ) = utils.coo2csr(
+        transposed_edge_srcs,
+        transposed_edge_dsts,
+        transposed_edge_etypes,
+        transposed_edge_referential_eids,
+    )
     # create graph
-    g = dict()
-    g["original"] = dict()
-    g["original"]["row_ptr"] = data_rowptr
-    g["original"]["col_idx"] = data_colidx
-    g["original"]["rel_types"] = data_reltypes
-    g["original"]["eids"] = data_eids
+    g = utils.create_mydgl_graph_csr_numpy(
+        data_rowptr, data_colidx, data_reltypes, data_eids
+    )
+    g_transposed = utils.create_mydgl_graph_csr_numpy(
+        transposed_data_rowptr,
+        transposed_data_colidx,
+        transposed_data_reltypes,
+        transposed_data_eids,
+    )
+    g["transposed"] = g_transposed["original"]
 
-    g["transposed"] = dict()
-    g["transposed"]["row_ptr"] = transposed_data_rowptr
-    g["transposed"]["col_idx"] = transposed_data_colidx
-    g["transposed"]["rel_types"] = transposed_data_reltypes
-    g["transposed"]["eids"] = transposed_data_eids
+    return g
 
+
+def main(args):
+    g = get_mydgl_graph(args)
+    model = get_model(args, g)
+    main_procedure(args, g, model)
+
+
+def main_procedure(args, g, model):
     # TODO: argument specify num_classes, len(train_idx), len(test_idx) for now.
     # aifb len(labels) == 8285, num_nodes == 8285, num_relations == 91, num_edges == 66371, len(train_idx) == 140, len(test_idx) == 36, num_classes = 4
     # mutag len(labels) == 23644, num_nodes == 23644, num_relations == 47, num_edges == 172098, len(train_idx) == 272, len(test_idx) == 68, num_classes = 2
     # bgs len(labels) == 333845, num_nodes == 333845, num_relations == 207, num_edges == 2166243, len(train_idx) == 117, len(test_idx) == 29, num_classes = 2
+    num_nodes = g["original"]["row_ptr"].numel() - 1
+    num_rels = int(g["original"]["rel_types"].max().item()) + 1
     num_classes = args.num_classes
     labels = np.random.randint(0, num_classes, num_nodes)
     train_idx = torch.randint(0, num_nodes, (args.train_size,))
@@ -262,41 +298,6 @@ def main(args):
         edge_type = edge_type.cuda()
         edge_norm = edge_norm.cuda()
         labels = labels.cuda()
-
-    # tu_forward = sorted(list(zip(data.edge_src, data.edge_dst, data.edge_type)), key=lambda x : (x[1], x[2]))
-    # tu_backward = sorted(list(zip(data.edge_dst, data.edge_src,  data.edge_type)), key=lambda x : (x[1], x[2]))
-    # def compute_e_to_distict_t(tu):
-    #    num_edges = len(tu)
-    #    all_node_distinct_types = 0
-    #    cur_node = tu[0][1]
-    #    type_set = set()
-    #    type_set.add(tu[0][2])
-    #    for i in range(1, len(tu)):
-    #        if tu[i][1] == cur_node:
-    #            type_set.add(tu[i][2])
-    #        else:
-    #            all_node_distinct_types += len(type_set)
-    #            cur_node = tu[i][1]
-    #            type_set.clear()
-    #            type_set.add(tu[i][2])
-    #    all_node_distinct_types += len(type_set)
-    #    type_set.clear()
-    #    #print('\n'.join([str(t) for t in tu]))
-    #    print('num_edges:', num_edges, 'node distinct types', all_node_distinct_types)
-    #    return num_edges/all_node_distinct_types
-    # r_forward = compute_e_to_distict_t(tu_forward)
-    # r_backward = compute_e_to_distict_t(tu_backward)
-    # print('ratio forward:', r_forward, 'ratio_backward:', r_backward)
-    model = HET_EGLRGCNModel(
-        num_nodes,
-        args.hidden_size,
-        num_classes,
-        num_rels,
-        edge_type.size(0),
-        num_bases=args.num_bases,
-        activation=F.relu,
-        dropout=args.dropout,
-    )
 
     if use_cuda:
         model.cuda()

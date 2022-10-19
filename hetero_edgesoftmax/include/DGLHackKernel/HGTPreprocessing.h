@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include "DGLHackKernel/DGLHackKernel.h"
 #include "DGLHackKernel/HGTPreprocessing.h"
 
@@ -164,6 +165,37 @@ struct HGTLayerHyperParams {
         alinear_out_dim(alinear_out_dim),
         num_heads(num_heads),
         PERF_ltsgemm_workspaceSize(PERF_ltsgemm_workspaceSize) {}
+
+  HGTLayerHyperParams(const std::map<std::string, int64_t> &params)
+      : num_relations(params.at("num_relations")),
+        num_node_types(params.at("num_node_types")),
+        num_nodes(params.at("num_nodes")),
+        num_edges(params.at("num_edges")),
+        input_dim(params.at("input_dim")),
+        klinear_out_dim(params.at("klinear_out_dim")),
+        qlinear_out_dim(params.at("qlinear_out_dim")),
+        vlinear_out_dim(params.at("vlinear_out_dim")),
+        message_dim(params.at("message_dim")),
+        alinear_out_dim(params.at("alinear_out_dim")),
+        num_heads(params.at("num_heads")),
+        PERF_ltsgemm_workspaceSize(params.at("PERF_ltsgemm_workspaceSize")) {}
+
+  std::map<std::string, int64_t> GetMapRepr() const {
+    std::map<std::string, int64_t> params;
+    params["num_relations"] = num_relations;
+    params["num_node_types"] = num_node_types;
+    params["num_nodes"] = num_nodes;
+    params["num_edges"] = num_edges;
+    params["input_dim"] = input_dim;
+    params["klinear_out_dim"] = klinear_out_dim;
+    params["qlinear_out_dim"] = qlinear_out_dim;
+    params["vlinear_out_dim"] = vlinear_out_dim;
+    params["message_dim"] = message_dim;
+    params["alinear_out_dim"] = alinear_out_dim;
+    params["num_heads"] = num_heads;
+    params["PERF_ltsgemm_workspaceSize"] = PERF_ltsgemm_workspaceSize;
+    return params;
+  }
 
   std::string getStrRepr() const {
     return "HGTLayerHyperParams num_relations: " +

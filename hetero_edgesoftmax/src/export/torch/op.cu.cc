@@ -12,22 +12,24 @@
 #include <torch/extension.h>
 #include <torch/library.h>
 #include <iostream>
+#include <map>
 #include "DGLHackKernel/DGLHackKernel.h"
 #include "hetero_edgesoftmax.h"
 // TODO: assume int32_t and float32 for now. but we may need to support other
 // types
 // TODO: check if torch builtin has the same encoding as int32_t and float32
 #include "DGLHackKernel/OpExport/HGTOps.inc"
-#include "DGLHackKernel/OpExport/HGTPrepToTensors.inc"
+#include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.inc"
 #include "DGLHackKernel/OpExport/RGCNOps.inc"
 //#include "DGLHackKernel/OpExport/RGATOps.inc"
 
-std::vector<at::Tensor> biops_tensor_info(at::Tensor& one_tensor,
-                                          at::Tensor& other_tensor) {
+std::vector<std::vector<at::Tensor>> biops_tensor_info(
+    at::Tensor& one_tensor, at::Tensor& other_tensor) {
   std::cout << "one_tensor device: " << one_tensor.device() << std::endl;
   std::cout << "other_tensor device: " << other_tensor.device() << std::endl;
 
-  std::vector<at::Tensor> result = {one_tensor.clone(), other_tensor.clone()};
+  std::vector<std::vector<at::Tensor>> result = {
+      {one_tensor.clone()}, {one_tensor.clone(), other_tensor.clone()}};
   return result;
 }
 
