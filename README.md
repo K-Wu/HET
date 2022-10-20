@@ -26,3 +26,6 @@ for debugging purpose, you may invoke the following command after cmake configur
 ```
 cmake --build . --verbose
 ```
+
+## Warning on Infidel Sort by Src Out Degree and by Etype
+This repo contains data sorted in infidel manner (in [[hetero_edgesoftmax/data]]) with ".infidel_sorted" mark and utility to do such sort (in [[hetero_edgesoftmax/python/utils/coo_sorters.py]]). This is a sort mechanism solely for load balance in RGCN and is not a general purpose sort. The sorted elements, i.e., source node index or etype, are reindexed while other elements, i.e., one of source node index or etype, and eids and destination node index, are not. Also "transposed.<dataset_name>.coo.infidel_sorted.by_srcs_outgoing_freq.<element_name>.npy" are sorted after transposed so using the same eid should refer to the same edge in the original data.
