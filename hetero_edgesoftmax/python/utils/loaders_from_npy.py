@@ -5,6 +5,31 @@ import torch as th
 from . import sparse_matrix_converters
 
 
+class MyDGLGraph:
+    def __init__(self):
+        self.graph_data = dict()
+
+    def __setitem__(self, key, value):
+        self.graph_data[key] = value
+
+    def __getitem__(self, key):
+        return self.graph_data[key]
+
+    def to(self, device):
+        for key in self.graph_data:
+            for second_key in self.graph_data[key]:
+                self.graph_data[key][second_key] = self.graph_data[key][second_key].to(
+                    device
+                )
+
+    def cuda(self):
+        for key in self.graph_data:
+            for second_key in self.graph_data[key]:
+                self.graph_data[key][second_key] = self.graph_data[key][
+                    second_key
+                ].cuda()
+
+
 def convert_mydgl_graph_csr_to_coo(g):
     # we haven't implemented csr2coo for tensors so we need to convert to numpy first
     row_ptr = g["original"]["row_ptr"].numpy()
@@ -41,7 +66,7 @@ def convert_mydgl_graph_coo_to_csr(g):
 
 
 def create_mydgl_graph_csr_torch(row_ptr, col_idx, rel_types, eids):
-    g = dict()
+    g = MyDGLGraph()
     g["original"] = dict()
     g["original"]["row_ptr"] = row_ptr
     g["original"]["col_idx"] = col_idx
@@ -80,7 +105,7 @@ def create_mydgl_graph_coo_from_dgl_graph(g):
 def create_mydgl_graph_coo_torch(
     edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
 ):
-    g = dict()
+    g = MyDGLGraph()
     g["original"] = dict()
     g["original"]["srcs"] = edge_srcs
     g["original"]["dsts"] = edge_dsts
@@ -115,9 +140,15 @@ def generic_load_data(dataset_path_and_name_prefix):
     return edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
 
 
-def load_fb15k237(dataset_path_prefix, sorted, sorted_by_srcs, transposed):
+def load_fb15k237(
+    dataset_path_prefix, sorted, sorted_by_srcs, transposed, infidel_sort_flag=True
+):
     transposed_prefix = "transposed." if transposed else ""
-    sorted_suffix = ".sorted" if sorted else ""
+    if infidel_sort_flag:
+        print("Warning: you are loading infidel sort data, see readme.md for details")
+        sorted_suffix = ".infidel_sorted" if sorted else ""
+    else:
+        sorted_suffix = ".sorted" if sorted else ""
     if sorted and sorted_by_srcs:
         sorted_suffix += ".by_srcs_outgoing_freq"
 
@@ -129,9 +160,15 @@ def load_fb15k237(dataset_path_prefix, sorted, sorted_by_srcs, transposed):
     )
 
 
-def load_wikikg2(dataset_path_prefix, sorted, sorted_by_srcs, transposed):
+def load_wikikg2(
+    dataset_path_prefix, sorted, sorted_by_srcs, transposed, infidel_sort_flag=True
+):
     transposed_prefix = "transposed." if transposed else ""
-    sorted_suffix = ".sorted" if sorted else ""
+    if infidel_sort_flag:
+        print("Warning: you are loading infidel sort data, see readme.md for details")
+        sorted_suffix = ".infidel_sorted" if sorted else ""
+    else:
+        sorted_suffix = ".sorted" if sorted else ""
     if sorted and sorted_by_srcs:
         sorted_suffix += ".by_srcs_outgoing_freq"
     return generic_load_data(

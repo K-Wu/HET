@@ -1,4 +1,4 @@
-# From seastar-paper-version\exp\rgcn\seastar\train.py
+# From seastar-paper-version/exp/rgcn/seastar/train.py
 # the paper copy of seastar can be obtained from www.cse.cuhk.edu.hk/~jcheng/papers/seastar_eurosys21.pdf
 import numpy as np
 import torch

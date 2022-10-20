@@ -25,7 +25,7 @@ def check_equal(first, second):
         print("correctness check passed!")
 
 
-def bench(
+def graphiler_bench(
     net, net_params, tag="", nvprof=False, memory=False, repeat=1000
 ):  # , log=None):
     try:

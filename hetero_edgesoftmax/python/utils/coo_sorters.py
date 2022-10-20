@@ -67,7 +67,10 @@ def remap_src_according_to_number_of_edges(srcs, torch_flag):
     return remapped_src
 
 
-def sort_coo_by_etype(srcs, dsts, etypes, eids, torch_flag=False):
+def infidel_sort_coo_by_etype(srcs, dsts, etypes, eids, torch_flag=False):
+    print(
+        "WARNING: you are using infidel sort utility. See readme.md for more details."
+    )
     if torch_flag:
         np_or_th = th
     else:
@@ -83,7 +86,10 @@ def sort_coo_by_etype(srcs, dsts, etypes, eids, torch_flag=False):
     return sorted_srcs, sorted_dsts, sorted_etypes, sorted_eids
 
 
-def sort_coo_by_src_outgoing_edges(srcs, dsts, etypes, eids, torch_flag=False):
+def infidel_sort_coo_by_src_outgoing_edges(srcs, dsts, etypes, eids, torch_flag=False):
+    print(
+        "WARNING: you are using infidel sort utility. See readme.md for more details."
+    )
     if torch_flag:
         np_or_th = th
     else:

@@ -292,9 +292,7 @@ def main_procedure(args, g, model):
     use_cuda = args.gpu >= 0 and torch.cuda.is_available()
     if use_cuda:
         torch.cuda.set_device(args.gpu)
-        for key in g:
-            for key2 in g[key]:
-                g[key][key2] = g[key][key2].cuda()
+        g.cuda()
         feats = feats.cuda()
         edge_type = edge_type.cuda()
         edge_norm = edge_norm.cuda()

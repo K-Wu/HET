@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 from . import models
+from . import models_dgl
 import sys
 import nvtx
 import torch
 from .. import utils
 
+print('WARNING: setting up device via utils.graphiler_setup_device(device="cuda:0")')
+device = utils.graphiler_setup_device(device="cuda:0")
+
 
 def profile(dataset, feat_dim, repeat=1000):
     print("benchmarking on: " + dataset)
-    g, features = load_data(dataset, feat_dim, prepare=False)
-    g_hetero, _ = load_data(dataset, feat_dim, to_homo=False)
+    g, features = utils.graphiler_load_data(dataset, feat_dim)
+    g_hetero, _ = utils.graphiler_load_data(dataset, feat_dim, to_homo=False)
     features = features.to(device)
 
     @empty_cache
@@ -22,71 +26,24 @@ def profile(dataset, feat_dim, repeat=1000):
                 node_dict[ntype] = len(node_dict)
             for etype in g_hetero.canonical_etypes:
                 edge_dict[etype] = len(edge_dict)
-            net_hetero = models.HGT_DGLHetero(
-                node_dict, edge_dict, feat_dim, DEFAULT_DIM, DEFAULT_DIM
+            net_hetero = models_dgl.HGT_DGLHetero(
+                node_dict,
+                edge_dict,
+                feat_dim,
+                utils.GRAPHILER_DEFAULT_DIM,
+                utils.GRAPHILER_DEFAULT_DIM,
             ).to(device)
             net_hetero.eval()
             with torch.no_grad():
-                utils.bench(
+                utils.graphiler_bench(
                     net=net_hetero,
                     net_params=(g_hetero, g_hetero.ndata["h"]),
                     tag="1-DGL-slice",
                     nvprof=False,
                     repeat=repeat,
                     memory=True,
-                    log=log,
                 )
             del g_hetero, node_dict, edge_dict, net_hetero
-
-
-def breakdown(dataset, feat_dim, repeat=1000):
-    # log = init_log(['0-DGL-UDF', '1+compile', '2+reorder',
-    #               '3+fusion'], ['time', 'mem'])
-    print("benchmarking on: " + dataset)
-    g, features = load_data(dataset, feat_dim)
-    g, features = g.to(device), features.to(device)
-    net = HGT(feat_dim, DEFAULT_DIM, DEFAULT_DIM, g.num_ntypes, g.num_rels).to(device)
-    net.eval()
-    with torch.no_grad():
-        utils.bench(
-            net=net,
-            net_params=(g, features, "naive"),
-            tag="0-DGL-UDF",
-            nvprof=False,
-            repeat=repeat,
-            memory=True,
-            log=log,
-        )
-        global BREAK_FLAG
-        BREAK_FLAG = 0
-        utils.bench(
-            net=net,
-            net_params=(g, features, "compile"),
-            tag="1+compile",
-            nvprof=False,
-            repeat=repeat,
-            memory=True,
-        )  # , log=log)
-        BREAK_FLAG = 1
-        utils.bench(
-            net=net,
-            net_params=(g, features, "compile"),
-            tag="2+reorder",
-            nvprof=False,
-            repeat=repeat,
-            memory=True,
-        )  # , log=log)
-        BREAK_FLAG = 2
-        utils.bench(
-            net=net,
-            net_params=(g, features, "compile"),
-            tag="3+fusion",
-            nvprof=False,
-            repeat=repeat,
-            memory=True,
-        )  # , log=log)
-
-    return log
 
 
 if __name__ == "__main__":
@@ -95,15 +52,11 @@ if __name__ == "__main__":
         exit()
     if sys.argv[1] == "all":
         # log = {}
-        for d in hetero_dataset:
-            profile(d, DEFAULT_DIM, repeat)
+        for d in utils.GRAPHILER_HETERO_DATASET:
+            profile(d, utils.GRAPHILER_DEFAULT_DIM, repeat=1000)
         # pd.DataFrame(log).to_pickle("output/HGT.pkl")
     elif sys.argv[1] == "breakdown":
-        print("not migrated yet!")
+        print("ERROR: ablation study not implemented yet!")
         exit(1)
-        log = {}
-        for d in hetero_dataset:
-            log[d] = breakdown(d, DEFAULT_DIM, repeat)
-        # pd.DataFrame(log).to_pickle("output/HGT_breakdown.pkl")
     else:
-        profile(sys.argv[1], int(sys.argv[2]), repeat)
+        profile(sys.argv[1], int(sys.argv[2]), repeat=1000)

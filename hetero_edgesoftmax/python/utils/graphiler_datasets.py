@@ -11,9 +11,9 @@ from ogb.linkproppred import DglLinkPropPredDataset
 import dgl
 from dgl.data.rdf import AIFBDataset, MUTAGDataset, BGSDataset, AMDataset
 
-DEFAULT_DIM = 64
-DGL_PATH = str(Path.home()) + "/.dgl/"
-torch.classes.load_library(DGL_PATH + "libgraphiler.so")
+GRAPHILER_DEFAULT_DIM = 64
+# DGL_PATH = str(Path.home()) + "/.dgl/"
+# torch.classes.load_library(DGL_PATH + "libgraphiler.so")
 
 # values are the dimension of the predefined features of the datasets provided by DGL. Notice that "proteins" are from ogbn and may not come with predefined features.
 GRAPHILER_HOMO_DATASET = {
@@ -28,7 +28,7 @@ GRAPHILER_HOMO_DATASET = {
 GRAPHILER_HETERO_DATASET = ["aifb", "mutag", "bgs", "biokg", "am", "mag", "wikikg2"]
 
 
-def graphiler_load_data(name, feat_dim=DEFAULT_DIM, prepare=True, to_homo=True):
+def graphiler_load_data(name, feat_dim=GRAPHILER_DEFAULT_DIM, to_homo=True):
     if name == "arxiv":
         dataset = DglNodePropPredDataset(name="ogbn-arxiv")
         g = dataset[0][0]
@@ -109,11 +109,11 @@ def graphiler_load_data(name, feat_dim=DEFAULT_DIM, prepare=True, to_homo=True):
     )  # returning etype for [HeteroGraphConv](https://docs.dgl.ai/en/0.8.x/generated/dgl.nn.pytorch.HeteroGraphConv.html) use.
 
 
-# def setup(device="cuda:0"):
-#     torch.manual_seed(42)
-#     assert torch.cuda.is_available()
-#     device = torch.device(device)
-#     return device
+def graphiler_setup_device(device="cuda:0"):
+    torch.manual_seed(42)
+    assert torch.cuda.is_available()
+    device = torch.device(device)
+    return device
 
 
 if __name__ == "__main__":
