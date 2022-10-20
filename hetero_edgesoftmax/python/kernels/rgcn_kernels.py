@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 import torch
 
-torch.ops.load_library("../build/hetero_edgesoftmax/libtorch_hetero_edgesoftmax.so")
-
 
 def rgcn_layer0(graph, weight, norm, ret):
     return torch.ops.torch_hetero_edgesoftmax.rgcn_layer0(graph, weight, norm, ret)

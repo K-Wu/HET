@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# From seastar-paper-version\exp\rgcn\seastar\train.py
+# From seastar-paper-version/exp/rgcn/seastar/train.py
 # the paper copy of seastar can be obtained from www.cse.cuhk.edu.hk/~jcheng/papers/seastar_eurosys21.pdf
 """
 Modeling Relational Data with Graph Convolutional Networks
@@ -212,6 +212,7 @@ def get_mydgl_graph(args):
     # load graph data
     # data_rowptr, data_colidx, data_reltypes, data_eids
     # transposed_data_rowptr, transposed_data_colidx, transposed_data_reltypes, transposed_data_eids,
+    print("WARNING! now only support fb15k. Loading it now")
     (
         edge_srcs,
         edge_dsts,
@@ -284,7 +285,7 @@ def main_procedure(args, g, model):
 
     # edge type and normalization factor
     edge_type = g["original"]["rel_types"]
-    edge_norm = g["original"]["eids"]
+    edge_norm = torch.rand(g["original"]["eids"].size())
     labels = torch.from_numpy(labels).view(-1).long()
 
     # check cuda

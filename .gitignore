@@ -1,6 +1,7 @@
 x64/
 .vs/
 .vscode/
+.idea/
 build**/
 *.log
 *.ncu-rep

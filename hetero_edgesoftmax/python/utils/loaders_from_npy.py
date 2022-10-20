@@ -2,7 +2,7 @@
 import numpy as np
 import os
 import torch as th
-from . import sparse_mat_conversion
+from . import sparse_matrix_converters
 
 
 def convert_mydgl_graph_csr_to_coo(g):
@@ -16,7 +16,7 @@ def convert_mydgl_graph_csr_to_coo(g):
         edge_dsts,
         edge_etypes,
         edge_referential_eids,
-    ) = sparse_mat_conversion.csr2coo(row_ptr, col_idx, rel_types, eids)
+    ) = sparse_matrix_converters.csr2coo(row_ptr, col_idx, rel_types, eids)
     return create_mydgl_graph_coo_numpy(
         edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
     )
@@ -28,7 +28,7 @@ def convert_mydgl_graph_coo_to_csr(g):
         edge_dsts,
         edge_etypes,
         edge_referential_eids,
-    ) = sparse_mat_conversion.coo2csr(
+    ) = sparse_matrix_converters.coo2csr(
         g["original"]["row_ptr"],
         g["original"]["col_idx"],
         g["original"]["rel_types"],
