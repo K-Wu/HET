@@ -133,34 +133,39 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(
 
   int num_nodes = 14541;
   int num_edges = 620232;
+
   if (sorted) {
+    printf("WARNING: infidel loading FB15k237. Check readme.md for details.\n");
     if (sorted_by_src) {
       npy::LoadArrayFromNumpy(
           (data_path_prefix +
-           "fb15k237.coo.sorted.by_srcs_outgoing_freq.srcs.npy")
+           "fb15k237.coo.infidel_sorted.by_srcs_outgoing_freq.srcs.npy")
               .c_str(),
           srcs_shape, fortran_order, srcs_data);
       npy::LoadArrayFromNumpy(
           (data_path_prefix +
-           "fb15k237.coo.sorted.by_srcs_outgoing_freq.dsts.npy")
+           "fb15k237.coo.infidel_sorted.by_srcs_outgoing_freq.dsts.npy")
               .c_str(),
           dsts_shape, fortran_order, dsts_data);
       npy::LoadArrayFromNumpy(
           (data_path_prefix +
-           "fb15k237.coo.sorted.by_srcs_outgoing_freq.etypes.npy")
+           "fb15k237.coo.infidel_sorted.by_srcs_outgoing_freq.etypes.npy")
               .c_str(),
           etypes_shape, fortran_order, etypes_data);
     } else {
       npy::LoadArrayFromNumpy(
-          (data_path_prefix + "fb15k237.coo.sorted.by_etype_freq.srcs.npy")
+          (data_path_prefix +
+           "fb15k237.coo.infidel_sorted.by_etype_freq.srcs.npy")
               .c_str(),
           srcs_shape, fortran_order, srcs_data);
       npy::LoadArrayFromNumpy(
-          (data_path_prefix + "fb15k237.coo.sorted.by_etype_freq.dsts.npy")
+          (data_path_prefix +
+           "fb15k237.coo.infidel_sorted.by_etype_freq.dsts.npy")
               .c_str(),
           dsts_shape, fortran_order, dsts_data);
       npy::LoadArrayFromNumpy(
-          (data_path_prefix + "fb15k237.coo.sorted.by_etype_freq.etypes.npy")
+          (data_path_prefix +
+           "fb15k237.coo.infidel_sorted.by_etype_freq.etypes.npy")
               .c_str(),
           etypes_shape, fortran_order, etypes_data);
     }
@@ -203,14 +208,18 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(
   int num_edges = 16109182;
   // num_relationship: 535
   if (sorted) {
+    printf(
+        "WARNING: infidel loading ogbn-wikikg2. Check readme.md for "
+        "details.\n");
     npy::LoadArrayFromNumpy(
-        (data_path_prefix + "ogbn-wikikg2.sorted.coo.srcs.npy").c_str(),
+        (data_path_prefix + "ogbn-wikikg2.infidel_sorted.coo.srcs.npy").c_str(),
         srcs_shape, fortran_order, srcs_data);
     npy::LoadArrayFromNumpy(
-        (data_path_prefix + "ogbn-wikikg2.sorted.coo.dsts.npy").c_str(),
+        (data_path_prefix + "ogbn-wikikg2.infidel_sorted.coo.dsts.npy").c_str(),
         dsts_shape, fortran_order, dsts_data);
     npy::LoadArrayFromNumpy(
-        (data_path_prefix + "ogbn-wikikg2.sorted.coo.etypes.npy").c_str(),
+        (data_path_prefix + "ogbn-wikikg2.infidel_sorted.coo.etypes.npy")
+            .c_str(),
         etypes_shape, fortran_order, etypes_data);
   } else {
     npy::LoadArrayFromNumpy(

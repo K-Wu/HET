@@ -140,9 +140,37 @@ def generic_load_data(dataset_path_and_name_prefix):
     return edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
 
 
+def get_fb15k237_data():
+    print("loading fb15k237 from dgl.data")
+    from dgl.data import FB15k237Dataset
+
+    dataset = FB15k237Dataset()
+    graph = dataset[0]
+    edges_srcs = graph.edges()[0].detach().numpy()
+    edges_dsts = graph.edges()[0].detach().numpy()
+    edges_etypes = graph.edata["etype"].detach().numpy()
+    edge_referential_eids = np.arange(len(edges_srcs), dtype=np.int64)
+    return edges_srcs, edges_dsts, edges_etypes, edge_referential_eids
+
+
+def get_wikikg2_data():
+    print("loading wikikg2 from ogb.linkproppred")
+    from ogb.linkproppred import LinkPropPredDataset
+
+    dataset = LinkPropPredDataset(name="ogbl-wikikg2")
+    graph = dataset[0]
+    edges_srcs = graph["edge_index"][0]
+    edges_dsts = graph["edge_index"][1]
+    edges_etypes = graph["edge_reltype"].flatten()
+    edge_referential_eids = np.arange(len(edges_srcs), dtype=np.int64)
+    return edges_srcs, edges_dsts, edges_etypes, edge_referential_eids
+
+
 def load_fb15k237(
     dataset_path_prefix, sorted, sorted_by_srcs, transposed, infidel_sort_flag=True
 ):
+    if sorted_by_srcs and (not sorted):
+        raise ValueError("sorted_by_srcs is only valid when sorted is True")
     transposed_prefix = "transposed." if transposed else ""
     if infidel_sort_flag:
         print("Warning: you are loading infidel sort data, see readme.md for details")
@@ -151,18 +179,25 @@ def load_fb15k237(
         sorted_suffix = ".sorted" if sorted else ""
     if sorted and sorted_by_srcs:
         sorted_suffix += ".by_srcs_outgoing_freq"
+    elif sorted:
+        sorted_suffix += ".by_etype_freq"
 
-    return generic_load_data(
-        os.path.join(
-            dataset_path_prefix,
-            (transposed_prefix + "fb15k237" + ".coo" + sorted_suffix),
+    if not sorted:
+        return get_fb15k237_data()
+    else:  # sorted
+        return generic_load_data(
+            os.path.join(
+                dataset_path_prefix,
+                (transposed_prefix + "fb15k237" + ".coo" + sorted_suffix),
+            )
         )
-    )
 
 
 def load_wikikg2(
     dataset_path_prefix, sorted, sorted_by_srcs, transposed, infidel_sort_flag=True
 ):
+    if sorted_by_srcs and (not sorted):
+        raise ValueError("sorted_by_srcs is only valid when sorted is True")
     transposed_prefix = "transposed." if transposed else ""
     if infidel_sort_flag:
         print("Warning: you are loading infidel sort data, see readme.md for details")
@@ -171,9 +206,12 @@ def load_wikikg2(
         sorted_suffix = ".sorted" if sorted else ""
     if sorted and sorted_by_srcs:
         sorted_suffix += ".by_srcs_outgoing_freq"
-    return generic_load_data(
-        os.path.join(
-            dataset_path_prefix,
-            (transposed_prefix + "wikikg2" + ".coo" + sorted_suffix),
+    if not sorted:
+        return get_wikikg2_data()
+    else:
+        return generic_load_data(
+            os.path.join(
+                dataset_path_prefix,
+                (transposed_prefix + "wikikg2" + ".coo" + sorted_suffix),
+            )
         )
-    )

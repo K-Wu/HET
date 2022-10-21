@@ -25,11 +25,12 @@ torch::Dict<KeyType, ValueType> convert_map_to_torch_dict(
   return result;
 }
 
-template <typename T,typename Alloc>
+template <typename ContainerType>
 at::Tensor export_thrust_device_vector_to_torch_tensor(
-    thrust::detail::vector_base<T,Alloc>& vec) {
-  static_assert(std::is_same<T, int>::value, "only support int for now");
-  return torch::from_blob(vec.data().get(), {vec.size()}, at::TensorOptions(caffe2::TypeMeta::Make<int32_t>()).device(at::kCUDA));
+   ContainerType& vec) {
+  //static_assert(std::is_same<T, int>::value, "only support int for now");
+  printf("WARNING: Narrowing Cast from size_t to int64_t in export_thrust_device_vector_to_torch_tensor!\n");
+  return torch::from_blob(vec.data().get(), {(signed long) vec.size()}, at::TensorOptions(caffe2::TypeMeta::Make<int32_t>()).device(at::kCUDA));
 }
 
 template <typename T>
@@ -40,17 +41,17 @@ thrust::device_vector<T> import_thrust_device_vector_from_torch_tensor(
       reinterpret_cast<T*>(tensor.data_ptr()), reinterpret_cast<T*>(tensor.data_ptr()) + tensor.numel());
 }
 
-std::vector<std::vector<at::Tensor>> export_HGTLayerExecPreprocessedData(const HGTLayerExecPreprocessedData& preprocessed_data){
+std::vector<std::vector<at::Tensor>> export_HGTLayerExecPreprocessedData(HGTLayerExecPreprocessedData& preprocessed_data){
     std::vector<std::vector<at::Tensor>> result;
     result.push_back({});
     for (size_t idx_relation = 0; idx_relation<preprocessed_data.coo_matrices_column_indices_unique.size(); idx_relation++){
-        result[0].push_back(export_thrust_device_vector_to_torch_tensor(preprocessed_data.coo_matrices_column_indices_unique[idx_relation]));
+        result[0].push_back(export_thrust_device_vector_to_torch_tensor<cusp::array1d<int, cusp::device_memory>>(preprocessed_data.coo_matrices_column_indices_unique[idx_relation]));
     }
     result.push_back({});
     for (size_t idx_relation = 0; idx_relation<preprocessed_data.dest_node_to_unique_index_per_relation.size(); idx_relation++){
-        result[1].push_back(export_thrust_device_vector_to_torch_tensor(preprocessed_data.dest_node_to_unique_index_per_relation[idx_relation]));
+        result[1].push_back(export_thrust_device_vector_to_torch_tensor<thrust::device_vector<int>>(preprocessed_data.dest_node_to_unique_index_per_relation[idx_relation]));
     }
-    result.push_back({export_thrust_device_vector_to_torch_tensor(preprocessed_data.num_unique_indices_to_column_indices_per_relation)});
+    result.push_back({export_thrust_device_vector_to_torch_tensor<thrust::device_vector<int>>(preprocessed_data.num_unique_indices_to_column_indices_per_relation)});
     return result;
 }
 
@@ -67,7 +68,7 @@ HGTLayerExecPreprocessedData import_HGTLayerExecPreprocessedData(const std::vect
         dest_node_to_unique_index_per_relation.push_back(import_thrust_device_vector_from_torch_tensor<int>(tensors[1][idx_relation]));
     }
     thrust::device_vector<int> num_unique_indices_to_column_indices_per_relation = import_thrust_device_vector_from_torch_tensor<int>(tensors[2][0]);
-    HGTLayerExecPreprocessedData result(coo_matrices_column_indices_unique, dest_node_to_unique_index_per_relation, num_unique_indices_to_column_indices_per_relation);
+    HGTLayerExecPreprocessedData result(coo_matrices_column_indices_unique, num_unique_indices_to_column_indices_per_relation, dest_node_to_unique_index_per_relation);
     return result;
 }
 

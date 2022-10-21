@@ -149,6 +149,34 @@ class HET_EglRelGraphConv(nn.Module):
         return node_repr
 
 
+class HET_EGLRGCNSingleLayerModel(nn.Module):
+    def __init__(
+        self,
+        input_dim,
+        out_dim,
+        num_rels,
+        num_edges,
+        num_bases,
+        dropout,
+        activation,
+    ):
+        super(HET_EGLRGCNSingleLayerModel, self).__init__()
+        self.layer2 = HET_EglRelGraphConv(
+            input_dim,
+            out_dim,
+            num_rels,
+            num_edges,
+            num_bases=num_bases,
+            dropout=dropout,
+            activation=activation,
+            layer_type=1,
+        )
+
+    def forward(self, g, feats, edge_type, edge_norm):
+        h = self.layer2.forward(g, feats, edge_type, edge_norm)
+        return h
+
+
 class HET_EGLRGCNModel(nn.Module):
     def __init__(
         self,
@@ -207,24 +235,70 @@ def get_model(args, mydglgraph):
     return model
 
 
-def get_mydgl_graph(args):
+def RGCN_get_mydgl_graph(args):
     # TODO: add args for dataset, and refactor these following lines into dedicated load data function
     # load graph data
     # data_rowptr, data_colidx, data_reltypes, data_eids
     # transposed_data_rowptr, transposed_data_colidx, transposed_data_reltypes, transposed_data_eids,
-    print("WARNING! now only support fb15k. Loading it now")
-    (
-        edge_srcs,
-        edge_dsts,
-        edge_etypes,
-        edge_referential_eids,
-    ) = utils.load_fb15k237("data/MyHybData", True, True, False)
-    (
-        transposed_edge_srcs,
-        transposed_edge_dsts,
-        transposed_edge_etypes,
-        transposed_edge_referential_eids,
-    ) = utils.load_fb15k237("data/MyHybData", True, True, True)
+
+    dataset_sort_flag = args.sort_by_src or args.sort_by_etype
+
+    if args.dataset == "fb15k":
+        print("WARNING - loading fb15k. Currently we only support a few dataset.")
+        (
+            edge_srcs,
+            edge_dsts,
+            edge_etypes,
+            edge_referential_eids,
+        ) = utils.load_fb15k237(
+            "data/MyHybData", dataset_sort_flag, args.sort_by_src, False
+        )
+        (
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        ) = utils.load_fb15k237(
+            "data/MyHybData", dataset_sort_flag, args.sort_by_src, True
+        )
+    elif args.dataset == "wikikg2":
+        print("WARNING - loading wikikg2. Currently we only support a few dataset.")
+        (
+            edge_srcs,
+            edge_dsts,
+            edge_etypes,
+            edge_referential_eids,
+        ) = utils.load_wikikg2(
+            "data/MyWikiKG2", dataset_sort_flag, args.sort_by_src, False
+        )
+        (
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        ) = utils.load_wikikg2(
+            "data/MyWikiKG2", dataset_sort_flag, args.sort_by_src, True
+        )
+    else:
+        print("ERROR! now only support fb15k and wikikg2. Loading it now")
+        exit(1)
+    if args.reindex_eid:
+        edge_new_eids = np.arange(edge_referential_eids.shape[0])
+        edge_referential_to_new_eids_mapping = dict(
+            zip(edge_referential_eids, edge_new_eids)
+        )
+        transposed_edge_new_eids = np.array(
+            list(
+                map(
+                    edge_referential_to_new_eids_mapping.__getitem__,
+                    transposed_edge_referential_eids,
+                )
+            )
+        ).astype(np.int64)
+        print("transposed_edge_new_eids shape", transposed_edge_new_eids.shape)
+        edge_referential_eids = edge_new_eids
+        transposed_edge_referential_eids = transposed_edge_new_eids
+
     # coo to csr conversion
     (data_rowptr, data_colidx, data_reltypes, data_eids) = utils.coo2csr(
         edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
@@ -256,12 +330,16 @@ def get_mydgl_graph(args):
 
 
 def main(args):
-    g = get_mydgl_graph(args)
+    g = RGCN_get_mydgl_graph(args)
     model = get_model(args, g)
-    main_procedure(args, g, model)
+    num_nodes = g["original"]["row_ptr"].numel() - 1
+    # since the nodes are featureless, the input feature is then the node id.
+    feats = torch.arange(num_nodes)
+
+    RGCN_main_procedure(args, g, model, feats)
 
 
-def main_procedure(args, g, model):
+def RGCN_main_procedure(args, g, model, feats):
     # TODO: argument specify num_classes, len(train_idx), len(test_idx) for now.
     # aifb len(labels) == 8285, num_nodes == 8285, num_relations == 91, num_edges == 66371, len(train_idx) == 140, len(test_idx) == 36, num_classes = 4
     # mutag len(labels) == 23644, num_nodes == 23644, num_relations == 47, num_edges == 172098, len(train_idx) == 272, len(test_idx) == 68, num_classes = 2
@@ -279,9 +357,6 @@ def main_procedure(args, g, model):
         train_idx = train_idx[len(train_idx) // 5 :]
     else:
         val_idx = train_idx
-
-    # since the nodes are featureless, the input feature is then the node id.
-    feats = torch.arange(num_nodes)
 
     # edge type and normalization factor
     edge_type = g["original"]["rel_types"]
@@ -315,12 +390,15 @@ def main_procedure(args, g, model):
     train_idx = list(train_idx)
     for epoch in range(args.num_epochs):
         optimizer.zero_grad()
+        torch.cuda.synchronize()
         t0 = time.time()
         logits = model(g, feats, edge_type, edge_norm)
+        torch.cuda.synchronize()
         tb = time.time()
         train_logits = logits[train_idx]
         ta = time.time()
         loss = F.cross_entropy(train_logits, train_labels)
+        torch.cuda.synchronize()
         t1 = time.time()
         loss.backward()
         optimizer.step()
@@ -330,8 +408,8 @@ def main_procedure(args, g, model):
             forward_time.append(t1 - t0)
             backward_time.append(t2 - t1)
             print(
-                "Epoch {:05d} | Train Forward Time(s) {:.4f} | Backward Time(s) {:.4f}".format(
-                    epoch, forward_time[-1], backward_time[-1]
+                "Epoch {:05d} | Train Forward Time(s) {:.4f} (our kernel {:.4f} cross entropy {:.4f}) | Backward Time(s) {:.4f}".format(
+                    epoch, forward_time[-1], (tb - t0), (t1 - ta), backward_time[-1]
                 )
             )
         train_acc = torch.sum(
@@ -378,12 +456,17 @@ def main_procedure(args, g, model):
     print("^^^{:6f}^^^{:6f}".format(Used_memory, avg_run_time))
 
 
-if __name__ == "__main__":
+def create_RGCN_parser():
     parser = argparse.ArgumentParser(description="RGCN")
     parser.add_argument("--dropout", type=float, default=0, help="dropout probability")
-    parser.add_argument(
-        "--hidden_size", type=int, default=16, help="number of hidden units"
-    )
+    if RGCN_single_layer_flag:
+        parser.add_argument(
+            "--input_dim", type=int, default=16, help="number of hidden units"
+        )
+    else:
+        parser.add_argument(
+            "--hidden_size", type=int, default=16, help="number of hidden units"
+        )
     parser.add_argument("--gpu", type=int, default=0, help="gpu")
     parser.add_argument("--lr", type=float, default=1e-2, help="learning rate")
     parser.add_argument(
@@ -392,15 +475,18 @@ if __name__ == "__main__":
         default=-1,
         help="number of filter weight matrices, default: -1 [use all]",
     )
-    parser.add_argument(
-        "--n-layers", type=int, default=2, help="number of propagation rounds"
-    )
+    if not RGCN_single_layer_flag:
+        parser.add_argument(
+            "--n-layers", type=int, default=2, help="number of propagation rounds"
+        )
     parser.add_argument(
         "-e", "--num_epochs", type=int, default=50, help="number of training epochs"
     )
     parser.add_argument(
         "-d", "--dataset", type=str, required=True, help="dataset to use"
     )
+    parser.add_argument("--sort_by_src", action="store_true", help="sort by src")
+    parser.add_argument("--sort_by_etype", action="store_true", help="sort by etype")
     parser.add_argument("--l2norm", type=float, default=0, help="l2 norm coef")
     parser.add_argument(
         "--relabel",
@@ -414,6 +500,11 @@ if __name__ == "__main__":
         action="store_true",
         help="include self feature as a special relation",
     )
+    parser.add_argument(
+        "--reindex_eid",
+        action="store_true",
+        help="use new eid after sorting rather than load referential eids",
+    )
     parser.add_argument("--train_size", type=int, default=256)
     parser.add_argument("--test_size", type=int, default=64)
     parser.add_argument("--num_classes", type=int, default=4)
@@ -421,6 +512,11 @@ if __name__ == "__main__":
     fp.add_argument("--validation", dest="validation", action="store_true")
     fp.add_argument("--testing", dest="validation", action="store_false")
     parser.set_defaults(validation=True)
+    return parser
+
+
+if __name__ == "__main__":
+    parser = create_RGCN_parser(RGCN_single_layer_flag=False)
 
     args = parser.parse_args()
     print(args)

@@ -18,10 +18,11 @@
 // TODO: assume int32_t and float32 for now. but we may need to support other
 // types
 // TODO: check if torch builtin has the same encoding as int32_t and float32
+#include "DGLHackKernel/OpExport/DataLoader.inc"
 #include "DGLHackKernel/OpExport/HGTOps.inc"
 #include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.inc"
+#include "DGLHackKernel/OpExport/RGATOps.inc"
 #include "DGLHackKernel/OpExport/RGCNOps.inc"
-//#include "DGLHackKernel/OpExport/RGATOps.inc"
 
 std::vector<std::vector<at::Tensor>> biops_tensor_info(
     at::Tensor& one_tensor, at::Tensor& other_tensor) {
@@ -130,24 +131,6 @@ torch::Dict<std::string, int64_t> test_argument_takein(
   return result;
 }
 
-// std::vector<at::Tensor> load_fb15k237(bool sorted, bool sorted_by_src,
-// std::string data_path_prefix){
-//   cusp::csr_matrix<int, int, cusp::host_memory> fb15k237_graph =
-//   LoadFB15k237Data(sorted, sorted_by_src, data_path_prefix);
-// }
-
-// std::vector<at::Tensor> load_ogbn_wikikg2(bool sorted, std::string
-// data_path_prefix){
-//   cusp::csr_matrix<int, int, cusp::host_memory> ogbn_wikikg2_graph =
-//   LoadOGBNWikiKG2Data(sorted, data_path_prefix);
-// }
-
-// std::vector<at::Tensor> load_mag(std::string data_path_prefix){
-//   MyHeteroIntegratedCSR<int, std::allocator<int>>  mag_graph =
-//   LoadOGBN_MAG(data_path_prefix);
-
-// }
-
 TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("biops_tensor_info", biops_tensor_info);
   m.def("tensor_info", tensor_info);
@@ -159,7 +142,10 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
         RgcnLayer1BackwardImpl_wrapper_integratedcsr);
   m.def("transpose_csr", transpose_csr);
   m.def("test_argument_takein", test_argument_takein);
-  // m.def("load_fb15k237", load_fb15k237);
-  // m.def("load_ogbn_wikikg2", load_ogbn_wikikg2);
-  // m.def("load_mag", load_mag);
+  m.def("import_HGTLayerHyperParams", import_HGTLayerHyperParams);
+  m.def("export_HGTLayerHyperParams", export_HGTLayerHyperParams);
+  m.def("import_HGTLayerExecPreprocessedData",
+        import_HGTLayerExecPreprocessedData);
+  m.def("export_HGTLayerExecPreprocessedData",
+        export_HGTLayerExecPreprocessedData);
 }
