@@ -147,7 +147,7 @@ def get_fb15k237_data():
     dataset = FB15k237Dataset()
     graph = dataset[0]
     edges_srcs = graph.edges()[0].detach().numpy()
-    edges_dsts = graph.edges()[0].detach().numpy()
+    edges_dsts = graph.edges()[1].detach().numpy()
     edges_etypes = graph.edata["etype"].detach().numpy()
     edge_referential_eids = np.arange(len(edges_srcs), dtype=np.int64)
     return edges_srcs, edges_dsts, edges_etypes, edge_referential_eids
