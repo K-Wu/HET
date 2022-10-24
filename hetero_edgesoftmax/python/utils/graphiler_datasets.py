@@ -2,7 +2,7 @@
 # adapted from graphiler/python/graphiler/utils/setup.py
 import numpy as np
 from pathlib import Path
-
+from . import loaders_from_npy
 import torch
 
 from ogb.nodeproppred import DglNodePropPredDataset
@@ -107,6 +107,14 @@ def graphiler_load_data(name, feat_dim=GRAPHILER_DEFAULT_DIM, to_homo=True):
         node_feats,
         g.etypes,
     )  # returning etype for [HeteroGraphConv](https://docs.dgl.ai/en/0.8.x/generated/dgl.nn.pytorch.HeteroGraphConv.html) use.
+
+
+def graphiler_load_data_as_mydgl_graph(
+    name, feat_dim=GRAPHILER_DEFAULT_DIM, to_homo=True
+):
+    g, node_feats, g.etypes = graphiler_load_data(name, feat_dim, to_homo)
+    my_g = loaders_from_npy.create_mydgl_graph_coo_from_dgl_graph(g)
+    return my_g, node_feats, g.etypes
 
 
 def graphiler_setup_device(device="cuda:0"):

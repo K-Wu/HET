@@ -27,9 +27,9 @@
 
 #include "DGLHackKernel/DGLHackKernel.h"
 
+#include "absl/random/random.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/random/random.h"
 
 namespace sputnik {
 
@@ -84,15 +84,11 @@ class SpmmTest : public ::testing::Test {
 // variants of the kernel the N dim must be a multiple of 8/4
 // respectively. All of our test cases meet these criteria.
 typedef ::testing::Types<
-    Problem<4, 32, 32, 32>,
-    Problem<4, 32, 48, 128>,
-    Problem<7, 96, 40, 333>,
-    Problem<11, 55, 8, 293>,
-    Problem<4, 128, 128, 512>,
+    Problem<4, 32, 32, 32>, Problem<4, 32, 48, 128>, Problem<7, 96, 40, 333>,
+    Problem<11, 55, 8, 293>, Problem<4, 128, 128, 512>,
     Problem<64, 512, 512, 16384>,
     /* Some actualy problem sizes that we benchmark */
-    Problem<1024, 1024, 512, 131072>,
-    Problem<1024, 1024, 256, 131072>,
+    Problem<1024, 1024, 512, 131072>, Problem<1024, 1024, 256, 131072>,
     Problem<1024, 1024, 128, 131072>,
     /* Some more problems we commonly benchmark */
     Problem<2048, 2048, 128, 1024 * 1024>,
@@ -123,8 +119,10 @@ void TestFn(FloatSpmmFn spmm_fn, SpmmTest<Problem> *obj) {
   // no longer need to pad rows of the sparse matrix to use vector memory
   // instruction.
 
-  cusp::csr_matrix<int, int, cusp::host_memory> fb15k237_graph = LoadFB15k237Data(false, false);
-  cusp::csr_matrix<int, int, cusp::host_memory> fb15k237_graph_sorted_by_srcs = LoadFB15k237Data(true, true);
+  cusp::csr_matrix<int, int, cusp::host_memory> fb15k237_graph =
+      LoadFB15k237Data(false, false);
+  cusp::csr_matrix<int, int, cusp::host_memory> fb15k237_graph_sorted_by_srcs =
+      LoadFB15k237Data(true, true);
 
   RGCNLayer1Profiling_main(fb15k237_graph, 32, 32);
   RGCNLayer1Profiling_main(fb15k237_graph_sorted_by_srcs, 32, 32);
