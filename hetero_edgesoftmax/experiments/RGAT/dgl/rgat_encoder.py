@@ -6,8 +6,9 @@ from torch import nn
 import torch.nn.functional as F
 import dgl
 import dgl.nn as dglnn
+import argparse
 from ogb.nodeproppred import DglNodePropPredDataset
-from .rgnn_base import RelGraphConvEncoder
+
 
 # involve code heavily from dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
 
@@ -115,16 +116,24 @@ class RelationalAttLayer(nn.Module):
         # bias
         if bias:
             self.h_bias = nn.Parameter(th.Tensor(out_feat))
-            nn.init.zeros_(self.h_bias)
 
         # weight for self loop
         if self.self_loop:
             self.loop_weight = nn.Parameter(th.Tensor(in_feat, out_feat))
+
+        # self.reset_parameters()
+
+        self.dropout = nn.Dropout(dropout)
+
+    def reset_parameters(self):
+        if self.bias:
+            nn.init.zeros_(self.h_bias)
+        if self.self_loop:
             nn.init.xavier_uniform_(
                 self.loop_weight, gain=nn.init.calculate_gain("relu")
             )
-
-        self.dropout = nn.Dropout(dropout)
+        for module in self.conv.mods.values():
+            module.reset_parameters()
 
     # pylint: disable=invalid-name
     def forward(self, g, inputs):
@@ -153,6 +162,7 @@ class RelationalAttLayer(nn.Module):
         hs = self.conv(g, inputs_src)
 
         def _apply(ntype, h):
+            h = h.view(-1, self.out_feat)
             if self.self_loop:
                 h = h + th.matmul(inputs_dst[ntype], self.loop_weight)
             if self.bias:
@@ -248,11 +258,15 @@ class RelationalGATEncoder(nn.Module):
                 self.h_dim,
                 self.out_dim,
                 self.g.etypes,
-                self.n_heads,
+                1,  # overwrting the n_head setting as the classification should be output in this stage
                 activation=F.relu if self.last_layer_act else None,
                 self_loop=self.use_self_loop,
             )
         )
+
+    def reset_parameters(self):
+        for layer in self.layers:
+            layer.reset_parameters()
 
     def forward(self, h=None, blocks=None):
         """Forward computation
@@ -371,15 +385,14 @@ def prepare_data(args):
 
 
 def get_model(g, num_classes, args):
-    embed_layer = RelGraphEmbed(g, 128, exclude=["paper"])
+    embed_layer = RelGraphEmbed(g, args["n_hidden"], exclude=[])  # exclude=["paper"])
 
     model = RelationalGATEncoder(
         g,
-        128,
-        args["n_hidden"],
-        num_classes,
-        args["n_heads"],
-        num_hidden_layers=args["num_layers"] - 2,
+        h_dim=args["n_hidden"],
+        out_dim=num_classes,
+        n_heads=args["n_head"],
+        num_hidden_layers=args["num_layers"] - 1,
         dropout=args["dropout"],
         use_self_loop=True,
     )
@@ -397,7 +410,6 @@ def get_model(g, num_classes, args):
 def train(
     g, model, node_embed, optimizer, train_loader, split_idx, labels, device, run, args
 ):
-
     # training loop
     print("start training...")
     category = "paper"
@@ -408,7 +420,9 @@ def train(
         model.train()
 
         total_loss = 0
-
+        print(
+            "WARNING: ignoring the hard-coded paper features in the original dataset. This script is solely for performance R&D purposes."
+        )
         for input_nodes, seeds, blocks in train_loader:
             blocks = [blk.to(device) for blk in blocks]
             seeds = seeds[category]  # we only predict the nodes with type "category"
@@ -416,7 +430,8 @@ def train(
 
             emb = extract_embed(node_embed, input_nodes)
             # Add the batch's raw "paper" features
-            emb.update({"paper": g.ndata["feat"]["paper"][input_nodes["paper"]]})
+            # emb.update({"paper": g.ndata["feat"]["paper"][input_nodes["paper"]]})
+
             lbl = labels[seeds]
 
             if th.cuda.is_available():
@@ -439,7 +454,9 @@ def train(
         # result = test(g, model, node_embed, labels, device, split_idx, args)
         # logger.add_result(run, result)
         # train_acc, valid_acc, test_acc = result
-        print(f"Run: {run + 1:02d}, " f"Epoch: {epoch +1 :02d}, " f"Loss: {loss:.4f}, ")
+        print(
+            f"Run: {run + 1:02d}, " f"Epoch: {epoch + 1 :02d}, " f"Loss: {loss:.4f}, "
+        )
     #              f'Train: {100 * train_acc:.2f}%, '
     #              f'Valid: {100 * valid_acc:.2f}%, '
     #              f'Test: {100 * test_acc:.2f}%')
@@ -465,7 +482,6 @@ def main(args):
     model = model.to(device)
 
     for run in range(hyperparameters["runs"]):
-
         embed_layer.reset_parameters()
         model.reset_parameters()
 
