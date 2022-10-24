@@ -41,7 +41,8 @@ thrust::device_vector<T> import_thrust_device_vector_from_torch_tensor(
       reinterpret_cast<T*>(tensor.data_ptr()), reinterpret_cast<T*>(tensor.data_ptr()) + tensor.numel());
 }
 
-std::vector<std::vector<at::Tensor>> export_HGTLayerExecPreprocessedData(HGTLayerExecPreprocessedData& preprocessed_data){
+// internal utility function as the end of a torch API function, to convert the input tensors to the corresponding C++ data structures
+std::vector<std::vector<at::Tensor>> _export_HGTLayerExecPreprocessedData(HGTLayerExecPreprocessedData& preprocessed_data){
     std::vector<std::vector<at::Tensor>> result;
     result.push_back({});
     for (size_t idx_relation = 0; idx_relation<preprocessed_data.coo_matrices_column_indices_unique.size(); idx_relation++){
@@ -55,7 +56,8 @@ std::vector<std::vector<at::Tensor>> export_HGTLayerExecPreprocessedData(HGTLaye
     return result;
 }
 
-HGTLayerExecPreprocessedData import_HGTLayerExecPreprocessedData(const std::vector<at::Tensor>& tensors){
+// internal utility function as the beginning of a torch API function, to convert the corresponding C++ data structures to a torch structure
+HGTLayerExecPreprocessedData _import_HGTLayerExecPreprocessedData(const std::vector<at::Tensor>& tensors){
     std::vector<cusp::coo_matrix<int, int,
                                cusp::device_memory>::column_indices_array_type>
       coo_matrices_column_indices_unique;
@@ -72,10 +74,13 @@ HGTLayerExecPreprocessedData import_HGTLayerExecPreprocessedData(const std::vect
     return result;
 }
 
-torch::Dict<std::string, int64_t> export_HGTLayerHyperParams(const HGTLayerHyperParams& hyper_params){
+
+// internal utility function as the end of a torch API function, to convert the input tensors to the corresponding C++ data structures
+torch::Dict<std::string, int64_t> _export_HGTLayerHyperParams(const HGTLayerHyperParams& hyper_params){
     return convert_map_to_torch_dict(hyper_params.GetMapRepr());
 }
 
-HGTLayerHyperParams import_HGTLayerHyperParams(const torch::Dict<std::string, int64_t>& dict){
+// internal utility function as the beginning of a torch API function, to convert the corresponding C++ data structures to a torch structure
+HGTLayerHyperParams _import_HGTLayerHyperParams(const torch::Dict<std::string, int64_t>& dict){
     return HGTLayerHyperParams(convert_torch_dict_to_map(dict));
 }

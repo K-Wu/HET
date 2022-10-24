@@ -36,7 +36,8 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = create_RGCN_parser(RGCN_single_layer_flag=False)
+    parser = create_RGCN_parser(RGCN_single_layer_flag=True)
+    args = parser.parse_args()
     print(args)
     args.bfs_level = 1 + 1  # n_layers + 1 pruning used nodes for memory
     main(args)

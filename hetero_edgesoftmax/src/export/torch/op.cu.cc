@@ -142,10 +142,4 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
         RgcnLayer1BackwardImpl_wrapper_integratedcsr);
   m.def("transpose_csr", transpose_csr);
   m.def("test_argument_takein", test_argument_takein);
-  m.def("import_HGTLayerHyperParams", import_HGTLayerHyperParams);
-  m.def("export_HGTLayerHyperParams", export_HGTLayerHyperParams);
-  m.def("import_HGTLayerExecPreprocessedData",
-        import_HGTLayerExecPreprocessedData);
-  m.def("export_HGTLayerExecPreprocessedData",
-        export_HGTLayerExecPreprocessedData);
 }

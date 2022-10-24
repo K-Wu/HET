@@ -194,7 +194,7 @@ def load_fb15k237(
 
 
 def load_wikikg2(
-    dataset_path_prefix, sorted, sorted_by_srcs, transposed, infidel_sort_flag=True
+    dataset_path_prefix, sorted, sorted_by_srcs, transposed, infidel_sort_flag=False
 ):
     if sorted_by_srcs and (not sorted):
         raise ValueError("sorted_by_srcs is only valid when sorted is True")

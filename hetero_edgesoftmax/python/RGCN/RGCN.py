@@ -251,7 +251,11 @@ def RGCN_get_mydgl_graph(args):
             edge_etypes,
             edge_referential_eids,
         ) = utils.load_fb15k237(
-            "data/MyHybData", dataset_sort_flag, args.sort_by_src, False
+            "data/MyHybData",
+            dataset_sort_flag,
+            args.sort_by_src,
+            transposed=False,
+            infidel_sort_flag=False,
         )
         (
             transposed_edge_srcs,
@@ -259,7 +263,11 @@ def RGCN_get_mydgl_graph(args):
             transposed_edge_etypes,
             transposed_edge_referential_eids,
         ) = utils.load_fb15k237(
-            "data/MyHybData", dataset_sort_flag, args.sort_by_src, True
+            "data/MyHybData",
+            dataset_sort_flag,
+            args.sort_by_src,
+            transposed=True,
+            infidel_sort_flag=False,
         )
     elif args.dataset == "wikikg2":
         print("WARNING - loading wikikg2. Currently we only support a few dataset.")
@@ -269,7 +277,11 @@ def RGCN_get_mydgl_graph(args):
             edge_etypes,
             edge_referential_eids,
         ) = utils.load_wikikg2(
-            "data/MyWikiKG2", dataset_sort_flag, args.sort_by_src, False
+            "data/MyWikiKG2",
+            dataset_sort_flag,
+            args.sort_by_src,
+            transposed=False,
+            infidel_sort_flag=False,
         )
         (
             transposed_edge_srcs,
@@ -277,7 +289,11 @@ def RGCN_get_mydgl_graph(args):
             transposed_edge_etypes,
             transposed_edge_referential_eids,
         ) = utils.load_wikikg2(
-            "data/MyWikiKG2", dataset_sort_flag, args.sort_by_src, True
+            "data/MyWikiKG2",
+            dataset_sort_flag,
+            args.sort_by_src,
+            transposed=True,
+            infidel_sort_flag=False,
         )
     else:
         print("ERROR! now only support fb15k and wikikg2. Loading it now")
@@ -456,7 +472,7 @@ def RGCN_main_procedure(args, g, model, feats):
     print("^^^{:6f}^^^{:6f}".format(Used_memory, avg_run_time))
 
 
-def create_RGCN_parser():
+def create_RGCN_parser(RGCN_single_layer_flag):
     parser = argparse.ArgumentParser(description="RGCN")
     parser.add_argument("--dropout", type=float, default=0, help="dropout probability")
     if RGCN_single_layer_flag:
@@ -517,7 +533,6 @@ def create_RGCN_parser():
 
 if __name__ == "__main__":
     parser = create_RGCN_parser(RGCN_single_layer_flag=False)
-
     args = parser.parse_args()
     print(args)
     args.bfs_level = args.n_layers + 1  # pruning used nodes for memory
