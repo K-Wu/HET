@@ -101,7 +101,7 @@ def graphiler_load_data(name, feat_dim=GRAPHILER_DEFAULT_DIM, to_homo=True):
     if name in GRAPHILER_HETERO_DATASET:
         if to_homo:
             g = dgl.to_homogeneous(g)
-
+    print(len(g.etypes))
     return (
         g,
         node_feats,
@@ -109,10 +109,8 @@ def graphiler_load_data(name, feat_dim=GRAPHILER_DEFAULT_DIM, to_homo=True):
     )  # returning etype for [HeteroGraphConv](https://docs.dgl.ai/en/0.8.x/generated/dgl.nn.pytorch.HeteroGraphConv.html) use.
 
 
-def graphiler_load_data_as_mydgl_graph(
-    name, feat_dim=GRAPHILER_DEFAULT_DIM, to_homo=True
-):
-    g, node_feats, g.etypes = graphiler_load_data(name, feat_dim, to_homo)
+def graphiler_load_data_as_mydgl_graph(name, feat_dim, to_homo):
+    g, node_feats, g_etypes = graphiler_load_data(name, feat_dim, to_homo)
     my_g = loaders_from_npy.create_mydgl_graph_coo_from_dgl_graph(g)
     return my_g, node_feats, g.etypes
 

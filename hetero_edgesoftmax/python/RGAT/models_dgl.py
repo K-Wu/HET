@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # external code. @xiangsx knows the source.
 """RGAT layer implementation"""
 import itertools
@@ -287,9 +288,6 @@ class RelationalGATEncoder(nn.Module):
             for layer, block in zip(self.layers, blocks):
                 h = layer(block, h)
         return h
-
-
-# TODO: adapt the main function from [[hetero_edgesoftmax/python/RGCN/RGCN.py]]
 
 
 def parse_args():
