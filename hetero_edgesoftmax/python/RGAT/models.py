@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
+import itertools
+import torch as th
+from torch import nn
+import torch.nn.functional as F
+import dgl
+import dgl.nn as dglnn
+import argparse
+from ogb.nodeproppred import DglNodePropPredDataset
 
 
-class MyRelationalAttLayer(nn.Module):
+class HET_RelationalAttLayer(nn.Module):
     # corresponding to RelGraphConvLayer in dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
     r"""Relational graph attention layer.
 
@@ -40,7 +48,7 @@ class MyRelationalAttLayer(nn.Module):
         self_loop=False,
         dropout=0.0,
     ):
-        super(MyRelationalAttLayer, self).__init__()
+        super(HET_RelationalAttLayer, self).__init__()
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.rel_names = rel_names
@@ -101,8 +109,10 @@ class MyRelationalAttLayer(nn.Module):
         else:
             inputs_src = inputs_dst = inputs
 
-        hs = self.conv(g, inputs_src)
+        hs = self.conv(g, inputs_src)  # Replace this line with our own logic
 
+        # NB: let's leverage the built-in bias, activation and dropout here and only focus on SpMM/SDDMM in our kernel implementation.
+        # NB: GATConv class also provides bias, activation and dropout but we can ignore them for now.
         def _apply(ntype, h):
             h = h.view(-1, self.out_feat)
             if self.self_loop:
@@ -132,7 +142,7 @@ class MyRelationalAttLayer(nn.Module):
         return {ntype: _apply(ntype, h) for ntype, h in hs.items()}
 
 
-class MyRelationalGATEncoder(nn.Module):
+class HET_RelationalGATEncoder(nn.Module):
     # corresponding to EntityClassify in dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
     r"""Relational graph attention encoder
 
@@ -166,7 +176,7 @@ class MyRelationalGATEncoder(nn.Module):
         use_self_loop=True,
         last_layer_act=False,
     ):
-        super(MyRelationalGATEncoder, self).__init__()
+        super(HET_RelationalGATEncoder, self).__init__()
         self.n_heads = n_heads
         self.g = g
         self.h_dim = h_dim
@@ -184,7 +194,7 @@ class MyRelationalGATEncoder(nn.Module):
         # h2h
         for _ in range(self.num_hidden_layers):
             self.layers.append(
-                MyRelationalAttLayer(
+                HET_RelationalAttLayer(
                     self.h_dim,
                     self.h_dim,
                     self.g.etypes,
@@ -196,7 +206,7 @@ class MyRelationalGATEncoder(nn.Module):
             )
         # h2o
         self.layers.append(
-            MyRelationalAttLayer(
+            HET_RelationalAttLayer(
                 self.h_dim,
                 self.out_dim,
                 self.g.etypes,

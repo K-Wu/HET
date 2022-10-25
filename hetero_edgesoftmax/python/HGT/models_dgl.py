@@ -77,6 +77,8 @@ class HGTLayerHetero(nn.Module):
                 v = v_linear(h[srctype]).view(-1, self.n_heads, self.d_k)
                 q = q_linear(h[dsttype]).view(-1, self.n_heads, self.d_k)
 
+                # the following is going to be replaced by our own logic
+
                 e_id = self.edge_dict[(srctype, etype, dsttype)]
 
                 relation_att = self.relation_att[e_id]
@@ -105,6 +107,8 @@ class HGTLayerHetero(nn.Module):
                 },
                 cross_reducer="mean",
             )
+
+            # the aforementioned logic is replaced by our own logic
 
             new_h = {}
             for ntype in G.ntypes:

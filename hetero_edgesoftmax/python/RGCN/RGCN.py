@@ -84,7 +84,7 @@ class HET_EglRelGraphConv(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, g, x, etypes, norm=None):
+    def forward(self, g, x, norm=None):
         """Forward computation
 
         Parameters
@@ -172,8 +172,8 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
             layer_type=1,
         )
 
-    def forward(self, g, feats, edge_type, edge_norm):
-        h = self.layer2.forward(g, feats, edge_type, edge_norm)
+    def forward(self, g, feats, edge_norm):
+        h = self.layer2.forward(g, feats, edge_norm)
         return h
 
 
@@ -211,9 +211,9 @@ class HET_EGLRGCNModel(nn.Module):
             layer_type=1,
         )
 
-    def forward(self, g, feats, edge_type, edge_norm):
-        h = self.layer1.forward(g, feats, edge_type, edge_norm)
-        h = self.layer2.forward(g, h, edge_type, edge_norm)
+    def forward(self, g, feats, edge_norm):
+        h = self.layer1.forward(g, feats, edge_norm)
+        h = self.layer2.forward(g, h, edge_norm)
         return h
 
 
@@ -408,7 +408,7 @@ def RGCN_main_procedure(args, g, model, feats):
         optimizer.zero_grad()
         torch.cuda.synchronize()
         t0 = time.time()
-        logits = model(g, feats, edge_type, edge_norm)
+        logits = model(g, feats, edge_norm)
         torch.cuda.synchronize()
         tb = time.time()
         train_logits = logits[train_idx]

@@ -9,7 +9,7 @@ import dgl.function as fn
 from dgl.nn.functional import edge_softmax
 
 
-class HGTLayerHetero(nn.Module):
+class HET_HGTLayerHetero(nn.Module):
     def __init__(
         self,
         in_dim,
@@ -20,7 +20,7 @@ class HGTLayerHetero(nn.Module):
         dropout=0.2,
         use_norm=False,
     ):
-        super(HGTLayerHetero, self).__init__()
+        super(HET_HGTLayerHetero, self).__init__()
 
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -123,17 +123,17 @@ class HGTLayerHetero(nn.Module):
             return new_h
 
 
-class HGT_DGLHetero(nn.Module):
+class HET_HGT_DGLHetero(nn.Module):
     def __init__(self, node_dict, edge_dict, in_dim, h_dim, out_dim):
-        super(HGT_DGLHetero, self).__init__()
+        super(HET_HGT_DGLHetero, self).__init__()
         self.node_dict = node_dict
         self.edge_dict = edge_dict
         self.gcs = nn.ModuleList()
         self.in_dim = in_dim
         self.h_dim = h_dim
         self.out_dim = out_dim
-        self.layer0 = HGTLayerHetero(in_dim, h_dim, node_dict, edge_dict)
-        self.layer1 = HGTLayerHetero(h_dim, out_dim, node_dict, edge_dict)
+        self.layer0 = HET_HGTLayerHetero(in_dim, h_dim, node_dict, edge_dict)
+        self.layer1 = HET_HGTLayerHetero(h_dim, out_dim, node_dict, edge_dict)
 
     def forward(self, G, h):
         h = self.layer0(G, h)

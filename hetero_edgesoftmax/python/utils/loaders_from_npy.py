@@ -89,10 +89,20 @@ def create_mydgl_graph_coo_from_dgl_graph(g):
     total_edge_etypes = th.zeros(g.number_of_edges(), dtype=th.int64)
     total_edge_referential_eids = th.arange(g.number_of_edges(), dtype=th.int64)
     etype_offsets = np.zeros(len(g.etypes) + 1, dtype=np.int64)
-    for etype_idx, etype in enumerate(g.etypes):
+    for etype_idx, etype in enumerate(g.canonical_etypes):
         last_etype_offsets = etype_offsets[etype_idx - 1] if etype_idx > 0 else 0
         etype_offsets[etype_idx] = g.number_of_edges(etype=etype) + last_etype_offsets
         edge_srcs, edge_dsts = g.edges(etype=etype)  # both are int64 Torch.Tensor
+        print(
+            etype,
+            "edge_srcs \in [",
+            min(edge_srcs),
+            max(edge_srcs),
+            "], edge_dests \in [",
+            min(edge_dsts),
+            max(edge_dsts),
+            "]",
+        )
         # add to total
         total_edge_srcs[last_etype_offsets : etype_offsets[etype_idx]] = edge_srcs
         total_edge_dsts[last_etype_offsets : etype_offsets[etype_idx]] = edge_dsts

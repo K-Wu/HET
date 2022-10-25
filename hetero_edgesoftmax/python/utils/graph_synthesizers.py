@@ -14,4 +14,4 @@ def generate_synthetic_graph(n_nodes, prob_edge, seed=None):
 
 
 def generate_hetero_synthetic_graph():
-    pass
+    raise NotImplementedError

@@ -11,8 +11,10 @@
 #include <c10/cuda/CUDAException.h>
 #include <torch/extension.h>
 #include <torch/library.h>
+
 #include <iostream>
 #include <map>
+
 #include "DGLHackKernel/DGLHackKernel.h"
 #include "hetero_edgesoftmax.h"
 // TODO: assume int32_t and float32 for now. but we may need to support other
@@ -20,7 +22,6 @@
 // TODO: check if torch builtin has the same encoding as int32_t and float32
 #include "DGLHackKernel/OpExport/DataLoader.inc"
 #include "DGLHackKernel/OpExport/HGTOps.inc"
-#include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.inc"
 #include "DGLHackKernel/OpExport/RGATOps.inc"
 #include "DGLHackKernel/OpExport/RGCNOps.inc"
 
