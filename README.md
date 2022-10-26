@@ -4,6 +4,7 @@
 The following repos, as submodules in `third_party/`, are required. Please recursively clone these submodules.
 
 [CUTLASS](https://github.com/NVIDIA/cutlass)
+
 [sputnik](https://github.com/google-research/sputnik)
 
 Besides, as we register our kernels in PyTorch and libtorch are also required.
@@ -18,7 +19,6 @@ We need to set BUILD_TEST and BUILD_BENCHMARK as they will be passed on to sub-r
 ```
 mkdir build
 cd build
-export Torch_DIR=$CONDA_PREFIX/lib/python3.9/site-packages/torch/share/cmake/Torch/
 cmake .. -DCUDA_ARCHS="70;75" -DBUILD_TEST=ON -DBUILD_BENCHMARK=ON -DBUILD_GENERATED=ON -DCMAKE_PREFIX_PATH=`python -c 'import torch;print(torch.utils.cmake_prefix_path)'` -DBUILD_TORCH_API=ON
 ```
 
