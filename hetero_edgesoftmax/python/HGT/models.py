@@ -15,8 +15,7 @@ class HET_HGTLayerHetero(nn.Module):
         self,
         in_dim,
         out_dim,
-        node_dict,
-        edge_dict,
+        mydglgraph,
         n_heads=1,
         dropout=0.2,
         use_norm=False,
@@ -25,10 +24,10 @@ class HET_HGTLayerHetero(nn.Module):
 
         self.in_dim = in_dim
         self.out_dim = out_dim
-        self.node_dict = node_dict
-        self.edge_dict = edge_dict
-        self.num_types = len(node_dict)
-        self.num_relations = len(edge_dict)
+        self.node_dict = mydglgraph["legacy_metadata_from_dgl"]["node_dict"]
+        self.edge_dict = mydglgraph["legacy_metadata_from_dgl"]["edge_dict"]
+        self.num_types = len(self.node_dict)
+        self.num_relations = len(self.edge_dict)
         self.total_rel = self.num_types * self.num_relations * self.num_types
         self.n_heads = n_heads
         self.d_k = out_dim // n_heads
@@ -75,10 +74,10 @@ class HET_HGTLayerHetero(nn.Module):
         for srctype, etype, dsttype in G.canonical_etypes:
             assert (
                 srctype in G.ntypes
-            ) and "srctype not in G.ntypes. Maybe ambiguity in node types?"
+            ), "srctype not in G.ntypes. Maybe ambiguity in node types?"
             assert (
                 dsttype in G.ntypes
-            ) and "dsttype not in G.ntypes. Maybe ambiguity in node types?"
+            ), "dsttype not in G.ntypes. Maybe ambiguity in node types?"
             src_nodetypes.add(srctype)
             dest_nodetypes.add(dsttype)
 
@@ -134,19 +133,20 @@ class HET_HGTLayerHetero(nn.Module):
 
         message_per_edge = B.hgt_full_graph_heterogeneous_message_ops_csr(
             G, self.relation_msg, v
-        )
+        )  # shape (num_edges, n_heads, d_k)
 
         attn_score = B.hgt_full_graph_heterogeneous_attention_ops_csr(
             G, self.relation_att, k, q
-        )
+        )  # shape (num_edges, n_heads)
+
         attn_score = B.hgt_full_graph_edge_softmax_ops_csr(
             G, attn_score, mu=self.relation_pri, scale_factor_reciprocal=self.sqrt_dk
         )
-        # attn_score = relation_pri / self.sqrt_dk * attn_score
+        # NB: the scaling is: attn_score = relation_pri / self.sqrt_dk * attn_score
 
         new_h = B.hgt_full_graph_message_mean_aggregation(
             G, message_per_edge, attn_score
-        )
+        )  # shape (num_nodes, n_heads, d_k)
 
         new_h_normed = torch.zeros((G.number_of_nodes(), self.out_dim), device=h.device)
         for dsttype in dest_nodetypes:

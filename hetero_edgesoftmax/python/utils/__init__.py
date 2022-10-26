@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from .mydgl_graph import *
 from .sparse_matrix_converters import *
 from .loaders_from_npy import *
 from .graphiler_datasets import *

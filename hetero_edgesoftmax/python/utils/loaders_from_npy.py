@@ -3,31 +3,7 @@ import numpy as np
 import os
 import torch as th
 from . import sparse_matrix_converters
-
-
-class MyDGLGraph:
-    def __init__(self):
-        self.graph_data = dict()
-
-    def __setitem__(self, key, value):
-        self.graph_data[key] = value
-
-    def __getitem__(self, key):
-        return self.graph_data[key]
-
-    def to(self, device):
-        for key in self.graph_data:
-            for second_key in self.graph_data[key]:
-                self.graph_data[key][second_key] = self.graph_data[key][second_key].to(
-                    device
-                )
-
-    def cuda(self):
-        for key in self.graph_data:
-            for second_key in self.graph_data[key]:
-                self.graph_data[key][second_key] = self.graph_data[key][
-                    second_key
-                ].cuda()
+from . import mydgl_graph
 
 
 def convert_mydgl_graph_csr_to_coo(g):
@@ -66,7 +42,7 @@ def convert_mydgl_graph_coo_to_csr(g):
 
 
 def create_mydgl_graph_csr_torch(row_ptr, col_idx, rel_types, eids):
-    g = MyDGLGraph()
+    g = mydgl_graph.MyDGLGraph()
     g["original"] = dict()
     g["original"]["row_ptr"] = row_ptr
     g["original"]["col_idx"] = col_idx
@@ -115,7 +91,7 @@ def create_mydgl_graph_coo_from_dgl_graph(g):
 def create_mydgl_graph_coo_torch(
     edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
 ):
-    g = MyDGLGraph()
+    g = mydgl_graph.MyDGLGraph()
     g["original"] = dict()
     g["original"]["srcs"] = edge_srcs
     g["original"]["dsts"] = edge_dsts

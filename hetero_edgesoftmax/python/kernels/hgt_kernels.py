@@ -82,3 +82,45 @@ def hgt_full_graph_hetero_attention_ops_backward_csr(
         grad_k,
         grad_q,
     )
+
+
+def hgt_full_graph_message_mean_aggregation_backward_csr(
+    transposed_row_ptr,
+    transposed_col_idx,
+    transposed_eids,
+    transposed_reltypes,
+    gradout,
+    grad_weight,
+    grad_attn_score,
+):
+    return torch.ops.torch_hetero_edgesoftmax.hgt_full_graph_message_mean_aggregation_backward_csr(
+        transposed_row_ptr,
+        transposed_col_idx,
+        transposed_eids,
+        transposed_reltypes,
+        gradout,
+        grad_weight,
+        grad_attn_score,
+    )
+
+
+def hgt_full_graph_message_mean_aggregation_csr(
+    row_ptr,
+    col_idx,
+    eids,
+    reltypes,
+    message_per_edge,
+    attn_score,
+    ret,
+):
+    return (
+        torch.ops.torch_hetero_edgesoftmax.hgt_full_graph_message_mean_aggregation_csr(
+            row_ptr,
+            col_idx,
+            eids,
+            reltypes,
+            message_per_edge,
+            attn_score,
+            ret,
+        )
+    )
