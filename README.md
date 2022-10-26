@@ -7,7 +7,7 @@ The following repos, as submodules in `third_party/`, are required. Please recur
 
 [sputnik](https://github.com/google-research/sputnik)
 
-Besides, as we register our kernels in PyTorch and libtorch are also required.
+Besides, as we register our kernels in PyTorch (optional cmake build component), pytorch-dev and libtorch are also required.
 
 ## Code Quality
 [![CodeFactor](https://www.codefactor.io/repository/github/k-wu/hetero_edgesoftmax/badge?s=34a94a8b3a8b3d83b6582edc6e24b1e5d0a207b9)](https://www.codefactor.io/repository/github/k-wu/hetero_edgesoftmax)
