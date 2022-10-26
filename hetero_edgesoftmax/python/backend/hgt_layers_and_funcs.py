@@ -5,7 +5,7 @@ import torch as th
 from .. import kernels as K
 
 
-class HGTFullGraphHeterogeneousMessageOps(th.autograd.Function):
+class HGTFullGraphHeteroMessageOps(th.autograd.Function):
     @staticmethod
     def forward(
         ctx,
@@ -34,7 +34,7 @@ class HGTFullGraphHeterogeneousMessageOps(th.autograd.Function):
             weight,
             applied_vlinear_node_features,
         )
-        K.hgt_heterogeneous_message_ops_csr(
+        K.hgt_full_graph_hetero_message_ops_csr(
             row_ptr, col_idx, eids, reltypes, weight, applied_vlinear_node_features, ret
         )
         return ret
@@ -56,20 +56,21 @@ class HGTFullGraphHeterogeneousMessageOps(th.autograd.Function):
         print(weight.numel())
         grad_weight = th.zeros_like(weight)
         grad_v = th.zeros_like(applied_vlinear_node_features)
-        K.hgt_heterogeneous_message_ops_backward_csr(
+        K.hgt_full_graph_hetero_message_ops_backward_csr(
             transposed_row_ptr,
             transposed_col_idx,
             transposed_eids,
             transposed_reltypes,
-            gradout,
+            weight,
             applied_vlinear_node_features,
+            gradout,
             grad_weight,
             grad_v,
         )
         return None, None, None, None, None, None, None, None, grad_weight, grad_v, None
 
 
-class HGTFullGraphHeterogeneousAttentionOps(th.autograd.Function):
+class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
     @staticmethod
     def forward(
         ctx,
@@ -100,7 +101,7 @@ class HGTFullGraphHeterogeneousAttentionOps(th.autograd.Function):
             applied_klinear_node_features,
             applied_qlinear_node_features,
         )
-        K.hgt_heterogeneous_message_ops_csr(
+        K.hgt_full_graph_hetero_attention_ops_csr(
             row_ptr,
             col_idx,
             eids,
@@ -131,14 +132,15 @@ class HGTFullGraphHeterogeneousAttentionOps(th.autograd.Function):
         grad_weight = th.zeros_like(weight)
         grad_k = th.zeros_like(applied_klinear_node_features)
         grad_q = th.zeros_like(applied_qlinear_node_features)
-        K.hgt_heterogeneous_attention_ops_backward_csr(
+        K.hgt_full_graph_hetero_attention_ops_backward_csr(
             transposed_row_ptr,
             transposed_col_idx,
             transposed_eids,
             transposed_reltypes,
-            gradout,
+            weight,
             applied_klinear_node_features,
             applied_qlinear_node_features,
+            gradout,
             grad_weight,
             grad_k,
             grad_q,
@@ -159,9 +161,7 @@ class HGTFullGraphHeterogeneousAttentionOps(th.autograd.Function):
         )
 
 
-def hgt_full_graph_heterogeneous_message_ops_csr(
-    graph, weight, applied_vlinear_node_features
-):
+def hgt_full_graph_hetero_message_ops_csr(graph, weight, applied_vlinear_node_features):
     row_ptr = graph["original"]["row_ptr"]
     col_idx = graph["original"]["col_idx"]
     eids = graph["original"]["eids"]
@@ -176,7 +176,7 @@ def hgt_full_graph_heterogeneous_message_ops_csr(
         device=weight.device,
         requires_grad=True,
     )
-    return HGTFullGraphHeterogeneousMessageOps.apply(
+    return HGTFullGraphHeteroMessageOps.apply(
         row_ptr,
         col_idx,
         eids,
@@ -191,7 +191,7 @@ def hgt_full_graph_heterogeneous_message_ops_csr(
     )
 
 
-def hgt_full_graph_heterogeneous_attention_ops_csr(
+def hgt_full_graph_hetero_attention_ops_csr(
     graph, weight, applied_klinear_node_features, applied_qlinear_node_features
 ):
     row_ptr = graph["original"]["row_ptr"]
@@ -208,7 +208,7 @@ def hgt_full_graph_heterogeneous_attention_ops_csr(
         device=weight.device,
         requires_grad=True,
     )
-    return HGTFullGraphHeterogeneousAttentionOps.apply(
+    return HGTFullGraphHeteroAttentionOps.apply(
         row_ptr,
         col_idx,
         eids,

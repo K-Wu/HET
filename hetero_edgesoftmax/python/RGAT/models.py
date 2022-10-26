@@ -3,10 +3,7 @@ import itertools
 import torch as th
 from torch import nn
 import torch.nn.functional as F
-import dgl
 import dgl.nn as dglnn
-import argparse
-from ogb.nodeproppred import DglNodePropPredDataset
 
 
 class HET_RelationalAttLayer(nn.Module):

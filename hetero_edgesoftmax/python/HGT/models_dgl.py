@@ -42,7 +42,7 @@ class HGTLayerHetero(nn.Module):
         self.norms = nn.ModuleList()
         self.use_norm = use_norm
 
-        for t in range(self.num_types):
+        for _ in range(self.num_types):
             self.k_linears.append(nn.Linear(in_dim, out_dim))
             self.q_linears.append(nn.Linear(in_dim, out_dim))
             self.v_linears.append(nn.Linear(in_dim, out_dim))
