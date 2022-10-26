@@ -30,6 +30,11 @@ thrust::device_vector<T *> GetDeviceVectorOfPointersToArrays(
 // examplified in the answer here https://stackoverflow.com/a/395158 An example
 // of initializing shared_ptr: https://godbolt.org/z/Yj86q3fEP backup:
 // https://gist.github.com/K-Wu/141d949fd467ec7ff32e003ad0a5c5ce
+
+// TODO: in our export implementation, we actually prefer source node to
+// destination node because in this case we may reuse the routine for both
+// message and the first stage of attention generation. Both processes will work
+// on source node.
 struct HGTLayerExecPreprocessedData {
   std::vector<cusp::coo_matrix<int, int,
                                cusp::device_memory>::column_indices_array_type>

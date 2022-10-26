@@ -1,7 +1,7 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
 #include "DGLHackKernel/HGTPreprocessing.h"
-#include "EdgeAttention_4/EdgeAttentionCOO.h"
+#include "EdgeAttention_4/mysgemm_functor.cu.h"
 
 // extract this kernel with mysgemm_ into template specialization
 // template <int NODE_INPUT_DIM_PER_HEAD/*derived from OUT_DIM and NUM_HEADS*/,
@@ -29,7 +29,7 @@ __global__ void _global_EdgeMessageConcatenatedCOOKernel(
        node_entry_idx <
        sizes_unique_index_to_dest_node_per_relation[relation_idx];
        node_entry_idx += stride) {
-    mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, false>::
+    mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, false, false>::
         exec_function(
             OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx],
             NODE_INPUT_DIM_PER_HEAD,
@@ -37,6 +37,6 @@ __global__ void _global_EdgeMessageConcatenatedCOOKernel(
                                        NODE_INPUT_DIM_PER_HEAD *
                                        NODE_INPUT_DIM_PER_HEAD],
             node_input_data, intermediate_node_vect[relation_idx], nullptr,
-            node_entry_idx);
+            nullptr, node_entry_idx);
   }
 }

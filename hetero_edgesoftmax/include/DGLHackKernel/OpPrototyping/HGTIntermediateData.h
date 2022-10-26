@@ -19,6 +19,9 @@ struct HGTLayerIntermediateData {
       NodeOutputFeatures;  // [num_nodes, num_heads, alinear_out_dim]
   MySimpleNDArray<float, thrust::device_allocator<float>>
       NodeInputFeatures;  // [num_nodes, num_heads, input_dim]
+  MySimpleNDArray<float4, thrust::device_allocator<float4>>
+      EdgeAttention;  // [num_edges, num_heads]
+                      // TODO: now EdgeAttention only works for num_heads = 4
   size_t ltsgemm_workspaceSize;
   std::vector<thrust::device_vector<float>> intermediate_node_vect;
   HGTLayerIntermediateData(
@@ -33,7 +36,8 @@ struct HGTLayerIntermediateData {
       MySimpleNDArray<float, thrust::device_allocator<float>>
           &NodeInputFeatures,
       size_t ltsgemm_workspaceSize,
-      std::vector<thrust::device_vector<float>> &intermediate_node_vect)
+      std::vector<thrust::device_vector<float>> &intermediate_node_vect,
+      MySimpleNDArray<float4, thrust::device_allocator<float4>> &EdgeAttention)
       : KLinearOutput(KLinearOutput),
         QLinearOutput(QLinearOutput),
         VLinearOutput(VLinearOutput),
@@ -42,7 +46,8 @@ struct HGTLayerIntermediateData {
         NodeOutputFeatures(NodeOutputFeatures),
         NodeInputFeatures(NodeInputFeatures),
         ltsgemm_workspaceSize(ltsgemm_workspaceSize),
-        intermediate_node_vect(intermediate_node_vect) {
+        intermediate_node_vect(intermediate_node_vect),
+        EdgeAttention(EdgeAttention) {
     intermediate_node_vect_d = GetDeviceVectorOfPointersToArrays<
         float, std::vector<thrust::device_vector<float>>>(
         intermediate_node_vect);
@@ -57,7 +62,8 @@ struct HGTLayerIntermediateData {
         NodeOutputFeatures(NodeOutputFeatures),
         NodeInputFeatures(NodeInputFeatures),
         ltsgemm_workspaceSize(other.ltsgemm_workspaceSize),
-        intermediate_node_vect(other.intermediate_node_vect) {
+        intermediate_node_vect(other.intermediate_node_vect),
+        EdgeAttention(other.EdgeAttention) {
     intermediate_node_vect_d = GetDeviceVectorOfPointersToArrays<
         float, std::vector<thrust::device_vector<float>>>(
         intermediate_node_vect);
@@ -71,7 +77,8 @@ struct HGTLayerIntermediateData {
         NodeOutputFeatures(NodeOutputFeatures),
         NodeInputFeatures(NodeInputFeatures),
         ltsgemm_workspaceSize(other.ltsgemm_workspaceSize),
-        intermediate_node_vect(std::move(other.intermediate_node_vect)) {
+        intermediate_node_vect(std::move(other.intermediate_node_vect)),
+        EdgeAttention(std::move(other.EdgeAttention)) {
     intermediate_node_vect_d = GetDeviceVectorOfPointersToArrays<
         float, std::vector<thrust::device_vector<float>>>(
         intermediate_node_vect);
@@ -123,6 +130,8 @@ CreateHGTLayerInputIntermediateOutputData(
        hyper_params.alinear_out_dim});
   MySimpleNDArray<float, thrust::device_allocator<float>> NodeInputFeatures(
       {hyper_params.num_nodes, hyper_params.num_heads, hyper_params.input_dim});
+  MySimpleNDArray<float4, thrust::device_allocator<float4>> EdgeAttention(
+      {hyper_params.num_edges, hyper_params.num_heads});
 
   // fill in random data
   // TODO: we may fill in magic number data for debug purpose in future
@@ -155,5 +164,6 @@ CreateHGTLayerInputIntermediateOutputData(
   return std::make_shared<HGTLayerIntermediateData>(
       KLinearOutput, QLinearOutput, VLinearOutput, ALinearOutput,
       ltsgemm_workspace, NodeOutputFeatures, NodeInputFeatures,
-      hyper_params.PERF_ltsgemm_workspaceSize, intermediate_node_vect);
+      hyper_params.PERF_ltsgemm_workspaceSize, intermediate_node_vect,
+      EdgeAttention);
 }

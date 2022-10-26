@@ -63,18 +63,84 @@ class HET_HGTLayerHetero(nn.Module):
         nn.init.xavier_uniform_(self.relation_msg)
 
     def forward(self, G, h):
+        # G is MyDGLGraph, h is node features with shape (num_nodes, in_dim).
+        # We assume h is made up of one continuous memory region, where each node type occupies one continuous subregion.
+        # TODO: add node type offset to G.
         with G.local_scope():
             node_dict, edge_dict = self.node_dict, self.edge_dict
+
+            src_nodetypes = set()
+            dest_nodetypes = set()
+            for srctype, etype, dsttype in G.canonical_etypes:
+                assert (
+                    srctype in G.ntypes
+                ) and "srctype not in G.ntypes. Maybe ambiguity in node types?"
+                assert (
+                    dsttype in G.ntypes
+                ) and "dsttype not in G.ntypes. Maybe ambiguity in node types?"
+                src_nodetypes.add(srctype)
+                dest_nodetypes.add(dsttype)
+
+            k = torch.zeros(
+                (G.number_of_nodes(), self.n_heads, self.d_k), device=h.device
+            )
+            q = torch.zeros(
+                (G.number_of_nodes(), self.n_heads, self.d_k), device=h.device
+            )
+            v = torch.zeros(
+                (G.number_of_nodes(), self.n_heads, self.d_k), device=h.device
+            )
+
+            for srctype in src_nodetypes:
+                k_linear = self.k_linears[node_dict[srctype]]
+                v_linear = self.v_linears[node_dict[srctype]]
+                k[
+                    G["original"]["node_type_offsets"][srctype] : G["original"][
+                        "node_type_offsets"
+                    ][srctype + 1]
+                ] = k_linear(
+                    h[
+                        G["original"]["node_type_offsets"][srctype] : G["original"][
+                            "node_type_offsets"
+                        ][srctype + 1]
+                    ]
+                ).view(
+                    -1, self.n_heads, self.d_k
+                )
+                v[
+                    G["original"]["node_type_offsets"][srctype] : G["original"][
+                        "node_type_offsets"
+                    ][srctype + 1]
+                ] = v_linear(
+                    h[
+                        G["original"]["node_type_offsets"][srctype] : G["original"][
+                            "node_type_offsets"
+                        ][srctype + 1]
+                    ]
+                ).view(
+                    -1, self.n_heads, self.d_k
+                )
+
+            for dsttype in dest_nodetypes:
+                q_linear = self.q_linears[node_dict[dsttype]]
+                q[
+                    G["original"]["node_type_offsets"][dsttype] : G["original"][
+                        "node_type_offsets"
+                    ][dsttype + 1]
+                ] = q_linear(
+                    h[
+                        G["original"]["node_type_offsets"][dsttype] : G["original"][
+                            "node_type_offsets"
+                        ][dsttype + 1]
+                    ]
+                ).view(
+                    -1, self.n_heads, self.d_k
+                )
+
             for srctype, etype, dsttype in G.canonical_etypes:
                 sub_graph = G[srctype, etype, dsttype]
 
-                k_linear = self.k_linears[node_dict[srctype]]
-                v_linear = self.v_linears[node_dict[srctype]]
-                q_linear = self.q_linears[node_dict[dsttype]]
-
-                k = k_linear(h[srctype]).view(-1, self.n_heads, self.d_k)
-                v = v_linear(h[srctype]).view(-1, self.n_heads, self.d_k)
-                q = q_linear(h[dsttype]).view(-1, self.n_heads, self.d_k)
+                # the following is going to be replaced by our own logic
 
                 e_id = self.edge_dict[(srctype, etype, dsttype)]
 
@@ -104,6 +170,8 @@ class HET_HGTLayerHetero(nn.Module):
                 },
                 cross_reducer="mean",
             )
+
+            # the aforementioned logic is replaced by our own logic
 
             new_h = {}
             for ntype in G.ntypes:

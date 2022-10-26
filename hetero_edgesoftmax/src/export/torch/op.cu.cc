@@ -22,6 +22,7 @@
 // TODO: check if torch builtin has the same encoding as int32_t and float32
 #include "DGLHackKernel/OpExport/DataLoader.inc"
 #include "DGLHackKernel/OpExport/HGTOps.inc"
+#include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.h"
 #include "DGLHackKernel/OpExport/RGATOps.inc"
 #include "DGLHackKernel/OpExport/RGCNOps.inc"
 
