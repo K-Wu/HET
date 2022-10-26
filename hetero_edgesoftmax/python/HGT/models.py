@@ -7,6 +7,7 @@ import torch.nn as nn
 
 import dgl.function as fn
 from dgl.nn.functional import edge_softmax
+from .. import backend as B
 
 
 class HET_HGTLayerHetero(nn.Module):
@@ -66,129 +67,119 @@ class HET_HGTLayerHetero(nn.Module):
         # G is MyDGLGraph, h is node features with shape (num_nodes, in_dim).
         # We assume h is made up of one continuous memory region, where each node type occupies one continuous subregion.
         # TODO: add node type offset to G.
-        with G.local_scope():
-            node_dict, edge_dict = self.node_dict, self.edge_dict
 
-            src_nodetypes = set()
-            dest_nodetypes = set()
-            for srctype, etype, dsttype in G.canonical_etypes:
-                assert (
-                    srctype in G.ntypes
-                ) and "srctype not in G.ntypes. Maybe ambiguity in node types?"
-                assert (
-                    dsttype in G.ntypes
-                ) and "dsttype not in G.ntypes. Maybe ambiguity in node types?"
-                src_nodetypes.add(srctype)
-                dest_nodetypes.add(dsttype)
+        node_dict, edge_dict = self.node_dict, self.edge_dict
 
-            k = torch.zeros(
-                (G.number_of_nodes(), self.n_heads, self.d_k), device=h.device
-            )
-            q = torch.zeros(
-                (G.number_of_nodes(), self.n_heads, self.d_k), device=h.device
-            )
-            v = torch.zeros(
-                (G.number_of_nodes(), self.n_heads, self.d_k), device=h.device
-            )
+        src_nodetypes = set()
+        dest_nodetypes = set()
+        for srctype, etype, dsttype in G.canonical_etypes:
+            assert (
+                srctype in G.ntypes
+            ) and "srctype not in G.ntypes. Maybe ambiguity in node types?"
+            assert (
+                dsttype in G.ntypes
+            ) and "dsttype not in G.ntypes. Maybe ambiguity in node types?"
+            src_nodetypes.add(srctype)
+            dest_nodetypes.add(dsttype)
 
-            for srctype in src_nodetypes:
-                k_linear = self.k_linears[node_dict[srctype]]
-                v_linear = self.v_linears[node_dict[srctype]]
-                k[
+        k = torch.zeros((G.number_of_nodes(), self.n_heads, self.d_k), device=h.device)
+        q = torch.zeros((G.number_of_nodes(), self.n_heads, self.d_k), device=h.device)
+        v = torch.zeros((G.number_of_nodes(), self.n_heads, self.d_k), device=h.device)
+
+        for srctype in src_nodetypes:
+            k_linear = self.k_linears[node_dict[srctype]]
+            v_linear = self.v_linears[node_dict[srctype]]
+            k[
+                G["original"]["node_type_offsets"][srctype] : G["original"][
+                    "node_type_offsets"
+                ][srctype + 1]
+            ] = k_linear(
+                h[
                     G["original"]["node_type_offsets"][srctype] : G["original"][
                         "node_type_offsets"
                     ][srctype + 1]
-                ] = k_linear(
-                    h[
-                        G["original"]["node_type_offsets"][srctype] : G["original"][
-                            "node_type_offsets"
-                        ][srctype + 1]
-                    ]
-                ).view(
-                    -1, self.n_heads, self.d_k
-                )
-                v[
+                ]
+            ).view(
+                -1, self.n_heads, self.d_k
+            )
+            v[
+                G["original"]["node_type_offsets"][srctype] : G["original"][
+                    "node_type_offsets"
+                ][srctype + 1]
+            ] = v_linear(
+                h[
                     G["original"]["node_type_offsets"][srctype] : G["original"][
                         "node_type_offsets"
                     ][srctype + 1]
-                ] = v_linear(
-                    h[
-                        G["original"]["node_type_offsets"][srctype] : G["original"][
-                            "node_type_offsets"
-                        ][srctype + 1]
-                    ]
-                ).view(
-                    -1, self.n_heads, self.d_k
-                )
+                ]
+            ).view(
+                -1, self.n_heads, self.d_k
+            )
 
-            for dsttype in dest_nodetypes:
-                q_linear = self.q_linears[node_dict[dsttype]]
-                q[
+        for dsttype in dest_nodetypes:
+            q_linear = self.q_linears[node_dict[dsttype]]
+            q[
+                G["original"]["node_type_offsets"][dsttype] : G["original"][
+                    "node_type_offsets"
+                ][dsttype + 1]
+            ] = q_linear(
+                h[
                     G["original"]["node_type_offsets"][dsttype] : G["original"][
                         "node_type_offsets"
                     ][dsttype + 1]
-                ] = q_linear(
-                    h[
+                ]
+            ).view(
+                -1, self.n_heads, self.d_k
+            )
+
+        message_per_edge = B.hgt_full_graph_heterogeneous_message_ops_csr(
+            G, self.relation_msg, v
+        )
+
+        attn_score = B.hgt_full_graph_heterogeneous_attention_ops_csr(
+            G, self.relation_att, k, q
+        )
+        attn_score = B.hgt_full_graph_edge_softmax_ops_csr(
+            G, attn_score, mu=self.relation_pri, scale_factor_reciprocal=self.sqrt_dk
+        )
+        # attn_score = relation_pri / self.sqrt_dk * attn_score
+
+        new_h = B.hgt_full_graph_message_mean_aggregation(
+            G, message_per_edge, attn_score
+        )
+
+        new_h_normed = torch.zeros((G.number_of_nodes(), self.out_dim), device=h.device)
+        for dsttype in dest_nodetypes:
+            """
+            Step 3: Target-specific Aggregation
+            x = norm( W[node_type] * gelu( Agg(x) ) + x )
+            """
+            n_id = node_dict[dsttype]
+            alpha = torch.sigmoid(self.skip[n_id])
+
+            trans_out = self.drop(
+                self.a_linears[n_id](
+                    new_h[
                         G["original"]["node_type_offsets"][dsttype] : G["original"][
                             "node_type_offsets"
                         ][dsttype + 1]
                     ]
-                ).view(
-                    -1, self.n_heads, self.d_k
                 )
-
-            for srctype, etype, dsttype in G.canonical_etypes:
-                sub_graph = G[srctype, etype, dsttype]
-
-                # the following is going to be replaced by our own logic
-
-                e_id = self.edge_dict[(srctype, etype, dsttype)]
-
-                relation_att = self.relation_att[e_id]
-                relation_pri = self.relation_pri[e_id]
-                relation_msg = self.relation_msg[e_id]
-
-                k = torch.einsum("bij,ijk->bik", k, relation_att)
-                v = torch.einsum("bij,ijk->bik", v, relation_msg)
-
-                sub_graph.srcdata["k"] = k
-                sub_graph.dstdata["q"] = q
-                sub_graph.srcdata["v_%d" % e_id] = v
-
-                sub_graph.apply_edges(fn.v_dot_u("q", "k", "t"))
-                attn_score = (
-                    sub_graph.edata.pop("t").sum(-1) * relation_pri / self.sqrt_dk
-                )
-                attn_score = edge_softmax(sub_graph, attn_score, norm_by="dst")
-
-                sub_graph.edata["t"] = attn_score.unsqueeze(-1)
-
-            G.multi_update_all(
-                {
-                    etype: (fn.u_mul_e("v_%d" % e_id, "t", "m"), fn.sum("m", "t"))
-                    for etype, e_id in edge_dict.items()
-                },
-                cross_reducer="mean",
             )
-
-            # the aforementioned logic is replaced by our own logic
-
-            new_h = {}
-            for ntype in G.ntypes:
-                """
-                Step 3: Target-specific Aggregation
-                x = norm( W[node_type] * gelu( Agg(x) ) + x )
-                """
-                n_id = node_dict[ntype]
-                alpha = torch.sigmoid(self.skip[n_id])
-                t = G.nodes[ntype].data["t"].view(-1, self.out_dim)
-                trans_out = self.drop(self.a_linears[n_id](t))
-                trans_out = trans_out * alpha  # + h[ntype] * (1-alpha) ?
-                if self.use_norm:
-                    new_h[ntype] = self.norms[n_id](trans_out)
-                else:
-                    new_h[ntype] = trans_out
-            return new_h
+            trans_out = trans_out * alpha  # + h[ntype] * (1-alpha) ?
+            if self.use_norm:
+                new_h_normed[
+                    G["original"]["node_type_offsets"][dsttype] : G["original"][
+                        "node_type_offsets"
+                    ][dsttype + 1]
+                ] = self.norms[n_id](trans_out)
+            else:
+                new_h_normed[
+                    G["original"]["node_type_offsets"][dsttype] : G["original"][
+                        "node_type_offsets"
+                    ][dsttype + 1]
+                ] = trans_out
+        return new_h_normed
 
 
 class HET_HGT_DGLHetero(nn.Module):
