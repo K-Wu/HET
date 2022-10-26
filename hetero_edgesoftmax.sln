@@ -1,11 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.31829.152
+# Visual Studio Version 17
+VisualStudioVersion = 17.2.32630.192
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "hetero_edgesoftmax", "hetero_edgesoftmax\hetero_edgesoftmax.vcxproj", "{05BDDFD2-CF7A-4476-9FC1-B7F9DB1E4F0B}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "show_smid", "show_smid\show_smid.vcxproj", "{D0CAB66F-F8F2-48A1-9CDC-68B2DBC30E6B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "myhyb_test", "hetero_edgesoftmax\myhyb_test.vcxproj", "{DC562BF4-E245-4644-8E2C-57600C3729F9}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DGLHackKernelTest", "hetero_edgesoftmax\DGLHackKernelTest.vcxproj", "{4FC5211B-7FB5-4FE2-961A-A50EDC08C274}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,10 +19,14 @@ Global
 		{05BDDFD2-CF7A-4476-9FC1-B7F9DB1E4F0B}.Debug|x64.Build.0 = Debug|x64
 		{05BDDFD2-CF7A-4476-9FC1-B7F9DB1E4F0B}.Release|x64.ActiveCfg = Release|x64
 		{05BDDFD2-CF7A-4476-9FC1-B7F9DB1E4F0B}.Release|x64.Build.0 = Release|x64
-		{D0CAB66F-F8F2-48A1-9CDC-68B2DBC30E6B}.Debug|x64.ActiveCfg = Debug|x64
-		{D0CAB66F-F8F2-48A1-9CDC-68B2DBC30E6B}.Debug|x64.Build.0 = Debug|x64
-		{D0CAB66F-F8F2-48A1-9CDC-68B2DBC30E6B}.Release|x64.ActiveCfg = Release|x64
-		{D0CAB66F-F8F2-48A1-9CDC-68B2DBC30E6B}.Release|x64.Build.0 = Release|x64
+		{DC562BF4-E245-4644-8E2C-57600C3729F9}.Debug|x64.ActiveCfg = Debug|x64
+		{DC562BF4-E245-4644-8E2C-57600C3729F9}.Debug|x64.Build.0 = Debug|x64
+		{DC562BF4-E245-4644-8E2C-57600C3729F9}.Release|x64.ActiveCfg = Release|x64
+		{DC562BF4-E245-4644-8E2C-57600C3729F9}.Release|x64.Build.0 = Release|x64
+		{4FC5211B-7FB5-4FE2-961A-A50EDC08C274}.Debug|x64.ActiveCfg = Debug|x64
+		{4FC5211B-7FB5-4FE2-961A-A50EDC08C274}.Debug|x64.Build.0 = Debug|x64
+		{4FC5211B-7FB5-4FE2-961A-A50EDC08C274}.Release|x64.ActiveCfg = Release|x64
+		{4FC5211B-7FB5-4FE2-961A-A50EDC08C274}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
