@@ -35,3 +35,17 @@ def rgcn_layer1_backward_csr(
     return torch.ops.torch_hetero_edgesoftmax.rgcn_layer1_backward_csr(
         row_ptr, col_idx, eids, reltypes, x, weight, norm, gradout, grad_x, grad_weight
     )
+
+
+def rgcn_layer1_coo(row_idx, col_idx, eids, reltypes, x, weight, norm, ret):
+    return torch.ops.torch_hetero_edgesoftmax.rgcn_layer1_coo(
+        row_idx, col_idx, eids, reltypes, x, weight, norm, ret
+    )
+
+
+def rgcn_layer1_backward_coo(
+    row_idx, col_idx, eids, reltypes, x, weight, norm, gradout, grad_x, grad_weight
+):
+    return torch.ops.torch_hetero_edgesoftmax.rgcn_layer1_backward_csr(
+        row_idx, col_idx, eids, reltypes, x, weight, norm, gradout, grad_x, grad_weight
+    )

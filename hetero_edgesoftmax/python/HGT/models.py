@@ -140,7 +140,7 @@ class HET_HGTLayerHetero(nn.Module):
         )  # shape (num_edges, n_heads)
 
         attn_score = B.hgt_full_graph_edge_softmax_ops_csr(
-            G, attn_score, mu=self.relation_pri, scale_factor_reciprocal=self.sqrt_dk
+            G, attn_score, mu=(self.relation_pri / self.sqrt_dk)
         )
         # NB: the scaling is: attn_score = relation_pri / self.sqrt_dk * attn_score
 

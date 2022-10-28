@@ -383,7 +383,7 @@ void EdgeAttentionConcatenatedCOOKernel(
       concatenated_coo_matrix_column_indices.size(),
       thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()),
       thrust::raw_pointer_cast(concatenated_coo_matrix_row_indices.data()),
-      thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
+      thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()), nullptr,
       (intermediate_data->QLinearOutput).Ptr(),
       thrust::raw_pointer_cast(
           (intermediate_data->get_intermediate_node_vect_d()).data()),

@@ -37,6 +37,7 @@ class HET_EglRelGraphConv(nn.Module):
         out_feat,
         num_rels,
         num_edges,
+        sparse_format,
         regularizer="basis",
         num_bases=None,
         bias=True,
@@ -60,6 +61,7 @@ class HET_EglRelGraphConv(nn.Module):
         self.bias = bias
         self.activation = activation
         self.layer_type = layer_type
+        self.sparse_format = sparse_format
 
         if regularizer == "basis":
             # add basis weights
@@ -123,15 +125,24 @@ class HET_EglRelGraphConv(nn.Module):
         # print('bbb',th.cuda.memory_allocated(),th.cuda.max_memory_allocated())
         # t2 = time.time()
 
-        if self.layer_type == 0:
-            node_repr = B.rgcn_layer0_csr(
-                g, weight, norm
-            )  # TODO: replace with my own rgcn_layer0
-            # print('output of layer 0', node_repr)
+        if self.sparse_format == "csr":
+            if self.layer_type == 0:
+                node_repr = B.rgcn_layer0_csr(
+                    g, weight, norm
+                )  # TODO: replace with my own rgcn_layer0
+                # print('output of layer 0', node_repr)
+            else:
+                node_repr = B.rgcn_layer1_csr(
+                    g, x, weight, norm
+                )  # TODO: replace with my own rgcn_layer1
         else:
-            node_repr = B.rgcn_layer1_csr(
-                g, x, weight, norm
-            )  # TODO: replace with my own rgcn_layer1
+            assert self.sparse_format == "coo"
+            if self.layer_type == 0:
+                raise NotImplementedError("Only support csr format for layer 0")
+                node_repr = B.rgcn_layer0_coo(g, weight, norm)
+                # print('output of layer 0', node_repr)
+            else:
+                node_repr = B.rgcn_layer1_coo(g, x, weight, norm)
         # torch.cuda.synchronize()
         # t3 = time.time()
         # print('output of layer 1', node_repr)
@@ -156,6 +167,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
         out_dim,
         num_rels,
         num_edges,
+        sparse_format,
         num_bases,
         dropout,
         activation,
@@ -166,6 +178,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
             out_dim,
             num_rels,
             num_edges,
+            sparse_format,
             num_bases=num_bases,
             dropout=dropout,
             activation=activation,
@@ -185,6 +198,7 @@ class HET_EGLRGCNModel(nn.Module):
         out_dim,
         num_rels,
         num_edges,
+        sparse_format,
         num_bases,
         dropout,
         activation,
@@ -195,6 +209,7 @@ class HET_EGLRGCNModel(nn.Module):
             hidden_dim,
             num_rels,
             num_edges,
+            sparse_format,
             num_bases=num_bases,
             dropout=dropout,
             activation=activation,
@@ -205,6 +220,7 @@ class HET_EGLRGCNModel(nn.Module):
             out_dim,
             num_rels,
             num_edges,
+            sparse_format,
             num_bases=num_bases,
             dropout=dropout,
             activation=activation,
@@ -228,6 +244,7 @@ def get_model(args, mydglgraph):
         num_classes,
         num_rels,
         num_edges,
+        args.sparse_format,
         num_bases=args.num_bases,
         activation=F.relu,
         dropout=args.dropout,
@@ -347,6 +364,16 @@ def RGCN_get_mydgl_graph(args):
 
 def main(args):
     g = RGCN_get_mydgl_graph(args)
+    if args.sparse_format == "coo":
+        g_transposed = dict()
+        g_transposed["original"] = g["transposed"]
+        new_g_original = utils.convert_mydgl_graph_csr_to_coo(g)
+        new_g_transposed = utils.convert_mydgl_graph_csr_to_coo(g_transposed)
+        new_g = new_g_original
+        new_g["transposed"] = new_g_transposed[
+            "original"
+        ]  # TODO: this is a hack, need to fix it later
+        g = new_g
     model = get_model(args, g)
     num_nodes = g["original"]["row_ptr"].numel() - 1
     # since the nodes are featureless, the input feature is then the node id.
@@ -360,7 +387,12 @@ def RGCN_main_procedure(args, g, model, feats):
     # aifb len(labels) == 8285, num_nodes == 8285, num_relations == 91, num_edges == 66371, len(train_idx) == 140, len(test_idx) == 36, num_classes = 4
     # mutag len(labels) == 23644, num_nodes == 23644, num_relations == 47, num_edges == 172098, len(train_idx) == 272, len(test_idx) == 68, num_classes = 2
     # bgs len(labels) == 333845, num_nodes == 333845, num_relations == 207, num_edges == 2166243, len(train_idx) == 117, len(test_idx) == 29, num_classes = 2
-    num_nodes = g["original"]["row_ptr"].numel() - 1
+    # num_nodes = g["original"]["row_ptr"].numel() - 1
+    if args.sparse_format == "coo":
+        num_nodes = int(th.max(g["original"]["row_idx"]))
+    else:
+        assert args.sparse_format == "csr"
+        num_nodes = g["original"]["row_ptr"].numel() - 1
     num_rels = int(g["original"]["rel_types"].max().item()) + 1
     num_classes = args.num_classes
     labels = np.random.randint(0, num_classes, num_nodes)
@@ -423,11 +455,12 @@ def RGCN_main_procedure(args, g, model, feats):
         if epoch >= 3:
             forward_time.append(t1 - t0)
             backward_time.append(t2 - t1)
-            print(
-                "Epoch {:05d} | Train Forward Time(s) {:.4f} (our kernel {:.4f} cross entropy {:.4f}) | Backward Time(s) {:.4f}".format(
-                    epoch, forward_time[-1], (tb - t0), (t1 - ta), backward_time[-1]
+            if args.verbose:
+                print(
+                    "Epoch {:05d} | Train Forward Time(s) {:.4f} (our kernel {:.4f} cross entropy {:.4f}) | Backward Time(s) {:.4f}".format(
+                        epoch, forward_time[-1], (tb - t0), (t1 - ta), backward_time[-1]
+                    )
                 )
-            )
         train_acc = torch.sum(
             logits[train_idx].argmax(dim=1) == labels[train_idx]
         ).item() / len(train_idx)
@@ -435,15 +468,16 @@ def RGCN_main_procedure(args, g, model, feats):
         val_acc = torch.sum(
             logits[val_idx].argmax(dim=1) == labels[val_idx]
         ).item() / len(val_idx)
-        print(
-            "Train Accuracy: {:.4f} | Train Loss: {:.4f} | Validation Accuracy: {:.4f} | Validation loss: {:.4f}".format(
-                train_acc, loss.item(), val_acc, val_loss.item()
+        if args.verbose:
+            print(
+                "Train Accuracy: {:.4f} | Train Loss: {:.4f} | Validation Accuracy: {:.4f} | Validation loss: {:.4f}".format(
+                    train_acc, loss.item(), val_acc, val_loss.item()
+                )
             )
-        )
     print("max memory allocated", torch.cuda.max_memory_allocated())
 
     model.eval()
-    logits = model.forward(g, feats, edge_type, edge_norm)
+    logits = model.forward(g, feats, edge_norm)
     test_loss = F.cross_entropy(logits[test_idx], labels[test_idx])
     test_acc = torch.sum(
         logits[test_idx].argmax(dim=1) == labels[test_idx]
@@ -499,6 +533,13 @@ def create_RGCN_parser(RGCN_single_layer_flag):
         "-e", "--num_epochs", type=int, default=50, help="number of training epochs"
     )
     parser.add_argument(
+        "--sparse_format",
+        type=str,
+        default="csr",
+        help="sparse format",
+        choices=["coo", "csr"],  # noqa: E501
+    )
+    parser.add_argument(
         "-d", "--dataset", type=str, required=True, help="dataset to use"
     )
     parser.add_argument("--sort_by_src", action="store_true", help="sort by src")
@@ -515,6 +556,12 @@ def create_RGCN_parser(RGCN_single_layer_flag):
         default=False,
         action="store_true",
         help="include self feature as a special relation",
+    )
+    parser.add_argument(
+        "--verbose",
+        default=False,
+        action="store_true",
+        help="print out training information",
     )
     parser.add_argument(
         "--reindex_eid",

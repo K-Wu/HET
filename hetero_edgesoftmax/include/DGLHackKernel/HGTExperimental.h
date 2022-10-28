@@ -1,5 +1,6 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
+#include "utils/cuda_helper_device_functions.cu.h"
 
 // In this experiment, the fused kernel 1) do fused intermediate vector and
 // attention calculation for the ELL portion, 2) output the intermediate vector
@@ -612,24 +613,6 @@ __device__ __forceinline__ static void func512_32_mysgemm_exec(
 #undef B
 #undef C
 #undef B_before_metadata_cache
-}
-
-__device__ __forceinline__ int binary_search(int num_elements,
-                                             int *__restrict__ arr,
-                                             int target) {
-  int lo = 0, hi = num_elements;
-  // find element in arr[i] where i in [lo, hi)
-  // This below check covers all cases , so need to check
-  // for mid=lo-(hi-lo)/2
-  while (hi - lo > 1) {
-    int mid = (hi + lo) / 2;
-    if (arr[mid] <= target) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
-  }
-  return lo;
 }
 
 // grid size equals num

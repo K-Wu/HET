@@ -22,7 +22,9 @@
 #include "RGCNLayer1BackwardMyHYB.h"
 #include "RGCNLayer1MyHYB.h"
 #include "RGCNLayersBackwardKernels.cu.h"
+#include "RGCNLayersBackwardKernelsCOO.cu.h"
 #include "RGCNLayersKernels.cu.h"
+#include "RGCNLayersKernelsCOO.cu.h"
 
 #include "HGTExperimental.h"
 #include "HGTLayersBackwardKernels.cu.h"

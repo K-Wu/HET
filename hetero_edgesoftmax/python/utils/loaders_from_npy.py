@@ -93,9 +93,9 @@ def create_mydgl_graph_coo_torch(
 ):
     g = mydgl_graph.MyDGLGraph()
     g["original"] = dict()
-    g["original"]["srcs"] = edge_srcs
-    g["original"]["dsts"] = edge_dsts
-    g["original"]["etypes"] = edge_etypes
+    g["original"]["row_idx"] = edge_srcs
+    g["original"]["col_idx"] = edge_dsts
+    g["original"]["rel_types"] = edge_etypes
     g["original"]["eids"] = edge_referential_eids
     return g
 

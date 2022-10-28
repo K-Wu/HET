@@ -21,7 +21,6 @@ class HGTFullGraphHeteroMessageOps(th.autograd.Function):
         applied_vlinear_node_features,
         ret,
     ):
-
         ctx.save_for_backward(
             row_ptr,
             col_idx,
@@ -190,7 +189,7 @@ class HGTFullGraphMessageMeanAggregationCSR(th.autograd.Function):
             message_per_edge,
             attn_score,
         )
-        K.hgt_full_graph_message_mean_aggregation_ops_csr(
+        K.hgt_full_graph_message_mean_aggregation_csr(
             row_ptr,
             col_idx,
             eids,
@@ -215,7 +214,6 @@ class HGTFullGraphMessageMeanAggregationCSR(th.autograd.Function):
             message_per_edge,
             attn_score,
         ) = ctx.saved_tensors
-        print(weight.numel())
         grad_message = th.zeros_like(message_per_edge)
         grad_attn_score = th.zeros_like(attn_score)
         K.hgt_full_graph_message_mean_aggregation_backward_csr(
@@ -224,7 +222,7 @@ class HGTFullGraphMessageMeanAggregationCSR(th.autograd.Function):
             transposed_eids,
             transposed_reltypes,
             gradout,
-            grad_weight,
+            grad_message,
             grad_attn_score,
         )
         return (
@@ -284,7 +282,10 @@ def hgt_full_graph_hetero_attention_ops_csr(
     transposed_eids = graph["transposed"]["eids"]
     transposed_reltypes = graph["transposed"]["rel_types"]
     ret = th.zeros(
-        (weight.size(1), weight.size(2)),
+        (
+            graph["original"]["row_ptr"].numel() - 1,
+            weight.size(2),
+        ),  # weight size (self.num_relations, n_heads, self.d_k, self.d_k)
         dtype=weight.dtype,
         device=weight.device,
         requires_grad=True,
@@ -333,5 +334,111 @@ def hgt_full_graph_message_mean_aggregation_csr(graph, message_per_edge, attn_sc
         transposed_reltypes,
         message_per_edge,
         attn_score,
+        ret,
+    )
+
+
+class HGTFullGraphEdgeSoftmaxOpsCSR(th.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        row_ptr,
+        col_idx,
+        eids,
+        reltypes,
+        transposed_row_ptr,
+        transposed_col_idx,
+        transposed_eids,
+        transposed_reltypes,
+        attn_score,
+        mu,
+        ret,
+    ):
+
+        ctx.save_for_backward(
+            row_ptr,
+            col_idx,
+            eids,
+            reltypes,
+            transposed_row_ptr,
+            transposed_col_idx,
+            transposed_eids,
+            transposed_reltypes,
+            attn_score,
+            mu,
+        )
+        K.hgt_full_graph_edge_softmax_ops_csr(
+            row_ptr,
+            col_idx,
+            eids,
+            reltypes,
+            attn_score,
+            mu,
+            ret,
+        )
+        return ret
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            row_ptr,
+            col_idx,
+            eids,
+            reltypes,
+            transposed_row_ptr,
+            transposed_col_idx,
+            transposed_eids,
+            transposed_reltypes,
+            attn_score,
+            mu,
+        ) = ctx.saved_tensors
+        grad_attn_score = th.zeros_like(attn_score)
+        grad_mu = th.zeros_like(mu)
+        K.hgt_full_graph_edge_softmax_ops_backward_csr(
+            transposed_row_ptr,
+            transposed_col_idx,
+            transposed_eids,
+            transposed_reltypes,
+            gradout,
+            grad_attn_score,
+            grad_mu,
+        )
+        return (
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            grad_attn_score,
+            grad_mu,
+            None,
+        )
+
+
+def hgt_full_graph_edge_softmax_ops_csr(graph, attn_score, mu, scale_factor_reciprocal):
+    row_ptr = graph["original"]["row_ptr"]
+    col_idx = graph["original"]["col_idx"]
+    eids = graph["original"]["eids"]
+    reltypes = graph["original"]["rel_types"]
+    transposed_row_ptr = graph["transposed"]["row_ptr"]
+    transposed_col_idx = graph["transposed"]["col_idx"]
+    transposed_eids = graph["transposed"]["eids"]
+    transposed_reltypes = graph["transposed"]["rel_types"]
+    ret = th.zeros_like(attn_score)
+    # scale_factor, i.e., sqrt_dk equals math.sqrt(out_dim // n_heads)
+    return HGTFullGraphEdgeSoftmaxOpsCSR.apply(
+        row_ptr,
+        col_idx,
+        eids,
+        reltypes,
+        transposed_row_ptr,
+        transposed_col_idx,
+        transposed_eids,
+        transposed_reltypes,
+        attn_score,
+        mu,
         ret,
     )

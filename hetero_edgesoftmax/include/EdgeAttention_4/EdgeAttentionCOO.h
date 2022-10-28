@@ -70,12 +70,14 @@
 // constant static __device__ class function is allowed by CUDA spec
 // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#const-variables
 
-__global__ void
-EdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel(
-    float4 *__restrict__ outEdges, int nnz, int *__restrict__ matCols,
+// The original use should be <float4, true, false, float**>
+template <typename OutDType, bool ProductCompactAsOfNodeFlag,
+          bool EidEnableFlag, typename IntermediateProductPointerType>
+__global__ void GeneralEdgeMessageMultiplyNodeFeature(
+    OutDType *__restrict__ outEdges, int nnz, int *__restrict__ matCols,
     int *__restrict__ matRows, int *__restrict__ matRelation,
-    float *__restrict__ node_input_data,
-    float **__restrict__ intermediate_node_vect_per_relation,
+    int *__restrict__ matEids, float *__restrict__ node_input_data,
+    IntermediateProductPointerType __restrict__ intermediate_product_per_edge_or_per_relation,
     int **__restrict__ dest_node_to_unique_index_per_relation) {
   // each warp is in charge of an edge
   int beg_edge_idx = (blockIdx.x * blockDim.x + threadIdx.x) / WARP_SIZE;
@@ -85,62 +87,121 @@ EdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel(
 #define FULL_MASK 0xffffffff
 
     int col = matCols[edge_idx];
-    int col_relation_idx =
-        dest_node_to_unique_index_per_relation[matRelation[edge_idx]][col];
+    int col_relation_idx;
+    if constexpr (ProductCompactAsOfNodeFlag) {
+      col_relation_idx =
+          dest_node_to_unique_index_per_relation[matRelation[edge_idx]][col];
+    }
+    int edge_output_storage_idx = edge_idx;
+    if constexpr (EidEnableFlag) {
+      edge_output_storage_idx = matEids[edge_idx];
+    }
     int row = matRows[edge_idx];
     float src_1 = node_input_data[row * 256 + lane_idx];
     float src_2 = node_input_data[row * 256 + 32 + lane_idx];
-    float dest_1 =
-        intermediate_node_vect_per_relation[matRelation[edge_idx]]
-                                           [col_relation_idx * 256 + lane_idx];
-    float dest_2 = intermediate_node_vect_per_relation[matRelation[edge_idx]]
-                                                      [col_relation_idx * 256 +
-                                                       32 + lane_idx];
+    float dest_1, dest_2, dest_3, dest_4, dest_5, dest_6, dest_7, dest_8;
+    if constexpr (ProductCompactAsOfNodeFlag) {
+      dest_1 =
+          intermediate_product_per_edge_or_per_relation[matRelation[edge_idx]]
+                                                       [col_relation_idx * 256 +
+                                                        lane_idx];
+      dest_2 =
+          intermediate_product_per_edge_or_per_relation[matRelation[edge_idx]]
+                                                       [col_relation_idx * 256 +
+                                                        32 + lane_idx];
+    } else {
+      dest_1 =
+          intermediate_product_per_edge_or_per_relation[col * 256 + lane_idx];
+      dest_2 = intermediate_product_per_edge_or_per_relation[col * 256 + 32 +
+                                                             lane_idx];
+    }
     float product_1 = src_1 * dest_1 + src_2 * dest_2;
     for (int offset = 16; offset > 0; offset /= 2)
       product_1 += __shfl_down_sync(FULL_MASK, product_1, offset);
 
     float src_3 = node_input_data[row * 256 + 64 + lane_idx];
     float src_4 = node_input_data[row * 256 + 96 + lane_idx];
-    float dest_3 = intermediate_node_vect_per_relation[matRelation[edge_idx]]
-                                                      [col_relation_idx * 256 +
-                                                       64 + lane_idx];
-    float dest_4 = intermediate_node_vect_per_relation[matRelation[edge_idx]]
-                                                      [col_relation_idx * 256 +
-                                                       96 + lane_idx];
+    if constexpr (ProductCompactAsOfNodeFlag) {
+      dest_3 =
+          intermediate_product_per_edge_or_per_relation[matRelation[edge_idx]]
+                                                       [col_relation_idx * 256 +
+                                                        64 + lane_idx];
+      dest_4 =
+          intermediate_product_per_edge_or_per_relation[matRelation[edge_idx]]
+                                                       [col_relation_idx * 256 +
+                                                        96 + lane_idx];
+    } else {
+      dest_3 = intermediate_product_per_edge_or_per_relation[col * 256 + 64 +
+                                                             lane_idx];
+      dest_4 = intermediate_product_per_edge_or_per_relation[col * 256 + 96 +
+                                                             lane_idx];
+    }
     float product_2 = src_3 * dest_3 + src_4 * dest_4;
     for (int offset = 16; offset > 0; offset /= 2)
       product_2 += __shfl_down_sync(FULL_MASK, product_2, offset);
 
     float src_5 = node_input_data[row * 256 + 128 + lane_idx];
     float src_6 = node_input_data[row * 256 + 160 + lane_idx];
-    float dest_5 = intermediate_node_vect_per_relation[matRelation[edge_idx]]
-                                                      [col_relation_idx * 256 +
-                                                       128 + lane_idx];
-    float dest_6 = intermediate_node_vect_per_relation[matRelation[edge_idx]]
-                                                      [col_relation_idx * 256 +
-                                                       160 + lane_idx];
+    if constexpr (ProductCompactAsOfNodeFlag) {
+      dest_5 =
+          intermediate_product_per_edge_or_per_relation[matRelation[edge_idx]]
+                                                       [col_relation_idx * 256 +
+                                                        128 + lane_idx];
+      dest_6 =
+          intermediate_product_per_edge_or_per_relation[matRelation[edge_idx]]
+                                                       [col_relation_idx * 256 +
+                                                        160 + lane_idx];
+    } else {
+      dest_5 = intermediate_product_per_edge_or_per_relation[col * 256 + 128 +
+                                                             lane_idx];
+      dest_6 = intermediate_product_per_edge_or_per_relation[col * 256 + 160 +
+                                                             lane_idx];
+    }
     float product_3 = src_5 * dest_5 + src_6 * dest_6;
     for (int offset = 16; offset > 0; offset /= 2)
       product_3 += __shfl_down_sync(FULL_MASK, product_3, offset);
 
     float src_7 = node_input_data[row * 256 + 192 + lane_idx];
     float src_8 = node_input_data[row * 256 + 224 + lane_idx];
-    float dest_7 = intermediate_node_vect_per_relation[matRelation[edge_idx]]
-                                                      [col_relation_idx * 256 +
-                                                       192 + lane_idx];
-    float dest_8 = intermediate_node_vect_per_relation[matRelation[edge_idx]]
-                                                      [col_relation_idx * 256 +
-                                                       224 + lane_idx];
+    if constexpr (ProductCompactAsOfNodeFlag) {
+      dest_7 =
+          intermediate_product_per_edge_or_per_relation[matRelation[edge_idx]]
+                                                       [col_relation_idx * 256 +
+                                                        192 + lane_idx];
+      dest_8 =
+          intermediate_product_per_edge_or_per_relation[matRelation[edge_idx]]
+                                                       [col_relation_idx * 256 +
+                                                        224 + lane_idx];
+    } else {
+      dest_7 = intermediate_product_per_edge_or_per_relation[col * 256 + 192 +
+                                                             lane_idx];
+      dest_8 = intermediate_product_per_edge_or_per_relation[col * 256 + 224 +
+                                                             lane_idx];
+    }
     float product_4 = src_7 * dest_7 + src_8 * dest_8;
     for (int offset = 16; offset > 0; offset /= 2)
       product_4 += __shfl_down_sync(FULL_MASK, product_4, offset);
     if (lane_idx == 0) {
-      outEdges[edge_idx] =
-          make_float4(product_1, product_2, product_3, product_4);
+      if constexpr (std::is_same<OutDType, float4>::value) {
+        outEdges[edge_output_storage_idx] =
+            make_float4(product_1, product_2, product_3, product_4);
+      } else if constexpr (std::is_same<OutDType, float>::value) {
+        // outEdges[4*edge_idx] = product_1;
+        // outEdges[4*edge_idx+1] = product_2;
+        // outEdges[4*edge_idx+2] = product_3;
+        // outEdges[4*edge_idx+3] = product_4;
+        reinterpret_cast<float4 *>(outEdges)[edge_output_storage_idx] =
+            make_float4(product_1, product_2, product_3, product_4);
+      } else {
+        assert(0);
+      }
     }
   }
 }
+
+constexpr auto
+    EdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel =
+        GeneralEdgeMessageMultiplyNodeFeature<float4, true, false, float **>;
 
 // extract this kernel with mysgemm_ into template specialization
 // template <int NODE_INPUT_DIM_PER_HEAD/*derived from OUT_DIM and NUM_HEADS*/,
@@ -437,7 +498,7 @@ EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel(
       concatenated_coo_matrix_column_indices.size(),
       thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()),
       thrust::raw_pointer_cast(concatenated_coo_matrix_row_indices.data()),
-      thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
+      thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()), nullptr,
       node_input_data,
       thrust::raw_pointer_cast(intermediate_node_vect_d.data()),
       thrust::raw_pointer_cast(
@@ -806,7 +867,7 @@ EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_512_32(
       concatenated_coo_matrix_column_indices.size(),
       thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()),
       thrust::raw_pointer_cast(concatenated_coo_matrix_row_indices.data()),
-      thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
+      thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()), nullptr,
       node_input_data,
       thrust::raw_pointer_cast(intermediate_node_vect_d.data()),
       thrust::raw_pointer_cast(

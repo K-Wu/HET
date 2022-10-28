@@ -21,7 +21,7 @@ def hgt_full_graph_hetero_message_ops_backward_csr(
     grad_weight,
     grad_v,
 ):
-    return torch.ops.torch_hetero_edgesoftmax.rgcn_layer1_backward_csr(
+    return torch.ops.torch_hetero_edgesoftmax.hgt_full_graph_hetero_message_ops_backward_csr(
         row_ptr,
         col_idx,
         eids,
@@ -90,7 +90,7 @@ def hgt_full_graph_message_mean_aggregation_backward_csr(
     transposed_eids,
     transposed_reltypes,
     gradout,
-    grad_weight,
+    grad_message,
     grad_attn_score,
 ):
     return torch.ops.torch_hetero_edgesoftmax.hgt_full_graph_message_mean_aggregation_backward_csr(
@@ -99,7 +99,7 @@ def hgt_full_graph_message_mean_aggregation_backward_csr(
         transposed_eids,
         transposed_reltypes,
         gradout,
-        grad_weight,
+        grad_message,
         grad_attn_score,
     )
 
@@ -123,4 +123,46 @@ def hgt_full_graph_message_mean_aggregation_csr(
             attn_score,
             ret,
         )
+    )
+
+
+def hgt_full_graph_edge_softmax_ops_backward_csr(
+    transposed_row_ptr,
+    transposed_col_idx,
+    transposed_eids,
+    transposed_reltypes,
+    gradout,
+    grad_attn_score,
+    grad_mu,
+):
+    return (
+        torch.ops.torch_hetero_edgesoftmax.hgt_full_graph_edge_softmax_ops_backward_csr(
+            transposed_row_ptr,
+            transposed_col_idx,
+            transposed_eids,
+            transposed_reltypes,
+            gradout,
+            grad_attn_score,
+            grad_mu,
+        )
+    )
+
+
+def hgt_full_graph_edge_softmax_ops_csr(
+    row_ptr,
+    col_idx,
+    eids,
+    reltypes,
+    attn_score,
+    mu,
+    ret,
+):
+    return torch.ops.torch_hetero_edgesoftmax.hgt_full_graph_edge_softmax_ops_csr(
+        row_ptr,
+        col_idx,
+        eids,
+        reltypes,
+        attn_score,
+        mu,
+        ret,
     )

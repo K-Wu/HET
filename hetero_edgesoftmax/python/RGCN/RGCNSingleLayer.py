@@ -11,7 +11,6 @@ import torch.nn.functional as F
 
 
 def get_single_layer_model(args, mydglgraph):
-    num_nodes = mydglgraph["original"]["row_ptr"].numel() - 1
     num_rels = int(mydglgraph["original"]["rel_types"].max().item()) + 1
     num_edges = mydglgraph["original"]["rel_types"].numel()
     num_classes = args.num_classes
@@ -20,6 +19,7 @@ def get_single_layer_model(args, mydglgraph):
         num_classes,
         num_rels,
         num_edges,
+        args.sparse_format,
         num_bases=args.num_bases,
         activation=F.relu,
         dropout=args.dropout,
@@ -29,8 +29,22 @@ def get_single_layer_model(args, mydglgraph):
 
 def main(args):
     g = RGCN_get_mydgl_graph(args)
+    if args.sparse_format == "coo":
+        g_transposed = dict()
+        g_transposed["original"] = g["transposed"]
+        new_g_original = utils.convert_mydgl_graph_csr_to_coo(g)
+        new_g_transposed = utils.convert_mydgl_graph_csr_to_coo(g_transposed)
+        new_g = new_g_original
+        new_g["transposed"] = new_g_transposed[
+            "original"
+        ]  # TODO: this is a hack, need to fix it later
+        g = new_g
     model = get_single_layer_model(args, g)
-    num_nodes = g["original"]["row_ptr"].numel() - 1
+    if args.sparse_format == "coo":
+        num_nodes = int(th.max(g["original"]["row_idx"]))
+    else:
+        assert args.sparse_format == "csr"
+        num_nodes = g["original"]["row_ptr"].numel() - 1
     feats = th.randn(num_nodes, args.input_dim)
     RGCN_main_procedure(args, g, model, feats)
 

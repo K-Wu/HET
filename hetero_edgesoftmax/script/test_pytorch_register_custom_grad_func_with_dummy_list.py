@@ -12,7 +12,7 @@ class LegendrePolynomial3(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, input, dummy_list):
+    def forward(ctx, input, dummy_list, dummy_scalar):
         """
         In the forward pass we receive a Tensor containing the input and return
         a Tensor containing the output. ctx is a context object that can be used
@@ -30,7 +30,7 @@ class LegendrePolynomial3(torch.autograd.Function):
         with respect to the input.
         """
         (input,) = ctx.saved_tensors
-        return grad_output * 1.5 * (5 * input**2 - 1), None
+        return grad_output * 1.5 * (5 * input**2 - 1), None, None
 
 
 dtype = torch.float
@@ -60,7 +60,7 @@ for t in range(2000):
 
     # Forward pass: compute predicted y using operations; we compute
     # P3 using our custom autograd operation.
-    y_pred = a + b * P3(c + d * x, [a, b, c, d])
+    y_pred = a + b * P3(c + d * x, [a, b, c, d], 1.1)
 
     # Compute and print loss
     loss = (y_pred - y).pow(2).sum()

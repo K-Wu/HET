@@ -24,6 +24,7 @@
 #include "DGLHackKernel/OpExport/HGTOps.inc"
 #include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.h"
 #include "DGLHackKernel/OpExport/RGATOps.inc"
+#include "DGLHackKernel/OpExport/RGCNCOOOps.inc"
 #include "DGLHackKernel/OpExport/RGCNOps.inc"
 
 std::vector<std::vector<at::Tensor>> biops_tensor_info(
@@ -142,6 +143,25 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("rgcn_layer1_csr", RgcnLayer1Impl_wrapper_integratedcsr);
   m.def("rgcn_layer1_backward_csr",
         RgcnLayer1BackwardImpl_wrapper_integratedcsr);
+  m.def("rgcn_layer1_coo", RgcnLayer1Impl_wrapper_integratedcoo);
+  m.def("rgcn_layer1_backward_coo",
+        RgcnLayer1BackwardImpl_wrapper_integratedcoo);
   m.def("transpose_csr", transpose_csr);
   m.def("test_argument_takein", test_argument_takein);
+  m.def("hgt_full_graph_message_mean_aggregation_backward_csr",
+        hgt_full_graph_message_mean_aggregation_backward_wrapper_integratedcsr);
+  m.def("hgt_full_graph_message_mean_aggregation_csr",
+        hgt_full_graph_message_mean_aggregation_wrapper_integratedcsr);
+  m.def("hgt_full_graph_hetero_attention_ops_backward_csr",
+        hgt_full_graph_hetero_attention_ops_backward_wrapper_integratedcsr);
+  m.def("hgt_full_graph_hetero_attention_ops_csr",
+        hgt_full_graph_hetero_attention_ops_wrapper_integratedcsr);
+  m.def("hgt_full_graph_hetero_message_ops_backward_csr",
+        hgt_full_graph_hetero_message_ops_backward_wrapper_integratedcsr);
+  m.def("hgt_full_graph_hetero_message_ops_csr",
+        hgt_full_graph_hetero_message_ops_wrapper_integratedcsr);
+  m.def("hgt_full_graph_edge_softmax_ops_csr",
+        hgt_full_graph_edge_softmax_ops_wrapper_integratedcsr);
+  m.def("hgt_full_graph_edge_softmax_ops_backward_csr",
+        hgt_full_graph_edge_softmax_ops_backward_wrapper_integratedcsr);
 }
