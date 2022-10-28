@@ -30,15 +30,7 @@ def get_single_layer_model(args, mydglgraph):
 def main(args):
     g = RGCN_get_mydgl_graph(args)
     if args.sparse_format == "coo":
-        g_transposed = dict()
-        g_transposed["original"] = g["transposed"]
-        new_g_original = utils.convert_mydgl_graph_csr_to_coo(g)
-        new_g_transposed = utils.convert_mydgl_graph_csr_to_coo(g_transposed)
-        new_g = new_g_original
-        new_g["transposed"] = new_g_transposed[
-            "original"
-        ]  # TODO: this is a hack, need to fix it later
-        g = new_g
+        g = utils.convert_mydgl_graph_csr_to_coo(g)
     model = get_single_layer_model(args, g)
     if args.sparse_format == "coo":
         num_nodes = int(th.max(g["original"]["row_idx"]))

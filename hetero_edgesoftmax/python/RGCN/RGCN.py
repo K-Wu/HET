@@ -365,15 +365,7 @@ def RGCN_get_mydgl_graph(args):
 def main(args):
     g = RGCN_get_mydgl_graph(args)
     if args.sparse_format == "coo":
-        g_transposed = dict()
-        g_transposed["original"] = g["transposed"]
-        new_g_original = utils.convert_mydgl_graph_csr_to_coo(g)
-        new_g_transposed = utils.convert_mydgl_graph_csr_to_coo(g_transposed)
-        new_g = new_g_original
-        new_g["transposed"] = new_g_transposed[
-            "original"
-        ]  # TODO: this is a hack, need to fix it later
-        g = new_g
+        g = utils.convert_mydgl_graph_csr_to_coo(g)
     model = get_model(args, g)
     num_nodes = g["original"]["row_ptr"].numel() - 1
     # since the nodes are featureless, the input feature is then the node id.

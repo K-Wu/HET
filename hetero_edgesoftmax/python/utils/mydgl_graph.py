@@ -21,6 +21,9 @@ class MyDGLGraph:
     def __getitem__(self, key):
         return self.graph_data[key]
 
+    def __contains__(self, key):
+        return key in self.graph_data
+
     def import_metadata_from_dgl_heterograph(self, dglgraph):
         assert (
             "legacy_metadata_from_dgl" not in self.graph_data

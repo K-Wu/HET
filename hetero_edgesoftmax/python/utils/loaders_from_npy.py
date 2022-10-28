@@ -18,9 +18,32 @@ def convert_mydgl_graph_csr_to_coo(g):
         edge_etypes,
         edge_referential_eids,
     ) = sparse_matrix_converters.csr2coo(row_ptr, col_idx, rel_types, eids)
-    return create_mydgl_graph_coo_numpy(
-        edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
-    )
+    if "transposed" not in g:
+        return create_mydgl_graph_coo_numpy(
+            edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
+        )
+    else:
+        (
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        ) = sparse_matrix_converters.csr2coo(
+            g["transposed"]["row_ptr"].numpy(),
+            g["transposed"]["col_idx"].numpy(),
+            g["transposed"]["rel_types"].numpy(),
+            g["transposed"]["eids"].numpy(),
+        )
+        return create_mydgl_graph_coo_with_transpose_numpy(
+            edge_srcs,
+            edge_dsts,
+            edge_etypes,
+            edge_referential_eids,
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        )
 
 
 def convert_mydgl_graph_coo_to_csr(g):
@@ -36,9 +59,56 @@ def convert_mydgl_graph_coo_to_csr(g):
         g["original"]["eids"],
         torch_flag=True,
     )
-    return create_mydgl_graph_csr_torch(
-        edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
-    )
+    if "transposed" not in g:
+        return create_mydgl_graph_csr_torch(
+            edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
+        )
+    else:
+        (
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        ) = sparse_matrix_converters.coo2csr(
+            g["transposed"]["row_ptr"],
+            g["transposed"]["col_idx"],
+            g["transposed"]["rel_types"],
+            g["transposed"]["eids"],
+            torch_flag=True,
+        )
+        return create_mydgl_graph_csr_with_transpose_torch(
+            edge_srcs,
+            edge_dsts,
+            edge_etypes,
+            edge_referential_eids,
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        )
+
+
+def create_mydgl_graph_csr_with_transpose_torch(
+    row_ptr,
+    col_idx,
+    rel_types,
+    eids,
+    transposed_row_ptr,
+    transposed_col_idx,
+    transposed_rel_types,
+    transposed_eids,
+):
+    g = mydgl_graph.MyDGLGraph()
+    g["original"] = dict()
+    g["original"]["row_ptr"] = row_ptr
+    g["original"]["col_idx"] = col_idx
+    g["original"]["rel_types"] = rel_types
+    g["original"]["eids"] = eids
+    g["transposed"]["row_ptr"] = transposed_row_ptr
+    g["transposed"]["col_idx"] = transposed_col_idx
+    g["transposed"]["rel_types"] = transposed_rel_types
+    g["transposed"]["eids"] = transposed_eids
+    return g
 
 
 def create_mydgl_graph_csr_torch(row_ptr, col_idx, rel_types, eids):
@@ -88,6 +158,30 @@ def create_mydgl_graph_coo_from_dgl_graph(g):
     )
 
 
+def create_mydgl_graph_coo_with_transpose_torch(
+    edge_srcs,
+    edge_dsts,
+    edge_etypes,
+    edge_eids,
+    transposed_edge_srcs,
+    transposed_edge_dsts,
+    transposed_edge_etypes,
+    transposed_edge_eids,
+):
+    g = mydgl_graph.MyDGLGraph()
+    g["original"] = dict()
+    g["original"]["row_idx"] = edge_srcs
+    g["original"]["col_idx"] = edge_dsts
+    g["original"]["rel_types"] = edge_etypes
+    g["original"]["eids"] = edge_eids
+    g["transposed"] = dict()
+    g["transposed"]["row_idx"] = transposed_edge_srcs
+    g["transposed"]["col_idx"] = transposed_edge_dsts
+    g["transposed"]["rel_types"] = transposed_edge_etypes
+    g["transposed"]["eids"] = transposed_edge_eids
+    return g
+
+
 def create_mydgl_graph_coo_torch(
     edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
 ):
@@ -98,6 +192,36 @@ def create_mydgl_graph_coo_torch(
     g["original"]["rel_types"] = edge_etypes
     g["original"]["eids"] = edge_referential_eids
     return g
+
+
+def create_mydgl_graph_coo_with_transpose_numpy(
+    edge_srcs,
+    edge_dsts,
+    edge_etypes,
+    edge_eids,
+    transposed_edge_srcs,
+    transposed_edge_dsts,
+    transposed_edge_etypes,
+    transposed_edge_eids,
+):
+    edge_srcs = th.from_numpy(edge_srcs).long()
+    edge_dsts = th.from_numpy(edge_dsts).long()
+    edge_etypes = th.from_numpy(edge_etypes).long()
+    edge_eids = th.from_numpy(edge_eids).long()
+    transposed_edge_srcs = th.from_numpy(transposed_edge_srcs).long()
+    transposed_edge_dsts = th.from_numpy(transposed_edge_dsts).long()
+    transposed_edge_etypes = th.from_numpy(transposed_edge_etypes).long()
+    transposed_edge_eids = th.from_numpy(transposed_edge_eids).long()
+    return create_mydgl_graph_coo_with_transpose_torch(
+        edge_srcs,
+        edge_dsts,
+        edge_etypes,
+        edge_eids,
+        transposed_edge_srcs,
+        transposed_edge_dsts,
+        transposed_edge_etypes,
+        transposed_edge_eids,
+    )
 
 
 def create_mydgl_graph_coo_numpy(
