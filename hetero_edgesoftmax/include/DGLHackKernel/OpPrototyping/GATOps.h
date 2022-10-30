@@ -1,7 +1,7 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
-#include "DGLHackKernel/FusedGAT.h"
-#include "DGLHackKernel/FusedGATBackward.h"
+#include "DGLHackKernel/FusedGAT.cu.h"
+#include "DGLHackKernel/FusedGATBackward.cu.h"
 
 template </*int XPU, */ typename Idx, typename DType>
 void FusedGatKernelImpl(

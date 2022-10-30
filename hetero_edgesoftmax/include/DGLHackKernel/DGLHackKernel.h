@@ -15,8 +15,8 @@
 #include "../utils.h"
 
 #include "DGLHackUtils.h"
-#include "FusedGAT.h"
-#include "FusedGATBackward.h"
+#include "FusedGAT.cu.h"
+#include "FusedGATBackward.cu.h"
 #include "OpPrototyping/GATOps.h"
 #include "OpPrototyping/HGTOps.h"
 #include "OpPrototyping/RGCNOps.h"
