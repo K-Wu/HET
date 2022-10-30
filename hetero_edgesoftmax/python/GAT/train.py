@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # From seastar-paper-version/exp/rgcn/seastar/train.py
 # the paper copy of seastar can be obtained from www.cse.cuhk.edu.hk/~jcheng/papers/seastar_eurosys21.pdf
 """
@@ -20,7 +21,8 @@ from dgl import DGLGraph
 from dgl.data import register_data_args, load_data
 from dgl import transform
 from egl_gat import EglGAT
-from utils import EarlyStopping
+from .GAT_utils import EarlyStopping
+from .. import utils
 
 
 def accuracy(logits, labels):
@@ -37,38 +39,56 @@ def evaluate(model, features, labels, mask):
         labels = labels[mask]
         return accuracy(logits, labels)
 
+    def seastar_original_load_dataset(args):
+        path = "./dataset/" + str(args.dataset) + "/"
+        """
+        edges = np.loadtxt(path + 'edges.txt')
+        edges = edges.astype(int)
+
+        features = np.loadtxt(path + 'features.txt')
+
+        train_mask = np.loadtxt(path + 'train_mask.txt')
+        train_mask = train_mask.astype(int)
+
+        labels = np.loadtxt(path + 'labels.txt')
+        labels = labels.astype(int)
+        """
+        edges = np.load(path + "edges.npy")
+        features = np.load(path + "features.npy")
+        train_mask = np.load(path + "train_mask.npy")
+        labels = np.load(path + "labels.npy")
+
+        num_edges = edges.shape[0]
+        num_nodes = features.shape[0]
+        num_feats = features.shape[1]
+        n_classes = int(max(labels) - min(labels) + 1)
+
+        return (
+            num_edges,
+            num_nodes,
+            num_feats,
+            n_classes,
+            edges,
+            features,
+            train_mask,
+            labels,
+        )
+
 
 def train(args):
     # load and preprocess dataset
-    path = "./dataset/" + str(args.dataset) + "/"
-    """
-    edges = np.loadtxt(path + 'edges.txt')
-    edges = edges.astype(int)
+    mydgl_graph = utils.RGCN_get_mydgl_graph(
+        args.dataset, args.sort_by_src, args.sort_by_etype, args.reindex_eid
+    )
+    num_nodes = mydgl_graph.get_num_nodes()
+    num_edges = mydgl_graph.get_num_edges()
 
-    features = np.loadtxt(path + 'features.txt')
-
-    train_mask = np.loadtxt(path + 'train_mask.txt')
-    train_mask = train_mask.astype(int)
-
-    labels = np.loadtxt(path + 'labels.txt')
-    labels = labels.astype(int)
-    """
-    edges = np.load(path + "edges.npy")
-    features = np.load(path + "features.npy")
-    train_mask = np.load(path + "train_mask.npy")
-    labels = np.load(path + "labels.npy")
-
-    num_edges = edges.shape[0]
-    num_nodes = features.shape[0]
-    num_feats = features.shape[1]
-    n_classes = int(max(labels) - min(labels) + 1)
-
-    assert train_mask.shape[0] == num_nodes
+    # assert train_mask.shape[0] == num_nodes
 
     print("dataset {}".format(args.dataset))
     print("# of edges : {}".format(num_edges))
     print("# of nodes : {}".format(num_nodes))
-    print("# of features : {}".format(num_feats))
+    print("# of features : {}".format(args.hidden_dim))
 
     features = torch.FloatTensor(features)
     labels = torch.LongTensor(labels)
@@ -88,30 +108,30 @@ def train(args):
         labels = labels.cuda()
         train_mask = train_mask.cuda()
 
-    u = edges[:, 0]
-    v = edges[:, 1]
+    # u = edges[:, 0]
+    # v = edges[:, 1]
 
     # initialize a DGL graph
-    g = DGLGraph()
-    g.add_nodes(num_nodes)
-    g.add_edges(u, v)
-
-    if isinstance(g, nx.classes.digraph.DiGraph):
-        g.remove_edges_from(nx.selfloop_edges(g))
-        g = DGLGraph(g)
-        g.add_edges(g.nodes(), g.nodes())
-    elif isinstance(g, DGLGraph):
-        g = transform.add_self_loop(g)
+    # g = DGLGraph()
+    # g.add_nodes(num_nodes)
+    # g.add_edges(u, v)
+    # TODO: incorporate the following modification to mydgl_graph
+    # if isinstance(g, nx.classes.digraph.DiGraph):
+    #     g.remove_edges_from(nx.selfloop_edges(g))
+    #     g = DGLGraph(g)
+    #     g.add_edges(g.nodes(), g.nodes())
+    # elif isinstance(g, DGLGraph):
+    #     g = transform.add_self_loop(g)
 
     # n_edges = g.number_of_edges()
     # create model
     heads = ([args.num_heads] * args.num_layers) + [args.num_out_heads]
     model = EglGAT(
-        g,
+        mydgl_graph,
         args.num_layers,
-        num_feats,
+        args.num_feats,
         args.num_hidden,
-        n_classes,
+        args.num_classes,
         heads,
         F.elu,
         args.in_drop,

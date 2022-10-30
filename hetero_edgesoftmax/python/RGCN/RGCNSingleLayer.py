@@ -1,7 +1,6 @@
 from . import (
     HET_EGLRGCNSingleLayerModel,
     RGCN_main_procedure,
-    RGCN_get_mydgl_graph,
     create_RGCN_parser,
 )
 from .. import utils
@@ -28,15 +27,20 @@ def get_single_layer_model(args, mydglgraph):
 
 
 def main(args):
-    g = RGCN_get_mydgl_graph(args)
-    if args.sparse_format == "coo":
-        g = utils.convert_mydgl_graph_csr_to_coo(g)
+    g = utils.RGCN_get_mydgl_graph(
+        args.dataset,
+        args.sort_by_src,
+        args.sort_by_etype,
+        args.reindex_eid,
+        args.sparse_format,
+    )
     model = get_single_layer_model(args, g)
     if args.sparse_format == "coo":
         num_nodes = int(th.max(g["original"]["row_idx"]))
     else:
         assert args.sparse_format == "csr"
         num_nodes = g["original"]["row_ptr"].numel() - 1
+    num_nodes = g.get_num_nodes()
     feats = th.randn(num_nodes, args.input_dim)
     RGCN_main_procedure(args, g, model, feats)
 

@@ -6,6 +6,127 @@ from . import sparse_matrix_converters
 from . import mydgl_graph
 
 
+def RGCN_get_mydgl_graph(
+    dataset, sort_by_src_flag, sort_by_etype_flag, reindex_eid_flag, sparse_format
+):
+    # TODO: add args for dataset, and refactor these following lines into dedicated load data function
+    # load graph data
+    # data_rowptr, data_colidx, data_reltypes, data_eids
+    # transposed_data_rowptr, transposed_data_colidx, transposed_data_reltypes, transposed_data_eids,
+
+    dataset_sort_flag = sort_by_src_flag or sort_by_etype_flag
+
+    if dataset == "fb15k":
+        print("WARNING - loading fb15k. Currently we only support a few dataset.")
+        (edge_srcs, edge_dsts, edge_etypes, edge_referential_eids,) = load_fb15k237(
+            "data/MyHybData",
+            dataset_sort_flag,
+            sort_by_src_flag,
+            transposed=False,
+            infidel_sort_flag=False,
+        )
+        (
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        ) = load_fb15k237(
+            "data/MyHybData",
+            dataset_sort_flag,
+            sort_by_src_flag,
+            transposed=True,
+            infidel_sort_flag=False,
+        )
+    elif dataset == "wikikg2":
+        print("WARNING - loading wikikg2. Currently we only support a few dataset.")
+        (edge_srcs, edge_dsts, edge_etypes, edge_referential_eids,) = load_wikikg2(
+            "data/MyWikiKG2",
+            dataset_sort_flag,
+            sort_by_src_flag,
+            transposed=False,
+            infidel_sort_flag=False,
+        )
+        (
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        ) = load_wikikg2(
+            "data/MyWikiKG2",
+            dataset_sort_flag,
+            sort_by_src_flag,
+            transposed=True,
+            infidel_sort_flag=False,
+        )
+    else:
+        print("ERROR! now only support fb15k and wikikg2. Loading it now")
+        exit(1)
+    if reindex_eid_flag:
+        edge_new_eids = np.arange(edge_referential_eids.shape[0])
+        edge_referential_to_new_eids_mapping = dict(
+            zip(edge_referential_eids, edge_new_eids)
+        )
+        transposed_edge_new_eids = np.array(
+            list(
+                map(
+                    edge_referential_to_new_eids_mapping.__getitem__,
+                    transposed_edge_referential_eids,
+                )
+            )
+        ).astype(np.int64)
+        print("transposed_edge_new_eids shape", transposed_edge_new_eids.shape)
+        edge_referential_eids = edge_new_eids
+        transposed_edge_referential_eids = transposed_edge_new_eids
+
+    if sparse_format == "coo":
+        return create_mydgl_graph_coo_with_transpose_numpy(
+            edge_srcs,
+            edge_dsts,
+            edge_etypes,
+            edge_referential_eids,
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        )
+    elif sparse_format == "csr":
+        # coo to csr conversion
+        (
+            data_rowptr,
+            data_colidx,
+            data_reltypes,
+            data_eids,
+        ) = sparse_matrix_converters.coo2csr(
+            edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
+        )
+        (
+            transposed_data_rowptr,
+            transposed_data_colidx,
+            transposed_data_reltypes,
+            transposed_data_eids,
+        ) = sparse_matrix_converters.coo2csr(
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        )
+        # create graph
+        g = create_mydgl_graph_with_transposecsr_numpy(
+            data_rowptr,
+            data_colidx,
+            data_reltypes,
+            data_eids,
+            transposed_data_rowptr,
+            transposed_data_colidx,
+            transposed_data_reltypes,
+            transposed_data_eids,
+        )
+    else:
+        raise NotImplementedError("sparse format not supported")
+
+    return g
+
+
 def convert_mydgl_graph_csr_to_coo(g):
     # we haven't implemented csr2coo for tensors so we need to convert to numpy first
     row_ptr = g["original"]["row_ptr"].numpy()
@@ -119,6 +240,36 @@ def create_mydgl_graph_csr_torch(row_ptr, col_idx, rel_types, eids):
     g["original"]["rel_types"] = rel_types
     g["original"]["eids"] = eids
     return g
+
+
+def create_mydgl_graph_csr_with_transpose_numpy(
+    row_ptr,
+    col_idx,
+    rel_types,
+    eids,
+    transposed_row_ptr,
+    transposed_col_idx,
+    transposed_rel_types,
+    transposed_eids,
+):
+    row_ptr = th.from_numpy(row_ptr).long()
+    col_idx = th.from_numpy(col_idx).long()
+    rel_types = th.from_numpy(rel_types).long()
+    eids = th.from_numpy(eids).long()
+    transposed_row_ptr = th.from_numpy(transposed_row_ptr).long()
+    transposed_col_idx = th.from_numpy(transposed_col_idx).long()
+    transposed_rel_types = th.from_numpy(transposed_rel_types).long()
+    transposed_eids = th.from_numpy(transposed_eids).long()
+    return create_mydgl_graph_csr_with_transpose_torch(
+        row_ptr,
+        col_idx,
+        rel_types,
+        eids,
+        transposed_row_ptr,
+        transposed_col_idx,
+        transposed_rel_types,
+        transposed_eids,
+    )
 
 
 def create_mydgl_graph_csr_numpy(row_ptr, col_idx, rel_types, eids):

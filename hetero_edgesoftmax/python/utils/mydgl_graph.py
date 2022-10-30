@@ -69,3 +69,20 @@ class MyDGLGraph:
                 self.graph_data[key][second_key] = self.graph_data[key][
                     second_key
                 ].cuda()
+
+    def get_num_nodes(self):
+        if "row_ptr" in self.graph_data["original"]:
+            return self.graph_data["original"]["row_ptr"].numel() - 1
+        else:
+            assert "row_idx" in self.graph_data["original"], "row_idx not exists"
+            assert "col_idx" in self.graph_data["original"], "col_idx not exists"
+            return max(
+                int(self.graph_data["original"]["row_idx"].max()) + 1,
+                int(self.graph_data["original"]["col_idx"].max()) + 1,
+            )
+
+    def get_num_rels(self):
+        return int(self.graph_data["original"]["rel_types"].max().item()) + 1
+
+    def get_num_edges(self):
+        return self.graph_data["original"]["rel_types"].numel()

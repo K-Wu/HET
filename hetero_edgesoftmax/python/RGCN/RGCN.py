@@ -234,9 +234,9 @@ class HET_EGLRGCNModel(nn.Module):
 
 
 def get_model(args, mydglgraph):
-    num_nodes = mydglgraph["original"]["row_ptr"].numel() - 1
-    num_rels = int(mydglgraph["original"]["rel_types"].max().item()) + 1
-    num_edges = mydglgraph["original"]["rel_types"].numel()
+    num_nodes = mydglgraph.get_num_nodes()
+    num_rels = mydglgraph.get_num_rels()
+    num_edges = mydglgraph.get_num_edges()
     num_classes = args.num_classes
     model = HET_EGLRGCNModel(
         num_nodes,
@@ -252,120 +252,14 @@ def get_model(args, mydglgraph):
     return model
 
 
-def RGCN_get_mydgl_graph(args):
-    # TODO: add args for dataset, and refactor these following lines into dedicated load data function
-    # load graph data
-    # data_rowptr, data_colidx, data_reltypes, data_eids
-    # transposed_data_rowptr, transposed_data_colidx, transposed_data_reltypes, transposed_data_eids,
-
-    dataset_sort_flag = args.sort_by_src or args.sort_by_etype
-
-    if args.dataset == "fb15k":
-        print("WARNING - loading fb15k. Currently we only support a few dataset.")
-        (
-            edge_srcs,
-            edge_dsts,
-            edge_etypes,
-            edge_referential_eids,
-        ) = utils.load_fb15k237(
-            "data/MyHybData",
-            dataset_sort_flag,
-            args.sort_by_src,
-            transposed=False,
-            infidel_sort_flag=False,
-        )
-        (
-            transposed_edge_srcs,
-            transposed_edge_dsts,
-            transposed_edge_etypes,
-            transposed_edge_referential_eids,
-        ) = utils.load_fb15k237(
-            "data/MyHybData",
-            dataset_sort_flag,
-            args.sort_by_src,
-            transposed=True,
-            infidel_sort_flag=False,
-        )
-    elif args.dataset == "wikikg2":
-        print("WARNING - loading wikikg2. Currently we only support a few dataset.")
-        (
-            edge_srcs,
-            edge_dsts,
-            edge_etypes,
-            edge_referential_eids,
-        ) = utils.load_wikikg2(
-            "data/MyWikiKG2",
-            dataset_sort_flag,
-            args.sort_by_src,
-            transposed=False,
-            infidel_sort_flag=False,
-        )
-        (
-            transposed_edge_srcs,
-            transposed_edge_dsts,
-            transposed_edge_etypes,
-            transposed_edge_referential_eids,
-        ) = utils.load_wikikg2(
-            "data/MyWikiKG2",
-            dataset_sort_flag,
-            args.sort_by_src,
-            transposed=True,
-            infidel_sort_flag=False,
-        )
-    else:
-        print("ERROR! now only support fb15k and wikikg2. Loading it now")
-        exit(1)
-    if args.reindex_eid:
-        edge_new_eids = np.arange(edge_referential_eids.shape[0])
-        edge_referential_to_new_eids_mapping = dict(
-            zip(edge_referential_eids, edge_new_eids)
-        )
-        transposed_edge_new_eids = np.array(
-            list(
-                map(
-                    edge_referential_to_new_eids_mapping.__getitem__,
-                    transposed_edge_referential_eids,
-                )
-            )
-        ).astype(np.int64)
-        print("transposed_edge_new_eids shape", transposed_edge_new_eids.shape)
-        edge_referential_eids = edge_new_eids
-        transposed_edge_referential_eids = transposed_edge_new_eids
-
-    # coo to csr conversion
-    (data_rowptr, data_colidx, data_reltypes, data_eids) = utils.coo2csr(
-        edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
-    )
-    (
-        transposed_data_rowptr,
-        transposed_data_colidx,
-        transposed_data_reltypes,
-        transposed_data_eids,
-    ) = utils.coo2csr(
-        transposed_edge_srcs,
-        transposed_edge_dsts,
-        transposed_edge_etypes,
-        transposed_edge_referential_eids,
-    )
-    # create graph
-    g = utils.create_mydgl_graph_csr_numpy(
-        data_rowptr, data_colidx, data_reltypes, data_eids
-    )
-    g_transposed = utils.create_mydgl_graph_csr_numpy(
-        transposed_data_rowptr,
-        transposed_data_colidx,
-        transposed_data_reltypes,
-        transposed_data_eids,
-    )
-    g["transposed"] = g_transposed["original"]
-
-    return g
-
-
 def main(args):
-    g = RGCN_get_mydgl_graph(args)
-    if args.sparse_format == "coo":
-        g = utils.convert_mydgl_graph_csr_to_coo(g)
+    g = utils.RGCN_get_mydgl_graph(
+        args.dataset,
+        args.sort_by_src,
+        args.sort_by_etype,
+        args.reindex_eid,
+        args.sparse_format,
+    )
     model = get_model(args, g)
     num_nodes = g["original"]["row_ptr"].numel() - 1
     # since the nodes are featureless, the input feature is then the node id.

@@ -8,6 +8,8 @@
 # sudo nvidia-smi --persistence-mode=1
 # sudo nvidia-smi -lgc 1395,1395
 
+# NB: As we have not implemented self-loop in our dataset loading, we switch off the self-loop in the baseline experiements.
+
 python -m python.RGCN.RGCNSingleLayer -d fb15k --input_dim 128 --num_classes 16 --sparse_format="csr"
 python -m python.RGCN.RGCNSingleLayer -d fb15k --input_dim 128 --num_classes 16 --sparse_format="csr" --sort_by_src 
 python -m python.RGCN.RGCNSingleLayer -d fb15k --input_dim 128 --num_classes 8 --sparse_format="csr"
