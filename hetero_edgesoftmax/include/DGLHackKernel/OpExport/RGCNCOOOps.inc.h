@@ -15,15 +15,16 @@ void _RgcnLayerImpl_wrapper_integratedcoo(
   auto ret_data = ret.data_ptr<DType>();
 
   Idx num_edges = coo_eids.numel();
-  //int nblks = num_nodes;
+  // int nblks = num_nodes;
 
   if (layer1_flag) {
     Idx ntypes = weight.size(0);
     Idx feat_len_y = weight.size(1);
     Idx feat_len_x = weight.size(2);
     int nthrs = feat_len_y * feat_len_x;
-    assert(nthrs %32 == 0);
-    int nblks = (num_edges + nthrs/32-1) / (nthrs /32); // 32 is the warp size
+    assert(nthrs % 32 == 0);
+    int nblks =
+        (num_edges + nthrs / 32 - 1) / (nthrs / 32);  // 32 is the warp size
     RgcnLayer1COOKernelImpl<Idx, DType>
         <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
             row_idx_data, ids_data, eids_data, typeids_data, hidden_data,
@@ -34,7 +35,7 @@ void _RgcnLayerImpl_wrapper_integratedcoo(
     Idx feat_len = weight.size(2);
     int nthrs = feat_len;
     assert(0 && "not implemented");
-    //RgcnLayer0KernelImpl<Idx, DType>
+    // RgcnLayer0KernelImpl<Idx, DType>
     //    <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
     //        range_data, ids_data, eids_data, typeids_data, weight_data,
     //        norm_data, ret_data, num_nodes, feat_len, ntypes);
@@ -42,7 +43,7 @@ void _RgcnLayerImpl_wrapper_integratedcoo(
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-bool RgcnLayer1Impl_wrapper_integratedcoo(
+void RgcnLayer1Impl_wrapper_integratedcoo(
     at::Tensor& coo_row_idx, at::Tensor& coo_col_idx, at::Tensor& coo_eids,
     at::Tensor& coo_reltypes, at::Tensor& hidden, at::Tensor& weight,
     at::Tensor& norm, at::Tensor& ret) {
@@ -50,7 +51,6 @@ bool RgcnLayer1Impl_wrapper_integratedcoo(
   _RgcnLayerImpl_wrapper_integratedcoo<int64_t, float>(
       coo_row_idx, coo_col_idx, coo_eids, coo_reltypes, hidden, weight, norm,
       ret, true);
-  return false;
 }
 
 // the referential implementation from seastar
@@ -95,7 +95,7 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcoo(
   // Idx feat_len_y = weight->shape[1];
   // Idx feat_len_x = weight->shape[2];
   Idx num_edges = transposed_coo_col_idx.numel();
-  //int nblks = num_nodes;
+  // int nblks = num_nodes;
   // auto* thr_entry = runtime::CUDAThreadEntry::ThreadLocal();
   // cuda_err_chk(cudaDeviceSynchronize());
   if (layer1_flag) {
@@ -103,20 +103,23 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcoo(
     Idx feat_len_y = weight.size(1);
     Idx feat_len_x = weight.size(2);
     int nthrs = feat_len_y * feat_len_x;
-    assert(nthrs %32 == 0);
-    int nblks = (num_edges + nthrs/32-1) / (nthrs /32); // 32 is the warp size
-    RgcnLayer1BackwardCOOKernelImpl<<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-        row_idx_data, ids_data, eids_data, typeids_data, hidden_data, weight_data,
-        norm_data, grad_out_data, grad_hidden_data, grad_weight_data, num_edges,
-        feat_len_y, feat_len_x, ntypes);
+    assert(nthrs % 32 == 0);
+    int nblks =
+        (num_edges + nthrs / 32 - 1) / (nthrs / 32);  // 32 is the warp size
+    RgcnLayer1BackwardCOOKernelImpl<<<nblks,
+                                      nthrs /*, 0, thr_entry->stream*/>>>(
+        row_idx_data, ids_data, eids_data, typeids_data, hidden_data,
+        weight_data, norm_data, grad_out_data, grad_hidden_data,
+        grad_weight_data, num_edges, feat_len_y, feat_len_x, ntypes);
   } else {
     Idx ntypes = weight.size(1);
     Idx feat_len = ret.size(2);
     int nthrs = feat_len;
     assert(0 && "not implemented");
-    //RgcnLayer0BackwardKernelImpl<<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-    //    range_data, ids_data, eids_data, typeids_data, grad_out_data, norm_data,
-    //    ret_data, num_nodes, feat_len, ntypes);
+    // RgcnLayer0BackwardKernelImpl<<<nblks, nthrs /*, 0,
+    // thr_entry->stream*/>>>(
+    //    range_data, ids_data, eids_data, typeids_data, grad_out_data,
+    //    norm_data, ret_data, num_nodes, feat_len, ntypes);
   }
   // cudaDeviceSynchronize();
   // auto t2 = std::chrono::steady_clock::now();
@@ -127,9 +130,8 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcoo(
   // cuda_err_chk(cudaDeviceSynchronize());
 }
 
-
 // template </*int XPU, */ typename Idx, typename DType>
-bool RgcnLayer1BackwardImpl_wrapper_integratedcoo(
+void RgcnLayer1BackwardImpl_wrapper_integratedcoo(
     // GraphRef graph,
     at::Tensor& transposed_coo_row_idx, at::Tensor& transposed_coo_col_idx,
     at::Tensor& transposed_coo_eids, at::Tensor& transposed_coo_reltypes,
@@ -141,5 +143,4 @@ bool RgcnLayer1BackwardImpl_wrapper_integratedcoo(
       transposed_coo_row_idx, transposed_coo_col_idx, transposed_coo_eids,
       transposed_coo_reltypes, hidden, weight, norm, grad_out, grad_hidden,
       grad_weight, /*ret_dummy*/ grad_weight, true);
-  return false;
 }

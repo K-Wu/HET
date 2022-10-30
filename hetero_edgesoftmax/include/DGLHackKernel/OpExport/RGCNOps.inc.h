@@ -1,6 +1,5 @@
 #pragma once
 
-
 template </*int XPU, */ typename Idx, typename DType>
 void _RgcnLayerImpl_wrapper_integratedcsr(
     at::Tensor& csr_rowptr, at::Tensor& csr_col_idx, at::Tensor& csr_eids,
@@ -41,7 +40,7 @@ void _RgcnLayerImpl_wrapper_integratedcsr(
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-bool RgcnLayer0Impl_wrapper_integratedcsr(at::Tensor& csr_rowptr,
+void RgcnLayer0Impl_wrapper_integratedcsr(at::Tensor& csr_rowptr,
                                           at::Tensor& csr_col_idx,
                                           at::Tensor& csr_eids,
                                           at::Tensor& csr_reltypes,
@@ -51,11 +50,10 @@ bool RgcnLayer0Impl_wrapper_integratedcsr(at::Tensor& csr_rowptr,
   _RgcnLayerImpl_wrapper_integratedcsr<int64_t, float>(
       csr_rowptr, csr_col_idx, csr_eids, csr_reltypes, /*dummy_tensor*/ weight,
       weight, norm, ret, false);
-  return false;
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-bool RgcnLayer1Impl_wrapper_integratedcsr(
+void RgcnLayer1Impl_wrapper_integratedcsr(
     at::Tensor& csr_rowptr, at::Tensor& csr_col_idx, at::Tensor& csr_eids,
     at::Tensor& csr_reltypes, at::Tensor& hidden, at::Tensor& weight,
     at::Tensor& norm, at::Tensor& ret) {
@@ -63,7 +61,6 @@ bool RgcnLayer1Impl_wrapper_integratedcsr(
   _RgcnLayerImpl_wrapper_integratedcsr<int64_t, float>(
       csr_rowptr, csr_col_idx, csr_eids, csr_reltypes, hidden, weight, norm,
       ret, true);
-  return false;
 }
 
 // the referential implementation from seastar
@@ -139,7 +136,7 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcsr(
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-bool RgcnLayer0BackwardImpl_wrapper_integratedcsr(
+void RgcnLayer0BackwardImpl_wrapper_integratedcsr(
     // GraphRef graph,
     at::Tensor& transposed_csr_rowptr, at::Tensor& transposed_csr_col_idx,
     at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
@@ -150,11 +147,10 @@ bool RgcnLayer0BackwardImpl_wrapper_integratedcsr(
       transposed_csr_reltypes, /*hidden_dummy*/ ret, /*weight_dummy*/ ret, norm,
       grad_out,
       /*grad_hidden_dummy*/ ret, /*grad_weight_dummy*/ ret, ret, false);
-  return false;
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-bool RgcnLayer1BackwardImpl_wrapper_integratedcsr(
+void RgcnLayer1BackwardImpl_wrapper_integratedcsr(
     // GraphRef graph,
     at::Tensor& transposed_csr_rowptr, at::Tensor& transposed_csr_col_idx,
     at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
@@ -166,5 +162,4 @@ bool RgcnLayer1BackwardImpl_wrapper_integratedcsr(
       transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
       transposed_csr_reltypes, hidden, weight, norm, grad_out, grad_hidden,
       grad_weight, /*ret_dummy*/ grad_weight, true);
-  return false;
 }

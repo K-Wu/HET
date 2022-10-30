@@ -20,12 +20,13 @@
 // TODO: assume int32_t and float32 for now. but we may need to support other
 // types
 // TODO: check if torch builtin has the same encoding as int32_t and float32
-#include "DGLHackKernel/OpExport/DataLoader.inc"
-#include "DGLHackKernel/OpExport/HGTOps.inc"
+#include "DGLHackKernel/OpExport/DataLoader.inc.h"
+#include "DGLHackKernel/OpExport/GATOps.inc.h"
+#include "DGLHackKernel/OpExport/HGTOps.inc.h"
 #include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.h"
-#include "DGLHackKernel/OpExport/RGATOps.inc"
-#include "DGLHackKernel/OpExport/RGCNCOOOps.inc"
-#include "DGLHackKernel/OpExport/RGCNOps.inc"
+#include "DGLHackKernel/OpExport/RGATOps.inc.h"
+#include "DGLHackKernel/OpExport/RGCNCOOOps.inc.h"
+#include "DGLHackKernel/OpExport/RGCNOps.inc.h"
 
 std::vector<std::vector<at::Tensor>> biops_tensor_info(
     at::Tensor& one_tensor, at::Tensor& other_tensor) {
@@ -135,19 +136,23 @@ torch::Dict<std::string, int64_t> test_argument_takein(
 }
 
 TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
+  // Utility and debugging functions
   m.def("biops_tensor_info", biops_tensor_info);
   m.def("tensor_info", tensor_info);
+  m.def("transpose_csr", transpose_csr);
+  m.def("test_argument_takein", test_argument_takein);
+  // RGCN CSR Declaration
   m.def("rgcn_layer0_csr", RgcnLayer0Impl_wrapper_integratedcsr);
   m.def("rgcn_layer0_backward_csr",
         RgcnLayer0BackwardImpl_wrapper_integratedcsr);
   m.def("rgcn_layer1_csr", RgcnLayer1Impl_wrapper_integratedcsr);
   m.def("rgcn_layer1_backward_csr",
         RgcnLayer1BackwardImpl_wrapper_integratedcsr);
+  // RGCN COO Declaration
   m.def("rgcn_layer1_coo", RgcnLayer1Impl_wrapper_integratedcoo);
   m.def("rgcn_layer1_backward_coo",
         RgcnLayer1BackwardImpl_wrapper_integratedcoo);
-  m.def("transpose_csr", transpose_csr);
-  m.def("test_argument_takein", test_argument_takein);
+  // HGT CSR Declaration
   m.def("hgt_full_graph_message_mean_aggregation_backward_csr",
         hgt_full_graph_message_mean_aggregation_backward_wrapper_integratedcsr);
   m.def("hgt_full_graph_message_mean_aggregation_csr",
@@ -164,4 +169,8 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
         hgt_full_graph_edge_softmax_ops_wrapper_integratedcsr);
   m.def("hgt_full_graph_edge_softmax_ops_backward_csr",
         hgt_full_graph_edge_softmax_ops_backward_wrapper_integratedcsr);
+  // Fused GAT CSR Declaration
+  m.def("fused_gat_kernel_csr", FusedGatKernelImpl_wrapper_integratedcsr);
+  m.def("backward_fused_gat_csr",
+        BackwardFusedGatKernelImpl_wrapper_integratedcsr);
 }

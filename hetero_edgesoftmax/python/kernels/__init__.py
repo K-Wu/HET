@@ -6,3 +6,4 @@ from .rgcn_kernels import *
 from .hgt_kernels import *
 from .utils_kernels import *
 from .rgat_kernels import *
+from .gat_kernels import *

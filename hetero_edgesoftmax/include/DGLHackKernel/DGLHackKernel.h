@@ -17,6 +17,7 @@
 #include "DGLHackUtils.h"
 #include "FusedGAT.h"
 #include "FusedGATBackward.h"
+#include "OpPrototyping/GATOps.h"
 #include "OpPrototyping/HGTOps.h"
 #include "OpPrototyping/RGCNOps.h"
 #include "RGCNLayer1BackwardMyHYB.h"
