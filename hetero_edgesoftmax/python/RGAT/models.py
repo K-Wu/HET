@@ -4,6 +4,8 @@ import torch as th
 from torch import nn
 import torch.nn.functional as F
 import dgl.nn as dglnn
+from .. import backend as B
+from .models_dgl import RGAT_main_procedure, RGAT_parse_args
 
 
 class HET_RelationalAttLayer(nn.Module):
@@ -53,12 +55,17 @@ class HET_RelationalAttLayer(nn.Module):
         self.activation = activation
         self.self_loop = self_loop
 
-        self.conv = dglnn.HeteroGraphConv(
-            {
-                rel: dglnn.GATConv(in_feat, out_feat // n_heads, n_heads, bias=False)
-                for rel in rel_names
-            }
-        )  # NB: RGAT model definition
+        # NB: RGAT model definition
+        assert out_feat % n_heads == 0, "out_feat must be a multiple of n_heads"
+        self.conv_weights = nn.Parameter(
+            th.Tensor(len(rel_names), n_heads, in_feat, out_feat // n_heads)
+        )
+        # self.conv = dglnn.HeteroGraphConv(
+        #     {
+        #         rel: dglnn.GATConv(in_feat, out_feat // n_heads, n_heads, bias=False)
+        #         for rel in rel_names
+        #     }
+        # )
 
         # bias
         if bias:
@@ -79,8 +86,11 @@ class HET_RelationalAttLayer(nn.Module):
             nn.init.xavier_uniform_(
                 self.loop_weight, gain=nn.init.calculate_gain("relu")
             )
-        for module in self.conv.mods.values():
-            module.reset_parameters()
+
+        nn.init.xavier_uniform_(self.conv_weights, gain=nn.init.calculate_gain("relu"))
+
+        # for module in self.conv.mods.values():
+        #     module.reset_parameters()
 
     # pylint: disable=invalid-name
     def forward(self, g, inputs):
@@ -106,7 +116,9 @@ class HET_RelationalAttLayer(nn.Module):
         else:
             inputs_src = inputs_dst = inputs
 
-        hs = self.conv(g, inputs_src)  # Replace this line with our own logic
+        # NB: this line originally calls DGL R(GAT) impl and is now replaced with our own logic
+        hs = B.rgat_layer_csr(g, self.conv_weights, input)
+        # hs = self.conv(g, inputs_src)
 
         # NB: let's leverage the built-in bias, activation and dropout here and only focus on SpMM/SDDMM in our kernel implementation.
         # NB: GATConv class also provides bias, activation and dropout but we can ignore them for now.
@@ -236,3 +248,8 @@ class HET_RelationalGATEncoder(nn.Module):
             for layer, block in zip(self.layers, blocks):
                 h = layer(block, h)
         return h
+
+
+if __name__ == "__main__":
+    args = RGAT_parse_args()
+    RGAT_main_procedure(args, dgl_model_flag=False)

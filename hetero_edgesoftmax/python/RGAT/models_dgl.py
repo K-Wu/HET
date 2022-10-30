@@ -9,7 +9,7 @@ import dgl
 import dgl.nn as dglnn
 import argparse
 from ogb.nodeproppred import DglNodePropPredDataset
-
+from .models import HET_RelationalAttLayer, HET_RelationalGATEncoder
 
 # involve code heavily from dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
 
@@ -290,7 +290,7 @@ class RelationalGATEncoder(nn.Module):
         return h
 
 
-def parse_args():
+def RGAT_parse_args():
     # DGL
     parser = argparse.ArgumentParser(description="RGAT")
     parser.add_argument(
@@ -382,10 +382,33 @@ def prepare_data(args):
     return (g, labels, dataset.num_classes, split_idx, train_loader)
 
 
-def get_model(g, num_classes, args):
+def RGAT_get_model(g, num_classes, args):
     embed_layer = RelGraphEmbed(g, args["n_hidden"], exclude=[])  # exclude=["paper"])
 
     model = RelationalGATEncoder(
+        g,
+        h_dim=args["n_hidden"],
+        out_dim=num_classes,
+        n_heads=args["n_head"],
+        num_hidden_layers=args["num_layers"] - 1,
+        dropout=args["dropout"],
+        use_self_loop=True,
+    )
+
+    print(embed_layer)
+    print(
+        f"Number of embedding parameters: {sum(p.numel() for p in embed_layer.parameters())}"
+    )
+    print(model)
+    print(f"Number of model parameters: {sum(p.numel() for p in model.parameters())}")
+
+    return embed_layer, model
+
+
+def RGAT_get_our_model(g, num_classes, args):
+    embed_layer = RelGraphEmbed(g, args["n_hidden"], exclude=[])  # exclude=["paper"])
+
+    model = HET_RelationalGATEncoder(
         g,
         h_dim=args["n_hidden"],
         out_dim=num_classes,
@@ -462,7 +485,7 @@ def train(
     return  # logger
 
 
-def main(args):
+def RGAT_main_procedure(args, dgl_model_flag):
     # Static parameters
     hyperparameters = dict(
         num_layers=2,
@@ -475,8 +498,13 @@ def main(args):
     device = f"cuda:0" if th.cuda.is_available() else "cpu"
 
     (g, labels, num_classes, split_idx, train_loader) = prepare_data(hyperparameters)
-
-    embed_layer, model = get_model(g, num_classes, hyperparameters)
+    # TODO: now this script from dgl repo uses the num_classes properties of dataset. Align this with graphiler's randomizing label, or add an option whether to randomize classification.
+    if dgl_model_flag:
+        print("Using DGL RGAT model")
+        embed_layer, model = RGAT_get_model(g, num_classes, hyperparameters)
+    else:
+        print("Using our RGAT model")
+        embed_layer, model = RGAT_get_our_model(g, num_classes, hyperparameters)
     model = model.to(device)
 
     for run in range(hyperparameters["runs"]):
@@ -507,5 +535,5 @@ def main(args):
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    main(args)
+    args = RGAT_parse_args()
+    RGAT_main_procedure(args, dgl_model_flag=True)

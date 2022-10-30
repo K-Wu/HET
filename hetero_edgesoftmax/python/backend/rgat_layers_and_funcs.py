@@ -18,6 +18,7 @@ class RgatLayerCSR(th.autograd.Function):
         outcsr_eids,
         outcsr_reltypes,
         weight,
+        input,
         ret,
     ):
         ctx.save_for_backward(
@@ -30,9 +31,10 @@ class RgatLayerCSR(th.autograd.Function):
             outcsr_eids,
             outcsr_reltypes,
             weight,
+            input,
         )
         K.rgat_layer_csr(
-            incsr_row_ptr, incsr_col_idx, incsr_eids, incsr_reltypes, weight, ret
+            incsr_row_ptr, incsr_col_idx, incsr_eids, incsr_reltypes, weight, input, ret
         )
         return ret
 
@@ -48,20 +50,35 @@ class RgatLayerCSR(th.autograd.Function):
             outcsr_eids,
             outcsr_reltypes,
             weight,
+            input,
         ) = ctx.saved_tensors
         grad_weight = th.zeros_like(weight)
+        grad_input = th.zeros_like(input)
         K.rgat_layer_backward_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,
             outcsr_reltypes,
             gradout,
+            grad_input,
             grad_weight,
         )
-        return None, None, None, None, None, None, None, None, grad_weight, None
+        return (
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            grad_input,
+            grad_weight,
+            None,
+        )
 
 
-def rgat_layer_csr(graph, weight):
+def rgat_layer_csr(graph, weight, input):
     # NB: notice that in rgcn, in-adjacency list is used and therefore, we input the transposed adj list to forward propagation, and the original to backward propagation.
     incsr_row_ptr = graph["transposed"]["row_ptr"]
     incsr_col_idx = graph["transposed"]["col_idx"]
@@ -86,5 +103,7 @@ def rgat_layer_csr(graph, weight):
         outcsr_col_idx,
         outcsr_eids,
         outcsr_reltypes,
+        weight,
+        input,
         ret,
     )

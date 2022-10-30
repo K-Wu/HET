@@ -129,12 +129,12 @@ class HET_EglRelGraphConv(nn.Module):
             if self.layer_type == 0:
                 node_repr = B.rgcn_layer0_csr(
                     g, weight, norm
-                )  # TODO: replace with my own rgcn_layer0
+                )  # NB: this line uses my own rgcn_layer0
                 # print('output of layer 0', node_repr)
             else:
                 node_repr = B.rgcn_layer1_csr(
                     g, x, weight, norm
-                )  # TODO: replace with my own rgcn_layer1
+                )  # NB: this line uses my own rgcn_layer1
         else:
             assert self.sparse_format == "coo"
             if self.layer_type == 0:
