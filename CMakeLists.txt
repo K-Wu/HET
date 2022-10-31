@@ -13,6 +13,7 @@ option(BUILD_TEST "build sputnik test suite" ON)
 option(BUILD_BENCHMARK "build sputnik benchmark suite" ON)
 option(BUILD_GENERATED "build sputnik-based generated op code" ON)
 option(BUILD_TORCH_API "build torch api library" OFF)
+option(RES_USAGE "show resource usage during nvcc compilation" OFF)
 
 ##
 ### Handle Dependencies.
@@ -28,7 +29,11 @@ include(cmake/Dependencies.cmake)
 # Requires C++17.
 set(CMAKE_CXX_STANDARD 17)
 
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -maxrregcount 128 -res-usage -g -lineinfo --restrict --extended-lambda -std=c++17 -O3")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -maxrregcount 128 -g -lineinfo --restrict --extended-lambda -std=c++17 -O3")
+
+if (RES_USAGE)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -res-usage")
+endif()
 
 #if(BUILD_TEST)
 #  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSPUTNIK_BUILD_TEST")
