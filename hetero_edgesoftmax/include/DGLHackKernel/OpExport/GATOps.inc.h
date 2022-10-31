@@ -16,6 +16,7 @@ void _FusedGatKernelImpl_wrapper_integratedcsr(
     // MySimpleNDArray<Idx, thrust::device_allocator<Idx>>
     // eids,//thrust::sequence<Idx>(eids.data.begin(),eids.data.end(), 0);
     double slope) {
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   // As GAT only has 1 type of relationship, we use a specialcase of separateCSR
   // where num releationship is asserted as 1
   // assert(incsr.num_rels == 1);
@@ -85,11 +86,11 @@ void _FusedGatKernelImpl_wrapper_integratedcsr(
   // graph->NumVertices(0),incsr_elements[1].NumElements(), incsr_elements[0],
   // incsr_elements[1], incsr_elements[2]); gatExpLeakyReluSumKernel<<<nblks,
   // nthrs, el_xlen*sizeof(DType), thr_entry->stream>>>(gdata, csr);
-  cuda_err_chk(cudaDeviceSynchronize());
+  // cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   gatExpLeakyReluSumKernel<Idx, DType>
-      <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+      <<<nblks, nthrs, 0, stream /*, 0, thr_entry->stream*/>>>(
           gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
           incsr_num_rows);
   // CUDA_KERNEL_CALL(gatExpLeakyReluSumKernel, nblks, nthrs, 0,
@@ -99,8 +100,8 @@ void _FusedGatKernelImpl_wrapper_integratedcsr(
   // graph->NumVertices(0), incsr_elements[1].NumElements(), incsr_elements[0],
   // incsr_elements[1], incsr_elements[2]);
 
-  cuda_err_chk(cudaPeekAtLastError());
-  cuda_err_chk(cudaDeviceSynchronize());
+  // cuda_err_chk(cudaPeekAtLastError());
+  // cuda_err_chk(cudaDeviceSynchronize());
   nthrs_x = FindNumThreads(el_xlen, 64);
   nthrs_y = FindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
   nblks_x = 1;
@@ -110,11 +111,11 @@ void _FusedGatKernelImpl_wrapper_integratedcsr(
   // LOG(INFO) << "kernel2 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:"
   // <<nthrs_x << "*" << nthrs_y;
   gatSumProdZipDivKernel<Idx, DType>
-      <<<nblks2, nthrs2 /*, 0, thr_entry->stream*/>>>(
+      <<<nblks2, nthrs2, 0, stream /*, 0, thr_entry->stream*/>>>(
           gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
           incsr_num_rows);
-  cuda_err_chk(cudaPeekAtLastError());
-  cuda_err_chk(cudaDeviceSynchronize());
+  // cuda_err_chk(cudaPeekAtLastError());
+  // cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t2 =
       std::chrono::high_resolution_clock::now();
   std::cout
@@ -147,6 +148,7 @@ void _BackwardFusedGatKernelImpl_wrapper_integratedcsr(
     // //thrust::sequence<Idx>(eids.data.begin(),eids.data.end(), 0); TODO:
     // check if it needs a different eid
     double slope) {
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   // As GAT only has 1 type of relationship, we use a specialcase of separateCSR
   // where num releationship is asserted as 1
   // assert(outcsr.num_rels == 1);
@@ -202,28 +204,29 @@ void _BackwardFusedGatKernelImpl_wrapper_integratedcsr(
   const dim3 nblks(nblks_x, nblks_y);
   // LOG(INFO) << "GradFeatSrc kernel blk dim:" << nblks_x << "*" <<nblks_y << "
   // thr dim:" <<nthrs_x << "*" << nthrs_y;
-  cuda_err_chk(cudaDeviceSynchronize());
+  // cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   if constexpr (!FLAG_KERNEL_FUSED) {
-    fusedGatBackwardGradFeatSrc<<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+    fusedGatBackwardGradFeatSrc<<<nblks, nthrs, 0,
+                                  stream /*, 0, thr_entry->stream*/>>>(
         gdata, outcsr_row_ptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
         outcsr_num_rows);
     // const dim3 nthrs3(nthrs_y, nthrs_x);
     // fusedGatBackwardGradElEr4<<<nblks, nthrs3, 0, thr_entry->stream>>>(gdata,
     // ocsr);
     fusedGatBackwardGradElEr<Idx, DType>
-        <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+        <<<nblks, nthrs, 0, stream /*, 0, thr_entry->stream*/>>>(
             gdata, outcsr_row_ptr.data_ptr<Idx>(),
             outcsr_col_idx.data_ptr<Idx>(), outcsr_num_rows);
   } else {
     fusedGatBackwardGradElErFeatSrcFused<Idx, DType>
-        <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+        <<<nblks, nthrs, 0, stream /*, 0, thr_entry->stream*/>>>(
             gdata, outcsr_row_ptr.data_ptr<Idx>(),
             outcsr_col_idx.data_ptr<Idx>(), outcsr_num_rows);
   }
-  cuda_err_chk(cudaPeekAtLastError());
-  cuda_err_chk(cudaDeviceSynchronize());
+  // cuda_err_chk(cudaPeekAtLastError());
+  // cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t2 =
       std::chrono::high_resolution_clock::now();
   std::cout

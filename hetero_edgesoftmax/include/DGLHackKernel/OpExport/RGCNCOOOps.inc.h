@@ -5,6 +5,7 @@ void _RgcnLayerImpl_wrapper_integratedcoo(
     at::Tensor& coo_row_idx, at::Tensor& coo_col_idx, at::Tensor& coo_eids,
     at::Tensor& coo_reltypes, at::Tensor& hidden, at::Tensor& weight,
     at::Tensor& norm, at::Tensor& ret, bool layer1_flag) {
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   auto row_idx_data = coo_row_idx.data_ptr<Idx>();
   auto ids_data = coo_col_idx.data_ptr<Idx>();
   auto eids_data = coo_eids.data_ptr<Idx>();
@@ -26,7 +27,7 @@ void _RgcnLayerImpl_wrapper_integratedcoo(
     int nblks =
         (num_edges + nthrs / 32 - 1) / (nthrs / 32);  // 32 is the warp size
     RgcnLayer1COOKernelImpl<Idx, DType>
-        <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+        <<<nblks, nthrs, 0, stream /*, 0, thr_entry->stream*/>>>(
             row_idx_data, ids_data, eids_data, typeids_data, hidden_data,
             weight_data, norm_data, ret_data, num_edges, feat_len_y, feat_len_x,
             ntypes);
@@ -62,6 +63,7 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcoo(
     at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
     at::Tensor& grad_out, at::Tensor& grad_hidden, at::Tensor& grad_weight,
     at::Tensor& ret, bool layer1_flag) {
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   // assert(csr.IsSortedByEdgeType_CPU());
   // cudaDeviceSynchronize();
   // auto t1 = std::chrono::steady_clock::now();
@@ -106,8 +108,8 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcoo(
     assert(nthrs % 32 == 0);
     int nblks =
         (num_edges + nthrs / 32 - 1) / (nthrs / 32);  // 32 is the warp size
-    RgcnLayer1BackwardCOOKernelImpl<<<nblks,
-                                      nthrs /*, 0, thr_entry->stream*/>>>(
+    RgcnLayer1BackwardCOOKernelImpl<<<nblks, nthrs, 0,
+                                      stream /*, 0, thr_entry->stream*/>>>(
         row_idx_data, ids_data, eids_data, typeids_data, hidden_data,
         weight_data, norm_data, grad_out_data, grad_hidden_data,
         grad_weight_data, num_edges, feat_len_y, feat_len_x, ntypes);

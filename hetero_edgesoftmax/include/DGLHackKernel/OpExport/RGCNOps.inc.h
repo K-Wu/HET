@@ -5,6 +5,7 @@ void _RgcnLayerImpl_wrapper_integratedcsr(
     at::Tensor& csr_rowptr, at::Tensor& csr_col_idx, at::Tensor& csr_eids,
     at::Tensor& csr_reltypes, at::Tensor& hidden, at::Tensor& weight,
     at::Tensor& norm, at::Tensor& ret, bool layer1_flag) {
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   auto range_data = csr_rowptr.data_ptr<Idx>();
   auto ids_data = csr_col_idx.data_ptr<Idx>();
   auto eids_data = csr_eids.data_ptr<Idx>();
@@ -24,7 +25,7 @@ void _RgcnLayerImpl_wrapper_integratedcsr(
     Idx feat_len_x = weight.size(2);
     int nthrs = feat_len_y * feat_len_x;
     RgcnLayer1KernelImpl<Idx, DType>
-        <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+        <<<nblks, nthrs, 0, stream /*, 0, thr_entry->stream*/>>>(
             range_data, ids_data, eids_data, typeids_data, hidden_data,
             weight_data, norm_data, ret_data, num_nodes, feat_len_y, feat_len_x,
             ntypes);
@@ -33,7 +34,7 @@ void _RgcnLayerImpl_wrapper_integratedcsr(
     Idx feat_len = weight.size(2);
     int nthrs = feat_len;
     RgcnLayer0KernelImpl<Idx, DType>
-        <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+        <<<nblks, nthrs, 0, stream /*, 0, thr_entry->stream*/>>>(
             range_data, ids_data, eids_data, typeids_data, weight_data,
             norm_data, ret_data, num_nodes, feat_len, ntypes);
   }
@@ -82,6 +83,7 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcsr(
   // auto ids = csr[1];
   // auto eids = csr[2];
   // auto type_ids = csr[3];
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   auto range_data = transposed_csr_rowptr.data_ptr<Idx>();
   auto ids_data = transposed_csr_col_idx.data_ptr<Idx>();
   auto eids_data = transposed_csr_eids.data_ptr<Idx>();
@@ -114,7 +116,8 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcsr(
     Idx feat_len_y = weight.size(1);
     Idx feat_len_x = weight.size(2);
     int nthrs = feat_len_y * feat_len_x;
-    RgcnLayer1BackwardKernelImpl<<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+    RgcnLayer1BackwardKernelImpl<<<nblks, nthrs, 0,
+                                   stream /*, 0, thr_entry->stream*/>>>(
         range_data, ids_data, eids_data, typeids_data, hidden_data, weight_data,
         norm_data, grad_out_data, grad_hidden_data, grad_weight_data, num_nodes,
         feat_len_y, feat_len_x, ntypes);
@@ -122,7 +125,8 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcsr(
     Idx ntypes = weight.size(1);
     Idx feat_len = ret.size(2);
     int nthrs = feat_len;
-    RgcnLayer0BackwardKernelImpl<<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+    RgcnLayer0BackwardKernelImpl<<<nblks, nthrs, 0,
+                                   stream /*, 0, thr_entry->stream*/>>>(
         range_data, ids_data, eids_data, typeids_data, grad_out_data, norm_data,
         ret_data, num_nodes, feat_len, ntypes);
   }
