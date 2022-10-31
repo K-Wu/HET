@@ -8,8 +8,10 @@ import torch.nn.functional as F
 import dgl
 import dgl.nn as dglnn
 import argparse
+from hetero_edgesoftmax.python.utils.mydgl_graph import MyDGLGraph
 from ogb.nodeproppred import DglNodePropPredDataset
 from .models import HET_RelationalAttLayer, HET_RelationalGATEncoder
+from .. import utils
 
 # involve code heavily from dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
 
@@ -503,8 +505,10 @@ def RGAT_main_procedure(args, dgl_model_flag):
         print("Using DGL RGAT model")
         embed_layer, model = RGAT_get_model(g, num_classes, hyperparameters)
     else:
+        g = utils.create_mydgl_graph_coo_from_dgl_graph(g)
         print("Using our RGAT model")
         embed_layer, model = RGAT_get_our_model(g, num_classes, hyperparameters)
+        g = g.to(device)
     model = model.to(device)
 
     for run in range(hyperparameters["runs"]):

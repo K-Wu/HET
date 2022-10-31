@@ -9,6 +9,7 @@
 // implemented at hetero_edgesoftmax/include/DGLHackKernel/RGCNLayers.h. Please
 // update accordingly whenever there is update.
 #include <c10/cuda/CUDAException.h>
+#include <c10/cuda/CUDAStream.h>
 #include <torch/extension.h>
 #include <torch/library.h>
 
@@ -20,7 +21,7 @@
 // TODO: assume int32_t and float32 for now. but we may need to support other
 // types
 // TODO: check if torch builtin has the same encoding as int32_t and float32
-#include "DGLHackKernel/OpExport/DataLoader.inc.h"
+#include "DGLHackKernel/OpExport/DataConverters.inc.h"
 #include "DGLHackKernel/OpExport/GATOps.inc.h"
 #include "DGLHackKernel/OpExport/HGTOps.inc.h"
 #include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.h"
@@ -61,69 +62,6 @@ at::Tensor tensor_info(at::Tensor& one_tensor) {
   return one_tensor.clone();
 }
 
-std::vector<at::Tensor> transpose_csr(at::Tensor& csr_rowptr,
-                                      at::Tensor& csr_col_idx,
-                                      at::Tensor& csr_reltypes,
-                                      at::Tensor& csr_eids) {
-  // NB: graphiler, seastar by default uses int64_t
-  assert(csr_rowptr.is_contiguous());
-  assert(csr_col_idx.is_contiguous());
-  assert(csr_reltypes.is_contiguous());
-  assert(csr_eids.is_contiguous());
-  assert(csr_rowptr.device().is_cpu());
-  assert(csr_col_idx.device().is_cpu());
-  assert(csr_reltypes.device().is_cpu());
-  assert(csr_eids.device().is_cpu());
-
-  thrust::host_vector<int64_t> csr_rowptr_thrust(
-      csr_rowptr.data_ptr<int64_t>(),
-      csr_rowptr.data_ptr<int64_t>() + csr_rowptr.numel());
-  thrust::host_vector<int64_t> csr_col_idx_thrust(
-      csr_col_idx.data_ptr<int64_t>(),
-      csr_col_idx.data_ptr<int64_t>() + csr_col_idx.numel());
-  thrust::host_vector<int64_t> csr_reltypes_thrust(
-      csr_reltypes.data_ptr<int64_t>(),
-      csr_reltypes.data_ptr<int64_t>() + csr_reltypes.numel());
-  thrust::host_vector<int64_t> csr_eids_thrust(
-      csr_eids.data_ptr<int64_t>(),
-      csr_eids.data_ptr<int64_t>() + csr_eids.numel());
-
-  MyHeteroIntegratedCSR<int64_t, std::allocator<int64_t>> csr(
-      csr_rowptr_thrust, csr_col_idx_thrust, csr_reltypes_thrust,
-      csr_eids_thrust);
-  csr.Transpose();
-
-  at::Tensor transposed_rowptr =
-      at::empty({csr_rowptr.numel()}, csr_rowptr.options());
-  at::Tensor transposed_col_idx =
-      at::empty({csr_col_idx.numel()}, csr_col_idx.options());
-  at::Tensor transposed_reltypes =
-      at::empty({csr_reltypes.numel()}, csr_reltypes.options());
-  at::Tensor transposed_eids =
-      at::empty({csr_eids.numel()}, csr_eids.options());
-  assert(transposed_rowptr.is_contiguous());
-  assert(transposed_col_idx.is_contiguous());
-  assert(transposed_reltypes.is_contiguous());
-  assert(transposed_eids.is_contiguous());
-  assert(transposed_rowptr.device().is_cpu());
-  assert(transposed_col_idx.device().is_cpu());
-  assert(transposed_reltypes.device().is_cpu());
-  assert(transposed_eids.device().is_cpu());
-
-  std::copy(csr.row_ptr.begin(), csr.row_ptr.end(),
-            transposed_rowptr.data_ptr<int64_t>());
-  std::copy(csr.col_idx.begin(), csr.col_idx.end(),
-            transposed_col_idx.data_ptr<int64_t>());
-  std::copy(csr.rel_type.begin(), csr.rel_type.end(),
-            transposed_reltypes.data_ptr<int64_t>());
-  std::copy(csr.eids.begin(), csr.eids.end(),
-            transposed_eids.data_ptr<int64_t>());
-
-  std::vector<at::Tensor> result = {transposed_rowptr, transposed_col_idx,
-                                    transposed_reltypes, transposed_eids};
-  return result;
-}
-
 torch::Dict<std::string, int64_t> test_argument_takein(
     std::string str, bool flag, torch::Dict<std::string, int64_t> dictionary) {
   std::cout << "test_string_takein: " << str << std::endl;
@@ -139,7 +77,12 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   // Utility and debugging functions
   m.def("biops_tensor_info", biops_tensor_info);
   m.def("tensor_info", tensor_info);
+  // Data Converters
   m.def("transpose_csr", transpose_csr);
+  m.def("convert_integrated_csr_to_separate_csr",
+        convert_integrated_csr_to_separate);
+  m.def("convert_integrated_csr_to_separate_coo",
+        convert_integrated_csr_to_separate_coo);
   m.def("test_argument_takein", test_argument_takein);
   // RGCN CSR Declaration
   m.def("rgcn_layer0_csr", RgcnLayer0Impl_wrapper_integratedcsr);

@@ -2,6 +2,9 @@
 
 
 # NB: this class stores type in list and assumes the type order in this class and dglgraph are preserved across run. Therefore one should use the CPython implementation to ensure that.
+from ast import Not
+
+
 class MyDGLGraph:
     # TODO: impl ["legacy_metadata_from_dgl"]["canonical_etypes"] elements are (srctype, etype, dsttype) in G.canonical_etypes
     # TODO: impl G["legacy_metadata_from_dgl"]["ntypes"] elements are in G.ntypes
@@ -23,6 +26,39 @@ class MyDGLGraph:
 
     def __contains__(self, key):
         return key in self.graph_data
+
+    def get_sparse_format(self):
+        if "row_ptr" in self.graph_data["original"]:
+            return "csr"
+        elif "row_idx" in self.graph_data["original"]:
+            assert "col_idx" in self.graph_data["original"], "col_idx not exists"
+            return "coo"
+        else:
+            raise ValueError("unknown sparse format")
+
+    def generate_separate_csr_adj_for_each_etype(self):
+        # store rel_ptr, row_ptr, col_idx, eids in self.graph_data["separate"]["csr"]["original"] and self.graph_data["separate"]["csr"]["transposed"]
+
+        # first make sure graph data, as torch tensors, are on cpu
+
+        # then call C++ wrapper function to do the job
+        raise NotImplementedError()
+
+    def generate_separate_coo_adj_for_each_etype(self):
+        # store rel_ptr, row_idx, col_idx, eids in self.graph_data["separate"]["coo"]["original"] and self.graph_data["separate"]["coo"]["transposed"]
+
+        # first make sure graph data, as torch tensors, are on cpu
+
+        # then call C++ wrapper function to do the job
+        raise NotImplementedError()
+
+    def generate_separate_adj_for_each_etype(self, separate_sparse_format):
+        if separate_sparse_format == "csr":
+            self.generate_separate_csr_adj_for_each_etype()
+        elif separate_sparse_format == "coo":
+            self.generate_separate_coo_adj_for_each_etype()
+        else:
+            raise NotImplementedError()
 
     def import_metadata_from_dgl_heterograph(self, dglgraph):
         assert (
