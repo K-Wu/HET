@@ -60,6 +60,7 @@ class MyDGLGraph:
                 self.graph_data[key][second_key] = self.graph_data[key][second_key].to(
                     device
                 )
+        return self
 
     def cuda(self):
         for key in self.graph_data:

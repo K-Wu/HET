@@ -111,7 +111,7 @@ def RGCN_get_mydgl_graph(
             transposed_edge_referential_eids,
         )
         # create graph
-        g = create_mydgl_graph_with_transposecsr_numpy(
+        g = create_mydgl_graph_csr_with_transpose_numpy(
             data_rowptr,
             data_colidx,
             data_reltypes,
@@ -225,6 +225,7 @@ def create_mydgl_graph_csr_with_transpose_torch(
     g["original"]["col_idx"] = col_idx
     g["original"]["rel_types"] = rel_types
     g["original"]["eids"] = eids
+    g["transposed"] = dict()
     g["transposed"]["row_ptr"] = transposed_row_ptr
     g["transposed"]["col_idx"] = transposed_col_idx
     g["transposed"]["rel_types"] = transposed_rel_types

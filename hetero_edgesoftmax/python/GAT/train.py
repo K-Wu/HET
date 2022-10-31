@@ -17,10 +17,12 @@ import networkx as nx
 import time
 import torch
 import torch.nn.functional as F
-from dgl import DGLGraph
-from dgl.data import register_data_args, load_data
-from dgl import transform
-from egl_gat import EglGAT
+
+# from dgl import DGLGraph
+from dgl.data import register_data_args  # , load_data
+
+# from dgl import transform
+from .egl_gat import EglGAT, EglGATSingleLayer
 from .GAT_utils import EarlyStopping
 from .. import utils
 
@@ -75,10 +77,14 @@ def evaluate(model, features, labels, mask):
         )
 
 
-def train(args):
+def GAT_train(args, single_layer_flag):
     # load and preprocess dataset
     mydgl_graph = utils.RGCN_get_mydgl_graph(
-        args.dataset, args.sort_by_src, args.sort_by_etype, args.reindex_eid
+        args.dataset,
+        args.sort_by_src,
+        args.sort_by_etype,
+        args.reindex_eid,
+        args.sparse_format,
     )
     num_nodes = mydgl_graph.get_num_nodes()
     num_edges = mydgl_graph.get_num_edges()
@@ -88,25 +94,36 @@ def train(args):
     print("dataset {}".format(args.dataset))
     print("# of edges : {}".format(num_edges))
     print("# of nodes : {}".format(num_nodes))
-    print("# of features : {}".format(args.hidden_dim))
+    print("# of features : {}".format(args.num_feats))
+    features = torch.randn(num_nodes, args.num_feats)
+    # features = torch.FloatTensor(features)
+    labels = torch.from_numpy(np.random.randint(0, args.num_classes, num_nodes))
+    # labels = torch.LongTensor(labels)
+    train_idx = torch.randint(0, num_nodes, (args.train_size,))
 
-    features = torch.FloatTensor(features)
-    labels = torch.LongTensor(labels)
+    print(
+        "WARNING: the original seastar loading dataset features is replaced with the seastar randomized features and labels instead."
+    )
+    print(
+        "WARNING the original seastar train_mask utility is replaced with the seastar randomized train_mask instead."
+    )
 
-    if hasattr(torch, "BoolTensor"):
-        train_mask = torch.BoolTensor(train_mask)
-
-    else:
-        train_mask = torch.ByteTensor(train_mask)
+    # if hasattr(torch, "BoolTensor"):
+    #    train_mask = torch.BoolTensor(train_mask)
+    #
+    # else:
+    #    train_mask = torch.ByteTensor(train_mask)
 
     if args.gpu < 0:
         cuda = False
     else:
         cuda = True
         torch.cuda.set_device(args.gpu)
+        mydgl_graph.to(args.gpu)
         features = features.cuda()
         labels = labels.cuda()
-        train_mask = train_mask.cuda()
+        train_idx = train_idx.cuda()
+        # train_mask = train_mask.cuda()
 
     # u = edges[:, 0]
     # v = edges[:, 1]
@@ -125,20 +142,35 @@ def train(args):
 
     # n_edges = g.number_of_edges()
     # create model
-    heads = ([args.num_heads] * args.num_layers) + [args.num_out_heads]
-    model = EglGAT(
-        mydgl_graph,
-        args.num_layers,
-        args.num_feats,
-        args.num_hidden,
-        args.num_classes,
-        heads,
-        F.elu,
-        args.in_drop,
-        args.attn_drop,
-        args.negative_slope,
-        args.residual,
-    )
+    if not single_layer_flag:
+        heads = ([args.num_heads] * args.num_layers) + [args.num_out_heads]
+    if single_layer_flag:
+        model = EglGATSingleLayer(
+            mydgl_graph,
+            args.num_feats,
+            args.num_classes,
+            args.num_heads,
+            F.elu,
+            args.in_drop,
+            args.attn_drop,
+            args.negative_slope,
+            args.residual,
+        )
+
+    else:
+        model = EglGAT(
+            mydgl_graph,
+            args.num_layers,
+            args.num_feats,
+            args.num_hidden,
+            args.num_classes,
+            heads,
+            F.elu,
+            args.in_drop,
+            args.attn_drop,
+            args.negative_slope,
+            args.residual,
+        )
     print(model)
     if args.early_stop:
         stopper = EarlyStopping(patience=100)
@@ -167,7 +199,10 @@ def train(args):
             t0 = time.time()
         # forward
         logits = model(features)
-        loss = loss_fcn(logits[train_mask], labels[train_mask])
+
+        # loss = loss_fcn(logits[train_mask], labels[train_mask])
+        loss = loss_fcn(logits[train_idx], labels[train_idx])
+        # loss = loss_fcn(logits, labels)
         now_mem = torch.cuda.max_memory_allocated(0)
         print("now_mem : ", now_mem)
         Used_memory = max(now_mem, Used_memory)
@@ -187,7 +222,9 @@ def train(args):
 
             avg_run_time += run_time_this_epoch
 
-        train_acc = accuracy(logits[train_mask], labels[train_mask])
+        # train_acc = accuracy(logits[train_mask], labels[train_mask])
+        train_acc = accuracy(logits[train_idx], labels[train_idx])
+        # train_acc = accuracy(logits, labels)
 
         # log for each step
         print(
@@ -220,10 +257,9 @@ def train(args):
     print("^^^{:6f}^^^{:6f}".format(Used_memory, avg_run_time))
 
 
-if __name__ == "__main__":
-
+def GAT_get_parser(single_layer_flag):
     parser = argparse.ArgumentParser(description="GAT")
-    register_data_args(parser)
+    # register_data_args(parser)
     parser.add_argument(
         "--gpu", type=int, default=0, help="which GPU to use. Set -1 to use CPU."
     )
@@ -233,15 +269,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_heads", type=int, default=8, help="number of hidden attention heads"
     )
-    parser.add_argument(
-        "--num_out_heads", type=int, default=1, help="number of output attention heads"
-    )
-    parser.add_argument(
-        "--num_layers", type=int, default=1, help="number of hidden layers"
-    )
-    parser.add_argument(
-        "--num_hidden", type=int, default=32, help="number of hidden units"
-    )
+    parser.add_argument("--num_feats", type=int, default=128, help="input feature dim")
+
+    if not single_layer_flag:
+        parser.add_argument(
+            "--num_out_heads",
+            type=int,
+            default=1,
+            help="number of output attention heads",
+        )
+        parser.add_argument(
+            "--num_layers", type=int, default=1, help="number of hidden layers"
+        )
+        parser.add_argument(
+            "--num_hidden", type=int, default=32, help="number of hidden units"
+        )
     parser.add_argument(
         "--residual", action="store_true", default=False, help="use residual connection"
     )
@@ -271,8 +313,29 @@ if __name__ == "__main__":
         default=False,
         help="skip re-evaluate the validation set",
     )
+    parser.add_argument(
+        "-d", "--dataset", type=str, required=True, help="dataset to use"
+    )
+    parser.add_argument(
+        "--sparse_format", type=str, default="csr", help="sparse format to use"
+    )
+    parser.add_argument("--sort_by_src", action="store_true", help="sort by src")
+    parser.add_argument("--sort_by_etype", action="store_true", help="sort by etype")
+    parser.add_argument(
+        "--reindex_eid",
+        action="store_true",
+        help="use new eid after sorting rather than load referential eids",
+    )
+    parser.add_argument("--train_size", type=int, default=256)
+    parser.add_argument("--num_classes", type=int, default=4)
+    return parser
+
+
+if __name__ == "__main__":
+    parser = GAT_get_parser(single_layer_flag=False)
+
     args = parser.parse_args()
 
     print(args)
 
-    train(args)
+    GAT_train(args, single_layer_flag=False)

@@ -36,8 +36,9 @@ class FusedGat(th.autograd.Function):
             s,
             exp,
             ret,
-            slope,
         )
+        # non-tensor arguments should be stored separately see torch repo torch\autograd\function.py
+        ctx.slope = slope
         K.fused_gat_kernel_csr(
             incsr_row_ptr,
             incsr_col_idx,
@@ -67,8 +68,8 @@ class FusedGat(th.autograd.Function):
             s,
             exp,
             ret,
-            slope,
         ) = ctx.saved_tensors
+        slope = ctx.slope
         grad_el = th.zeros_like(el)
         grad_er = th.zeros_like(er)
         grad_feat_src = th.zeros_like(feat_src)

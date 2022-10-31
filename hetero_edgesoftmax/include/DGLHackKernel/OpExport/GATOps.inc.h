@@ -53,8 +53,7 @@ void _FusedGatKernelImpl_wrapper_integratedcsr(
 
   // gdata.eids = incsr.data.Ptr<Idx>();
   // gdata.eids = eids.Ptr();
-  gdata.eids =
-      static_cast<Idx*>(thrust::raw_pointer_cast(incsr_eids.data_ptr<Idx>()));
+  gdata.eids = incsr_eids.data_ptr<Idx>();
 
   // write a device function and call it from here
   // LOG(INFO) << "Within Fused Gat Kernel Impl." << "feat_src_dim:" <<
@@ -91,11 +90,7 @@ void _FusedGatKernelImpl_wrapper_integratedcsr(
       std::chrono::high_resolution_clock::now();
   gatExpLeakyReluSumKernel<Idx, DType>
       <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-          gdata,
-          static_cast<Idx*>(
-              thrust::raw_pointer_cast(incsr_row_ptr.data_ptr<Idx>())),
-          static_cast<Idx*>(
-              thrust::raw_pointer_cast(incsr_col_idx.data_ptr<Idx>())),
+          gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
           incsr_num_rows);
   // CUDA_KERNEL_CALL(gatExpLeakyReluSumKernel, nblks, nthrs, 0,
   // thr_entry->stream, gdata, incsr.indptr.Ptr<Idx>(),
@@ -103,6 +98,9 @@ void _FusedGatKernelImpl_wrapper_integratedcsr(
   // DType>(feat_src,el,er,sum,exp,ret,el_xlen, feat_src_xlen,
   // graph->NumVertices(0), incsr_elements[1].NumElements(), incsr_elements[0],
   // incsr_elements[1], incsr_elements[2]);
+
+  cuda_err_chk(cudaPeekAtLastError());
+  cuda_err_chk(cudaDeviceSynchronize());
   nthrs_x = FindNumThreads(el_xlen, 64);
   nthrs_y = FindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
   nblks_x = 1;
@@ -113,11 +111,7 @@ void _FusedGatKernelImpl_wrapper_integratedcsr(
   // <<nthrs_x << "*" << nthrs_y;
   gatSumProdZipDivKernel<Idx, DType>
       <<<nblks2, nthrs2 /*, 0, thr_entry->stream*/>>>(
-          gdata,
-          static_cast<Idx*>(
-              thrust::raw_pointer_cast(incsr_row_ptr.data_ptr<Idx>())),
-          static_cast<Idx*>(
-              thrust::raw_pointer_cast(incsr_col_idx.data_ptr<Idx>())),
+          gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
           incsr_num_rows);
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());
@@ -185,8 +179,7 @@ void _BackwardFusedGatKernelImpl_wrapper_integratedcsr(
   // minigun::Csr<Idx> ocsr = utils::CreateCsr<Idx>(outcsr.indptr,
   // outcsr.indices); gdata.eids =
   // eids.Ptr();//static_cast<Idx*>(outcsr.data->data);
-  gdata.eids =
-      static_cast<Idx*>(thrust::raw_pointer_cast(outcsr_eids.data_ptr<Idx>()));
+  gdata.eids = outcsr_eids.data_ptr<Idx>();
   // write a device function and call it from here
   // LOG(INFO) << "Within Fused Gat Kernel Impl." << "feat_src_dim:" <<
   // feat_src.GetSize()/sizeof(DType)/feat_src_xlen << "*" << feat_src_xlen
@@ -214,32 +207,20 @@ void _BackwardFusedGatKernelImpl_wrapper_integratedcsr(
       std::chrono::high_resolution_clock::now();
   if constexpr (!FLAG_KERNEL_FUSED) {
     fusedGatBackwardGradFeatSrc<<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-        gdata,
-        static_cast<Idx*>(
-            thrust::raw_pointer_cast(outcsr_row_ptr.data_ptr<Idx>())),
-        static_cast<Idx*>(
-            thrust::raw_pointer_cast(outcsr_col_idx.data_ptr<Idx>())),
+        gdata, outcsr_row_ptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
         outcsr_num_rows);
     // const dim3 nthrs3(nthrs_y, nthrs_x);
     // fusedGatBackwardGradElEr4<<<nblks, nthrs3, 0, thr_entry->stream>>>(gdata,
     // ocsr);
     fusedGatBackwardGradElEr<Idx, DType>
         <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-            gdata,
-            static_cast<Idx*>(
-                thrust::raw_pointer_cast(outcsr_row_ptr.data_ptr<Idx>())),
-            static_cast<Idx*>(
-                thrust::raw_pointer_cast(outcsr_col_idx.data_ptr<Idx>())),
-            outcsr_num_rows);
+            gdata, outcsr_row_ptr.data_ptr<Idx>(),
+            outcsr_col_idx.data_ptr<Idx>(), outcsr_num_rows);
   } else {
     fusedGatBackwardGradElErFeatSrcFused<Idx, DType>
         <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-            gdata,
-            static_cast<Idx*>(
-                thrust::raw_pointer_cast(outcsr_row_ptr.data_ptr<Idx>())),
-            static_cast<Idx*>(
-                thrust::raw_pointer_cast(outcsr_col_idx.data_ptr<Idx>())),
-            outcsr_num_rows);
+            gdata, outcsr_row_ptr.data_ptr<Idx>(),
+            outcsr_col_idx.data_ptr<Idx>(), outcsr_num_rows);
   }
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());

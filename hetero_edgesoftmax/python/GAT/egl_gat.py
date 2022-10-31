@@ -53,7 +53,7 @@ class EglGATConv(nn.Module):
             nn.init.xavier_normal_(self.res_fc.weight, gain=gain)
 
     def forward(self, graph, feat):
-        graph = graph.local_var()
+        # graph = graph.local_var()
         h_dst = h_src = self.feat_drop(feat)
         feat_src = feat_dst = self.fc(h_src).view(-1, self._num_heads, self._out_feats)
         el = (feat_src * self.attn_l).sum(dim=-1).unsqueeze(-1)
@@ -149,6 +149,44 @@ class EglGAT(nn.Module):
         h = inputs
         for l in range(self.num_layers):
             h = self.gat_layers[l](self.g, h).flatten(1)
+        # output projection
+        logits = self.gat_layers[-1](self.g, h).mean(1)
+        return logits
+
+
+class EglGATSingleLayer(nn.Module):
+    def __init__(
+        self,
+        g,
+        in_dim,
+        num_classes,
+        head,
+        activation,
+        feat_drop,
+        attn_drop,
+        negative_slope,
+        residual,
+    ):
+        super(EglGATSingleLayer, self).__init__()
+        self.g = g
+        self.gat_layers = nn.ModuleList()
+        self.activation = activation
+        # input projection (no residual)
+        self.gat_layers.append(
+            EglGATConv(
+                in_dim,
+                num_classes,
+                head,
+                feat_drop,
+                attn_drop,
+                negative_slope,
+                residual,
+                self.activation,
+            )
+        )
+
+    def forward(self, inputs):
+        h = inputs
         # output projection
         logits = self.gat_layers[-1](self.g, h).mean(1)
         return logits
