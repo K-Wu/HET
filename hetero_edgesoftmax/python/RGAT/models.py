@@ -250,6 +250,29 @@ class HET_RelationalGATEncoder(nn.Module):
         return h
 
 
+class HET_RelationalGATEncoderSingleLayer(HET_RelationalGATEncoder):
+    def __init__(
+        self,
+        g,
+        h_dim,
+        out_dim,
+        n_heads,
+        dropout=0,
+        use_self_loop=True,
+        last_layer_act=False,
+    ):
+        super(HET_RelationalGATEncoderSingleLayer, self).__init__(
+            g,
+            h_dim,
+            out_dim,
+            n_heads,
+            num_hidden_layers=0,
+            dropout=dropout,
+            use_self_loop=use_self_loop,
+            last_layer_act=last_layer_act,
+        )
+
+
 if __name__ == "__main__":
     args = RGAT_parse_args()
     RGAT_main_procedure(args, dgl_model_flag=False)
