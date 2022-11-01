@@ -127,7 +127,8 @@ __global__ void HGTBackwardGradientSmFirstPartImpl(
     DType* message,              //|E| * N_HEADS * DIM_PER_HEAD
     DType* sigmas,               //|E| * N_HEADS
     Idx num_nodes, Idx num_heads, Idx feat_dim_per_head, Idx n_rel_types) {
-  assert(n_rel_types == 2);
+  assert(n_rel_types == 2);  // some bit manipulation is used and thus the
+                             // kernel is intended for MAG only
 
   // delta Sm = \Sum_outgoing (m * delta t_neighbour^(l+1) * sigma)
   // We need to store one delta Sm for each relationship type
