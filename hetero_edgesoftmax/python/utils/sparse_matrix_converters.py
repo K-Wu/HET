@@ -15,6 +15,28 @@ def convert_integrated_csr_to_separate_coo(row_ptr, col_idx, rel_types, eids):
     )
 
 
+def convert_integrated_coo_to_separate_csr(
+    row_idx, col_idx, rel_types, eids, num_rows, num_rels
+):
+    return th.ops.torch_hetero_edgesoftmax.convert_integrated_coo_to_separate_csr(
+        row_idx, col_idx, rel_types, eids, num_rows, num_rels
+    )
+
+
+def convert_integrated_coo_to_separate_coo(
+    row_idx, col_idx, rel_types, eids, num_rows, num_rels
+):
+    return th.ops.torch_hetero_edgesoftmax.convert_integrated_coo_to_separate_coo(
+        row_idx, col_idx, rel_types, eids, num_rows, num_rels
+    )
+
+
+def transpose_csr(row_ptr, col_idx, rel_types, eids):
+    return th.ops.torch_hetero_edgesoftmax.transpose_csr(
+        row_ptr, col_idx, rel_types, eids
+    )
+
+
 def coo2csr(edge_srcs, edge_dsts, edge_etypes, edge_referential_eids, torch_flag=False):
     if torch_flag:
         curr_namespace = th

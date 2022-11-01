@@ -3,15 +3,20 @@
 #include "DGLHackKernel/HGTPreprocessing.h"
 #include "EdgeAttention_4/EdgeAttentionCOO.h"
 #include "EdgeAttention_4/mysgemm_functor.cu.h"
-#include "utils/cuda_helper_device_functions.cu.h"
+#include "utils.cu.h"
 
 // only requires column indices and therefore both COO and CSR could leverage
 // this kernel.
-template <typename Idx, typename DType>
-__global__ void HGTTriviallyEdgeParallelNodeMeanAggregation(
-    Idx* col_idxes, Idx* etypes, Idx* eids, DType* EdgeMessages,
-    DType* EdgeAttnScores, Idx num_nodes, Idx num_edges, Idx num_etypes,
-    Idx num_heads, Idx inout_feat_dim, DType* NodeAggregates) {
+template <typename Idx, typename DType, bool EdgeMessagesCompactAsOfNodeFlag,
+          bool EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag,
+          typename EdgeMessagesPointerType,
+          bool BinarySearchToGetEtypeNodeOffsetFlag, bool CSRInsteadOfCOOFlag>
+__device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
+    Idx* col_idxes, Idx* etypes, Idx* eids,
+    EdgeMessagesPointerType EdgeMessages, DType* EdgeAttnScores, Idx num_nodes,
+    Idx num_edges, Idx num_etypes, Idx num_heads, Idx inout_feat_dim,
+    DType* NodeAggregates, Idx* MapAmongEtypeNodeAndOffsetArray,
+    Idx* row_indices_or_row_ptrs) {
   // each warp deals with one edge
   Idx edge_idx =
       (blockIdx.x * blockDim.x + threadIdx.x) / warpSize;  // warpSize = 32
@@ -21,7 +26,37 @@ __global__ void HGTTriviallyEdgeParallelNodeMeanAggregation(
     Idx col_idx = col_idxes[edge_idx];
     Idx etype = etypes[edge_idx];
     Idx eid = eids[edge_idx];
-    DType* EdgeMessage = &EdgeMessages[eid * inout_feat_dim];
+    DType* EdgeMessage;
+    if constexpr (EdgeMessagesCompactAsOfNodeFlag) {
+      Idx unique_node_index_for_curr_etype;
+      Idx row_idx;
+      if constexpr (CSRInsteadOfCOOFlag) {
+        // do binary search in row_ptrs if CSR
+        row_idx = binary_search(num_edges, row_indices_or_row_ptrs, edge_idx);
+      } else {
+        // if COO, just index the row_idx directly
+        row_idx = row_indices_or_row_ptrs[edge_idx];
+      }  // if constexpr (CSRInsteadOfCOOFlag) {
+      if constexpr (BinarySearchToGetEtypeNodeOffsetFlag) {
+        unqiue_node_index_for_curr_etype = binary_search(
+            etype_unique_node_offsets[etype + 1] -
+                etype_unique_node_offsets[etype],
+            &MapAmongEtypeNodeAndOffsetArray[etype_unique_node_offsets[etype]],
+            row_idx);
+      } else {
+        unique_node_index_for_curr_etype =
+            MapAmongEtypeNodeAndOffsetArray[num_nodes * etype + row_idx];
+      }
+      if constexpr (EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag) {
+        EdgeMessage = &EdgeMessages[etype_unique_node_offsets[etype] +
+                                    unique_node_index_for_curr_etype];
+      } else {
+        EdgeMessage = &EdgeMessages[etype][unique_node_index_for_curr_etype];
+      }
+
+    } else {
+      EdgeMessage = &EdgeMessages[eid * inout_feat_dim];
+    }
     DType* EdgeAttnScore = &EdgeAttnScores[eid * num_heads];
     Idx featid = threadIdx.x % warpSize;
 
@@ -38,46 +73,120 @@ __global__ void HGTTriviallyEdgeParallelNodeMeanAggregation(
   }
 }
 
+__global__ void HGTTriviallyEdgeParallelVanillaNodeMeanAggregation(
+    int64_t* col_idxes, int64_t* etypes, int64_t* eids, float* EdgeMessages,
+    float* EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
+    int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
+    float* NodeAggregates) {
+  _HGTTriviallyEdgeParallelNodeMeanAggregation<
+      int64_t, float, /* EdgeMessagesCompactAsOfNodeFlag = */ false,
+      /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ false, float*,
+      /*flag not applicable*/ false, /*flag not applicable*/ false>(
+      col_idxes, etypes, eids, EdgeMessages, EdgeAttnScores, num_nodes,
+      num_edges, num_etypes, num_heads, inout_feat_dim, NodeAggregates, nullptr,
+      nullptr);
+}
+
+__global__ void HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation(
+    int64_t* col_idxes, int64_t* etypes, int64_t* eids, float** EdgeMessages,
+    float* EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
+    int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
+    float* NodeAggregates, float* ETypeUniqueIndexToNodeIndexMap,
+    float* row_indices) {
+  _HGTTriviallyEdgeParallelNodeMeanAggregation<
+      int64_t, float, /* EdgeMessagesCompactAsOfNodeFlag = */ true,
+      /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ true, float**,
+      /*BinarySearchToGetEtypeNodeOffsetFlag = */ true,
+      /*CSRInsteadOfCOOFlag = */ false>(
+      col_idxes, etypes, eids, EdgeMessages, DType * EdgeAttnScores,
+      Idx num_nodes, num_edges, num_etypes, num_heads, inout_feat_dim,
+      NodeAggregates, ETypeUniqueIndexToNodeIndexMap, row_indices)
+}
+
+// constexpr auto HGTTriviallyEdgeParallelVanillaNodeMeanAggregation =
+// HGTTriviallyEdgeParallelNodeMeanAggregation<int, float, false, float *>;
+// constexpr auto HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation =
+// HGTTriviallyEdgeParallelNodeMeanAggregation<int, float, true, float **>;
+
 // We need to use separate coo at this moment
-// this kernel can be used for either sW in edge attention computation or sW in
-// edge message generation. s STANDS FOR SOURCE NODE.
+// this kernel can be used for either sW in edge attention computation (vanilla
+// + compactAsOfNode) or sW in edge message generation (vanilla). s STANDS FOR
+// SOURCE NODE.
 template <typename Idx, typename DType, int TILE_SZ_A, int TILE_SZ_B,
-          int OUT_DIM, int NUM_HEADS>
-__global__ void EdgeMessageComputation(Idx* etype_edge_offsets, Idx* row_idxes,
-                                       Idx* col_idxes, Idx* etypes, Idx* eids,
-                                       DType* weight, Idx num_nodes,
-                                       Idx num_edges, Idx num_etypes,
-                                       DType* NodeFeatures,
-                                       DType* OutEdgeMessage) {
+          int OUT_DIM, int NUM_HEADS, bool WORK_ASSIGNMENT_INDEX_FLAG,
+          bool InputNodeFeaturesCompactOfNodeFlag,
+          bool ETypeUniqueNodeIndexBinarySearchFlag>
+__global__ void EdgeMessageGeneration(
+    Idx* etype_edge_offsets, Idx* etype_block_offsets, Idx* row_idxes,
+    Idx* col_idxes, Idx* etypes, Idx* eids, DType* weight, Idx num_nodes,
+    Idx num_edges, Idx num_etypes, DType* NodeFeatures, DType* OutEdgeMessage,
+    Idx* etype_unique_node_offsets, Idx* etype_unique_node_index_map) {
   constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
   constexpr int COARSE_SGEMM_EDGES_PER_BLOCK = (TILE_SZ_B);
-  int beg_edge_entry_idx = beg_edge_entry_idxes_vect[blockIdx.x];
-  int stride = num_blocks_xdim_for_same_relation_per_block_vect[blockIdx.x] *
-               COARSE_SGEMM_EDGES_PER_BLOCK;
-  int relation_idx = blockid_relation_id_vect[blockIdx.x];
 
-  for (int edge_entry_idx = beg_edge_entry_idx;
-       edge_entry_idx <
-       etype_edge_offsets[relation_idx + 1] - etype_edge_offsets[relation_idx];
+  int stride;
+  int relation_idx;
+  if constexpr (WORK_ASSIGNMENT_INDEX_FLAG) {
+    assert(
+        0 &&
+        "WORK_ASSIGNMENT_INDEX_FLAG is not supported in EdgeMessageGeneration");
+    // int beg_edge_entry_idx = beg_edge_entry_idxes_vect[blockIdx.x];
+    // stride = num_blocks_xdim_for_same_relation_per_block_vect[blockIdx.x] *
+    //             COARSE_SGEMM_EDGES_PER_BLOCK;
+    // relation_idx = blockid_relation_id_vect[blockIdx.x];
+  } else {
+    relation_idx = binary_search(num_etypes, etype_block_offsets, blockIdx.x);
+    stride =
+        COARSE_SGEMM_EDGES_PER_BLOCK * (etype_block_offsets[relation_idx + 1] -
+                                        etype_block_offsets[relation_idx]);
+  }
+  for (int edge_entry_idx = etype_edge_offsets[relation_idx];
+       edge_entry_idx < etype_edge_offsets[relation_idx + 1];
        edge_entry_idx += stride) {
-    mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, true, true>::
-        exec_function(
-            OUT_DIM,
-            etype_edge_offsets[relation_idx + 1] -
-                etype_edge_offsets[relation_idx],
-            NODE_INPUT_DIM_PER_HEAD,
-            &weight[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD *
-                    NODE_INPUT_DIM_PER_HEAD],
-            NodeFeatures, OutEdgeMessage,
-            row_idxes /* source node feature is what we want as one of the
-                         operand*/
-            ,
-            eids, edge_entry_idx);
+    if constexpr (InputNodeFeaturesCompactOfNodeFlag) {
+      mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, true, true,
+                      InputNodeFeaturesCompactOfNodeFlag,
+                      ETypeUniqueNodeIndexBinarySearchFlag>::
+          exec_function(
+              OUT_DIM,
+              etype_edge_offsets[relation_idx + 1] -
+                  etype_edge_offsets[relation_idx],
+              NODE_INPUT_DIM_PER_HEAD,
+              &weight[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD *
+                      NODE_INPUT_DIM_PER_HEAD],
+              // assuming in_dim == out_dim
+              &NodeFeatures[etype_unique_node_offsets[relation_idx] * OUT_DIM],
+              OutEdgeMessage,
+              &row_idxes[etype_edge_offsets[relation_idx]] /* source node
+                           feature is what we want as one of the operand*/
+              ,
+              &etype_unique_node_index_map
+                  [etype_unique_node_offsets[relation_idx]],
+              etype_unique_node_offsets[relation_idx + 1] -
+                  etype_unique_node_offsets[relation_idx],
+              &eids[etype_edge_offsets[relation_idx]],
+              edge_entry_idx - etype_edge_offsets[relation_idx]);
+    } else {
+      mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, true, true,
+                      false, false>::
+          exec_function(
+              OUT_DIM, etype_edge_offsets[relation_idx + 1],
+              NODE_INPUT_DIM_PER_HEAD,
+              &weight[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD *
+                      NODE_INPUT_DIM_PER_HEAD],
+              // assuming in_dim == out_dim
+              NodeFeatures, OutEdgeMessage,
+              row_idxes /* source node feature is what we want as one of the
+                           operand*/
+              ,
+              nullptr, -1, eids, edge_entry_idx);
+    }
   }
 }
 
 // This is to calculate the product of (sW) and t where (sW) is stored per edge
 // and t is stored per node.
 constexpr auto HGTVanillaEdgeAttentionSecondStage =
-    EdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel<
-        float, false, true, float*>;
+    GeneralEdgeMessageMultiplyNodeFeature<
+        float, /*ProductCompactAsOfNodeFlag = */ false,
+        /*EidEnableFlag = */ true, float*>;

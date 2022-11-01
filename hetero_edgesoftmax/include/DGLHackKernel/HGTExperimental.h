@@ -1,6 +1,6 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
-#include "utils/cuda_helper_device_functions.cu.h"
+#include "utils.cu.h"
 
 // In this experiment, the fused kernel 1) do fused intermediate vector and
 // attention calculation for the ELL portion, 2) output the intermediate vector

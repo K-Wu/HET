@@ -29,14 +29,16 @@ __global__ void _global_EdgeMessageConcatenatedCOOKernel(
        node_entry_idx <
        sizes_unique_index_to_dest_node_per_relation[relation_idx];
        node_entry_idx += stride) {
-    mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, false, false>::
+    mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, false, false,
+                    false, false>::
         exec_function(
             OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx],
             NODE_INPUT_DIM_PER_HEAD,
             &relation_message_matrices[relation_idx * NUM_HEADS *
                                        NODE_INPUT_DIM_PER_HEAD *
                                        NODE_INPUT_DIM_PER_HEAD],
-            node_input_data, intermediate_node_vect[relation_idx], nullptr,
-            nullptr, node_entry_idx);
+            node_input_data, intermediate_node_vect[relation_idx],
+            /*B gather list*/ nullptr, nullptr, -1,
+            /*C scatter list*/ nullptr, node_entry_idx);
   }
 }

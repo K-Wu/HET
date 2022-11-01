@@ -12,7 +12,7 @@
 
 #include "../MyHyb/MyHyb.h"
 #include "../hetero_edgesoftmax.h"
-#include "../utils.h"
+#include "../utils.cu.h"
 
 #include "DGLHackUtils.h"
 #include "FusedGAT.cu.h"

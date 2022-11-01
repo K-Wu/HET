@@ -78,7 +78,7 @@ __global__ void GeneralEdgeMessageMultiplyNodeFeature(
     int *__restrict__ matRows, int *__restrict__ matRelation,
     int *__restrict__ matEids, float *__restrict__ node_input_data,
     IntermediateProductPointerType __restrict__ intermediate_product_per_edge_or_per_relation,
-    int **__restrict__ dest_node_to_unique_index_per_relation) {
+    int **__restrict__ node_to_unique_index_per_relation) {
   // each warp is in charge of an edge
   int beg_edge_idx = (blockIdx.x * blockDim.x + threadIdx.x) / WARP_SIZE;
   int lane_idx = (blockIdx.x * blockDim.x + threadIdx.x) % WARP_SIZE;
@@ -90,7 +90,7 @@ __global__ void GeneralEdgeMessageMultiplyNodeFeature(
     int col_relation_idx;
     if constexpr (ProductCompactAsOfNodeFlag) {
       col_relation_idx =
-          dest_node_to_unique_index_per_relation[matRelation[edge_idx]][col];
+          node_to_unique_index_per_relation[matRelation[edge_idx]][col];
     }
     int edge_output_storage_idx = edge_idx;
     if constexpr (EidEnableFlag) {
@@ -212,8 +212,8 @@ __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel(
     int *__restrict__ matCols, int *__restrict__ matRelation,
     float *__restrict__ node_input_data,
     float *__restrict__ relation_attention_matrices,
-    int **__restrict__ dest_node_to_unique_index_per_relation,
-    int **__restrict__ unique_index_to_dest_node_per_relation,
+    int **__restrict__ node_to_unique_index_per_relation,
+    int **__restrict__ unique_index_to_node_per_relation,
     int *__restrict__ sizes_unique_index_to_dest_node_per_relation,
     int num_relations,
     int *__restrict__ num_blocks_xdim_for_same_relation_per_block_vect,
@@ -230,7 +230,8 @@ __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel(
        node_entry_idx <
        sizes_unique_index_to_dest_node_per_relation[relation_idx];
        node_entry_idx += stride) {
-    mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, true, false>::
+    mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, true, false,
+                    false, false>::
         exec_function(
             OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx],
             NODE_INPUT_DIM_PER_HEAD,
@@ -238,8 +239,8 @@ __global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel(
                                          NODE_INPUT_DIM_PER_HEAD *
                                          NODE_INPUT_DIM_PER_HEAD],
             node_input_data, intermediate_node_vect[relation_idx],
-            unique_index_to_dest_node_per_relation[relation_idx], nullptr,
-            node_entry_idx);
+            /* B gather list */ unique_index_to_node_per_relation[relation_idx],
+            nullptr, -1, /*C scatter list*/ nullptr, node_entry_idx);
   }
 }
 

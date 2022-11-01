@@ -12,6 +12,7 @@
 #include <tuple>
 #include <vector>
 #include "cuda.h"
+#include "cuda_runtime.h"
 
 #define _HOST_DEVICE_METHOD_QUALIFIER __host__ __device__
 
@@ -87,4 +88,22 @@ __device__ __forceinline__ unsigned int getlaneid() {
   unsigned int r;
   asm("mov.u32 %0, %%laneid;" : "=r"(r));
   return r;
+}
+
+__device__ __forceinline__ int binary_search(int num_elements,
+                                             int *__restrict__ arr,
+                                             int target) {
+  int lo = 0, hi = num_elements;
+  // find element in arr[i] where i in [lo, hi)
+  // This below check covers all cases , so need to check
+  // for mid=lo-(hi-lo)/2
+  while (hi - lo > 1) {
+    int mid = (hi + lo) / 2;
+    if (arr[mid] <= target) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
 }

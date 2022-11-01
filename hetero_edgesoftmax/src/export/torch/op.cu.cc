@@ -80,9 +80,13 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   // Data Converters
   m.def("transpose_csr", transpose_csr);
   m.def("convert_integrated_csr_to_separate_csr",
-        convert_integrated_csr_to_separate);
+        convert_integrated_csr_to_separate_csr);
   m.def("convert_integrated_csr_to_separate_coo",
         convert_integrated_csr_to_separate_coo);
+  m.def("convert_integrated_coo_to_separate_csr",
+        convert_integrated_coo_to_separate_csr);
+  m.def("convert_integrated_coo_to_separate_coo",
+        convert_integrated_coo_to_separate_coo);
   m.def("test_argument_takein", test_argument_takein);
   // RGCN CSR Declaration
   m.def("rgcn_layer0_csr", RgcnLayer0Impl_wrapper_integratedcsr);

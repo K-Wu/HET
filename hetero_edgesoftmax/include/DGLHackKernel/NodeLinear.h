@@ -33,7 +33,7 @@
 
 #include <cublasLt.h>
 
-#include "utils.h"
+#include "utils.cu.h"
 
 /// Sample wrapper executing single precision gemm with cublasLtMatmul, nearly a
 /// drop-in replacement for cublasSgemm, with addition of the workspace to

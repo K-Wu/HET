@@ -1,38 +1,35 @@
 #pragma once
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
 #include <cooperative_groups.h>
 #include <cooperative_groups/memcpy_async.h>
+#include "cuda_runtime.h"
+#include "device_launch_parameters.h"
 namespace cg = cooperative_groups;
 
-#include "utils.h"
+#include <curand.h>
+#include <cusp/coo_matrix.h>
+#include <cusp/csr_matrix.h>
+#include <cusp/transpose.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <vector>
-#include <cusp/csr_matrix.h>
-#include <cusp/coo_matrix.h>
-#include <cusp/transpose.h>
 #include <thrust/copy.h>
-#include <npy.hpp>
-#include <thrust/random.h>
 #include <thrust/device_vector.h>
-#include <thrust/transform.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <chrono>
-#include <curand.h>
-#include <thrust/transform.h>
 #include <thrust/functional.h>
-
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/random.h>
+#include <thrust/transform.h>
+#include <chrono>
+#include <npy.hpp>
+#include <vector>
+#include "utils.cu.h"
 
 template <typename Iterator>
-void print_range(const std::string &name, Iterator first, Iterator last)
-{
-    // from thrust example
-    typedef typename std::iterator_traits<Iterator>::value_type T;
+void print_range(const std::string &name, Iterator first, Iterator last) {
+  // from thrust example
+  typedef typename std::iterator_traits<Iterator>::value_type T;
 
-    std::cout << name << ": (" << std::distance(first, last) << ")";
-    thrust::copy(first, last, std::ostream_iterator<T>(std::cout, " "));
-    std::cout << "\n";
+  std::cout << name << ": (" << std::distance(first, last) << ")";
+  thrust::copy(first, last, std::ostream_iterator<T>(std::cout, " "));
+  std::cout << "\n";
 }
 
 #define WARP_SIZE (32)

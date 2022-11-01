@@ -1,7 +1,7 @@
 #pragma once
 #include <stddef.h>
 #include <tuple>
-#include "utils.h"
+#include "utils.cu.h"
 
 // from https://stackoverflow.com/a/12742980
 // ex: return tuple_with_removed_refs{result};

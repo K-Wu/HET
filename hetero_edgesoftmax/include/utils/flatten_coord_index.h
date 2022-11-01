@@ -1,7 +1,8 @@
 #pragma once
-#include "utils.h"
+#include "utils.cu.h"
 
-// Working compilation example: https://godbolt.org/z/h66hP77qM backup: https://gist.github.com/K-Wu/7db30d4cf93a1fff76fa2631f95c476b
+// Working compilation example: https://godbolt.org/z/h66hP77qM backup:
+// https://gist.github.com/K-Wu/7db30d4cf93a1fff76fa2631f95c476b
 
 #include <assert.h>
 #include <stddef.h>

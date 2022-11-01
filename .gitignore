@@ -7,5 +7,6 @@ build**/
 *.ncu-rep
 *.do_not_use
 *.cubin
+*.pyc
 __pycache__/
 dataset/

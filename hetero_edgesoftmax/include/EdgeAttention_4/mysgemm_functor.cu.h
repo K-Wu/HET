@@ -1,6 +1,7 @@
 #pragma once
 #include "cuda.h"
 #include "cuda_runtime.h"
+#include "utils.cu.h"
 
 template <bool scatter_col_flag, int OUT_DIM>
 __device__ __forceinline__ static float &GetCEle(float *C,
@@ -18,9 +19,10 @@ __device__ __forceinline__ static float &GetCEle(float *C,
 }
 
 template <bool gather_col_flag, int OUT_DIM>
-__device__ __forceinline__ static float GetBEle(float *B, int *col_gather_list,
-                                                int K, int idx_head, int row,
-                                                int col) {
+__device__ __forceinline__ static float _basic_GetBEle(float *B,
+                                                       int *col_gather_list,
+                                                       int K, int idx_head,
+                                                       int row, int col) {
   if constexpr (gather_col_flag) {
     return B[(idx_head * K) + (row) + (col_gather_list[col]) * OUT_DIM];
   } else {
@@ -28,25 +30,171 @@ __device__ __forceinline__ static float GetBEle(float *B, int *col_gather_list,
   }
 }
 
+template <bool gather_col_flag, int OUT_DIM,
+          bool B_col_second_indirection_gather_flag,
+          bool B_col_second_indirection_gather_binary_search_flag>
+__device__ __forceinline__ static float GetBEle(
+    float *B, int *col_gather_list, int *second_col_gather_list,
+    int second_col_gather_list_length, int K, int idx_head, int row, int col) {
+  if constexpr (gather_col_flag) {
+    if constexpr (B_col_second_indirection_gather_flag) {
+      if constexpr (B_col_second_indirection_gather_binary_search_flag) {
+        int col_idx = col_gather_list[col];
+        int col_idx_second = second_col_gather_list[col_idx];
+        return B[(idx_head * K) + (row) + (col_idx_second)*OUT_DIM];
+      } else {
+        int col_idx = col_gather_list[col];
+        int col_idx_second = binary_search(second_col_gather_list_length,
+                                           second_col_gather_list, col_idx);
+        return B[(idx_head * K) + (row) + (col_idx_second)*OUT_DIM];
+      }
+    } else {
+      return B[(idx_head * K) + (row) + (col_gather_list[col]) * OUT_DIM];
+    }
+  } else {
+    return B[(idx_head * K) + (row) + (col)*OUT_DIM];
+  }
+}
+
 template <int TILE_SZ_A, int TILE_SZ_B, int OUT_DIM, int NUM_HEADS,
-          bool B_col_gather_flag, bool C_col_scatter_flag>
+          bool B_col_gather_flag, bool C_col_scatter_flag,
+          bool B_col_second_indirection_gather_flag,
+          bool B_col_second_indirection_gather_binary_search_flag>
 class mysgemm_functor {
  public:
   __device__ __forceinline__ static void exec_function(
       int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
+      int *B_col_second_gather_list, int B_col_second_gather_list_length,
       int *C_col_scatter_list, int BcolBias) {
     assert(0 && "not implemented");
     // static_assert(0, "not implemented");
   }
 };
 
-template <int OUT_DIM, int NUM_HEADS, bool B_col_gather_flag,
-          bool C_col_scatter_flag>
-class mysgemm_functor<512, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
-                      C_col_scatter_flag> {
+// when num_head==1, the function is reduced to a general matrix-matrix
+// multiplication kernel from
+// https://github.com/K-Wu/gpu-algorithms-labs/blob/master/labs/sgemm-regtiled-coarsened/template.cu
+template <int TILE_SZ_A, int TILE_SZ_B, int OUT_DIM, bool B_col_gather_flag,
+          bool C_col_scatter_flag, bool B_col_second_indirection_gather_flag,
+          bool B_col_second_indirection_gather_binary_search_flag>
+class mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, 1, B_col_gather_flag,
+                      C_col_scatter_flag, B_col_second_indirection_gather_flag,
+                      B_col_second_indirection_gather_binary_search_flag> {
  public:
   __device__ __forceinline__ static void exec_function(
       int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
+      int *B_col_second_gather_list, int B_col_second_gather_list_length,
+      int *C_col_scatter_list, int BcolBias) {
+    /********************************************************************
+     *
+     * Compute C = A x B
+     *   where A is a (m x k) matrix
+     *   where B is a (k x n) matrix
+     *   where C is a (m x n) matrix
+     *
+     * Use register and shared memory tiling and thread coarsening
+     *
+     * NOTE: A and C are column major, B is column major as well
+     *
+     ********************************************************************/
+
+// Macros for accessing flattened matrices
+#define A(row, col) A[(row) + (col)*m]
+    constexpr int TILE_SZ_RATIO = (TILE_SZ_A / TILE_SZ_B);
+    __shared__ float shmem[TILE_SZ_RATIO][TILE_SZ_B];
+    // INSERT KERNEL CODE HERE
+
+    int ArowIdx = blockIdx.x * TILE_SZ_A + threadIdx.x;
+
+    for (int i = 0; i < (k + TILE_SZ_RATIO - 1) / TILE_SZ_RATIO; i++) {
+      // load A in registers
+      float reg0 = 0.0f;
+      float reg1 = 0.0f;
+      float reg2 = 0.0f;
+      float reg3 = 0.0f;
+      float reg4 = 0.0f;
+      float reg5 = 0.0f;
+      float reg6 = 0.0f;
+      float reg7 = 0.0f;
+      if (ArowIdx < m) {
+        reg0 = (k > i * TILE_SZ_RATIO) ? A(ArowIdx, i * TILE_SZ_RATIO) : 0.0f;
+        reg1 = (k > i * TILE_SZ_RATIO + 1) ? A(ArowIdx, i * TILE_SZ_RATIO + 1)
+                                           : 0.0f;
+        reg2 = (k > i * TILE_SZ_RATIO + 2) ? A(ArowIdx, i * TILE_SZ_RATIO + 2)
+                                           : 0.0f;
+        reg3 = (k > i * TILE_SZ_RATIO + 3) ? A(ArowIdx, i * TILE_SZ_RATIO + 3)
+                                           : 0.0f;
+        reg4 = (k > i * TILE_SZ_RATIO + 4) ? A(ArowIdx, i * TILE_SZ_RATIO + 4)
+                                           : 0.0f;
+        reg5 = (k > i * TILE_SZ_RATIO + 5) ? A(ArowIdx, i * TILE_SZ_RATIO + 5)
+                                           : 0.0f;
+        reg6 = (k > i * TILE_SZ_RATIO + 6) ? A(ArowIdx, i * TILE_SZ_RATIO + 6)
+                                           : 0.0f;
+        reg7 = (k > i * TILE_SZ_RATIO + 7) ? A(ArowIdx, i * TILE_SZ_RATIO + 7)
+                                           : 0.0f;
+      }
+      // load B in shared memory
+      int shdmemLDBrowIdx = i * TILE_SZ_RATIO + threadIdx.x / TILE_SZ_B;
+      int shdmemLDBcolIdx = blockIdx.y * TILE_SZ_B + threadIdx.x % TILE_SZ_B;
+      shmem[threadIdx.x / TILE_SZ_B][threadIdx.x % TILE_SZ_B] =
+          (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n)
+              ? GetBEle<B_col_gather_flag, OUT_DIM,
+                        B_col_second_indirection_gather_flag,
+                        B_col_second_indirection_gather_binary_search_flag>(
+                    B, B_col_gather_list, B_col_second_gather_list,
+                    B_col_second_gather_list_length, k, 0, shdmemLDBrowIdx,
+                    shdmemLDBcolIdx)
+              : 0.0f;
+
+      __syncthreads();
+      // compute C
+      if (ArowIdx < m) {
+        for (int shdmemColIdx = 0; shdmemColIdx < TILE_SZ_B; shdmemColIdx++) {
+          int CcolIdx = shdmemColIdx + blockIdx.y * TILE_SZ_B;
+          if (CcolIdx < n) {
+            GetCEle<C_col_scatter_flag, OUT_DIM>(C, C_col_scatter_list, k, 0,
+                                                 ArowIdx, CcolIdx) +=
+                reg0 * shmem[0][shdmemColIdx];
+            GetCEle<C_col_scatter_flag, OUT_DIM>(C, C_col_scatter_list, k, 0,
+                                                 ArowIdx, CcolIdx) +=
+                reg1 * shmem[1][shdmemColIdx];
+            GetCEle<C_col_scatter_flag, OUT_DIM>(C, C_col_scatter_list, k, 0,
+                                                 ArowIdx, CcolIdx) +=
+                reg2 * shmem[2][shdmemColIdx];
+            GetCEle<C_col_scatter_flag, OUT_DIM>(C, C_col_scatter_list, k, 0,
+                                                 ArowIdx, CcolIdx) +=
+                reg3 * shmem[3][shdmemColIdx];
+            GetCEle<C_col_scatter_flag, OUT_DIM>(C, C_col_scatter_list, k, 0,
+                                                 ArowIdx, CcolIdx) +=
+                reg4 * shmem[4][shdmemColIdx];
+            GetCEle<C_col_scatter_flag, OUT_DIM>(C, C_col_scatter_list, k, 0,
+                                                 ArowIdx, CcolIdx) +=
+                reg5 * shmem[5][shdmemColIdx];
+            GetCEle<C_col_scatter_flag, OUT_DIM>(C, C_col_scatter_list, k, 0,
+                                                 ArowIdx, CcolIdx) +=
+                reg6 * shmem[6][shdmemColIdx];
+            GetCEle<C_col_scatter_flag, OUT_DIM>(C, C_col_scatter_list, k, 0,
+                                                 ArowIdx, CcolIdx) +=
+                reg7 * shmem[7][shdmemColIdx];
+          }
+        }
+      }
+      __syncthreads();
+    }
+  }
+#undef A
+};
+
+template <int OUT_DIM, int NUM_HEADS, bool B_col_gather_flag,
+          bool C_col_scatter_flag, bool B_col_second_indirection_gather_flag,
+          bool B_col_second_indirection_gather_binary_search_flag>
+class mysgemm_functor<512, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
+                      C_col_scatter_flag, B_col_second_indirection_gather_flag,
+                      B_col_second_indirection_gather_binary_search_flag> {
+ public:
+  __device__ __forceinline__ static void exec_function(
+      int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
+      int *B_col_second_gather_list, int B_col_second_gather_list_length,
       int *C_col_scatter_list, int BcolBias) {
     constexpr int TILE_SZ_A = 512;
     constexpr int TILE_SZ_B = 32;
@@ -140,16 +288,22 @@ class mysgemm_functor<512, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8)]
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] =
              (shdmemLDBrowIdx < K && shdmemLDBcolIdx < n)
-                 ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                       B, B_col_gather_list, K, shdmemLDBheadIdx,
+                 ? GetBEle<B_col_gather_flag, OUT_DIM,
+                           B_col_second_indirection_gather_flag,
+                           B_col_second_indirection_gather_binary_search_flag>(
+                       B, B_col_gather_list, B_col_second_gather_list,
+                       B_col_second_gather_list_length, K, shdmemLDBheadIdx,
                        shdmemLDBrowIdx, shdmemLDBcolIdx)
                  : 0.0f;
     shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)]
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 16]
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] =
              (shdmemLDBrowIdx < K && shdmemLDBcolIdx + 16 < n)
-                 ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                       B, B_col_gather_list, K, shdmemLDBheadIdx,
+                 ? GetBEle<B_col_gather_flag, OUT_DIM,
+                           B_col_second_indirection_gather_flag,
+                           B_col_second_indirection_gather_binary_search_flag>(
+                       B, B_col_gather_list, B_col_second_gather_list,
+                       B_col_second_gather_list_length, K, shdmemLDBheadIdx,
                        shdmemLDBrowIdx, shdmemLDBcolIdx + 16)
                  : 0.0f;
 
@@ -243,14 +397,20 @@ class mysgemm_functor<512, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
 
       float next_iter_shmem_val_0 =
           (shdmemLDBrowIdx + 8 < K && shdmemLDBcolIdx < n)
-              ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                    B, B_col_gather_list, K, shdmemLDBheadIdx,
+              ? GetBEle<B_col_gather_flag, OUT_DIM,
+                        B_col_second_indirection_gather_flag,
+                        B_col_second_indirection_gather_binary_search_flag>(
+                    B, B_col_gather_list, B_col_second_gather_list,
+                    B_col_second_gather_list_length, K, shdmemLDBheadIdx,
                     shdmemLDBrowIdx + 8, shdmemLDBcolIdx)
               : 0.0f;
       float next_iter_shmem_val_2 =
           (shdmemLDBrowIdx + 8 < K && shdmemLDBcolIdx + 16 < n)
-              ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                    B, B_col_gather_list, K, shdmemLDBheadIdx,
+              ? GetBEle<B_col_gather_flag, OUT_DIM,
+                        B_col_second_indirection_gather_flag,
+                        B_col_second_indirection_gather_binary_search_flag>(
+                    B, B_col_gather_list, B_col_second_gather_list,
+                    B_col_second_gather_list_length, K, shdmemLDBheadIdx,
                     shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 16)
               : 0.0f;
 
@@ -395,12 +555,15 @@ class mysgemm_functor<512, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
 };
 
 template <int OUT_DIM, int NUM_HEADS, bool B_col_gather_flag,
-          bool C_col_scatter_flag>
+          bool C_col_scatter_flag, bool B_col_second_indirection_gather_flag,
+          bool B_col_second_indirection_gather_binary_search_flag>
 class mysgemm_functor<256, 8, OUT_DIM, NUM_HEADS, B_col_gather_flag,
-                      C_col_scatter_flag> {
+                      C_col_scatter_flag, B_col_second_indirection_gather_flag,
+                      B_col_second_indirection_gather_binary_search_flag> {
  public:
   __device__ __forceinline__ static void exec_function(
       int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
+      int *B_col_second_gather_list, int B_col_second_gather_list_length,
       int *C_col_scatter_list, int BcolBias) {
     constexpr int TILE_SZ_A = 256;
     constexpr int TILE_SZ_B = 8;
@@ -484,8 +647,11 @@ class mysgemm_functor<256, 8, OUT_DIM, NUM_HEADS, B_col_gather_flag,
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) %
           (TILE_SZ_RATIO / TILE_NUM_HEAD)] =
              (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n)
-                 ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                       B, B_col_gather_list, k, shdmemLDBheadIdx,
+                 ? GetBEle<B_col_gather_flag, OUT_DIM,
+                           B_col_second_indirection_gather_flag,
+                           B_col_second_indirection_gather_binary_search_flag>(
+                       B, B_col_gather_list, B_col_second_gather_list,
+                       B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                        shdmemLDBrowIdx, shdmemLDBcolIdx)
                  : 0.0f;
     __syncthreads();
@@ -561,8 +727,11 @@ class mysgemm_functor<256, 8, OUT_DIM, NUM_HEADS, B_col_gather_flag,
       float next_iter_shmem_val =
           (shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD < k &&
            shdmemLDBcolIdx < n)
-              ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                    B, B_col_gather_list, k, shdmemLDBheadIdx,
+              ? GetBEle<B_col_gather_flag, OUT_DIM,
+                        B_col_second_indirection_gather_flag,
+                        B_col_second_indirection_gather_binary_search_flag>(
+                    B, B_col_gather_list, B_col_second_gather_list,
+                    B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                     shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD,
                     shdmemLDBcolIdx)
               : 0.0f;
@@ -625,12 +794,15 @@ class mysgemm_functor<256, 8, OUT_DIM, NUM_HEADS, B_col_gather_flag,
 };
 
 template <int OUT_DIM, int NUM_HEADS, bool B_col_gather_flag,
-          bool C_col_scatter_flag>
+          bool C_col_scatter_flag, bool B_col_second_indirection_gather_flag,
+          bool B_col_second_indirection_gather_binary_search_flag>
 class mysgemm_functor<256, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
-                      C_col_scatter_flag> {
+                      C_col_scatter_flag, B_col_second_indirection_gather_flag,
+                      B_col_second_indirection_gather_binary_search_flag> {
  public:
   __device__ __forceinline__ static void exec_function(
       int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
+      int *B_col_second_gather_list, int B_col_second_gather_list_length,
       int *C_col_scatter_list, int BcolBias) {
     constexpr int TILE_SZ_A = 256;
     constexpr int TILE_SZ_B = 32;
@@ -710,32 +882,44 @@ class mysgemm_functor<256, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8)]
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] =
              (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n)
-                 ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                       B, B_col_gather_list, k, shdmemLDBheadIdx,
+                 ? GetBEle<B_col_gather_flag, OUT_DIM,
+                           B_col_second_indirection_gather_flag,
+                           B_col_second_indirection_gather_binary_search_flag>(
+                       B, B_col_gather_list, B_col_second_gather_list,
+                       B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                        shdmemLDBrowIdx, shdmemLDBcolIdx)
                  : 0.0f;
     shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)]
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 8]
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] =
              (shdmemLDBrowIdx < k && shdmemLDBcolIdx + 8 < n)
-                 ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                       B, B_col_gather_list, k, shdmemLDBheadIdx,
+                 ? GetBEle<B_col_gather_flag, OUT_DIM,
+                           B_col_second_indirection_gather_flag,
+                           B_col_second_indirection_gather_binary_search_flag>(
+                       B, B_col_gather_list, B_col_second_gather_list,
+                       B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                        shdmemLDBrowIdx, shdmemLDBcolIdx + 8)
                  : 0.0f;
     shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)]
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 16]
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] =
              (shdmemLDBrowIdx < k && shdmemLDBcolIdx + 16 < n)
-                 ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                       B, B_col_gather_list, k, shdmemLDBheadIdx,
+                 ? GetBEle<B_col_gather_flag, OUT_DIM,
+                           B_col_second_indirection_gather_flag,
+                           B_col_second_indirection_gather_binary_search_flag>(
+                       B, B_col_gather_list, B_col_second_gather_list,
+                       B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                        shdmemLDBrowIdx, shdmemLDBcolIdx + 16)
                  : 0.0f;
     shmem[0][threadIdx.x / (TILE_SZ_A / TILE_NUM_HEAD)]
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) / (8) + 24]
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) % (8)] =
              (shdmemLDBrowIdx < k && shdmemLDBcolIdx + 24 < n)
-                 ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                       B, B_col_gather_list, k, shdmemLDBheadIdx,
+                 ? GetBEle<B_col_gather_flag, OUT_DIM,
+                           B_col_second_indirection_gather_flag,
+                           B_col_second_indirection_gather_binary_search_flag>(
+                       B, B_col_gather_list, B_col_second_gather_list,
+                       B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                        shdmemLDBrowIdx, shdmemLDBcolIdx + 24)
                  : 0.0f;
 
@@ -783,26 +967,38 @@ class mysgemm_functor<256, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
 
       float next_iter_shmem_val_0 =
           (shdmemLDBrowIdx + 8 < k && shdmemLDBcolIdx < n)
-              ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                    B, B_col_gather_list, k, shdmemLDBheadIdx,
+              ? GetBEle<B_col_gather_flag, OUT_DIM,
+                        B_col_second_indirection_gather_flag,
+                        B_col_second_indirection_gather_binary_search_flag>(
+                    B, B_col_gather_list, B_col_second_gather_list,
+                    B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                     shdmemLDBrowIdx + 8, shdmemLDBcolIdx)
               : 0.0f;
       float next_iter_shmem_val_1 =
           (shdmemLDBrowIdx + 8 < k && shdmemLDBcolIdx + 8 < n)
-              ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                    B, B_col_gather_list, k, shdmemLDBheadIdx,
+              ? GetBEle<B_col_gather_flag, OUT_DIM,
+                        B_col_second_indirection_gather_flag,
+                        B_col_second_indirection_gather_binary_search_flag>(
+                    B, B_col_gather_list, B_col_second_gather_list,
+                    B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                     shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 8)
               : 0.0f;
       float next_iter_shmem_val_2 =
           (shdmemLDBrowIdx + 8 < k && shdmemLDBcolIdx + 16 < n)
-              ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                    B, B_col_gather_list, k, shdmemLDBheadIdx,
+              ? GetBEle<B_col_gather_flag, OUT_DIM,
+                        B_col_second_indirection_gather_flag,
+                        B_col_second_indirection_gather_binary_search_flag>(
+                    B, B_col_gather_list, B_col_second_gather_list,
+                    B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                     shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 16)
               : 0.0f;
       float next_iter_shmem_val_3 =
           (shdmemLDBrowIdx + 8 < k && shdmemLDBcolIdx + 24 < n)
-              ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                    B, B_col_gather_list, k, shdmemLDBheadIdx,
+              ? GetBEle<B_col_gather_flag, OUT_DIM,
+                        B_col_second_indirection_gather_flag,
+                        B_col_second_indirection_gather_binary_search_flag>(
+                    B, B_col_gather_list, B_col_second_gather_list,
+                    B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                     shdmemLDBrowIdx + 8, shdmemLDBcolIdx + 24)
               : 0.0f;
 
@@ -875,12 +1071,15 @@ class mysgemm_functor<256, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
 };
 
 template <int OUT_DIM, int NUM_HEADS, bool B_col_gather_flag,
-          bool C_col_scatter_flag>
+          bool C_col_scatter_flag, bool B_col_second_indirection_gather_flag,
+          bool B_col_second_indirection_gather_binary_search_flag>
 class mysgemm_functor<128, 16, OUT_DIM, NUM_HEADS, B_col_gather_flag,
-                      C_col_scatter_flag> {
+                      C_col_scatter_flag, B_col_second_indirection_gather_flag,
+                      B_col_second_indirection_gather_binary_search_flag> {
  public:
   __device__ __forceinline__ static void exec_function(
       int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
+      int *B_col_second_gather_list, int B_col_second_gather_list_length,
       int *C_col_scatter_list, int BcolBias) {
     constexpr int TILE_SZ_A = 128;
     constexpr int TILE_SZ_B = 16;
@@ -1004,8 +1203,12 @@ class mysgemm_functor<128, 16, OUT_DIM, NUM_HEADS, B_col_gather_flag,
            [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) /
             (TILE_SZ_RATIO / TILE_NUM_HEAD)] =
                (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n)
-                   ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                         B, B_col_gather_list, k, shdmemLDBheadIdx,
+                   ? GetBEle<
+                         B_col_gather_flag, OUT_DIM,
+                         B_col_second_indirection_gather_flag,
+                         B_col_second_indirection_gather_binary_search_flag>(
+                         B, B_col_gather_list, B_col_second_gather_list,
+                         B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                          shdmemLDBrowIdx, shdmemLDBcolIdx)
                    : 0.0f;
 
@@ -1055,12 +1258,15 @@ class mysgemm_functor<128, 16, OUT_DIM, NUM_HEADS, B_col_gather_flag,
 };
 
 template <int OUT_DIM, int NUM_HEADS, bool B_col_gather_flag,
-          bool C_col_scatter_flag>
+          bool C_col_scatter_flag, bool B_col_second_indirection_gather_flag,
+          bool B_col_second_indirection_gather_binary_search_flag>
 class mysgemm_functor<128, 8, OUT_DIM, NUM_HEADS, B_col_gather_flag,
-                      C_col_scatter_flag> {
+                      C_col_scatter_flag, B_col_second_indirection_gather_flag,
+                      B_col_second_indirection_gather_binary_search_flag> {
  public:
   __device__ __forceinline__ static void exec_function(
       int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
+      int *B_col_second_gather_list, int B_col_second_gather_list_length,
       int *C_col_scatter_list, int BcolBias) {
     constexpr int TILE_SZ_A = 128;
     constexpr int TILE_SZ_B = 8;
@@ -1140,8 +1346,11 @@ class mysgemm_functor<128, 8, OUT_DIM, NUM_HEADS, B_col_gather_flag,
          [(threadIdx.x % (TILE_SZ_A / TILE_NUM_HEAD)) %
           (TILE_SZ_RATIO / TILE_NUM_HEAD)] =
              (shdmemLDBrowIdx < k && shdmemLDBcolIdx < n)
-                 ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                       B, B_col_gather_list, k, shdmemLDBheadIdx,
+                 ? GetBEle<B_col_gather_flag, OUT_DIM,
+                           B_col_second_indirection_gather_flag,
+                           B_col_second_indirection_gather_binary_search_flag>(
+                       B, B_col_gather_list, B_col_second_gather_list,
+                       B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                        shdmemLDBrowIdx, shdmemLDBcolIdx)
                  : 0.0f;
     __syncthreads();
@@ -1217,8 +1426,11 @@ class mysgemm_functor<128, 8, OUT_DIM, NUM_HEADS, B_col_gather_flag,
       float next_iter_shmem_val =
           (shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD < k &&
            shdmemLDBcolIdx < n)
-              ? GetBEle<B_col_gather_flag, OUT_DIM>(
-                    B, B_col_gather_list, k, shdmemLDBheadIdx,
+              ? GetBEle<B_col_gather_flag, OUT_DIM,
+                        B_col_second_indirection_gather_flag,
+                        B_col_second_indirection_gather_binary_search_flag>(
+                    B, B_col_gather_list, B_col_second_gather_list,
+                    B_col_second_gather_list_length, k, shdmemLDBheadIdx,
                     shdmemLDBrowIdx + TILE_SZ_RATIO / TILE_NUM_HEAD,
                     shdmemLDBcolIdx)
               : 0.0f;

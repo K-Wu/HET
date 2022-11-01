@@ -1,6 +1,6 @@
 #pragma once
 #include "flatten_coord_index.h"
-#include "utils.h"
+#include "utils.cu.h"
 #include "variadic_tricks.h"
 
 // transposition code from

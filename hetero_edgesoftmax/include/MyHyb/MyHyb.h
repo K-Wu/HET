@@ -1041,7 +1041,107 @@ MyHeteroSeparateCSR<IdxType, std::allocator<IdxType>> ToSeparateCSR_CPU(
 }
 
 template <typename IdxType>
-std::vector<thrust::host_vector<IdxType>> ToSeparateCOO_CPU(
+std::vector<thrust::host_vector<IdxType>> ConvertIntegratedCOOToSeparateCSR(
+    thrust::host_vector<IdxType> integrated_row_idx,
+    thrust::host_vector<IdxType> integrated_col_idx,
+    thrust::host_vector<IdxType> integrated_rel_type,
+    thrust::host_vector<IdxType> integrated_eids, int64_t num_rows,
+    int64_t num_rels) {
+  // csr.row_ptr;
+  // csr.col_idx;
+  // csr.rel_type;
+  thrust::host_vector<IdxType> result_rel_ptr(num_rels + 1, 0);
+  thrust::host_vector<IdxType> result_row_ptr(num_rows * num_rels + 1, 0);
+  thrust::host_vector<IdxType> result_col_idx(integrated_col_idx.size(), 0);
+  thrust::host_vector<IdxType> result_eids(integrated_col_idx.size(), 0);
+  std::vector<std::vector<std::vector<std::pair<IdxType, IdxType>>>>
+      rel_type_to_edges(
+          num_rels, std::vector<std::vector<std::pair<IdxType, IdxType>>>(
+                        num_rows, std::vector<std::pair<IdxType, IdxType>>()));
+
+  for (IdxType IdxEdge = 0; IdxEdge < integrated_col_idx.size(); IdxEdge++) {
+    IdxType IdxSrcNode = integrated_row_idx[IdxEdge];
+    IdxType IdxDestNode = integrated_col_idx[IdxEdge];
+    IdxType IdxRelationshipEdge = integrated_rel_type[IdxEdge];
+    IdxType IdxEids = integrated_eids[IdxEdge];
+    rel_type_to_edges[IdxRelationshipEdge][IdxSrcNode].push_back(
+        std::make_pair(IdxDestNode, IdxEids));
+  }
+
+  for (int64_t IdxRelationship = 0; IdxRelationship < num_rels;
+       IdxRelationship++) {
+    for (IdxType IdxRow = 0; IdxRow < num_rows; IdxRow++) {
+      result_row_ptr[IdxRelationship * num_rows + IdxRow + 1] =
+          result_row_ptr[IdxRelationship * num_rows + IdxRow];
+      for (IdxType IdxElement = 0;
+           IdxElement < rel_type_to_edges[IdxRelationship][IdxRow].size();
+           IdxElement++) {
+        result_col_idx[result_row_ptr[IdxRelationship * num_rows + IdxRow +
+                                      1]] =
+            rel_type_to_edges[IdxRelationship][IdxRow][IdxElement].first;
+        result_eids[result_row_ptr[IdxRelationship * num_rows + IdxRow + 1]] =
+            rel_type_to_edges[IdxRelationship][IdxRow][IdxElement].second;
+        result_row_ptr[IdxRelationship * num_rows + IdxRow + 1] += 1;
+      }
+    }
+    result_rel_ptr[IdxRelationship + 1] =
+        result_rel_ptr[IdxRelationship] +
+        result_row_ptr[IdxRelationship * num_rows + num_rows];
+  }
+
+  return {result_rel_ptr, result_row_ptr, result_col_idx, result_eids};
+}
+
+template <typename IdxType>
+std::vector<thrust::host_vector<IdxType>> ConvertIntegratedCOOToSeparateCOO(
+    thrust::host_vector<IdxType> integrated_row_idx,
+    thrust::host_vector<IdxType> integrated_col_idx,
+    thrust::host_vector<IdxType> integrated_rel_type,
+    thrust::host_vector<IdxType> integrated_eids, int64_t num_rows,
+    int64_t num_rels) {
+  thrust::host_vector<IdxType> result_rel_ptr(num_rels + 1, 0);
+  thrust::host_vector<IdxType> result_row_idx(integrated_row_idx.size(), 0);
+  thrust::host_vector<IdxType> result_col_idx(integrated_row_idx.size(), 0);
+  thrust::host_vector<IdxType> result_eids(integrated_row_idx.size(), 0);
+  std::vector<std::vector<std::vector<std::pair<IdxType, IdxType>>>>
+      rel_type_to_edges(
+          num_rels, std::vector<std::vector<std::pair<IdxType, IdxType>>>(
+                        num_rows, std::vector<std::pair<IdxType, IdxType>>()));
+
+  for (IdxType IdxEdge = 0; IdxEdge < integrated_row_idx.size(); IdxEdge++) {
+    IdxType IdxSrcNode = integrated_row_idx[IdxEdge];
+    IdxType IdxDestNode = integrated_col_idx[IdxEdge];
+    IdxType IdxRelationshipEdge = integrated_rel_type[IdxEdge];
+    IdxType IdxEids = integrated_eids[IdxEdge];
+    rel_type_to_edges[IdxRelationshipEdge][IdxSrcNode].push_back(
+        std::make_pair(IdxDestNode, IdxEids));
+  }
+
+  result_rel_ptr[0] = 0;
+  for (int64_t IdxRelationship = 0; IdxRelationship < num_rels;
+       IdxRelationship++) {
+    result_rel_ptr[IdxRelationship + 1] = result_rel_ptr[IdxRelationship];
+    for (IdxType IdxRow = 0; IdxRow < num_rows; IdxRow++) {
+      for (IdxType IdxElement = 0;
+           IdxElement < rel_type_to_edges[IdxRelationship][IdxRow].size();
+           IdxElement++) {
+        result_row_idx[result_rel_ptr[IdxRelationship + 1]] = IdxRow;
+        result_col_idx[result_rel_ptr[IdxRelationship + 1]] =
+            rel_type_to_edges[IdxRelationship][IdxRow][IdxElement].first;
+        result_eids[result_rel_ptr[IdxRelationship + 1]] =
+            rel_type_to_edges[IdxRelationship][IdxRow][IdxElement].second;
+        result_rel_ptr[IdxRelationship + 1] += 1;
+      }
+    }
+  }
+
+  std::vector<thrust::host_vector<IdxType>> result = {
+      result_rel_ptr, result_row_idx, result_col_idx, result_eids};
+  return result;
+}
+
+template <typename IdxType>
+std::vector<thrust::host_vector<IdxType>> ToSeparateCOO(
     const MyHeteroIntegratedCSR<IdxType, std::allocator<IdxType>> &csr) {
   thrust::host_vector<IdxType> result_rel_ptr(csr.num_rels + 1, 0);
   thrust::host_vector<IdxType> result_row_idx(csr.total_num_nnzs, 0);
@@ -1052,8 +1152,6 @@ std::vector<thrust::host_vector<IdxType>> ToSeparateCOO_CPU(
           csr.num_rels,
           std::vector<std::vector<std::pair<IdxType, IdxType>>>(
               csr.num_rows, std::vector<std::pair<IdxType, IdxType>>()));
-
-  result_rel_ptr[0] = 0;
 
   for (int64_t IdxRow = 0; IdxRow < csr.num_rows; IdxRow++) {
     for (IdxType IdxEdge = csr.row_ptr[IdxRow];
@@ -1066,22 +1164,26 @@ std::vector<thrust::host_vector<IdxType>> ToSeparateCOO_CPU(
           std::make_pair(IdxDestNode, IdxEids));
     }
   }
+  result_rel_ptr[0] = 0;
   for (int64_t IdxRelationship = 0; IdxRelationship < csr.num_rels;
        IdxRelationship++) {
-    result_rel_ptr[IdxRelationship + 1] = result_rel_ptr[IdxRelationship];
+    result_rel_ptr[IdxRelationship + 1] =
+        result_rel_ptr[IdxRelationship] + csr.num_nnzs[IdxRelationship];
+    int64_t curr_relationship_edge_count = 0;
     for (IdxType IdxRow = 0; IdxRow < csr.num_rows; IdxRow++) {
       for (IdxType IdxElement = 0;
            IdxElement < rel_type_to_edges[IdxRelationship][IdxRow].size();
            IdxElement++) {
-        result_row_idx[result_row_ptr[IdxRelationship * csr.num_rows + IdxRow +
-                                      1]] = IdxRow;
-        result_col_idx[result_row_ptr[IdxRelationship * csr.num_rows + IdxRow +
-                                      1]] =
+        result_row_idx[curr_relationship_edge_count +
+                       result_rel_ptr[IdxRelationship]] = IdxRow;
+        result_col_idx[curr_relationship_edge_count +
+                       result_rel_ptr[IdxRelationship]] =
             rel_type_to_edges[IdxRelationship][IdxRow][IdxElement].first;
-        result_eids[result_row_ptr[IdxRelationship * csr.num_rows + IdxRow +
-                                   1]] =
+        result_eids[curr_relationship_edge_count +
+                    result_rel_ptr[IdxRelationship]] =
             rel_type_to_edges[IdxRelationship][IdxRow][IdxElement].second;
-        result_rel_ptr[IdxRelationship + 1] += 1;
+
+        curr_relationship_edge_count++;
       }
     }
   }
