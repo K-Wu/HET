@@ -59,8 +59,8 @@ struct HGTLayerIntermediateData {
         VLinearOutput(other.VLinearOutput),
         ALinearOutput(other.ALinearOutput),
         ltsgemm_workspace(other.ltsgemm_workspace),
-        NodeOutputFeatures(NodeOutputFeatures),
-        NodeInputFeatures(NodeInputFeatures),
+        NodeOutputFeatures(other.NodeOutputFeatures),
+        NodeInputFeatures(other.NodeInputFeatures),
         ltsgemm_workspaceSize(other.ltsgemm_workspaceSize),
         intermediate_node_vect(other.intermediate_node_vect),
         EdgeAttention(other.EdgeAttention) {
@@ -74,8 +74,8 @@ struct HGTLayerIntermediateData {
         VLinearOutput(std::move(other.VLinearOutput)),
         ALinearOutput(std::move(other.ALinearOutput)),
         ltsgemm_workspace(std::move(other.ltsgemm_workspace)),
-        NodeOutputFeatures(NodeOutputFeatures),
-        NodeInputFeatures(NodeInputFeatures),
+        NodeOutputFeatures(std::move(other.NodeOutputFeatures)),
+        NodeInputFeatures(std::move(other.NodeInputFeatures)),
         ltsgemm_workspaceSize(other.ltsgemm_workspaceSize),
         intermediate_node_vect(std::move(other.intermediate_node_vect)),
         EdgeAttention(std::move(other.EdgeAttention)) {

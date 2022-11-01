@@ -157,7 +157,8 @@ struct HGTLayerHyperParams {
   HGTLayerHyperParams(int num_relations, int num_node_types, int num_nodes,
                       int num_edges, int input_dim, int klinear_out_dim,
                       int qlinear_out_dim, int vlinear_out_dim, int message_dim,
-                      int alinear_out_dim, int num_heads)
+                      int alinear_out_dim, int num_heads,
+                      int64_t PERF_ltsgemm_workspaceSize)
       : num_relations(num_relations),
         num_node_types(num_node_types),
         num_nodes(num_nodes),
