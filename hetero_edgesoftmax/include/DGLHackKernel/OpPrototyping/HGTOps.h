@@ -128,6 +128,67 @@ void VanillaEdgeMessageConcatenatedCOOKernel(
   assert(0 && "not implemented");
 }
 
+template <bool EqualPartitionFlag>
+std::tuple<thrust::device_vector<int>, thrust::device_vector<int>,
+           thrust::device_vector<int>>
+get_schedule_by_relation_kernel_launch_per_block_metadata(
+    std::vector<int>& num_blocks_for_same_relation_vect,
+    std::vector<int>& num_blocks_for_all_prev_relation_vect, int num_blocks,
+    int num_node_per_block_per_iteration) {
+  if constexpr (!EqualPartitionFlag) {
+    printf("not implemented!\n");
+  }
+  thrust::device_vector<int> num_blocks_for_same_relation_per_block_vect;
+  thrust::device_vector<int> blockid_relation_id_vect;
+  thrust::device_vector<int> beg_node_entry_idxes_vect;
+  int idx_curr_relation = 0;
+  int curr_beg_node_entry_idx = 0;
+  for (int idx_block = 0; idx_block < num_blocks; idx_block++) {
+    if (idx_curr_relation < num_blocks_for_all_prev_relation_vect.size() - 1 &&
+        idx_block >= num_blocks_for_all_prev_relation_vect[idx_curr_relation]) {
+      assert(curr_beg_node_entry_idx / num_node_per_block_per_iteration ==
+             num_blocks_for_same_relation_vect[idx_curr_relation]);
+      idx_curr_relation++;
+      curr_beg_node_entry_idx = 0;
+    }
+    blockid_relation_id_vect.push_back(idx_curr_relation);
+    beg_node_entry_idxes_vect.push_back(curr_beg_node_entry_idx);
+    curr_beg_node_entry_idx += num_node_per_block_per_iteration;
+    num_blocks_for_same_relation_per_block_vect.push_back(
+        num_blocks_for_same_relation_vect[idx_curr_relation]);
+  }
+  return std::make_tuple(num_blocks_for_same_relation_per_block_vect,
+                         blockid_relation_id_vect, beg_node_entry_idxes_vect);
+}
+
+std::pair<std::vector<int>, std::vector<int>>
+get_schedule_by_relation_kernel_launch_metadata(int num_blocks,
+                                                int num_relations) {
+  std::vector<int> num_blocks_for_same_relation_vect;
+  std::vector<int> num_blocks_for_all_prev_relation_vect;
+  num_blocks_for_all_prev_relation_vect.push_back(0);
+
+  // for ease of programming equally partition the workload to different blocks
+  // at this moment.
+  for (int idx_relationship = 0; idx_relationship < num_relations;
+       idx_relationship++) {
+    int num_blocks_for_this_and_prev_relation =
+        (idx_relationship + 1 + 0.0) / (num_relations + 0.0) * num_blocks;
+    num_blocks_for_all_prev_relation_vect.push_back(
+        num_blocks_for_this_and_prev_relation);
+  }
+  for (int idx_relationship = 0; idx_relationship < num_relations;
+       idx_relationship++) {
+    num_blocks_for_same_relation_vect.push_back(
+        num_blocks_for_all_prev_relation_vect[idx_relationship + 1] -
+        num_blocks_for_all_prev_relation_vect[idx_relationship]);
+  }
+  num_blocks_for_all_prev_relation_vect.erase(
+      num_blocks_for_all_prev_relation_vect.begin());
+  return std::make_pair(num_blocks_for_same_relation_vect,
+                        num_blocks_for_all_prev_relation_vect);
+}
+
 // NB: In this implementation, message generation is done for each (source node,
 // relationship this node is involved) where each (source node, relationship
 // this node is involved) is mapped to a unique (relationship id, unique node
@@ -166,35 +227,13 @@ void CompressedEdgeMessageConcatenatedCOOKernel(
   // NODE_INPUT_DIM_PER_HEAD
 
   // preparing op kernel launch specific preprocessed metadata:
-  // num_blocks_xdim_for_same_relation_per_block_vect,
+  // num_blocks_for_same_relation_per_block_vect,
   // beg_node_entry_idxes_vect, blockid_relation_id_vect
-  thrust::device_vector<int> num_blocks_xdim_for_same_relation_per_block_vect;
-  thrust::device_vector<int> blockid_relation_id_vect;
-  thrust::device_vector<int> beg_node_entry_idxes_vect;
-  std::vector<int> num_blocks_xdim_for_same_relation_vect;
-  std::vector<int> num_blocks_xdim_for_all_prev_relation_vect;
-  num_blocks_xdim_for_all_prev_relation_vect.push_back(0);
-
-  // for ease of programming equally partition the workload to different blocks
-  // at this moment.
-  for (int idx_relationship = 0; idx_relationship < hyper_params.num_relations;
-       idx_relationship++) {
-    int num_blocks_xdim_for_this_and_prev_relation =
-        (idx_relationship + 1 + 0.0) / (hyper_params.num_relations + 0.0) *
-        RTX_3090_GRIDSIZE;
-    num_blocks_xdim_for_all_prev_relation_vect.push_back(
-        num_blocks_xdim_for_this_and_prev_relation);
-  }
-  for (int idx_relationship = 0; idx_relationship < hyper_params.num_relations;
-       idx_relationship++) {
-    num_blocks_xdim_for_same_relation_vect.push_back(
-        num_blocks_xdim_for_all_prev_relation_vect[idx_relationship + 1] -
-        num_blocks_xdim_for_all_prev_relation_vect[idx_relationship]);
-  }
-  num_blocks_xdim_for_all_prev_relation_vect.erase(
-      num_blocks_xdim_for_all_prev_relation_vect.begin());
-  int idx_curr_relation = 0;
-  int curr_beg_node_entry_idx = 0;
+  auto [num_blocks_for_same_relation_vect,
+        num_blocks_for_all_prev_relation_vect] =
+      get_schedule_by_relation_kernel_launch_metadata(
+          RTX_3090_GRIDSIZE,  // num_blocks
+          hyper_params.num_relations);
 
   // grid and thread configuration of the first stage
   //   block (0,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16
@@ -205,22 +244,12 @@ void CompressedEdgeMessageConcatenatedCOOKernel(
   //   16 nodes), (head3 (64 element), 16 nodes); ... block(BLOCKDIM_X-1,1):
   //   (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes);
 
-  for (int idx_block = 0; idx_block < RTX_3090_GRIDSIZE; idx_block++) {
-    if (idx_curr_relation <
-            num_blocks_xdim_for_all_prev_relation_vect.size() - 1 &&
-        idx_block >=
-            num_blocks_xdim_for_all_prev_relation_vect[idx_curr_relation]) {
-      assert(curr_beg_node_entry_idx / COARSE_SGEMM_NODES_PER_BLOCK ==
-             num_blocks_xdim_for_same_relation_vect[idx_curr_relation]);
-      idx_curr_relation++;
-      curr_beg_node_entry_idx = 0;
-    }
-    blockid_relation_id_vect.push_back(idx_curr_relation);
-    beg_node_entry_idxes_vect.push_back(curr_beg_node_entry_idx);
-    curr_beg_node_entry_idx += COARSE_SGEMM_NODES_PER_BLOCK;
-    num_blocks_xdim_for_same_relation_per_block_vect.push_back(
-        num_blocks_xdim_for_same_relation_vect[idx_curr_relation]);
-  }
+  auto [num_blocks_for_same_relation_per_block_vect, blockid_relation_id_vect,
+        beg_node_entry_idxes_vect] =
+      get_schedule_by_relation_kernel_launch_per_block_metadata<true>(
+          num_blocks_for_same_relation_vect,
+          num_blocks_for_all_prev_relation_vect, RTX_3090_GRIDSIZE,
+          COARSE_SGEMM_NODES_PER_BLOCK);
 
   dim3 block(COARSE_SGEMM_BLOCKSIZE, 1, 1);
   dim3 grid(RTX_3090_GRIDSIZE, 2, 1);
@@ -248,7 +277,7 @@ void CompressedEdgeMessageConcatenatedCOOKernel(
               .data()),
       hyper_params.num_relations,
       thrust::raw_pointer_cast(
-          num_blocks_xdim_for_same_relation_per_block_vect.data()),
+          num_blocks_for_same_relation_per_block_vect.data()),
       thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()),
       thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
 
@@ -283,40 +312,19 @@ void EdgeAttentionConcatenatedCOOKernel(
   constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
 
   // float *node_input_data element num: num_nodes * NUM_HEADS *
-  // NODE_INPUT_DIM_PER_HEAD float *relation_attention_matrices element num:
+  // NODE_INPUT_DIM_PER_HEAD
+  // float *relation_attention_matrices element num:
   // num_relations * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD *
   // NODE_INPUT_DIM_PER_HEAD
 
   // preparing op kernel launch specific preprocessed metadata:
-  // num_blocks_xdim_for_same_relation_per_block_vect,
+  // num_blocks_for_same_relation_per_block_vect,
   // beg_node_entry_idxes_vect, blockid_relation_id_vect
-  thrust::device_vector<int> num_blocks_xdim_for_same_relation_per_block_vect;
-  thrust::device_vector<int> blockid_relation_id_vect;
-  thrust::device_vector<int> beg_node_entry_idxes_vect;
-  std::vector<int> num_blocks_xdim_for_same_relation_vect;
-  std::vector<int> num_blocks_xdim_for_all_prev_relation_vect;
-  num_blocks_xdim_for_all_prev_relation_vect.push_back(0);
 
-  // for ease of programming equally partition the workload to different blocks
-  // at this moment.
-  for (int idx_relationship = 0; idx_relationship < hyper_params.num_relations;
-       idx_relationship++) {
-    int num_blocks_xdim_for_this_and_prev_relation =
-        (idx_relationship + 1 + 0.0) / (hyper_params.num_relations + 0.0) *
-        RTX_3090_GRIDSIZE;
-    num_blocks_xdim_for_all_prev_relation_vect.push_back(
-        num_blocks_xdim_for_this_and_prev_relation);
-  }
-  for (int idx_relationship = 0; idx_relationship < hyper_params.num_relations;
-       idx_relationship++) {
-    num_blocks_xdim_for_same_relation_vect.push_back(
-        num_blocks_xdim_for_all_prev_relation_vect[idx_relationship + 1] -
-        num_blocks_xdim_for_all_prev_relation_vect[idx_relationship]);
-  }
-  num_blocks_xdim_for_all_prev_relation_vect.erase(
-      num_blocks_xdim_for_all_prev_relation_vect.begin());
-  int idx_curr_relation = 0;
-  int curr_beg_node_entry_idx = 0;
+  auto [num_blocks_for_same_relation_vect,
+        num_blocks_for_all_prev_relation_vect] =
+      get_schedule_by_relation_kernel_launch_metadata(
+          RTX_3090_GRIDSIZE, hyper_params.num_relations);
 
   // grid and thread configuration of the first stage
   //   block (0,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16
@@ -327,22 +335,12 @@ void EdgeAttentionConcatenatedCOOKernel(
   //   16 nodes), (head3 (64 element), 16 nodes); ... block(BLOCKDIM_X-1,1):
   //   (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes);
 
-  for (int idx_block = 0; idx_block < RTX_3090_GRIDSIZE; idx_block++) {
-    if (idx_curr_relation <
-            num_blocks_xdim_for_all_prev_relation_vect.size() - 1 &&
-        idx_block >=
-            num_blocks_xdim_for_all_prev_relation_vect[idx_curr_relation]) {
-      assert(curr_beg_node_entry_idx / COARSE_SGEMM_NODES_PER_BLOCK ==
-             num_blocks_xdim_for_same_relation_vect[idx_curr_relation]);
-      idx_curr_relation++;
-      curr_beg_node_entry_idx = 0;
-    }
-    blockid_relation_id_vect.push_back(idx_curr_relation);
-    beg_node_entry_idxes_vect.push_back(curr_beg_node_entry_idx);
-    curr_beg_node_entry_idx += COARSE_SGEMM_NODES_PER_BLOCK;
-    num_blocks_xdim_for_same_relation_per_block_vect.push_back(
-        num_blocks_xdim_for_same_relation_vect[idx_curr_relation]);
-  }
+  auto [num_blocks_for_same_relation_per_block_vect, blockid_relation_id_vect,
+        beg_node_entry_idxes_vect] =
+      get_schedule_by_relation_kernel_launch_per_block_metadata<true>(
+          num_blocks_for_same_relation_vect,
+          num_blocks_for_all_prev_relation_vect, RTX_3090_GRIDSIZE,
+          COARSE_SGEMM_NODES_PER_BLOCK);
 
   dim3 block(COARSE_SGEMM_BLOCKSIZE, 1, 1);
   dim3 grid(RTX_3090_GRIDSIZE, 2, 1);
@@ -370,7 +368,7 @@ void EdgeAttentionConcatenatedCOOKernel(
               .data()),
       hyper_params.num_relations,
       thrust::raw_pointer_cast(
-          num_blocks_xdim_for_same_relation_per_block_vect.data()),
+          num_blocks_for_same_relation_per_block_vect.data()),
       thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()),
       thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
 

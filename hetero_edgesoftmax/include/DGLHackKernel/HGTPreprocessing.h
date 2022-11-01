@@ -225,18 +225,12 @@ struct HGTLayerHyperParams {
 template <int OUT_DIM, int NUM_HEADS, int TILE_SZ_A, int TILE_SZ_B>
 std::shared_ptr<HGTLayerExecPreprocessedData> HGTLayerPreprocessing(
     HGTLayerHyperParams hyper_params,
-    cusp::coo_matrix<int, int, cusp::device_memory>::row_indices_array_type
-        concatenated_coo_matrix_row_indices,
-    cusp::coo_matrix<int, int, cusp::device_memory>::column_indices_array_type
-        concatenated_coo_matrix_column_indices,
     std::vector<cusp::coo_matrix<
         int, int, cusp::device_memory>::column_indices_array_type>
-        coo_matrices_column_indices,
-    cusp::coo_matrix<int, int, cusp::device_memory>::values_array_type
-        concatenated_coo_matrix_values) {
-  constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
-  constexpr int COARSE_SGEMM_BLOCKSIZE = (TILE_SZ_A);
-  constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
+        coo_matrices_column_indices) {
+  // constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
+  // constexpr int COARSE_SGEMM_BLOCKSIZE = (TILE_SZ_A);
+  // constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
 
   // generating preprocessed metadata:
   // dest_node_to_unique_index_per_relation_d,
@@ -248,29 +242,8 @@ std::shared_ptr<HGTLayerExecPreprocessedData> HGTLayerPreprocessing(
           hyper_params
               .num_relations);  // need to persist (pointed by elements in
                                 // unique_indices_to_column_indices_per_relation_d)
-  thrust::device_vector<int *>
-      unique_indices_to_column_indices_per_relation_d;  // need to output
   thrust::device_vector<int> num_unique_indices_to_column_indices_per_relation(
       hyper_params.num_relations, -1);  // need to output
-
-  std::vector<thrust::device_vector<int>>
-      dest_node_to_unique_index_per_relation =
-          std::vector<thrust::device_vector<int>>(
-              hyper_params.num_relations,
-              thrust::device_vector<int>(
-                  hyper_params.num_nodes,
-                  -1));  // need to persist (pointed by elements in
-                         // dest_node_to_unique_index_per_relation_d)
-  thrust::device_vector<int *>
-      dest_node_to_unique_index_per_relation_d;  // need to output
-
-  // TODO: dedicated function to generate array of (pointers to arrays)
-  for (int idx_relation = 0; idx_relation < hyper_params.num_relations;
-       idx_relation++) {
-    dest_node_to_unique_index_per_relation_d.push_back(thrust::raw_pointer_cast(
-        dest_node_to_unique_index_per_relation[idx_relation].data()));
-  }
-
   for (int idx_relation = 0; idx_relation < hyper_params.num_relations;
        idx_relation++) {
     coo_matrices_column_indices_unique[idx_relation] =
@@ -286,6 +259,29 @@ std::shared_ptr<HGTLayerExecPreprocessedData> HGTLayerPreprocessing(
         coo_matrices_column_indices_unique[idx_relation].begin(),
         curr_unique_vector_end));
   }
+  for (int idx_relation = 0; idx_relation < hyper_params.num_relations;
+       idx_relation++) {
+    num_unique_indices_to_column_indices_per_relation[idx_relation] =
+        coo_matrices_column_indices_unique[idx_relation].size();
+  }
+
+  std::vector<thrust::device_vector<int>>
+      dest_node_to_unique_index_per_relation =
+          std::vector<thrust::device_vector<int>>(
+              hyper_params.num_relations,
+              thrust::device_vector<int>(
+                  hyper_params.num_nodes,
+                  -1));  // need to persist (pointed by elements in
+                         // dest_node_to_unique_index_per_relation_d)
+                         //   thrust::device_vector<int *>
+  //       dest_node_to_unique_index_per_relation_d;  // need to output
+
+  //   // TODO: dedicated function to generate array of (pointers to arrays)
+  //   for (int idx_relation = 0; idx_relation < hyper_params.num_relations;
+  //        idx_relation++) {
+  //     dest_node_to_unique_index_per_relation_d.push_back(thrust::raw_pointer_cast(
+  //         dest_node_to_unique_index_per_relation[idx_relation].data()));
+  //   }
 
   for (int idx_relation = 0; idx_relation < hyper_params.num_relations;
        idx_relation++) {
@@ -295,7 +291,9 @@ std::shared_ptr<HGTLayerExecPreprocessedData> HGTLayerPreprocessing(
         coo_matrices_column_indices_unique[idx_relation].size();
 
     int *curr_dest_node_to_unique_index_per_relation_d =
-        dest_node_to_unique_index_per_relation_d[idx_relation];
+        thrust::raw_pointer_cast(
+            dest_node_to_unique_index_per_relation[idx_relation].data());
+
     thrust::for_each(
         thrust::device,
         thrust::make_zip_iterator(thrust::make_tuple(
@@ -312,8 +310,9 @@ std::shared_ptr<HGTLayerExecPreprocessedData> HGTLayerPreprocessing(
 
   for (int idx_relation = 0; idx_relation < hyper_params.num_relations;
        idx_relation++) {
-    num_unique_indices_to_column_indices_per_relation[idx_relation] =
-        coo_matrices_column_indices_unique[idx_relation].size();
+    dest_node_to_unique_index_per_relation[idx_relation].resize(
+        num_unique_indices_to_column_indices_per_relation
+            [idx_relation]);  // resize to actual size
   }
 
   return std::make_shared<HGTLayerExecPreprocessedData>(
