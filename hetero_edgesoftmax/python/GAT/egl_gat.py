@@ -3,7 +3,7 @@
 # the paper copy of seastar can be obtained from www.cse.cuhk.edu.hk/~jcheng/papers/seastar_eurosys21.pdf
 """Torch modules for graph attention networks(GAT)."""
 # pylint: disable= no-member, arguments-differ, invalid-name
-import argparse
+# import argparse
 
 import torch as th
 

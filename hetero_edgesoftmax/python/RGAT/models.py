@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-import itertools
+# import itertools
 import torch as th
 from torch import nn
 import torch.nn.functional as F
-import dgl.nn as dglnn
+
+# import dgl.nn as dglnn
 from .. import backend as B
 from .models_dgl import RGAT_main_procedure, RGAT_parse_args
 

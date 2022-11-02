@@ -8,9 +8,10 @@ import torch.nn.functional as F
 import dgl
 import dgl.nn as dglnn
 import argparse
-from hetero_edgesoftmax.python.utils.mydgl_graph import MyDGLGraph
+
+# from hetero_edgesoftmax.python.utils.mydgl_graph import MyDGLGraph
 from ogb.nodeproppred import DglNodePropPredDataset
-from .models import HET_RelationalAttLayer, HET_RelationalGATEncoder
+from .models import HET_RelationalGATEncoder  # , HET_RelationalAttLayer
 from .. import utils
 
 # involve code heavily from dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py

@@ -13,13 +13,14 @@ Pytorch implementation: https://github.com/Diego999/pyGAT
 
 import argparse
 import numpy as np
-import networkx as nx
+
+# import networkx as nx
 import time
 import torch
 import torch.nn.functional as F
 
 # from dgl import DGLGraph
-from dgl.data import register_data_args  # , load_data
+# from dgl.data import register_data_args  # , load_data
 
 # from dgl import transform
 from .egl_gat import EglGAT, EglGATSingleLayer

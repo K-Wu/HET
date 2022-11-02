@@ -5,8 +5,8 @@ import math
 import torch
 import torch.nn as nn
 
-import dgl.function as fn
-from dgl.nn.functional import edge_softmax
+# import dgl.function as fn
+# from dgl.nn.functional import edge_softmax
 from .. import backend as B
 
 

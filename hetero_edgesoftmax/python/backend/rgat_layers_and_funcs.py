@@ -80,14 +80,7 @@ class RgatLayerCSR(th.autograd.Function):
 
 def rgat_layer_csr(graph, weight, input):
     # NB: notice that in rgcn, in-adjacency list is used and therefore, we input the transposed adj list to forward propagation, and the original to backward propagation.
-    incsr_row_ptr = graph["transposed"]["row_ptr"]
-    incsr_col_idx = graph["transposed"]["col_idx"]
-    incsr_eids = graph["transposed"]["eids"]
-    incsr_reltypes = graph["transposed"]["rel_types"]
-    outcsr_row_ptr = graph["original"]["row_ptr"]
-    outcsr_col_idx = graph["original"]["col_idx"]
-    outcsr_eids = graph["original"]["eids"]
-    outcsr_reltypes = graph["original"]["rel_types"]
+
     ret = th.zeros(
         (weight.size(1), weight.size(2)),
         dtype=weight.dtype,
@@ -95,14 +88,14 @@ def rgat_layer_csr(graph, weight, input):
         requires_grad=True,
     )
     return RgatLayerCSR.apply(
-        incsr_row_ptr,
-        incsr_col_idx,
-        incsr_eids,
-        incsr_reltypes,
-        outcsr_row_ptr,
-        outcsr_col_idx,
-        outcsr_eids,
-        outcsr_reltypes,
+        graph["transposed"]["row_ptr"],
+        graph["transposed"]["col_idx"],
+        graph["transposed"]["eids"],
+        graph["transposed"]["rel_types"],
+        graph["original"]["row_ptr"],
+        graph["original"]["col_idx"],
+        graph["original"]["eids"],
+        graph["original"]["rel_types"],
         weight,
         input,
         ret,

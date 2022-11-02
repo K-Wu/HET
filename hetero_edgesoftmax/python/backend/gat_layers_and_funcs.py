@@ -109,23 +109,17 @@ class FusedGat(th.autograd.Function):
 
 def fused_gat(graph, feat_src, el, er, slope):
     # g = graph._graph.get_immutable_gidx(utils.to_dgl_context(context(feat_src)))
-    incsr_row_ptr = graph["transposed"]["row_ptr"]
-    incsr_col_idx = graph["transposed"]["col_idx"]
-    incsr_eids = graph["transposed"]["eids"]
-    outcsr_row_ptr = graph["original"]["row_ptr"]
-    outcsr_col_idx = graph["original"]["col_idx"]
-    outcsr_eids = graph["original"]["eids"]
 
     exp = el.new_empty([incsr_col_idx.numel()] + list(el.size()[1:]))
     s = th.empty_like(el)
     ret = th.empty_like(feat_src)
     return FusedGat.apply(
-        incsr_row_ptr,
-        incsr_col_idx,
-        incsr_eids,
-        outcsr_row_ptr,
-        outcsr_col_idx,
-        outcsr_eids,
+        graph["transposed"]["row_ptr"],
+        graph["transposed"]["col_idx"],
+        graph["transposed"]["eids"],
+        graph["original"]["row_ptr"],
+        graph["original"]["col_idx"],
+        graph["original"]["eids"],
         feat_src,
         el,
         er,

@@ -2,7 +2,5 @@
 import torch
 
 
-def transpose_csr(row_ptr, col_idx, eids, reltypes):
-    return torch.ops.torch_hetero_edgesoftmax.transpose_csr(
-        row_ptr, col_idx, eids, reltypes
-    )
+def transpose_csr(*args):
+    return torch.ops.torch_hetero_edgesoftmax.transpose_csr(*args)

@@ -21,7 +21,8 @@ import torch.nn.functional as F
 # from dgl.contrib.data import load_data
 from .. import backend as B
 from .. import utils
-from functools import partial
+
+# from functools import partial
 
 
 """Torch Module for Relational graph convolution layer"""
@@ -279,7 +280,7 @@ def RGCN_main_procedure(args, g, model, feats):
     else:
         assert args.sparse_format == "csr"
         num_nodes = g["original"]["row_ptr"].numel() - 1
-    num_rels = int(g["original"]["rel_types"].max().item()) + 1
+    # num_rels = int(g["original"]["rel_types"].max().item()) + 1
     num_classes = args.num_classes
     labels = np.random.randint(0, num_classes, num_nodes)
     train_idx = torch.randint(0, num_nodes, (args.train_size,))
