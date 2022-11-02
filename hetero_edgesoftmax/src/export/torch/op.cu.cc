@@ -120,4 +120,12 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("fused_gat_kernel_csr", FusedGatKernelImpl_wrapper_integratedcsr);
   m.def("backward_fused_gat_csr",
         BackwardFusedGatKernelImpl_wrapper_integratedcsr);
+  // RGAT Declaration
+  m.def("relational_fused_gat_kernel_csr",
+        RelationalFusedGATKernel_wrapper_integratedcsr);
+  m.def("backward_relational_fused_gat_csr",
+        BackwardRelationalFusedGATKernel_wrapper_integratedcsr);
+  m.def("rgat_relational_matmul", RGATRelationalMatMul_wrapper_separatecoo);
+  m.def("rgat_relational_matmul_backward",
+        BackwardRGATRelationalMatMul_wrapper_separatecoo);
 }

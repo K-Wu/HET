@@ -58,8 +58,15 @@ class HET_RelationalAttLayer(nn.Module):
 
         # NB: RGAT model definition
         assert out_feat % n_heads == 0, "out_feat must be a multiple of n_heads"
+
         self.conv_weights = nn.Parameter(
             th.Tensor(len(rel_names), n_heads, in_feat, out_feat // n_heads)
+        )
+        self.attn_l = nn.Parameter(
+            th.Tensor(len(rel_names), n_heads, 1, out_feat // n_heads)
+        )
+        self.attn_r = nn.Parameter(
+            th.Tensor(len(rel_names), n_heads, 1, out_feat // n_heads)
         )
         # self.conv = dglnn.HeteroGraphConv(
         #     {
@@ -89,6 +96,8 @@ class HET_RelationalAttLayer(nn.Module):
             )
 
         nn.init.xavier_uniform_(self.conv_weights, gain=nn.init.calculate_gain("relu"))
+        nn.init.xavier_uniform_(self.attn_l, gain=nn.init.calculate_gain("relu"))
+        nn.init.xavier_uniform_(self.attn_r, gain=nn.init.calculate_gain("relu"))
 
         # for module in self.conv.mods.values():
         #     module.reset_parameters()
@@ -118,7 +127,40 @@ class HET_RelationalAttLayer(nn.Module):
             inputs_src = inputs_dst = inputs
 
         # NB: this line originally calls DGL R(GAT) impl and is now replaced with our own logic
-        hs = B.rgat_layer_csr(g, self.conv_weights, input)
+        # hs = B.rgat_layer_csr(g, self.conv_weights, input)
+        if self.compact_as_of_node_flag:
+            raise NotImplementedError("compact_as_of_node_flag is not implemented yet")
+            feat_src_compact = B.rgat_relational_matmul_compact_as_of_node(
+                g, self.conv_weight, input
+            )
+            feat_dst_per_edge = B.rgat_relational_matmul_per_edge(
+                g, self.conv_weight, input
+            )
+            el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
+            er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
+            rst = B.relational_fused_gat_compact_as_of_node(
+                g, feat_src, el, er, self.negative_slope
+            )
+
+        else:
+            feat_src_per_edge = B.rgat_relational_matmul(
+                g["separate"]["coo"]["rel_ptr"],
+                g["separate"]["coo"]["row_idx"],
+                g["separate"]["coo"]["eids"],
+                self.conv_weights,
+                input,
+            )
+            feat_dst_per_edge = B.rgat_relational_matmul(
+                g["separate"]["coo"]["rel_ptr"],
+                g["separate"]["coo"]["col_idx"],
+                g["separate"]["coo"]["eids"],
+                self.conv_weights,
+                input,
+            )
+            el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
+            er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
+            rst = B.relational_fused_gat_csr(g, feat_src, el, er, self.negative_slope)
+
         # hs = self.conv(g, inputs_src)
 
         # NB: let's leverage the built-in bias, activation and dropout here and only focus on SpMM/SDDMM in our kernel implementation.
