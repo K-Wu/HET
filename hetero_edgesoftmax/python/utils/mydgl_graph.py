@@ -2,13 +2,14 @@
 
 
 # NB: this class stores type in list and assumes the type order in this class and dglgraph are preserved across run. Therefore one should use the CPython implementation to ensure that.
-from .sparse_matrix_converters import (
-    convert_integrated_csr_to_separate_csr,
-    convert_integrated_csr_to_separate_coo,
-    convert_integrated_coo_to_separate_csr,
-    convert_integrated_coo_to_separate_coo,
-    transpose_csr,
-)
+from .. import kernels as K
+
+#    convert_integrated_csr_to_separate_csr,
+#    convert_integrated_csr_to_separate_coo,
+#    convert_integrated_coo_to_separate_csr,
+#    convert_integrated_coo_to_separate_coo,
+#    transpose_csr
+
 import torch
 
 
@@ -73,7 +74,7 @@ class MyDGLGraph:
                 transposed_col_idx,
                 transposed_rel_types,
                 transposed_eids,
-            ) = transpose_csr(
+            ) = K.transpose_csr(
                 self.graph_data["original"]["row_ptr"],
                 self.graph_data["original"]["col_idx"],
                 self.graph_data["original"]["rel_types"],
@@ -129,7 +130,7 @@ class MyDGLGraph:
                     separate_csr_row_ptr,
                     separate_csr_col_idx,
                     separate_csr_eids,
-                ) = convert_integrated_csr_to_separate_csr(
+                ) = K.convert_integrated_csr_to_separate_csr(
                     self.graph_data["original"]["row_ptr"],
                     self.graph_data["original"]["col_idx"],
                     self.graph_data["original"]["rel_types"],
@@ -141,7 +142,7 @@ class MyDGLGraph:
                     separate_csr_row_ptr,
                     separate_csr_col_idx,
                     separate_csr_eids,
-                ) = convert_integrated_coo_to_separate_csr(
+                ) = K.convert_integrated_coo_to_separate_csr(
                     self.graph_data["original"]["row_idx"],
                     self.graph_data["original"]["col_idx"],
                     self.graph_data["original"]["rel_types"],
@@ -203,7 +204,7 @@ class MyDGLGraph:
                     separate_coo_row_idx,
                     separate_coo_col_idx,
                     separate_coo_eids,
-                ) = convert_integrated_csr_to_separate_coo(
+                ) = K.convert_integrated_csr_to_separate_coo(
                     self.graph_data["original"]["row_ptr"],
                     self.graph_data["original"]["col_idx"],
                     self.graph_data["original"]["rel_types"],
@@ -215,7 +216,7 @@ class MyDGLGraph:
                     separate_coo_row_idx,
                     separate_coo_col_idx,
                     separate_coo_eids,
-                ) = convert_integrated_coo_to_separate_coo(
+                ) = K.convert_integrated_coo_to_separate_coo(
                     self.graph_data["original"]["row_idx"],
                     self.graph_data["original"]["col_idx"],
                     self.graph_data["original"]["rel_types"],

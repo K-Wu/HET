@@ -3,41 +3,6 @@ import numpy as np
 import torch as th
 
 
-def convert_integrated_csr_to_separate_csr(
-    *args,
-    # row_ptr, col_idx, rel_types, eids
-):
-    return th.ops.torch_hetero_edgesoftmax.convert_integrated_csr_to_separate_csr(*args)
-
-
-def convert_integrated_csr_to_separate_coo(
-    *args,
-    # row_ptr, col_idx, rel_types, eids
-):
-    return th.ops.torch_hetero_edgesoftmax.convert_integrated_csr_to_separate_coo(*args)
-
-
-def convert_integrated_coo_to_separate_csr(
-    *args,
-    # row_idx, col_idx, rel_types, eids, num_rows, num_rels
-):
-    return th.ops.torch_hetero_edgesoftmax.convert_integrated_coo_to_separate_csr(*args)
-
-
-def convert_integrated_coo_to_separate_coo(
-    *args,
-    # row_idx, col_idx, rel_types, eids, num_rows, num_rels
-):
-    return th.ops.torch_hetero_edgesoftmax.convert_integrated_coo_to_separate_coo(*args)
-
-
-def transpose_csr(
-    *args,
-    # row_ptr, col_idx, rel_types, eids
-):
-    return th.ops.torch_hetero_edgesoftmax.transpose_csr(*args)
-
-
 def coo2csr(edge_srcs, edge_dsts, edge_etypes, edge_referential_eids, torch_flag=False):
     if torch_flag:
         curr_namespace = th
