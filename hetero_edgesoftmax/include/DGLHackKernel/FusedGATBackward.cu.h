@@ -26,7 +26,7 @@ __device__ DType gradLeaky(DType val, DType slope) {
 }
 
 // TODO: test correctness of the fused kernel
-template <typename Idx, typename DType>
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
 __global__ void fusedGatBackwardGradElErFeatSrcFused(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, int64_t num_rows) {
@@ -44,13 +44,29 @@ __global__ void fusedGatBackwardGradElErFeatSrcFused(
       while (feat_idx < hidden_xlen) {
         DType s = 0.;
         DType sfeatsrc = 0.;
-        Idx feat_src_offset =
-            src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
-        Idx src_node_feat_offset = src_vid * e_xlen + head_idx;
+        Idx feat_src_offset;
+        Idx src_node_feat_offset;
+        if constexpr (CompactAsOfNodeFlag) {
+          feat_src_offset =
+              src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
+          src_node_feat_offset = src_vid * e_xlen + head_idx;
+        }
+
         for (Idx e = start_off; e < end_off; ++e) {
-          Idx edge_offset = gdata.eids[e] * e_xlen + head_idx;
+          Idx eid = gdata.eids[e];
           Idx dst_vid = column_indices[e];
-          Idx dst_node_feat_offset = dst_vid * e_xlen + head_idx;
+          Idx dst_node_feat_offset;
+          if constexpr (!CompactAsOfNodeFlag) {
+            feat_src_offset =
+                eid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
+            dst_node_feat_offset = eid * e_xlen + head_idx;
+            src_node_feat_offset = eid * e_xlen + head_idx;
+          } else {
+            dst_node_feat_offset = dst_vid * e_xlen + head_idx;
+          }
+
+          Idx edge_offset = eid * e_xlen + head_idx;
+
           Idx dst_out_offset =
               dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
           DType grad_exp =
@@ -61,18 +77,28 @@ __global__ void fusedGatBackwardGradElErFeatSrcFused(
               gdata.el[src_node_feat_offset] + gdata.er[dst_node_feat_offset];
           DType tmp2 = grad_exp * gdata.exp[edge_offset] *
                        gradLeaky(tmp_sum, gdata.leaky_relu_slope);
-          s += tmp2;
-          Idx eid = gdata.eids[e];
-          sfeatsrc += gdata.exp[eid * e_xlen + head_idx] /
-                      gdata.sum[dst_vid * e_xlen + head_idx] *
-                      gdata.grad_out[dst_vid * gdata.feat_src_xlen +
-                                     head_idx * hidden_xlen + feat_idx];
 
           atomicAdd(gdata.grad_er + dst_node_feat_offset, tmp2);
+          if constexpr (!CompactAsOfNodeFlag) {
+            atomicAdd(gdata.grad_el + src_node_feat_offset, tmp2);
+            atomicAdd(gdata.grad_feat_src + feat_src_offset,
+                      gdata.exp[eid * e_xlen + head_idx] /
+                          gdata.sum[dst_vid * e_xlen + head_idx] *
+                          gdata.grad_out[dst_vid * gdata.feat_src_xlen +
+                                         head_idx * hidden_xlen + feat_idx]);
+          } else {
+            sfeatsrc += gdata.exp[eid * e_xlen + head_idx] /
+                        gdata.sum[dst_vid * e_xlen + head_idx] *
+                        gdata.grad_out[dst_vid * gdata.feat_src_xlen +
+                                       head_idx * hidden_xlen + feat_idx];
+            s += tmp2;
+          }
         }
-        gdata.grad_feat_src[src_vid * gdata.feat_src_xlen +
-                            head_idx * hidden_xlen + feat_idx] = sfeatsrc;
-        atomicAdd(gdata.grad_el + src_node_feat_offset, s);
+        if constexpr (CompactAsOfNodeFlag) {
+          gdata.grad_feat_src[feat_src_offset] = sfeatsrc;
+          atomicAdd(gdata.grad_el + src_node_feat_offset, s);
+        }
+
         feat_idx += blockDim.y;
       }
       head_idx += stride_head;
@@ -81,10 +107,13 @@ __global__ void fusedGatBackwardGradElErFeatSrcFused(
   }
 }
 
-template <typename Idx, typename DType>
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
 __global__ void fusedGatBackwardGradFeatSrc(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, int64_t num_rows) {
+  if constexpr (!CompactAsOfNodeFlag) {
+    assert(0 && "not implemented yet");
+  }
   Idx src_vid = blockIdx.y;
   Idx stride_vid = gridDim.y;
   Idx e_xlen = gdata.e_xlen;
@@ -118,11 +147,14 @@ __global__ void fusedGatBackwardGradFeatSrc(
   }
 }
 
-template <typename Idx, typename DType>
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
 __global__ void fusedGatBackwardGradElEr(BackwardGatFusedData<Idx, DType> gdata,
                                          const Idx* row_offsets,
                                          const Idx* column_indices,
                                          int64_t num_rows) {
+  if constexpr (!CompactAsOfNodeFlag) {
+    assert(0 && "not implemented yet");
+  }
   Idx src_vid = blockIdx.y;
   Idx stride_vid = gridDim.y;
   Idx e_xlen = gdata.e_xlen;

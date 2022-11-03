@@ -20,6 +20,7 @@
 #include "OpPrototyping/GATOps.h"
 #include "OpPrototyping/HGTOps.h"
 #include "OpPrototyping/RGCNOps.h"
+#include "RGATLayersKernels.cu.h"
 #include "RGCNLayer1BackwardMyHYB.h"
 #include "RGCNLayer1MyHYB.h"
 #include "RGCNLayersBackwardKernels.cu.h"

@@ -86,7 +86,7 @@ void FusedGatKernelImpl(
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
-  gatExpLeakyReluSumKernel<Idx, DType>
+  gatExpLeakyReluSumKernel<Idx, DType, true>
       <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
           gdata,
           static_cast<Idx*>(thrust::raw_pointer_cast(incsr.row_ptr.data())),
@@ -106,7 +106,7 @@ void FusedGatKernelImpl(
   const dim3 nblks2(nblks_x, nblks_y);
   // LOG(INFO) << "kernel2 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:"
   // <<nthrs_x << "*" << nthrs_y;
-  gatSumProdZipDivKernel<Idx, DType>
+  gatSumProdZipDivKernel<Idx, DType, true>
       <<<nblks2, nthrs2 /*, 0, thr_entry->stream*/>>>(
           gdata,
           static_cast<Idx*>(thrust::raw_pointer_cast(incsr.row_ptr.data())),
@@ -211,22 +211,23 @@ void BackwardFusedGatKernelImpl(
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   if constexpr (!FLAG_KERNEL_FUSED) {
-    fusedGatBackwardGradFeatSrc<<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-        gdata,
-        static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
-        static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
-        outcsr.num_rows);
+    fusedGatBackwardGradFeatSrc<Idx, DType, true>
+        <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+            gdata,
+            static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
+            static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
+            outcsr.num_rows);
     // const dim3 nthrs3(nthrs_y, nthrs_x);
     // fusedGatBackwardGradElEr4<<<nblks, nthrs3, 0, thr_entry->stream>>>(gdata,
     // ocsr);
-    fusedGatBackwardGradElEr<Idx, DType>
+    fusedGatBackwardGradElEr<Idx, DType, true>
         <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
             gdata,
             static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
             static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
             outcsr.num_rows);
   } else {
-    fusedGatBackwardGradElErFeatSrcFused<Idx, DType>
+    fusedGatBackwardGradElErFeatSrcFused<Idx, DType, true>
         <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
             gdata,
             static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),

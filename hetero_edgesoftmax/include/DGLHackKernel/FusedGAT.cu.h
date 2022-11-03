@@ -25,7 +25,9 @@ __device__ DType gatLeakyReluExp(DType val, DType slope) {
   return val > 0 ? exp(val) : exp(slope * val);
 }
 
-template <typename Idx, typename DType>
+// NB: when CompactAsOfNodeFlag is false, gdata.el, gdata.er, gdata.feat_src are
+// edge-wise data instead of node-wise.
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
 __global__ void gatSumProdZipDivKernel(GatFusedData<Idx, DType> gdata,
                                        const Idx* row_offsets,
                                        const Idx* column_indices,
@@ -43,13 +45,19 @@ __global__ void gatSumProdZipDivKernel(GatFusedData<Idx, DType> gdata,
       Idx feat_idx = threadIdx.y;
       while (feat_idx < hidden_xlen) {
         DType s = 0.;
-        for (Idx eid = start_off; eid < end_off; eid++) {
-          Idx src_vid = column_indices[eid];
-          // s +=  gdata.exp[gdata.eids[eid] * e_xlen + head_idx] /
-          // gdata.sum[dst_vid*e_xlen + head_idx]
-          s += gdata.exp[eid * e_xlen + head_idx] /
+        for (Idx eidx = start_off; eidx < end_off; eidx++) {
+          Idx src_vid = column_indices[eidx];
+          Idx feat_src_entry_id;
+          Idx edge_id = gdata.eids[eidx];
+          if constexpr (CompactAsOfNodeFlag) {
+            feat_src_entry_id = src_vid;
+          } else {
+            feat_src_entry_id = edge_id;
+          }
+
+          s += gdata.exp[edge_id * e_xlen + head_idx] /
                gdata.sum[dst_vid * e_xlen + head_idx] *
-               gdata.feat_src[src_vid * gdata.feat_src_xlen +
+               gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx];
         }
         gdata.ret[dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen +
@@ -62,7 +70,9 @@ __global__ void gatSumProdZipDivKernel(GatFusedData<Idx, DType> gdata,
   }
 }
 
-template <typename Idx, typename DType>
+// NB: when CompactAsOfNodeFlag is false, gdata.el, gdata.er, gdata.feat_src are
+// edge-wise data instead of node-wise.
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
 __global__ void gatExpLeakyReluSumKernel(GatFusedData<Idx, DType> gdata,
                                          const Idx* row_offsets,
                                          const Idx* column_indices,
@@ -80,21 +90,30 @@ __global__ void gatExpLeakyReluSumKernel(GatFusedData<Idx, DType> gdata,
     Idx feat_idx = tx;
     while (feat_idx < e_xlen) {
       // 1. Load dstnation vertex into shared memory
-      Idx feat_off_dst = dst_vid * e_xlen + feat_idx;
+      Idx feat_off_dst;
+      if constexpr (CompactAsOfNodeFlag) {
+        feat_off_dst = dst_vid * e_xlen + feat_idx;
+      }
       // er[threadIdx.x] = gdata.er[feat_off_dst];
       //__syncthreads();
       // 2. Do the computation
       DType sum = 0.;
-      for (Idx eid = start_off; eid < end_off; ++eid) {
-        Idx src_id = *(column_indices + eid);
-        Idx feat_off_src = src_id * e_xlen + feat_idx;
+      for (Idx eidx = start_off; eidx < end_off; ++eidx) {
+        Idx src_id = *(column_indices + eidx);
+        Idx feat_off_src;
+        Idx edge_id = gdata.eids[eidx];
+        if constexpr (CompactAsOfNodeFlag) {
+          feat_off_src = src_id * e_xlen + feat_idx;
+        } else {
+          feat_off_src = edge_id * e_xlen + feat_idx;
+          feat_off_dst = edge_id * e_xlen + feat_idx;
+        }
         // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] + er[threadIdx.x],
         // gdata.leaky_relu_slope);
         DType tmp =
             gatLeakyReluExp(gdata.el[feat_off_src] + gdata.er[feat_off_dst],
                             gdata.leaky_relu_slope);
-        // gdata.exp[Idx(gdata.eids[eid] * e_xlen) + feat_idx] = tmp;
-        gdata.exp[Idx(eid * e_xlen) + feat_idx] = tmp;
+        gdata.exp[Idx(edge_id * e_xlen) + feat_idx] = tmp;
 
         sum += tmp;
       }
