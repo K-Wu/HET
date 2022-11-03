@@ -63,10 +63,10 @@ class HET_RelationalAttLayer(nn.Module):
             th.Tensor(len(rel_names), n_heads, in_feat, out_feat // n_heads)
         )
         self.attn_l = nn.Parameter(
-            th.Tensor(len(rel_names), n_heads, 1, out_feat // n_heads)
+            th.Tensor(len(rel_names), n_heads, out_feat // n_heads)
         )
         self.attn_r = nn.Parameter(
-            th.Tensor(len(rel_names), n_heads, 1, out_feat // n_heads)
+            th.Tensor(len(rel_names), n_heads, out_feat // n_heads)
         )
         # self.conv = dglnn.HeteroGraphConv(
         #     {
@@ -159,7 +159,9 @@ class HET_RelationalAttLayer(nn.Module):
             )
             el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
             er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
-            rst = B.relational_fused_gat_csr(g, feat_src, el, er, self.negative_slope)
+            rst = B.relational_fused_gat_csr(
+                g, feat_src_per_edge, el, er, self.negative_slope
+            )
 
         # hs = self.conv(g, inputs_src)
 

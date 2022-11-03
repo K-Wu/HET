@@ -4,6 +4,7 @@ import os
 import torch as th
 from . import sparse_matrix_converters
 from . import mydgl_graph
+from .coo_sorters import sort_coo_by_src_outgoing_edges, sort_coo_by_etype
 
 
 def RGCN_get_mydgl_graph(
@@ -53,6 +54,25 @@ def RGCN_get_mydgl_graph(
             transposed_edge_referential_eids,
         ) = load_wikikg2(
             "data/MyWikiKG2",
+            dataset_sort_flag,
+            sort_by_src_flag,
+            transposed=True,
+            infidel_sort_flag=False,
+        )
+    elif dataset == "ogbnmag":
+        print("WARNING - loading mag. Currently we only support a few dataset.")
+        (edge_srcs, edge_dsts, edge_etypes, edge_referential_eids,) = get_ogbnmag(
+            dataset_sort_flag,
+            sort_by_src_flag,
+            transposed=False,
+            infidel_sort_flag=False,
+        )
+        (
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        ) = get_ogbnmag(
             dataset_sort_flag,
             sort_by_src_flag,
             transposed=True,
@@ -402,7 +422,7 @@ def generic_load_data(dataset_path_and_name_prefix):
     return edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
 
 
-def get_fb15k237_data():
+def fetch_fb15k237_raw_data():
     print("loading fb15k237 from dgl.data")
     from dgl.data import FB15k237Dataset
 
@@ -415,7 +435,7 @@ def get_fb15k237_data():
     return edges_srcs, edges_dsts, edges_etypes, edge_referential_eids
 
 
-def get_wikikg2_data():
+def fetch_wikikg2_raw_data():
     print("loading wikikg2 from ogb.linkproppred")
     from ogb.linkproppred import LinkPropPredDataset
 
@@ -426,6 +446,65 @@ def get_wikikg2_data():
     edges_etypes = graph["edge_reltype"].flatten()
     edge_referential_eids = np.arange(len(edges_srcs), dtype=np.int64)
     return edges_srcs, edges_dsts, edges_etypes, edge_referential_eids
+
+
+def fetch_ogbnmag_raw_data():
+    # NB: we need to reindex nodes as nodes of any type in this data set originally starts with index 0
+    # the ordering of the abosolute node indices from 0 to N-1 is author, paper, institution, field_of_study
+    from ogb.nodeproppred import NodePropPredDataset
+
+    dataset = NodePropPredDataset(name="ogbn-mag")
+    graph = dataset[0]
+    # edges_srcs = graph.edges()[0].detach().numpy()
+    # edges_dsts = graph.edges()[0].detach().numpy()
+    # edges_etypes = graph.edata['etype'].detach().numpy()
+    edge_srcs = graph[0]["edge_index_dict"][
+        ("author", "affiliated_with", "institution")
+    ][0]
+    edge_dsts = (
+        graph[0]["edge_index_dict"][("author", "affiliated_with", "institution")][1]
+        + graph[0]["num_nodes_dict"]["author"]
+        + graph[0]["num_nodes_dict"]["paper"]
+    )
+    edge_types = [0] * len(edge_srcs)
+
+    edge_srcs2 = graph[0]["edge_index_dict"][("author", "writes", "paper")][0]
+    edge_dsts2 = (
+        graph[0]["edge_index_dict"][("author", "writes", "paper")][1]
+        + graph[0]["num_nodes_dict"]["author"]
+    )
+    edge_types2 = [1] * len(edge_srcs2)
+
+    edge_srcs3 = (
+        graph[0]["edge_index_dict"][("paper", "cites", "paper")][0]
+        + graph[0]["num_nodes_dict"]["author"]
+    )
+    edge_dsts3 = (
+        graph[0]["edge_index_dict"][("paper", "cites", "paper")][1]
+        + graph[0]["num_nodes_dict"]["author"]
+    )
+    edge_types3 = [2] * len(edge_srcs3)
+
+    edge_srcs4 = (
+        graph[0]["edge_index_dict"][("paper", "has_topic", "field_of_study")][0]
+        + graph[0]["num_nodes_dict"]["author"]
+    )
+    edge_dsts4 = (
+        graph[0]["edge_index_dict"][("paper", "has_topic", "field_of_study")][1]
+        + graph[0]["num_nodes_dict"]["author"]
+        + graph[0]["num_nodes_dict"]["paper"]
+        + graph[0]["num_nodes_dict"]["institution"]
+    )
+    edge_types4 = [3] * len(edge_srcs4)
+    return create_mydgl_graph_coo_numpy(
+        np.concatenate([edge_srcs, edge_srcs2, edge_srcs3, edge_srcs4]),
+        np.concatenate([edge_dsts, edge_dsts2, edge_dsts3, edge_dsts4]),
+        np.concatenate([edge_types, edge_types2, edge_types3, edge_types4]),
+        np.arange(
+            len(edge_srcs) + len(edge_srcs2) + len(edge_srcs3) + len(edge_srcs4),
+            dtype=np.int64,
+        ),
+    )
 
 
 def load_fb15k237(
@@ -445,7 +524,7 @@ def load_fb15k237(
         sorted_suffix += ".by_etype_freq"
 
     if not sorted:
-        return get_fb15k237_data()
+        return fetch_fb15k237_raw_data()
     else:  # sorted
         return generic_load_data(
             os.path.join(
@@ -469,7 +548,7 @@ def load_wikikg2(
     if sorted and sorted_by_srcs:
         sorted_suffix += ".by_srcs_outgoing_freq"
     if not sorted:
-        return get_wikikg2_data()
+        return fetch_wikikg2_raw_data()
     else:
         return generic_load_data(
             os.path.join(
@@ -477,3 +556,44 @@ def load_wikikg2(
                 (transposed_prefix + "wikikg2" + ".coo" + sorted_suffix),
             )
         )
+
+
+def get_ogbnmag(sorted, sorted_by_srcs, transposed, infidel_sort_flag=False):
+    if sorted_by_srcs and (not sorted):
+        raise ValueError("sorted_by_srcs is only valid when sorted is True")
+    if infidel_sort_flag:
+        print("Warning: you are loading infidel sort data, see readme.md for details")
+
+    edge_srcs, edge_dsts, edge_etypes, edge_referential_eids = fetch_ogbnmag_raw_data()
+    if transposed:
+        edge_srcs, edge_dsts = edge_dsts, edge_srcs
+    if sorted:
+        if sorted_by_srcs:
+            (
+                edge_srcs,
+                edge_dsts,
+                edge_etypes,
+                edge_referential_eids,
+            ) = sort_coo_by_src_outgoing_edges(
+                edge_srcs,
+                edge_dsts,
+                edge_etypes,
+                edge_referential_eids,
+                torch_flag=False,
+                infidel_sort_flag=infidel_sort_flag,
+            )
+        else:
+            (
+                edge_srcs,
+                edge_dsts,
+                edge_etypes,
+                edge_referential_eids,
+            ) = sort_coo_by_etype(
+                edge_srcs,
+                edge_dsts,
+                edge_etypes,
+                edge_referential_eids,
+                torch_flag=False,
+                infidel_sort_flag=infidel_sort_flag,
+            )
+    return edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
