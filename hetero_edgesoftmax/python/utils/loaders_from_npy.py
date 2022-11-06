@@ -307,10 +307,22 @@ def create_mydgl_graph_coo_from_dgl_graph(g):
     total_edge_etypes = th.zeros(g.number_of_edges(), dtype=th.int64)
     total_edge_referential_eids = th.arange(g.number_of_edges(), dtype=th.int64)
     etype_offsets = np.zeros(len(g.etypes) + 1, dtype=np.int64)
+
+    # calculate the offsets for each node type. See the following NB for more details.
+    ntype_offsets = np.zeros(len(g.ntypes) + 1, dtype=np.int64)
+    ntype_offsets[0] = 0
+    ntype_id_map = dict()
+    for idx, ntype in enumerate(g.ntypes):
+        ntype_offsets[idx + 1] = ntype_offsets[idx] + g.number_of_nodes(ntype)
+        ntype_id_map[ntype] = idx
     for etype_idx, etype in enumerate(g.canonical_etypes):
         last_etype_offsets = etype_offsets[etype_idx - 1] if etype_idx > 0 else 0
         etype_offsets[etype_idx] = g.number_of_edges(etype=etype) + last_etype_offsets
         edge_srcs, edge_dsts = g.edges(etype=etype)  # both are int64 Torch.Tensor
+        # NB: we need to add offsets to edge_srcs and edge_dsts because indices restart from 0 in every new node type
+        edge_srcs = edge_srcs + ntype_offsets[ntype_id_map[etype[0]]]
+        edge_dsts = edge_dsts + ntype_offsets[ntype_id_map[etype[2]]]
+
         print(
             etype,
             "edge_srcs \in [",
