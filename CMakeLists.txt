@@ -12,7 +12,7 @@ cmake_policy(SET CMP0104 OLD)
 option(BUILD_TEST "build sputnik test suite" ON)
 option(BUILD_BENCHMARK "build sputnik benchmark suite" ON)
 option(BUILD_GENERATED "build sputnik-based generated op code" ON)
-option(BUILD_TORCH_API "build torch api library" OFF)
+option(BUILD_TORCH_API "build torch api library" ON)
 option(RES_USAGE "show resource usage during nvcc compilation" OFF)
 
 ##

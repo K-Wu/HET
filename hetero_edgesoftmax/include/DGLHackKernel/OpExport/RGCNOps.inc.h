@@ -1,5 +1,10 @@
 #pragma once
 
+#include <c10/cuda/CUDAException.h>
+#include <c10/cuda/CUDAStream.h>
+#include <torch/extension.h>
+#include <torch/library.h>
+
 template </*int XPU, */ typename Idx, typename DType>
 void _RgcnLayerImpl_wrapper_integratedcsr(
     at::Tensor& csr_rowptr, at::Tensor& csr_col_idx, at::Tensor& csr_eids,

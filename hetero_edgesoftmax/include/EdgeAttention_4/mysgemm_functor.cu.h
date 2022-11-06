@@ -3,6 +3,11 @@
 #include "cuda_runtime.h"
 #include "utils.cu.h"
 
+#include <c10/cuda/CUDAException.h>
+#include <c10/cuda/CUDAStream.h>
+#include <torch/extension.h>
+#include <torch/library.h>
+
 template <bool scatter_col_flag, int OUT_DIM>
 __device__ __forceinline__ static float &GetCEle(float *C,
                                                  int *col_scatter_list, int K,
@@ -18,11 +23,10 @@ __device__ __forceinline__ static float &GetCEle(float *C,
   }
 }
 
+// this is a basic version of the GetBEle
 template <bool gather_col_flag, int OUT_DIM>
-__device__ __forceinline__ static float _basic_GetBEle(float *B,
-                                                       int *col_gather_list,
-                                                       int K, int idx_head,
-                                                       int row, int col) {
+__device__ __forceinline__ static float _deprecated_GetBEle(
+    float *B, int *col_gather_list, int K, int idx_head, int row, int col) {
   if constexpr (gather_col_flag) {
     return B[(idx_head * K) + (row) + (col_gather_list[col]) * OUT_DIM];
   } else {
@@ -53,6 +57,16 @@ __device__ __forceinline__ static float GetBEle(
     }
   } else {
     return B[(idx_head * K) + (row) + (col)*OUT_DIM];
+  }
+}
+
+template <bool transpose_flag>
+__device__ __forceinline__ static float GetAEle(float *A, int idx_head, int row,
+                                                int col) {
+  if constexpr (transpose_flag) {
+    return A[(idx_head * K) + (col) + (row)*OUT_DIM];
+  } else {
+    return A[(idx_head * K) + (row) + (col)*OUT_DIM];
   }
 }
 
@@ -257,10 +271,10 @@ class mysgemm_functor<512, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
 #define A(idx_head, row, col) A[(idx_head * K) + (row) + (col)*OUT_DIM]
 
     __shared__ float shmem[2 /*double buffering*/][TILE_NUM_HEAD][TILE_SZ_B][8];
-    __shared__ float shmem_output[16 /*node idx*/]
-                                 [16 /*element idx in 4 heads*/]
-                                 [2 /*node idx 2nd part*/]
-                                 [16 /*element idx in 4 heads 2nd part*/];
+    __shared__ float
+        shmem_output[16 /*node idx*/][16 /*element idx in 4 heads*/]
+                    [2 /*node idx 2nd part*/]
+                    [16 /*element idx in 4 heads 2nd part*/];  // 32KB
     for (int idx = 0; idx < 16; idx++) {
       shmem_output[idx][threadIdx.x / 32][threadIdx.x % 32 / 16]
                   [threadIdx.x % 16] = 0.0f;

@@ -129,37 +129,42 @@ class HET_RelationalAttLayer(nn.Module):
         # NB: this line originally calls DGL R(GAT) impl and is now replaced with our own logic
         # hs = B.rgat_layer_csr(g, self.conv_weights, input)
         if self.compact_as_of_node_flag:
-            raise NotImplementedError("compact_as_of_node_flag is not implemented yet")
-            feat_src_compact = B.rgat_relational_matmul_compact_as_of_node(
-                g, self.conv_weight, input
+            # feat_src_compact = B.rgat_relational_matmul_compact_as_of_node(
+            #     g, self.conv_weight, input
+            # )
+            # feat_dst_compact = B.rgat_relational_matmul_compact_as_of_node(
+            #     g["separate"]["unique_srcs_and_dests"]["rel_ptr"],g["separate"]["unique_srcs_and_dests"]["unique_node_idxes"], self.conv_weight, input
+            # )
+            feat_compact = B.rgat_relational_matmul_compact_as_of_node(
+                g["separate"]["unique_srcs_and_dests"]["rel_ptr"],
+                g["separate"]["unique_srcs_and_dests"]["unique_node_idxes"],
+                self.conv_weight,
+                input,
             )
-            feat_dst_per_edge = B.rgat_relational_matmul_per_edge(
-                g, self.conv_weight, input
-            )
-            el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
-            er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
-            rst = B.relational_fused_gat_compact_as_of_node(
-                g, feat_src, el, er, self.negative_slope
+            el_compact = (feat_compact * self.attn_l).sum(dim=-1).unsqueeze(-1)
+            er_compact = (feat_compact * self.attn_r).sum(dim=-1).unsqueeze(-1)
+            h = B.relational_fused_gat_compact_as_of_node(
+                g, feat_compact, el_compact, er_compact, self.negative_slope
             )
 
         else:
             feat_src_per_edge = B.rgat_relational_matmul(
-                g["separate"]["coo"]["rel_ptr"],
-                g["separate"]["coo"]["row_idx"],
-                g["separate"]["coo"]["eids"],
+                g["separate"]["coo"]["original"]["rel_ptr"],
+                g["separate"]["coo"]["original"]["row_idx"],
+                g["separate"]["coo"]["original"]["eids"],
                 self.conv_weights,
                 input,
             )
             feat_dst_per_edge = B.rgat_relational_matmul(
-                g["separate"]["coo"]["rel_ptr"],
-                g["separate"]["coo"]["col_idx"],
-                g["separate"]["coo"]["eids"],
+                g["separate"]["coo"]["original"]["rel_ptr"],
+                g["separate"]["coo"]["original"]["col_idx"],
+                g["separate"]["coo"]["original"]["eids"],
                 self.conv_weights,
                 input,
             )
             el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
             er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
-            rst = B.relational_fused_gat_csr(
+            h = B.relational_fused_gat_csr(
                 g, feat_src_per_edge, el, er, self.negative_slope
             )
 
@@ -167,33 +172,15 @@ class HET_RelationalAttLayer(nn.Module):
 
         # NB: let's leverage the built-in bias, activation and dropout here and only focus on SpMM/SDDMM in our kernel implementation.
         # NB: GATConv class also provides bias, activation and dropout but we can ignore them for now.
-        def _apply(ntype, h):
-            h = h.view(-1, self.out_feat)
-            if self.self_loop:
-                h = h + th.matmul(inputs_dst[ntype], self.loop_weight)
-            if self.bias:
-                h = h + self.h_bias
-            if self.activation:
-                h = self.activation(h)
-            return self.dropout(h)
 
-        for k, _ in inputs.items():
-            if g.number_of_dst_nodes(k) > 0:
-                if k not in hs:
-                    print(
-                        "Warning. Graph convolution returned empty dictionary, "
-                        f"for node with type: {str(k)}"
-                    )
-                    for _, in_v in inputs_src.items():
-                        device = in_v.device
-                    hs[k] = th.zeros(
-                        (g.number_of_dst_nodes(k), self.out_feat), device=device
-                    )
-                    # TODO the above might fail if the device is a different GPU
-                else:
-                    hs[k] = hs[k].view(hs[k].shape[0], hs[k].shape[1] * hs[k].shape[2])
-
-        return {ntype: _apply(ntype, h) for ntype, h in hs.items()}
+        h = h.view(-1, self.out_feat)
+        if self.self_loop:
+            h = h + th.matmul(h, self.loop_weight)
+        if self.bias:
+            h = h + self.h_bias
+        if self.activation:
+            h = self.activation(h)
+        return self.dropout(h)
 
 
 class HET_RelationalGATEncoder(nn.Module):

@@ -120,6 +120,22 @@ def sort_coo_by_etype(srcs, dsts, etypes, eids, torch_flag=False, infidel_flag=F
     return sorted_srcs, sorted_dsts, sorted_etypes, sorted_eids
 
 
+def sort_coo_by_etype_eids_torch_tensors(rel_ptr, srcs, dsts, eids):
+    result_srcs = th.empty([0], dtype=srcs.dtype)
+    result_dsts = th.empty([0], dtype=dsts.dtype)
+    result_eids = th.empty([0], dtype=eids.dtype)
+    for idx_relation in range(len(rel_ptr) - 1):
+        start = rel_ptr[idx_relation]
+        end = rel_ptr[idx_relation + 1]
+        sorted_eids, sorted_indices = th.sort(eids[start:end])
+        sorted_srcs = srcs[start:end][sorted_indices]
+        sorted_dsts = dsts[start:end][sorted_indices]
+        result_srcs = th.cat([result_srcs, sorted_srcs])
+        result_dsts = th.cat([result_dsts, sorted_dsts])
+        result_eids = th.cat([result_eids, sorted_eids])
+    return rel_ptr, result_srcs, result_dsts, result_eids
+
+
 def sort_coo_by_src_outgoing_edges(
     srcs, dsts, etypes, eids, torch_flag=False, infidel_flag=False
 ):

@@ -3,6 +3,7 @@
 
 # NB: this class stores type in list and assumes the type order in this class and dglgraph are preserved across run. Therefore one should use the CPython implementation to ensure that.
 from .. import kernels as K
+from .. import utils
 
 #    convert_integrated_csr_to_separate_csr,
 #    convert_integrated_csr_to_separate_coo,
@@ -26,6 +27,53 @@ class MyDGLGraph:
         ), "This class assumes the type order in this class and dglgraph are preserved across run. Therefore one should use the CPython implementation to ensure that."
         self.graph_data = dict()
 
+    def get_num_nodes(self):
+        if "row_ptr" in self.graph_data["original"]:
+            return self.graph_data["original"]["row_ptr"].numel() - 1
+        else:
+            assert "row_idx" in self.graph_data["original"], "row_idx not exists"
+            assert "col_idx" in self.graph_data["original"], "col_idx not exists"
+            return max(
+                int(self.graph_data["original"]["row_idx"].max()) + 1,
+                int(self.graph_data["original"]["col_idx"].max()) + 1,
+            )
+
+    def get_num_rels(self):
+        return int(self.graph_data["original"]["rel_types"].max().item()) + 1
+
+    def get_num_edges(self):
+        return self.graph_data["original"]["rel_types"].numel()
+
+    def to(self, device):
+        for key in self.graph_data:
+            if key == "legacy_metadata_from_dgl":
+                continue
+            for second_key in self.graph_data[key]:
+                self.graph_data[key][second_key] = self.graph_data[key][second_key].to(
+                    device
+                )
+        return self
+
+    def cuda(self):
+        for key in self.graph_data:
+            if key == "legacy_metadata_from_dgl":
+                continue
+            for second_key in self.graph_data[key]:
+                self.graph_data[key][second_key] = self.graph_data[key][
+                    second_key
+                ].cuda()
+        return self
+
+    def cpu(self):
+        for key in self.graph_data:
+            if key == "legacy_metadata_from_dgl":
+                continue
+            for second_key in self.graph_data[key]:
+                self.graph_data[key][second_key] = self.graph_data[key][
+                    second_key
+                ].cpu()
+        return self
+
     def __setitem__(self, key, value):
         self.graph_data[key] = value
 
@@ -35,11 +83,14 @@ class MyDGLGraph:
     def __contains__(self, key):
         return key in self.graph_data
 
-    def get_sparse_format(self):
-        if "row_ptr" in self.graph_data["original"]:
+    def get_sparse_format(self, transpose_flag=False):
+        original_or_transpose = "transposed" if transpose_flag else "original"
+        if "row_ptr" in self.graph_data[original_or_transpose]:
             return "csr"
-        elif "row_idx" in self.graph_data["original"]:
-            assert "col_idx" in self.graph_data["original"], "col_idx not exists"
+        elif "row_idx" in self.graph_data[original_or_transpose]:
+            assert (
+                "col_idx" in self.graph_data[original_or_transpose]
+            ), "col_idx not exists"
             return "coo"
         else:
             raise ValueError("unknown sparse format")
@@ -86,9 +137,14 @@ class MyDGLGraph:
             self.graph_data["transposed"]["eids"] = transposed_eids
         return self
 
-    def generate_separate_csr_adj_for_each_etype(self, transposed_flag):
+    def generate_separate_csr_adj_for_each_etype(
+        self, transposed_flag, sorted_rel_eid_flag=True
+    ):
         # store rel_ptr, row_ptr, col_idx, eids in self.graph_data["separate"]["csr"]["original"] and self.graph_data["separate"]["csr"]["transposed"]
-
+        if sorted_rel_eid_flag:
+            assert (
+                0
+            ), "WARNING: sorted_rel_eid_flag is True, which is not supported for separate_csr_adj generation."
         # first make sure graph data, as torch tensors, are on cpu
         self = self.cpu()
 
@@ -105,6 +161,7 @@ class MyDGLGraph:
                 "WARNING : in generating_separate csr already exists, will be overwritten"
             )
 
+        # make sure the corresponding key in graph data is assigned an empty container
         if transposed_flag:
             if "transposed" not in self.graph_data["separate"]["csr"]:
                 self.graph_data["separate"]["csr"]["transposed"] = dict()
@@ -112,10 +169,12 @@ class MyDGLGraph:
                 print(
                     "WARNING: in generating_separate transposed already exists, will be overwritten"
                 )
-            # then call C++ wrapper function to do the job
-            raise NotImplementedError(
-                "convertion to transposed separate csr not implemented"
-            )
+            if "transposed" not in self.graph_data:
+                self.transpose()
+            assert self.get_sparse_format(
+                transpose_flag=False
+            ) == self.get_sparse_format(transpose_flag=True)
+
         else:
             if "original" not in self.graph_data["separate"]["csr"]:
                 self.graph_data["separate"]["csr"]["original"] = dict()
@@ -123,45 +182,52 @@ class MyDGLGraph:
                 print(
                     "WARNING : in generating_separate original already exists, will be overwritten"
                 )
-            # then call C++ wrapper function to do the job
-            if self.get_sparse_format() == "csr":
-                (
-                    separate_csr_rel_ptr,
-                    separate_csr_row_ptr,
-                    separate_csr_col_idx,
-                    separate_csr_eids,
-                ) = K.convert_integrated_csr_to_separate_csr(
-                    self.graph_data["original"]["row_ptr"],
-                    self.graph_data["original"]["col_idx"],
-                    self.graph_data["original"]["rel_types"],
-                    self.graph_data["original"]["eids"],
-                )
-            elif self.get_sparse_format() == "coo":
-                (
-                    separate_csr_rel_ptr,
-                    separate_csr_row_ptr,
-                    separate_csr_col_idx,
-                    separate_csr_eids,
-                ) = K.convert_integrated_coo_to_separate_csr(
-                    self.graph_data["original"]["row_idx"],
-                    self.graph_data["original"]["col_idx"],
-                    self.graph_data["original"]["rel_types"],
-                    self.graph_data["original"]["eids"],
-                )
-            else:
-                raise ValueError("unknown sparse format")
-            self.graph_data["separate"]["csr"]["original"][
-                "rel_ptr"
-            ] = separate_csr_rel_ptr
-            self.graph_data["separate"]["csr"]["original"][
-                "row_ptr"
-            ] = separate_csr_row_ptr
-            self.graph_data["separate"]["csr"]["original"][
-                "col_idx"
-            ] = separate_csr_col_idx
-            self.graph_data["separate"]["csr"]["original"]["eids"] = separate_csr_eids
 
-    def generate_separate_coo_adj_for_each_etype(self, transposed_flag):
+        original_or_transposed = "transposed" if transposed_flag else "original"
+
+        # then call C++ wrapper function to do the job
+        if self.get_sparse_format() == "csr":
+            (
+                separate_csr_rel_ptr,
+                separate_csr_row_ptr,
+                separate_csr_col_idx,
+                separate_csr_eids,
+            ) = K.convert_integrated_csr_to_separate_csr(
+                self.graph_data[original_or_transposed]["row_ptr"],
+                self.graph_data[original_or_transposed]["col_idx"],
+                self.graph_data[original_or_transposed]["rel_types"],
+                self.graph_data[original_or_transposed]["eids"],
+            )
+        elif self.get_sparse_format() == "coo":
+            (
+                separate_csr_rel_ptr,
+                separate_csr_row_ptr,
+                separate_csr_col_idx,
+                separate_csr_eids,
+            ) = K.convert_integrated_coo_to_separate_csr(
+                self.graph_data[original_or_transposed]["row_idx"],
+                self.graph_data[original_or_transposed]["col_idx"],
+                self.graph_data[original_or_transposed]["rel_types"],
+                self.graph_data[original_or_transposed]["eids"],
+            )
+        else:
+            raise ValueError("unknown sparse format")
+        self.graph_data["separate"]["csr"][original_or_transposed][
+            "rel_ptr"
+        ] = separate_csr_rel_ptr
+        self.graph_data["separate"]["csr"][original_or_transposed][
+            "row_ptr"
+        ] = separate_csr_row_ptr
+        self.graph_data["separate"]["csr"][original_or_transposed][
+            "col_idx"
+        ] = separate_csr_col_idx
+        self.graph_data["separate"]["csr"][original_or_transposed][
+            "eids"
+        ] = separate_csr_eids
+
+    def generate_separate_coo_adj_for_each_etype(
+        self, transposed_flag, rel_eid_sorted_flag=True
+    ):
         # store rel_ptr, row_idx, col_idx, eids in self.graph_data["separate"]["coo"]["original"] and self.graph_data["separate"]["coo"]["transposed"]
         # first make sure graph data, as torch tensors, are on cpu
         self = self.cpu()
@@ -186,10 +252,12 @@ class MyDGLGraph:
                 print(
                     "WARNING: in generating_separate transposed already exists, will be overwritten"
                 )
-            # then call C++ wrapper function to do the job
-            raise NotImplementedError(
-                "convertion to transposed separate coo not implemented"
-            )
+            if "transposed" not in self.graph_data:
+                self.transpose()
+            assert self.get_sparse_format(
+                transpose_flag=False
+            ) == self.get_sparse_format(transpose_flag=True)
+
         else:
             if "original" not in self.graph_data["separate"]["coo"]:
                 self.graph_data["separate"]["coo"]["original"] = dict()
@@ -197,51 +265,121 @@ class MyDGLGraph:
                 print(
                     "WARNING : in generating_separate original already exists, will be overwritten"
                 )
-            # then call C++ wrapper function to do the job
-            if self.get_sparse_format() == "csr":
-                (
-                    separate_coo_rel_ptr,
-                    separate_coo_row_idx,
-                    separate_coo_col_idx,
-                    separate_coo_eids,
-                ) = K.convert_integrated_csr_to_separate_coo(
-                    self.graph_data["original"]["row_ptr"],
-                    self.graph_data["original"]["col_idx"],
-                    self.graph_data["original"]["rel_types"],
-                    self.graph_data["original"]["eids"],
-                )
-            elif self.get_sparse_format() == "coo":
-                (
-                    separate_coo_rel_ptr,
-                    separate_coo_row_idx,
-                    separate_coo_col_idx,
-                    separate_coo_eids,
-                ) = K.convert_integrated_coo_to_separate_coo(
-                    self.graph_data["original"]["row_idx"],
-                    self.graph_data["original"]["col_idx"],
-                    self.graph_data["original"]["rel_types"],
-                    self.graph_data["original"]["eids"],
-                )
-            else:
-                raise ValueError("unknown sparse format")
-            self.graph_data["separate"]["coo"]["original"][
-                "rel_ptr"
-            ] = separate_coo_rel_ptr
-            self.graph_data["separate"]["coo"]["original"][
-                "row_idx"
-            ] = separate_coo_row_idx
-            self.graph_data["separate"]["coo"]["original"][
-                "col_idx"
-            ] = separate_coo_col_idx
-            self.graph_data["separate"]["coo"]["original"]["eids"] = separate_coo_eids
 
-    def generate_separate_adj_for_each_etype(self, separate_sparse_format):
+        original_or_transposed = "transposed" if transposed_flag else "original"
+        # then call C++ wrapper function to do the job
+        if self.get_sparse_format() == "csr":
+            (
+                separate_coo_rel_ptr,
+                separate_coo_row_idx,
+                separate_coo_col_idx,
+                separate_coo_eids,
+            ) = K.convert_integrated_csr_to_separate_coo(
+                self.graph_data[original_or_transposed]["row_ptr"],
+                self.graph_data[original_or_transposed]["col_idx"],
+                self.graph_data[original_or_transposed]["rel_types"],
+                self.graph_data[original_or_transposed]["eids"],
+            )
+        elif self.get_sparse_format() == "coo":
+            (
+                separate_coo_rel_ptr,
+                separate_coo_row_idx,
+                separate_coo_col_idx,
+                separate_coo_eids,
+            ) = K.convert_integrated_coo_to_separate_coo(
+                self.graph_data[original_or_transposed]["row_idx"],
+                self.graph_data[original_or_transposed]["col_idx"],
+                self.graph_data[original_or_transposed]["rel_types"],
+                self.graph_data[original_or_transposed]["eids"],
+            )
+        else:
+            raise ValueError("unknown sparse format")
+
+        if rel_eid_sorted_flag:
+            # sort the coo by rel_type and eid
+            (
+                separate_coo_rel_ptr,
+                separate_coo_row_idx,
+                separate_coo_col_idx,
+                separate_coo_eids,
+            ) = utils.sort_coo_by_etype_eids_torch_tensors(
+                separate_coo_rel_ptr,
+                separate_coo_row_idx,
+                separate_coo_col_idx,
+                separate_coo_eids,
+            )
+        self.graph_data["separate"]["coo"][original_or_transposed][
+            "rel_ptr"
+        ] = separate_coo_rel_ptr
+        self.graph_data["separate"]["coo"][original_or_transposed][
+            "row_idx"
+        ] = separate_coo_row_idx
+        self.graph_data["separate"]["coo"][original_or_transposed][
+            "col_idx"
+        ] = separate_coo_col_idx
+        self.graph_data["separate"]["coo"][original_or_transposed][
+            "eids"
+        ] = separate_coo_eids
+
+    def generate_separate_adj_for_each_etype(
+        self, separate_sparse_format, transposed_flag
+    ):
         if separate_sparse_format == "csr":
-            self.generate_separate_csr_adj_for_each_etype()
+            self.generate_separate_csr_adj_for_each_etype(transposed_flag)
         elif separate_sparse_format == "coo":
-            self.generate_separate_coo_adj_for_each_etype()
+            self.generate_separate_coo_adj_for_each_etype(transposed_flag)
         else:
             raise NotImplementedError()
+
+    def get_separate_node_idx_for_each_etype(self):
+        if (
+            "separate" not in self.graph_data
+            or "coo" not in self.graph_data["separate"]
+        ):
+            raise ValueError(
+                "separate coo graph data not found, please generate it first"
+            )
+        result_node_idx = torch.empty([0], dtype=torch.int64)
+        result_rel_ptr = torch.empty([0], dtype=torch.int64)
+        for idx_relation in range(self.get_num_rels()):
+            node_idx_for_curr_relation = torch.unique(
+                torch.concat(
+                    [
+                        self.graph_data["separate"]["coo"]["original"]["row_idx"][
+                            self.graph_data["separate"]["coo"]["original"]["row_ptr"][
+                                idx_relation
+                            ] : self.graph_data["separate"]["coo"]["original"][
+                                "row_ptr"
+                            ][
+                                idx_relation + 1
+                            ]
+                        ],
+                        self.graph_data["separate"]["coo"]["original"]["col_idx"][
+                            self.graph_data["separate"]["coo"]["original"]["row_ptr"][
+                                idx_relation
+                            ] : self.graph_data["separate"]["coo"]["original"][
+                                "row_ptr"
+                            ][
+                                idx_relation + 1
+                            ]
+                        ],
+                    ]
+                )
+            )
+
+            result_node_idx = torch.cat([result_node_idx, node_idx_for_curr_relation])
+            result_rel_ptr = torch.cat(
+                [
+                    result_rel_ptr,
+                    (result_rel_ptr[-1] + node_idx_for_curr_relation.shape[0]),
+                ]
+            )
+
+        if "unique_node_idx" in self.graph_data["separate"]:
+            print("WARNING: unique_node_idx already exists, will be overwritten")
+        self.graph_data["separate"]["unique_node_idx"] = dict()
+        self.graph_data["separate"]["unique_node_idx"]["node_idx"] = result_node_idx
+        self.graph_data["separate"]["unique_node_idx"]["rel_ptr"] = result_rel_ptr
 
     def import_metadata_from_dgl_heterograph(self, dglgraph):
         assert (
@@ -270,50 +408,3 @@ class MyDGLGraph:
         self["original"]["node_type_offsets"] = self["original"][
             "node_type_offsets"
         ].to(self["original"]["eids"].device)
-
-    def to(self, device):
-        for key in self.graph_data:
-            if key == "legacy_metadata_from_dgl":
-                continue
-            for second_key in self.graph_data[key]:
-                self.graph_data[key][second_key] = self.graph_data[key][second_key].to(
-                    device
-                )
-        return self
-
-    def cuda(self):
-        for key in self.graph_data:
-            if key == "legacy_metadata_from_dgl":
-                continue
-            for second_key in self.graph_data[key]:
-                self.graph_data[key][second_key] = self.graph_data[key][
-                    second_key
-                ].cuda()
-        return self
-
-    def cpu(self):
-        for key in self.graph_data:
-            if key == "legacy_metadata_from_dgl":
-                continue
-            for second_key in self.graph_data[key]:
-                self.graph_data[key][second_key] = self.graph_data[key][
-                    second_key
-                ].cpu()
-        return self
-
-    def get_num_nodes(self):
-        if "row_ptr" in self.graph_data["original"]:
-            return self.graph_data["original"]["row_ptr"].numel() - 1
-        else:
-            assert "row_idx" in self.graph_data["original"], "row_idx not exists"
-            assert "col_idx" in self.graph_data["original"], "col_idx not exists"
-            return max(
-                int(self.graph_data["original"]["row_idx"].max()) + 1,
-                int(self.graph_data["original"]["col_idx"].max()) + 1,
-            )
-
-    def get_num_rels(self):
-        return int(self.graph_data["original"]["rel_types"].max().item()) + 1
-
-    def get_num_edges(self):
-        return self.graph_data["original"]["rel_types"].numel()

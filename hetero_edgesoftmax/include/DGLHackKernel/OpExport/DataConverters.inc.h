@@ -1,6 +1,9 @@
 #pragma once
-#include "DGLHackKernel/DGLHackKernel.h"
-#include "hetero_edgesoftmax.h"
+#include <c10/cuda/CUDAException.h>
+#include <c10/cuda/CUDAStream.h>
+#include <torch/extension.h>
+#include <torch/library.h>
+#include "MyHyb/MyHyb.h"
 
 std::vector<at::Tensor> convert_integrated_coo_to_separate_coo(
     at::Tensor& integrated_row_idx, at::Tensor& integrated_col_idx,

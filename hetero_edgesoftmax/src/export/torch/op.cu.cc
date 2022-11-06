@@ -128,4 +128,14 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("rgat_relational_matmul", RGATRelationalMatMul_wrapper_separatecoo);
   m.def("rgat_relational_matmul_backward",
         BackwardRGATRelationalMatMul_wrapper_separatecoo);
+  m.def(
+      "backward_rgat_relational_fused_gat_compact_as_of_node_csr",
+      BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr);
+  m.def("rgat_relational_fused_gat_compact_as_of_node_csr",
+        RGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr);
+  m.def(
+      "backward_rgat_relational_matmul_compact_as_of_node",
+      BackwardRGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices);
+  m.def("rgat_relational_matmul_compact_as_of_node",
+        RGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices);
 }
