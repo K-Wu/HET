@@ -55,6 +55,7 @@ __device__ __forceinline__ void RgcnLayer0KernelNodePerWarp(
   }
 }
 
+// from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 template <typename Idx, typename DType>
 __global__ void RgcnLayer0KernelImpl(Idx* ranges, Idx* src_ids, Idx* eids,
                                      Idx* types, DType* weight, DType* norm,
@@ -145,6 +146,7 @@ __device__ __forceinline__ void RgcnLayer1KernelNodePerBlock(
   atomicAdd(ret + node_idx * feat_len_x + th, agg_val);
 }
 
+// from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 // bgs:
 template <typename Idx, typename DType>
 __global__ void RgcnLayer1KernelImpl(const Idx* ranges, const Idx* src_ids,

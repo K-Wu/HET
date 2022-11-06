@@ -3,6 +3,7 @@
 #include "DGLHackKernel/FusedGAT.cu.h"
 #include "DGLHackKernel/FusedGATBackward.cu.h"
 
+// from seastar dgl-hack
 template </*int XPU, */ typename Idx, typename DType>
 void FusedGatKernelImpl(
     MyHeteroSeparateCSR<Idx, thrust::device_allocator<Idx>>
@@ -135,6 +136,7 @@ void FusedGatKernelImpl(
   // incsr.num_rows);
 }
 
+// from seastar dgl-hack
 template </*int XPU, */ typename Idx, typename DType, bool FLAG_KERNEL_FUSED>
 void BackwardFusedGatKernelImpl(
     // create CSR in driver code

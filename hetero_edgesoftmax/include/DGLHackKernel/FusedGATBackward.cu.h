@@ -107,6 +107,16 @@ __global__ void fusedGatBackwardGradElErFeatSrcFused(
   }
 }
 
+// from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
+/*** Implement the logic of computing grad_feat_src.
+    feat_src is of dimension: N * num_heads * num_hidden
+    exp is of dimension: M * num_heads
+    sum is of dimension: N * num_heads
+    * means element-wise mutliplication
+    In forward computation: out = sum([feat_src[e.src] * exp[e.eid]/sum[curnode]
+for e in curnode.inedges]), In backward computation: grad_feat_src[curnode] =
+sum([grad_out[e.dst] * exp[e.eid]/sum[e.dst] for e in curnode.outedges])
+***/
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
 __global__ void fusedGatBackwardGradFeatSrc(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* row_offsets,
@@ -147,6 +157,29 @@ __global__ void fusedGatBackwardGradFeatSrc(
   }
 }
 
+// from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
+/***
+Implement the logic of computing grad_el.
+Dimension of grad_out: N * num_heads * num_hidden
+             grad_el:  N * num_heads
+             grad_er:  N * num_heads
+             el:       N * num_heads
+             er:       N * num_heads
+             exp:      M * num_heads
+             sum:      N * num_heads
+             feat_src: N * num_heads * num_hidden
+
+In forward computation: gdata.exp = [exp(leaky_relu(e.el[src] + e.el[dst])) for
+e in curnode.inedges] gdata.sum[curnode] = sum([exp[e.eid] for e in
+curnode.inedges]) out[curnode] = sum([gdata.exp[e.eid] / gdata.sum[curnode] *
+gdata.feat_src[e.src] for e in curnode.inedges]) In backward computation:
+                        grad_er = sum([grad_exp[e.eid] *
+exp(leaky_relu(gdata.el[src]+ gdata.er[dst])) * grad_leaky_relu(gdata.el[src] +
+gdata.er[dst]) for e in curnode.inedges]) grad_el = sum([grad_exp[e.eid] *
+leaky_relu(gdata.el[src] + gdata.er[dst]) * grad_leaky_relu(gdata.el[src] +
+gdata.er[dst]) for e in curnode.outedges]) grad_exp = [grad_out[e.dst] *
+(feat_src[e.src] - out[e.dst])/sum[e.dst] for e in outedges]
+***/
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
 __global__ void fusedGatBackwardGradElEr(BackwardGatFusedData<Idx, DType> gdata,
                                          const Idx* row_offsets,

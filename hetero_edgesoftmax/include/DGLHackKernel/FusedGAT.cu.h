@@ -25,6 +25,7 @@ __device__ DType gatLeakyReluExp(DType val, DType slope) {
   return val > 0 ? exp(val) : exp(slope * val);
 }
 
+// from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 // NB: when CompactAsOfNodeFlag is false, gdata.el, gdata.er, gdata.feat_src are
 // edge-wise data instead of node-wise.
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
@@ -70,6 +71,7 @@ __global__ void gatSumProdZipDivKernel(GatFusedData<Idx, DType> gdata,
   }
 }
 
+// from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 // NB: when CompactAsOfNodeFlag is false, gdata.el, gdata.er, gdata.feat_src are
 // edge-wise data instead of node-wise.
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
