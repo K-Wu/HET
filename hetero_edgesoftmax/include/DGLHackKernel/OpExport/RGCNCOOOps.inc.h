@@ -26,18 +26,17 @@ void _RgcnLayerImpl_wrapper_integratedcoo(
     assert(nthrs % 32 == 0);
     int nblks =
         (num_edges + nthrs / 32 - 1) / (nthrs / 32);  // 32 is the warp size
-    RgcnLayer1COOKernelImpl<Idx, DType>
-        <<<nblks, nthrs, 0, stream /*, 0, thr_entry->stream*/>>>(
-            row_idx_data, ids_data, eids_data, typeids_data, hidden_data,
-            weight_data, norm_data, ret_data, num_edges, feat_len_y, feat_len_x,
-            ntypes);
+    RgcnLayer1COOKernelImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
+        row_idx_data, ids_data, eids_data, typeids_data, hidden_data,
+        weight_data, norm_data, ret_data, num_edges, feat_len_y, feat_len_x,
+        ntypes);
   } else {
     Idx ntypes = weight.size(1);
     Idx feat_len = weight.size(2);
     int nthrs = feat_len;
     assert(0 && "not implemented");
     // RgcnLayer0KernelImpl<Idx, DType>
-    //    <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+    //    <<<nblks, nthrs >>>(
     //        range_data, ids_data, eids_data, typeids_data, weight_data,
     //        norm_data, ret_data, num_nodes, feat_len, ntypes);
   }
@@ -108,8 +107,7 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcoo(
     assert(nthrs % 32 == 0);
     int nblks =
         (num_edges + nthrs / 32 - 1) / (nthrs / 32);  // 32 is the warp size
-    RgcnLayer1BackwardCOOKernelImpl<<<nblks, nthrs, 0,
-                                      stream /*, 0, thr_entry->stream*/>>>(
+    RgcnLayer1BackwardCOOKernelImpl<<<nblks, nthrs, 0, stream>>>(
         row_idx_data, ids_data, eids_data, typeids_data, hidden_data,
         weight_data, norm_data, grad_out_data, grad_hidden_data,
         grad_weight_data, num_edges, feat_len_y, feat_len_x, ntypes);
@@ -118,8 +116,7 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcoo(
     Idx feat_len = ret.size(2);
     int nthrs = feat_len;
     assert(0 && "not implemented");
-    // RgcnLayer0BackwardKernelImpl<<<nblks, nthrs /*, 0,
-    // thr_entry->stream*/>>>(
+    // RgcnLayer0BackwardKernelImpl<<<nblks, nthrs>>>(
     //    range_data, ids_data, eids_data, typeids_data, grad_out_data,
     //    norm_data, ret_data, num_nodes, feat_len, ntypes);
   }

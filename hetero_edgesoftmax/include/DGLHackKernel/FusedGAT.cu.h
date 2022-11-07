@@ -28,11 +28,13 @@ __device__ DType gatLeakyReluExp(DType val, DType slope) {
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 // NB: when CompactAsOfNodeFlag is false, gdata.el, gdata.er, gdata.feat_src are
 // edge-wise data instead of node-wise.
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
-__global__ void gatSumProdZipDivKernel(GatFusedData<Idx, DType> gdata,
-                                       const Idx* row_offsets,
-                                       const Idx* column_indices,
-                                       int64_t num_rows) {
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag>
+__global__ void gatSumProdZipDivKernel(
+    GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices) {
   Idx dst_vid = blockIdx.y;
   Idx stride_vid = gridDim.y;
   Idx stride_head = blockDim.x * gridDim.x;
@@ -50,19 +52,37 @@ __global__ void gatSumProdZipDivKernel(GatFusedData<Idx, DType> gdata,
           Idx src_vid = column_indices[eidx];
           Idx feat_src_entry_id;
           Idx edge_id = gdata.eids[eidx];
-          if constexpr (CompactAsOfNodeFlag) {
-            feat_src_entry_id = src_vid;
+          if constexpr (RelationalFlag) {
+            Idx sum_idx;
+            Idx etype = etypes[eidx];
+            if constexpr (CompactAsOfNodeFlag) {
+              feat_src_entry_id = src_vid;
+              sum_idx = find_relational_compact_as_of_node_index(
+                  etype, dst_vid, unique_srcs_and_dests_node_indices,
+                  unique_srcs_and_dests_rel_ptr);
+            } else {
+              // NB: This is the case where we have the data stored in
+              // (relation, node) but do not compress the (relation, node)
+              // matrix. It could be a case in subgraph where compressing along
+              // the node dimension may not be worth it.
+              CONSTEXPR_CLAUSE_NONREACHABLE("not implemented");
+            }
+            s += (gdata.exp[edge_id * e_xlen + head_idx] /
+                  gdata.sum[sum_idx * e_xlen + head_idx] *
+                  gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
+                                 head_idx * hidden_xlen + feat_idx]);
           } else {
             feat_src_entry_id = edge_id;
+            s += gdata.exp[edge_id * e_xlen + head_idx] /
+                 gdata.sum[dst_vid * e_xlen + head_idx] *
+                 gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
+                                head_idx * hidden_xlen + feat_idx];
           }
-
-          s += gdata.exp[edge_id * e_xlen + head_idx] /
-               gdata.sum[dst_vid * e_xlen + head_idx] *
-               gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
-                              head_idx * hidden_xlen + feat_idx];
         }
+
         gdata.ret[dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen +
                   feat_idx] = s;
+
         feat_idx += blockDim.y;
       }
       head_idx += stride_head;
@@ -74,11 +94,13 @@ __global__ void gatSumProdZipDivKernel(GatFusedData<Idx, DType> gdata,
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 // NB: when CompactAsOfNodeFlag is false, gdata.el, gdata.er, gdata.feat_src are
 // edge-wise data instead of node-wise.
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
-__global__ void gatExpLeakyReluSumKernel(GatFusedData<Idx, DType> gdata,
-                                         const Idx* row_offsets,
-                                         const Idx* column_indices,
-                                         int64_t num_rows) {
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag>
+__global__ void gatExpLeakyReluSumKernel(
+    GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
+    const Idx* column_indices, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices) {
   // extern __shared__ DType er[];
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
@@ -104,11 +126,32 @@ __global__ void gatExpLeakyReluSumKernel(GatFusedData<Idx, DType> gdata,
         Idx src_id = *(column_indices + eidx);
         Idx feat_off_src;
         Idx edge_id = gdata.eids[eidx];
+        Idx dst_vid_relational;
         if constexpr (CompactAsOfNodeFlag) {
-          feat_off_src = src_id * e_xlen + feat_idx;
+          if constexpr (RelationalNodeFlag) {
+            Idx etype = gdata.etypes[eidx];
+            Idx src_vid_temp = find_relational_compact_as_of_node_index(
+                etype, src_id, unique_srcs_and_dests_node_indices,
+                unique_srcs_and_dests_rel_ptr);
+            dst_vid_relational = find_relational_compact_as_of_node_index(
+                etype, dst_vid, unique_srcs_and_dests_node_indices,
+                unique_srcs_and_dests_rel_ptr);
+            feat_off_src = src_vid_temp * e_xlen + feat_idx;
+            feat_off_dst = dst_vid_relational * e_xlen + feat_idx;
+          } else {
+            feat_off_src = src_id * e_xlen + feat_idx;
+          }
         } else {
-          feat_off_src = edge_id * e_xlen + feat_idx;
-          feat_off_dst = edge_id * e_xlen + feat_idx;
+          if constexpr (RelationalNodeFlag) {
+            // NB: This is the case where we have the data stored in
+            // (relation, node) but do not compress the (relation, node)
+            // matrix. It could be a case in subgraph where compressing along
+            // the node dimension may not be worth it.
+            CONSTEXPR_CLAUSE_NONREACHABLE("not implemented");
+          } else {
+            feat_off_src = edge_id * e_xlen + feat_idx;
+            feat_off_dst = edge_id * e_xlen + feat_idx;
+          }
         }
         // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] + er[threadIdx.x],
         // gdata.leaky_relu_slope);
@@ -116,12 +159,24 @@ __global__ void gatExpLeakyReluSumKernel(GatFusedData<Idx, DType> gdata,
             gatLeakyReluExp(gdata.el[feat_off_src] + gdata.er[feat_off_dst],
                             gdata.leaky_relu_slope);
         gdata.exp[Idx(edge_id * e_xlen) + feat_idx] = tmp;
-
+        if constexpr (RelationalNodeFlag) {
+          atomicAdd(&gdata.sum[Idx(dst_vid_relational * e_xlen) + feat_idx],
+                    tmp);
+        }
         sum += tmp;
       }
-      gdata.sum[Idx(dst_vid * e_xlen) + feat_idx] = sum;
+      if constexpr (!RelationalFlag) {
+        gdata.sum[Idx(dst_vid * e_xlen) + feat_idx] = sum;
+      }
       feat_idx += stride_x;
     }
     dst_vid += stride_y;
   }
 }
+
+template <typename Idx, typename DType>
+constexpr auto relational_gatExpLeakyReluSumKernel_per_edge =
+    gatExpLeakyReluSumKernel<Idx, DType, false, false>;
+template <typename Idx, typename DType>
+constexpr auto relational_gatSumProdZipDivKernel_per_edge =
+    gatSumProdZipDivKernel<Idx, DType, false, false>;

@@ -118,9 +118,9 @@ class HET_RelationalAttLayer(nn.Module):
         dict[str, torch.Tensor]
             New node features for each node type.
         """
-        g = g.local_var()
 
         if g.is_block:
+            raise NotImplementedError("Block is not supported by us yet")
             inputs_src = inputs
             inputs_dst = {k: v[: g.number_of_dst_nodes(k)] for k, v in inputs.items()}
         else:

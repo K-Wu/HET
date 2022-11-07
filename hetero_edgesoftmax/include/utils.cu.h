@@ -107,3 +107,25 @@ __device__ __forceinline__ int binary_search(int num_elements,
   }
   return lo;
 }
+
+// TODO: figure out metadata caching to optimize the performance
+template <typename Idx, typename IdxPtr>
+__device__ __forceinline__ Idx find_relational_compact_as_of_node_index(
+    Idx idx_relation, Idx idx_node, IdxPtr unique_srcs_and_dests_rel_ptr,
+    IdxPtr unique_srcs_and_dests_node_indices) {
+  Idx idx_relation_offset = unique_srcs_and_dests_rel_ptr[idx_relation];
+  Idx idx_relation_plus_one_offset =
+      unique_srcs_and_dests_rel_ptr[idx_relation + 1];
+  return idx_relation_offset +
+         binary_search(idx_relation_plus_one_offset - idx_relation_offset,
+                       &unique_srcs_and_dests_node_indices[idx_relation_offset],
+                       idx_node);
+}
+
+// workaround to assert an if constexpr clause won't be emitted during compile
+// time Use the following: static_assert(dependent_false<T>::value); See
+// https://stackoverflow.com/a/53945555/5555077
+template <class T>
+struct dependent_false : std::false_type {};
+#define CONSTEXPR_CLAUSE_NONREACHABLE(reason) \
+  static_assert(dependent_false<T>::value && reason)

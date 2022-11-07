@@ -230,11 +230,10 @@ void HGTBackPropGradientSMAFusion(
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
-  HGTBackwardGradientSmFirstPartImpl<Idx, DType>
-      <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-          range_data, ids_data, eids_data, typeids_data,
-          grad_sm_first_stage_data, grad_t_neighbour_data, message_data,
-          sigmas_data, num_nodes, num_heads, feat_dim_per_head, n_rel_types);
+  HGTBackwardGradientSmFirstPartImpl<Idx, DType><<<nblks, nthrs>>>(
+      range_data, ids_data, eids_data, typeids_data, grad_sm_first_stage_data,
+      grad_t_neighbour_data, message_data, sigmas_data, num_nodes, num_heads,
+      feat_dim_per_head, n_rel_types);
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t2 =
@@ -247,11 +246,10 @@ void HGTBackPropGradientSMAFusion(
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t1_kernel2 =
       std::chrono::high_resolution_clock::now();
-  HGTBackwardGradientAImpl<Idx, DType>
-      <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-          range_data, ids_data, eids_data, typeids_data, grad_a_data,
-          grad_t_neighbour_data, message_data, sigmas_data, num_nodes,
-          num_heads, feat_dim_per_head, n_rel_types);
+  HGTBackwardGradientAImpl<Idx, DType><<<nblks, nthrs>>>(
+      range_data, ids_data, eids_data, typeids_data, grad_a_data,
+      grad_t_neighbour_data, message_data, sigmas_data, num_nodes, num_heads,
+      feat_dim_per_head, n_rel_types);
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t2_kernel2 =
@@ -267,10 +265,10 @@ void HGTBackPropGradientSMAFusion(
       std::chrono::high_resolution_clock::now();
 
   HGTBackwardFusedGradientSmFirstPartGradientAImpl<Idx, DType>
-      <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-          range_data, ids_data, eids_data, typeids_data, grad_a_data,
-          grad_sm_first_stage_data, grad_t_neighbour_data, message_data,
-          sigmas_data, num_nodes, num_heads, feat_dim_per_head, n_rel_types);
+      <<<nblks, nthrs>>>(range_data, ids_data, eids_data, typeids_data,
+                         grad_a_data, grad_sm_first_stage_data,
+                         grad_t_neighbour_data, message_data, sigmas_data,
+                         num_nodes, num_heads, feat_dim_per_head, n_rel_types);
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t2_kernel3 =

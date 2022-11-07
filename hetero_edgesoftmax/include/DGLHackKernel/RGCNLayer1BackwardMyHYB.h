@@ -138,12 +138,11 @@ void RgcnLayer1BackwardMyHYBImpl(
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   RgcnLayer1BackwardMyHYBKernelImpl<Idx, DType, ELL_logical_width,
-                                    ELL_physical_width>
-      <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-          ellcolidx_data, ellreltype_data, elleids_data, range_data, ids_data,
-          eids_data, typeids_data, hidden_data, weight_data, norm_data,
-          grad_out_data, grad_hidden_data, grad_weight_data, num_nodes,
-          feat_len_y, feat_len_x, ntypes);
+                                    ELL_physical_width><<<nblks, nthrs>>>(
+      ellcolidx_data, ellreltype_data, elleids_data, range_data, ids_data,
+      eids_data, typeids_data, hidden_data, weight_data, norm_data,
+      grad_out_data, grad_hidden_data, grad_weight_data, num_nodes, feat_len_y,
+      feat_len_x, ntypes);
   // cudaDeviceSynchronize();
   // auto t2 = std::chrono::steady_clock::now();
   // LOG(INFO) << "layer 1 backward kernel takes:" <<

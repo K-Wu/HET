@@ -26,10 +26,13 @@ __device__ DType gradLeaky(DType val, DType slope) {
 }
 
 // TODO: test correctness of the fused kernel
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag>
 __global__ void fusedGatBackwardGradElErFeatSrcFused(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* row_offsets,
-    const Idx* column_indices, int64_t num_rows) {
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices) {
   Idx src_vid = blockIdx.y;
   Idx stride_vid = gridDim.y;
   Idx e_xlen = gdata.e_xlen;
@@ -45,24 +48,47 @@ __global__ void fusedGatBackwardGradElErFeatSrcFused(
         DType s = 0.;
         DType sfeatsrc = 0.;
         Idx feat_src_offset;
-        Idx src_node_feat_offset;
-        if constexpr (CompactAsOfNodeFlag) {
+        Idx el_idx;
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          // in this case, feat_src_offset is the same regardless of which
+          // outgoing edge we deal with
           feat_src_offset =
               src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
-          src_node_feat_offset = src_vid * e_xlen + head_idx;
+          el_idx = src_vid * e_xlen + head_idx;
         }
 
         for (Idx e = start_off; e < end_off; ++e) {
           Idx eid = gdata.eids[e];
           Idx dst_vid = column_indices[e];
-          Idx dst_node_feat_offset;
+          Idx er_idx;
+          Idx dst_vid_relational;
           if constexpr (!CompactAsOfNodeFlag) {
+            // in this case, feat_src_offset, er_idx and el_idx are related to
+            // edge id, regardless of the type of the edge
             feat_src_offset =
                 eid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
-            dst_node_feat_offset = eid * e_xlen + head_idx;
-            src_node_feat_offset = eid * e_xlen + head_idx;
-          } else {
-            dst_node_feat_offset = dst_vid * e_xlen + head_idx;
+            er_idx = eid * e_xlen + head_idx;
+            el_idx = eid * e_xlen + head_idx;
+          } else {  // CompactAsOfNodeFlag
+            if (!RelationalFlag) {
+              er_idx = dst_vid * e_xlen + head_idx;
+            } else {
+              // in this case, er_idx (sum's index) is related to (relation,
+              // unique node index) el_idx is related to (relation, unique node
+              // index) feat_src_offset is related to (relation, unique node
+              // index)
+              Idx etype = etypes[e];
+              dst_vid_relational = find_relational_compact_as_of_node_index(
+                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              er_idx = dst_vid_relational * e_xlen + head_idx;
+              Idx src_vid_temp = find_relational_compact_as_of_node_index(
+                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              el_idx = src_vid_temp * e_xlen + head_idx;
+              feat_src_offset = src_vid_temp * gdata.feat_src_xlen +
+                                head_idx * hidden_xlen + feat_idx;
+            }
           }
 
           Idx edge_offset = eid * e_xlen + head_idx;
@@ -72,39 +98,42 @@ __global__ void fusedGatBackwardGradElErFeatSrcFused(
           DType grad_exp =
               gdata.grad_out[dst_out_offset] *
               (gdata.feat_src[feat_src_offset] - gdata.ret[dst_out_offset]) /
-              gdata.sum[dst_node_feat_offset];
-          DType tmp_sum =
-              gdata.el[src_node_feat_offset] + gdata.er[dst_node_feat_offset];
+              gdata.sum[er_idx];
+          DType tmp_sum = gdata.el[el_idx] + gdata.er[er_idx];
           DType tmp2 = grad_exp * gdata.exp[edge_offset] *
                        gradLeaky(tmp_sum, gdata.leaky_relu_slope);
 
-          atomicAdd(gdata.grad_er + dst_node_feat_offset, tmp2);
-          if constexpr (!CompactAsOfNodeFlag) {
-            atomicAdd(gdata.grad_el + src_node_feat_offset, tmp2);
+          atomicAdd(gdata.grad_er + er_idx, tmp2);
+          Idx sum_vid = dst_vid;
+          if (RelationalFlag && CompactAsOfNodeFlag) {
+            sum_vid = dst_vid_relational;
+          }
+          if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
+            atomicAdd(gdata.grad_el + el_idx, tmp2);
             atomicAdd(gdata.grad_feat_src + feat_src_offset,
                       gdata.exp[eid * e_xlen + head_idx] /
-                          gdata.sum[dst_vid * e_xlen + head_idx] *
+                          gdata.sum[sum_vid * e_xlen + head_idx] *
                           gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                          head_idx * hidden_xlen + feat_idx]);
           } else {
             sfeatsrc += gdata.exp[eid * e_xlen + head_idx] /
-                        gdata.sum[dst_vid * e_xlen + head_idx] *
+                        gdata.sum[sum_vid * e_xlen + head_idx] *
                         gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                        head_idx * hidden_xlen + feat_idx];
             s += tmp2;
-          }
-        }
-        if constexpr (CompactAsOfNodeFlag) {
+          }  // if constexpr (!CompactAsOfNodeFlag)
+        }    // for Idx e
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
           gdata.grad_feat_src[feat_src_offset] = sfeatsrc;
-          atomicAdd(gdata.grad_el + src_node_feat_offset, s);
+          atomicAdd(gdata.grad_el + el_idx, s);
         }
 
         feat_idx += blockDim.y;
-      }
+      }  // while feat_idx
       head_idx += stride_head;
-    }
+    }  // while head_idx
     src_vid += stride_vid;
-  }
+  }  // while src_vid
 }
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
@@ -117,13 +146,13 @@ __global__ void fusedGatBackwardGradElErFeatSrcFused(
 for e in curnode.inedges]), In backward computation: grad_feat_src[curnode] =
 sum([grad_out[e.dst] * exp[e.eid]/sum[e.dst] for e in curnode.outedges])
 ***/
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag>
 __global__ void fusedGatBackwardGradFeatSrc(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* row_offsets,
-    const Idx* column_indices, int64_t num_rows) {
-  if constexpr (!CompactAsOfNodeFlag) {
-    assert(0 && "not implemented yet");
-  }
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices) {
   Idx src_vid = blockIdx.y;
   Idx stride_vid = gridDim.y;
   Idx e_xlen = gdata.e_xlen;
@@ -137,18 +166,57 @@ __global__ void fusedGatBackwardGradFeatSrc(
       Idx feat_idx = threadIdx.y;
       while (feat_idx < hidden_xlen) {
         DType s = 0.;
+        Idx feat_src_offset;
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          // in this case, feat_src_offset is the same regardless of which
+          // outgoing edge we deal with
+          feat_src_offset =
+              src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
+        }
         for (Idx e = start_off; e < end_off; ++e) {
           Idx eid = gdata.eids[e];
           Idx dst_id = column_indices[e];
+          Idx dst_vid_relational;
+          if constexpr (!CompactAsOfNodeFlag) {
+            // in this case, feat_src_offset, er_idx and el_idx are related to
+            // edge id, regardless of the type of the edge
+            feat_src_offset =
+                eid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
+          } else {
+            if constexpr (RelationalFlag) {
+              Idx etype = etypes[e];
+              Idx src_vid_temp = find_relational_compact_as_of_node_index(
+                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              feat_src_offset = src_vid_temp * gdata.feat_src_xlen +
+                                head_idx * hidden_xlen + feat_idx;
+              dst_vid_relational = find_relational_compact_as_of_node_index(
+                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+            }
+          }
           // TODO: maybe it's better to cache exp/sum to reduce mem traffic as
           // well as redundant computation?
-          s += gdata.exp[eid * e_xlen + head_idx] /
-               gdata.sum[dst_id * e_xlen + head_idx] *
-               gdata.grad_out[dst_id * gdata.feat_src_xlen +
-                              head_idx * hidden_xlen + feat_idx];
+          Idx sum_vid = dst_vid;
+          if (RelationalFlag && CompactAsOfNodeFlag) {
+            sum_vid = dst_vid_relational;
+          }
+          if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
+            atomicAdd(gdata.grad_feat_src + feat_src_offset,
+                      gdata.exp[eid * e_xlen + head_idx] /
+                          gdata.sum[sum_vid * e_xlen + head_idx] *
+                          gdata.grad_out[dst_vid * gdata.feat_src_xlen +
+                                         head_idx * hidden_xlen + feat_idx]);
+          } else {
+            s += gdata.exp[eid * e_xlen + head_idx] /
+                 gdata.sum[sum_vid * e_xlen + head_idx] *
+                 gdata.grad_out[dst_id * gdata.feat_src_xlen +
+                                head_idx * hidden_xlen + feat_idx];
+          }
         }
-        gdata.grad_feat_src[src_vid * gdata.feat_src_xlen +
-                            head_idx * hidden_xlen + feat_idx] = s;
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          gdata.grad_feat_src[feat_src_offset] = s;
+        }
         feat_idx += blockDim.y;
       }
       head_idx += stride_head;
@@ -180,11 +248,13 @@ leaky_relu(gdata.el[src] + gdata.er[dst]) * grad_leaky_relu(gdata.el[src] +
 gdata.er[dst]) for e in curnode.outedges]) grad_exp = [grad_out[e.dst] *
 (feat_src[e.src] - out[e.dst])/sum[e.dst] for e in outedges]
 ***/
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
-__global__ void fusedGatBackwardGradElEr(BackwardGatFusedData<Idx, DType> gdata,
-                                         const Idx* row_offsets,
-                                         const Idx* column_indices,
-                                         int64_t num_rows) {
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag>
+__global__ void fusedGatBackwardGradElEr(
+    BackwardGatFusedData<Idx, DType> gdata, const Idx* row_offsets,
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices) {
   if constexpr (!CompactAsOfNodeFlag) {
     assert(0 && "not implemented yet");
   }
@@ -201,27 +271,67 @@ __global__ void fusedGatBackwardGradElEr(BackwardGatFusedData<Idx, DType> gdata,
       Idx feat_idx = threadIdx.y;
       while (feat_idx < hidden_xlen) {
         DType s = 0.;
-        Idx feat_src_offset =
-            src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
-        Idx src_node_feat_offset = src_vid * e_xlen + head_idx;
+        Idx feat_src_offset;
+        Idx el_idx;
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          // in this case, feat_src_offset is the same regardless of which
+          // outgoing edge we deal with
+          feat_src_offset =
+              src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
+          el_idx = src_vid * e_xlen + head_idx;
+        }
         for (Idx e = start_off; e < end_off; ++e) {
           Idx edge_offset = gdata.eids[e] * e_xlen + head_idx;
+          Idx eid = gdata.eids[e];
           Idx dst_vid = column_indices[e];
-          Idx dst_node_feat_offset = dst_vid * e_xlen + head_idx;
+          Idx er_idx;
+          Idx dst_vid_relational;
+          if constexpr (!CompactAsOfNodeFlag) {
+            // in this case, feat_src_offset, er_idx and el_idx are related to
+            // edge id, regardless of the type of the edge
+            feat_src_offset =
+                eid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
+            er_idx = eid * e_xlen + head_idx;
+            el_idx = eid * e_xlen + head_idx;
+          } else {  // CompactAsOfNodeFlag
+            if (!RelationalFlag) {
+              er_idx = dst_vid * e_xlen + head_idx;
+            } else {
+              // in this case, er_idx (sum's index) is related to (relation,
+              // unique node index) el_idx is related to (relation, unique node
+              // index) feat_src_offset is related to (relation, unique node
+              // index)
+              Idx etype = etypes[e];
+              dst_vid_relational = find_relational_compact_as_of_node_index(
+                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              er_idx = dst_vid_relational * e_xlen + head_idx;
+              Idx src_vid_temp = find_relational_compact_as_of_node_index(
+                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              el_idx = src_vid_temp * e_xlen + head_idx;
+              feat_src_offset = src_vid_temp * gdata.feat_src_xlen +
+                                head_idx * hidden_xlen + feat_idx;
+            }
+          }
           Idx dst_out_offset =
               dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
           DType grad_exp =
               gdata.grad_out[dst_out_offset] *
               (gdata.feat_src[feat_src_offset] - gdata.ret[dst_out_offset]) /
-              gdata.sum[dst_node_feat_offset];
-          DType tmp_sum =
-              gdata.el[src_node_feat_offset] + gdata.er[dst_node_feat_offset];
+              gdata.sum[er_idx];
+          DType tmp_sum = gdata.el[el_idx] + gdata.er[er_idx];
           DType tmp2 = grad_exp * gdata.exp[edge_offset] *
                        gradLeaky(tmp_sum, gdata.leaky_relu_slope);
           s += tmp2;
-          atomicAdd(gdata.grad_er + dst_node_feat_offset, tmp2);
+          atomicAdd(gdata.grad_er + er_idx, tmp2);
+          if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
+            atomicAdd(gdata.grad_el + el_idx, tmp2);
+          }
         }
-        atomicAdd(gdata.grad_el + src_node_feat_offset, s);
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          atomicAdd(gdata.grad_el + el_idx, s);
+        }
         feat_idx += blockDim.y;
       }
       head_idx += stride_head;
@@ -229,3 +339,13 @@ __global__ void fusedGatBackwardGradElEr(BackwardGatFusedData<Idx, DType> gdata,
     src_vid += stride_vid;
   }
 }
+
+template <typename Idx, typename DType>
+constexpr auto relational_fusedGatBackwardGradElEr_per_edge =
+    fusedGatBackwardGradElEr<Idx, DType, false, false>;
+template <typename Idx, typename DType>
+constexpr auto relational_fusedGatBackwardGradFeatSrc_per_edge =
+    fusedGatBackwardGradFeatSrc<Idx, DType, false, false>;
+template <typename Idx, typename DType>
+constexpr auto relational_fusedGatBackwardGradElErFeatSrcFused_per_edge =
+    fusedGatBackwardGradElErFeatSrcFused<Idx, DType, false, false>;

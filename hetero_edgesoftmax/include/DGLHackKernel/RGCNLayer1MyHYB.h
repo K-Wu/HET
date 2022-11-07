@@ -125,10 +125,10 @@ void RgcnLayer1MyHYBImpl(
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   RgcnLayer1MyHYBKernelImpl<Idx, DType, ELL_logical_width, ELL_physical_width>
-      <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-          ellcolidx_data, ellreltype_data, elleids_data, range_data, ids_data,
-          eids_data, typeids_data, hidden_data, weight_data, norm_data,
-          ret_data, num_nodes, feat_len_y, feat_len_x, ntypes);
+      <<<nblks, nthrs>>>(ellcolidx_data, ellreltype_data, elleids_data,
+                         range_data, ids_data, eids_data, typeids_data,
+                         hidden_data, weight_data, norm_data, ret_data,
+                         num_nodes, feat_len_y, feat_len_x, ntypes);
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t2 =

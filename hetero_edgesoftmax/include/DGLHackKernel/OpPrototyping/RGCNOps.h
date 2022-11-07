@@ -53,19 +53,16 @@ void _RgcnLayerImpl(
     Idx feat_len_y = weight.shape[1];
     Idx feat_len_x = weight.shape[2];
     int nthrs = feat_len_y * feat_len_x;
-    RgcnLayer1KernelImpl<Idx, DType>
-        <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-            range_data, ids_data, eids_data, typeids_data, hidden_data,
-            weight_data, norm_data, ret_data, num_nodes, feat_len_y, feat_len_x,
-            ntypes);
+    RgcnLayer1KernelImpl<Idx, DType><<<nblks, nthrs>>>(
+        range_data, ids_data, eids_data, typeids_data, hidden_data, weight_data,
+        norm_data, ret_data, num_nodes, feat_len_y, feat_len_x, ntypes);
   } else {
     Idx ntypes = weight.shape[1];
     Idx feat_len = weight.shape[2];
     int nthrs = feat_len;
-    RgcnLayer0KernelImpl<Idx, DType>
-        <<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
-            range_data, ids_data, eids_data, typeids_data, weight_data,
-            norm_data, ret_data, num_nodes, feat_len, ntypes);
+    RgcnLayer0KernelImpl<Idx, DType><<<nblks, nthrs>>>(
+        range_data, ids_data, eids_data, typeids_data, weight_data, norm_data,
+        ret_data, num_nodes, feat_len, ntypes);
   }
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());
@@ -166,7 +163,7 @@ void _RgcnLayerBackwardImpl(
     Idx feat_len_y = weight.shape[1];
     Idx feat_len_x = weight.shape[2];
     int nthrs = feat_len_y * feat_len_x;
-    RgcnLayer1BackwardKernelImpl<<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+    RgcnLayer1BackwardKernelImpl<<<nblks, nthrs>>>(
         range_data, ids_data, eids_data, typeids_data, hidden_data, weight_data,
         norm_data, grad_out_data, grad_hidden_data, grad_weight_data, num_nodes,
         feat_len_y, feat_len_x, ntypes);
@@ -174,7 +171,7 @@ void _RgcnLayerBackwardImpl(
     Idx ntypes = weight.shape[1];
     Idx feat_len = ret.shape[2];
     int nthrs = feat_len;
-    RgcnLayer0BackwardKernelImpl<<<nblks, nthrs /*, 0, thr_entry->stream*/>>>(
+    RgcnLayer0BackwardKernelImpl<<<nblks, nthrs>>>(
         range_data, ids_data, eids_data, typeids_data, grad_out_data, norm_data,
         ret_data, num_nodes, feat_len, ntypes);
   }

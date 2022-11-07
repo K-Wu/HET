@@ -3,11 +3,6 @@
 #include "cuda_runtime.h"
 #include "utils.cu.h"
 
-#include <c10/cuda/CUDAException.h>
-#include <c10/cuda/CUDAStream.h>
-#include <torch/extension.h>
-#include <torch/library.h>
-
 template <bool scatter_col_flag, int OUT_DIM>
 __device__ __forceinline__ static float &GetCEle(float *C,
                                                  int *col_scatter_list, int K,

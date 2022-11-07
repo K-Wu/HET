@@ -1,5 +1,4 @@
 #pragma once
-#include "../HGTKernelsBlockConfigurations.h"
 #include "DGLHackKernel/DGLHackKernel.h"
 #include "DGLHackKernel/HGTExperimental.h"
 #include "DGLHackKernel/HGTLayersBackwardKernels.cu.h"
@@ -7,6 +6,7 @@
 #include "DGLHackKernel/HGTPreprocessing.h"
 #include "DGLHackKernel/OpPrototyping/HGTIntermediateData.h"
 #include "EdgeAttention_4/EdgeAttentionCOO.h"
+#include "EdgeAttention_4/mysgemm_KernelsBlockConfigurations.h"
 
 struct HGTLayerWeights {
   MySimpleNDArray<float, thrust::device_allocator<float>> KLinearWeights;
