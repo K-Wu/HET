@@ -5,8 +5,8 @@
 #include "DGLHackKernel/HGTLayersKernels.cu.h"
 #include "DGLHackKernel/HGTPreprocessing.h"
 #include "DGLHackKernel/OpPrototyping/HGTIntermediateData.h"
+#include "DGLHackKernel/mysgemm_KernelsBlockConfigurations.h"
 #include "EdgeAttention_4/EdgeAttentionCOO.h"
-#include "EdgeAttention_4/mysgemm_KernelsBlockConfigurations.h"
 
 struct HGTLayerWeights {
   MySimpleNDArray<float, thrust::device_allocator<float>> KLinearWeights;

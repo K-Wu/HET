@@ -1,5 +1,8 @@
 #pragma once
 #include "DGLHackKernel.h"
+// This file provides logic to generate assignments from relationship to work,
+// for gemm when it is applied to node entries or edge entries. The logic can be
+// used for my_shmem_sgemm.cu.h and mysgemm_functor.cu.h
 
 std::tuple<thrust::device_vector<int>, thrust::device_vector<int>,
            thrust::device_vector<int>>
