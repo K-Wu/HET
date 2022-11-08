@@ -70,7 +70,7 @@ __global__ void fusedGatBackwardGradElErFeatSrcFused(
             er_idx = eid * e_xlen + head_idx;
             el_idx = eid * e_xlen + head_idx;
           } else {  // CompactAsOfNodeFlag
-            if (!RelationalFlag) {
+            if constexpr (!RelationalFlag) {
               er_idx = dst_vid * e_xlen + head_idx;
             } else {
               // in this case, er_idx (sum's index) is related to (relation,
@@ -105,7 +105,7 @@ __global__ void fusedGatBackwardGradElErFeatSrcFused(
 
           atomicAdd(gdata.grad_er + er_idx, tmp2);
           Idx sum_vid = dst_vid;
-          if (RelationalFlag && CompactAsOfNodeFlag) {
+          if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
             sum_vid = dst_vid_relational;
           }
           if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
@@ -175,7 +175,7 @@ __global__ void fusedGatBackwardGradFeatSrc(
         }
         for (Idx e = start_off; e < end_off; ++e) {
           Idx eid = gdata.eids[e];
-          Idx dst_id = column_indices[e];
+          Idx dst_vid = column_indices[e];
           Idx dst_vid_relational;
           if constexpr (!CompactAsOfNodeFlag) {
             // in this case, feat_src_offset, er_idx and el_idx are related to
@@ -198,7 +198,7 @@ __global__ void fusedGatBackwardGradFeatSrc(
           // TODO: maybe it's better to cache exp/sum to reduce mem traffic as
           // well as redundant computation?
           Idx sum_vid = dst_vid;
-          if (RelationalFlag && CompactAsOfNodeFlag) {
+          if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
             sum_vid = dst_vid_relational;
           }
           if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
@@ -210,7 +210,7 @@ __global__ void fusedGatBackwardGradFeatSrc(
           } else {
             s += gdata.exp[eid * e_xlen + head_idx] /
                  gdata.sum[sum_vid * e_xlen + head_idx] *
-                 gdata.grad_out[dst_id * gdata.feat_src_xlen +
+                 gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx];
           }
         }
@@ -294,7 +294,7 @@ __global__ void fusedGatBackwardGradElEr(
             er_idx = eid * e_xlen + head_idx;
             el_idx = eid * e_xlen + head_idx;
           } else {  // CompactAsOfNodeFlag
-            if (!RelationalFlag) {
+            if constexpr (!RelationalFlag) {
               er_idx = dst_vid * e_xlen + head_idx;
             } else {
               // in this case, er_idx (sum's index) is related to (relation,

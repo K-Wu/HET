@@ -55,9 +55,9 @@ __device__ __forceinline__ static float GetBEle(
   }
 }
 
-template <bool transpose_flag>
+template <bool transpose_flag, int OUT_DIM>
 __device__ __forceinline__ static float GetAEle(float *A, int idx_head, int row,
-                                                int col) {
+                                                int col, int K) {
   if constexpr (transpose_flag) {
     return A[(idx_head * K) + (col) + (row)*OUT_DIM];
   } else {

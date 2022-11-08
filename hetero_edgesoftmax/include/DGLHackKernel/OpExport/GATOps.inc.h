@@ -90,7 +90,7 @@ void _FusedGatKernelImpl_wrapper_integratedcsr(at::Tensor& incsr_row_ptr,
   //       std::chrono::high_resolution_clock::now();
   gatExpLeakyReluSumKernel<Idx, DType, true, false>
       <<<nblks, nthrs, 0, stream>>>(gdata, incsr_row_ptr.data_ptr<Idx>(),
-                                    incsr_col_idx.data_ptr<Idx>(),
+                                    incsr_col_idx.data_ptr<Idx>(), nullptr,
                                     incsr_num_rows, nullptr, nullptr);
 
   // cuda_err_chk(cudaPeekAtLastError());

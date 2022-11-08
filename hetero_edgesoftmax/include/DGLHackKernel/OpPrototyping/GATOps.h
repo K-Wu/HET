@@ -102,7 +102,7 @@ void FusedGatKernelImpl(
   gatSumProdZipDivKernel<Idx, DType, true, false><<<nblks2, nthrs2>>>(
       gdata, static_cast<Idx*>(thrust::raw_pointer_cast(incsr.row_ptr.data())),
       static_cast<Idx*>(thrust::raw_pointer_cast(incsr.col_idx.data())),
-      incsr.num_rows, nullptr, nullptr);
+      nullptr, incsr.num_rows, nullptr, nullptr);
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t2 =
@@ -203,7 +203,7 @@ void BackwardFusedGatKernelImpl(
         gdata,
         static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
         static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
-        outcsr.num_rows, nullptr, nullptr);
+        nullptr, outcsr.num_rows, nullptr, nullptr);
     // const dim3 nthrs3(nthrs_y, nthrs_x);
     // fusedGatBackwardGradElEr4<<<nblks, nthrs3, 0, thr_entry->stream>>>(gdata,
     // ocsr);
@@ -211,14 +211,14 @@ void BackwardFusedGatKernelImpl(
         gdata,
         static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
         static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
-        outcsr.num_rows, nullptr, nullptr);
+        nullptr, outcsr.num_rows, nullptr, nullptr);
   } else {
     fusedGatBackwardGradElErFeatSrcFused<Idx, DType, true, false>
         <<<nblks, nthrs>>>(
             gdata,
             static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
             static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
-            outcsr.num_rows, nullptr, nullptr);
+            nullptr, outcsr.num_rows, nullptr, nullptr);
   }
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());

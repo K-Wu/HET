@@ -20,7 +20,7 @@ void _RelationalFusedGATKernel_wrapper_integratedcsr(
   const Idx MAX_NBLKS = 65535;
   const Idx MAX_NTHRS = 1024;
   GatFusedData<Idx, DType> gdata;
-
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   int64_t el_xlen = ComputeXLength(el);
   int64_t feat_src_xlen = ComputeXLength(feat_src);
   int64_t ret_len = ComputeXLength(ret);
@@ -51,7 +51,8 @@ void _RelationalFusedGATKernel_wrapper_integratedcsr(
   gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, true>
       <<<nblks, nthrs, 0, stream>>>(
           gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
-          incsr_num_rows, unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+          nullptr, incsr_num_rows,
+          unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
           unique_srcs_and_dests_node_indices.data_ptr<Idx>());
 
   nthrs_x = FindNumThreads(el_xlen, 64);
@@ -64,7 +65,7 @@ void _RelationalFusedGATKernel_wrapper_integratedcsr(
   gatSumProdZipDivKernel<Idx, DType, CompactAsOfNodeFlag, true>
       <<<nblks2, nthrs2, 0, stream>>>(
           gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
-          incsr_rel_types.data_ptr<Idx>(), incsr_num_rows,
+          incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
           unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
           unique_srcs_and_dests_node_indices.data_ptr<Idx>());
 }
@@ -91,7 +92,7 @@ void _BackwardRelationalFusedGATKernel_wrapper_integratedcsr(
   gdata.sum = sum.data_ptr<DType>();
   gdata.exp = exp.data_ptr<DType>();
   gdata.ret = ret.data_ptr<DType>();
-  gdata.grad_out = grad_out.data_ptr<DType>();
+  gdata.grad_out = gradout.data_ptr<DType>();
   gdata.grad_feat_src = grad_feat_src.data_ptr<DType>();
   gdata.grad_el = grad_el.data_ptr<DType>();
   gdata.grad_er = grad_er.data_ptr<DType>();

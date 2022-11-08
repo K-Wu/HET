@@ -91,7 +91,7 @@ __device__ __forceinline__ unsigned int getlaneid() {
 }
 
 __device__ __forceinline__ int binary_search(int num_elements,
-                                             int *__restrict__ arr,
+                                             const int *__restrict__ arr,
                                              int target) {
   int lo = 0, hi = num_elements;
   // find element in arr[i] where i in [lo, hi)
@@ -111,8 +111,8 @@ __device__ __forceinline__ int binary_search(int num_elements,
 // TODO: figure out metadata caching to optimize the performance
 template <typename Idx, typename IdxPtr>
 __device__ __forceinline__ Idx find_relational_compact_as_of_node_index(
-    Idx idx_relation, Idx idx_node, IdxPtr unique_srcs_and_dests_rel_ptr,
-    IdxPtr unique_srcs_and_dests_node_indices) {
+    Idx idx_relation, Idx idx_node, const IdxPtr unique_srcs_and_dests_rel_ptr,
+    const IdxPtr unique_srcs_and_dests_node_indices) {
   Idx idx_relation_offset = unique_srcs_and_dests_rel_ptr[idx_relation];
   Idx idx_relation_plus_one_offset =
       unique_srcs_and_dests_rel_ptr[idx_relation + 1];
@@ -127,5 +127,5 @@ __device__ __forceinline__ Idx find_relational_compact_as_of_node_index(
 // https://stackoverflow.com/a/53945555/5555077
 template <class T>
 struct dependent_false : std::false_type {};
-#define CONSTEXPR_CLAUSE_NONREACHABLE(reason) \
+#define CONSTEXPR_CLAUSE_NONREACHABLE(T, reason) \
   static_assert(dependent_false<T>::value && reason)

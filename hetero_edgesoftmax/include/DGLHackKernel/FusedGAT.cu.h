@@ -65,7 +65,7 @@ __global__ void gatSumProdZipDivKernel(
               // (relation, node) but do not compress the (relation, node)
               // matrix. It could be a case in subgraph where compressing along
               // the node dimension may not be worth it.
-              CONSTEXPR_CLAUSE_NONREACHABLE("not implemented");
+              assert(0 && "should be non-reachable not implemented");
             }
             s += (gdata.exp[edge_id * e_xlen + head_idx] /
                   gdata.sum[sum_idx * e_xlen + head_idx] *
@@ -98,7 +98,7 @@ template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag>
 __global__ void gatExpLeakyReluSumKernel(
     GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
-    const Idx* column_indices, int64_t num_rows,
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices) {
   // extern __shared__ DType er[];
@@ -128,8 +128,8 @@ __global__ void gatExpLeakyReluSumKernel(
         Idx edge_id = gdata.eids[eidx];
         Idx dst_vid_relational;
         if constexpr (CompactAsOfNodeFlag) {
-          if constexpr (RelationalNodeFlag) {
-            Idx etype = gdata.etypes[eidx];
+          if constexpr (RelationalFlag) {
+            Idx etype = etypes[eidx];
             Idx src_vid_temp = find_relational_compact_as_of_node_index(
                 etype, src_id, unique_srcs_and_dests_node_indices,
                 unique_srcs_and_dests_rel_ptr);
@@ -142,12 +142,12 @@ __global__ void gatExpLeakyReluSumKernel(
             feat_off_src = src_id * e_xlen + feat_idx;
           }
         } else {
-          if constexpr (RelationalNodeFlag) {
+          if constexpr (RelationalFlag) {
             // NB: This is the case where we have the data stored in
             // (relation, node) but do not compress the (relation, node)
             // matrix. It could be a case in subgraph where compressing along
             // the node dimension may not be worth it.
-            CONSTEXPR_CLAUSE_NONREACHABLE("not implemented");
+            assert(0 && "should be non-reachable not implemented");
           } else {
             feat_off_src = edge_id * e_xlen + feat_idx;
             feat_off_dst = edge_id * e_xlen + feat_idx;
@@ -159,7 +159,7 @@ __global__ void gatExpLeakyReluSumKernel(
             gatLeakyReluExp(gdata.el[feat_off_src] + gdata.er[feat_off_dst],
                             gdata.leaky_relu_slope);
         gdata.exp[Idx(edge_id * e_xlen) + feat_idx] = tmp;
-        if constexpr (RelationalNodeFlag) {
+        if constexpr (RelationalFlag) {
           atomicAdd(&gdata.sum[Idx(dst_vid_relational * e_xlen) + feat_idx],
                     tmp);
         }
