@@ -1,6 +1,6 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
-#include "DGLHackKernel/HGTPreprocessing.h"
+#include "DGLHackKernel/HGT/HGTPreprocessing.h"
 #include "DGLHackKernel/NodeLinear.h"
 
 // this structure also involves input and output data

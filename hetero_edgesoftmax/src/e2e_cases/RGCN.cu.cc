@@ -1,4 +1,4 @@
-#include "DGHackKernel/RGCNLayers.h"
+#include "DGHackKernel/RGCN/RGCNLayers.h"
 #include "DGLHackKernel/DGLHackKernel.h"
 
 int main() {

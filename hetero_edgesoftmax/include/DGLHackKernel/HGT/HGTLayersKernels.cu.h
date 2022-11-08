@@ -1,6 +1,6 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
-#include "DGLHackKernel/HGTPreprocessing.h"
+#include "DGLHackKernel/HGT/HGTPreprocessing.h"
 #include "EdgeAttention_4/mysgemm_functor.cu.h"
 
 // extract this kernel with mysgemm_ into template specialization

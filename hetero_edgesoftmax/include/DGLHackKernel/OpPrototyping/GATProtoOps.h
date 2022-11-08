@@ -1,7 +1,7 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
-#include "DGLHackKernel/FusedGAT.cu.h"
-#include "DGLHackKernel/FusedGATBackward.cu.h"
+#include "DGLHackKernel/GAT/FusedGAT.cu.h"
+#include "DGLHackKernel/GAT/FusedGATBackward.cu.h"
 
 // from seastar dgl-hack
 template </*int XPU, */ typename Idx, typename DType>

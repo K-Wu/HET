@@ -1,11 +1,11 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
-#include "DGLHackKernel/HGTExperimental.h"
-#include "DGLHackKernel/HGTLayersBackwardKernels.cu.h"
-#include "DGLHackKernel/HGTLayersKernels.cu.h"
-#include "DGLHackKernel/HGTPreprocessing.h"
+#include "DGLHackKernel/HGT/HGTExperimental.h"
+#include "DGLHackKernel/HGT/HGTLayersBackwardKernels.cu.h"
+#include "DGLHackKernel/HGT/HGTLayersKernels.cu.h"
+#include "DGLHackKernel/HGT/HGTPreprocessing.h"
 #include "DGLHackKernel/OpPrototyping/HGTIntermediateData.h"
-#include "DGLHackKernel/mysgemm_KernelsBlockConfigurations.h"
+#include "DGLHackKernel/mysgemm/mysgemm_KernelsBlockConfigurations.h"
 #include "EdgeAttention_4/EdgeAttentionCOO.h"
 
 struct HGTLayerWeights {
@@ -171,9 +171,10 @@ void CompressedEdgeMessageConcatenatedCOOKernel(
   // beg_node_entry_idxes_vect, blockid_relation_id_vect
   auto [num_blocks_for_same_relation_vect,
         num_blocks_for_all_prev_relation_vect] =
-      get_schedule_by_relation_kernel_launch_metadata<true, std::nullptr_t>(
+      get_schedule_by_relation_kernel_launch_metadata<true, false,
+                                                      std::nullptr_t>(
           RTX_3090_GRIDSIZE,  // num_blocks
-          hyper_params.num_relations, nullptr, nullptr);
+          hyper_params.num_relations, -1, nullptr, nullptr);
 
   // grid and thread configuration of the first stage
   //   block (0,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16
@@ -265,8 +266,9 @@ void EdgeAttentionConcatenatedCOOKernel(
 
   auto [num_blocks_for_same_relation_vect,
         num_blocks_for_all_prev_relation_vect] =
-      get_schedule_by_relation_kernel_launch_metadata<true, std::nullptr_t>(
-          RTX_3090_GRIDSIZE, hyper_params.num_relations, nullptr, nullptr);
+      get_schedule_by_relation_kernel_launch_metadata<true, false,
+                                                      std::nullptr_t>(
+          RTX_3090_GRIDSIZE, hyper_params.num_relations, -1, nullptr, nullptr);
 
   // grid and thread configuration of the first stage
   //   block (0,0): (head0 (64 element), 16 nodes), (head1 (64 element), 16

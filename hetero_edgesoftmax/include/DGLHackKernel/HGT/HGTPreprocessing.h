@@ -1,7 +1,6 @@
 #pragma once
 #include <map>
 #include "DGLHackKernel/DGLHackKernel.h"
-#include "DGLHackKernel/HGTPreprocessing.h"
 
 template <class T, class OtherContainerType>
 thrust::device_vector<T *> GetDeviceVectorOfPointersToArrays(

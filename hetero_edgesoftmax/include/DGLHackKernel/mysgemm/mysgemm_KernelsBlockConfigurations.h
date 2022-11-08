@@ -1,5 +1,5 @@
 #pragma once
-#include "DGLHackKernel.h"
+#include "../DGLHackKernel.h"
 // This file provides logic to generate assignments from relationship to work,
 // for gemm when it is applied to node entries or edge entries. The logic can be
 // used for my_shmem_sgemm.cu.h and mysgemm_functor.cu.h
@@ -42,10 +42,11 @@ get_schedule_by_relation_kernel_launch_per_block_metadata(
                          blockid_relation_id_vect, beg_node_entry_idxes_vect);
 }
 
-template <bool EqualPartitionFlag, typename IteratorType>
+template <bool EqualPartitionFlag, bool PartitionAccordingToBlockSizeFlag,
+          typename IteratorType>
 std::pair<std::vector<int>, std::vector<int>>
 get_schedule_by_relation_kernel_launch_metadata(
-    int num_blocks_along_dimx, int num_relations,
+    int num_blocks_along_dimx, int num_relations, int block_size,
     IteratorType num_job_entries_per_relation_beg,
     IteratorType num_job_entries_per_relation_end) {
   std::vector<int> num_blocks_along_dimx_for_same_relation_vect;
@@ -65,49 +66,60 @@ get_schedule_by_relation_kernel_launch_metadata(
     }
 
   } else {
-    int total_num_job_entries = 0;
-    for (IteratorType iter = num_job_entries_per_relation_beg;
-         iter != num_job_entries_per_relation_end; iter++) {
-      total_num_job_entries += *iter;
-    }
-    int num_job_entries_for_this_and_prev_relation = 0;
-    IteratorType curr_iter = num_job_entries_per_relation_beg;
-    // in this branch, let's allocate blocks according to the amount of workload
-    for (int idx_relationship = 0; idx_relationship < num_relations;
-         idx_relationship++) {
-      int num_job_entries_for_current_relation = *curr_iter;
-      num_job_entries_for_this_and_prev_relation +=
-          num_job_entries_for_current_relation;
-
-      int num_blocks_along_dimx_for_this_and_prev_relation =
-          (num_job_entries_for_this_and_prev_relation + 0.0) /
-          (total_num_job_entries)*num_blocks_along_dimx;
-      if (num_blocks_along_dimx_for_this_and_prev_relation ==
-          num_blocks_along_dimx_for_all_prev_relation_vect
-              [num_blocks_along_dimx_for_all_prev_relation_vect.size() - 1]) {
-        // if there is too few jobs for current relation, we still need to
-        // assign at least one block to it.
-        num_blocks_along_dimx_for_this_and_prev_relation += 1;
+    if constexpr (PartitionAccordingToBlockSizeFlag) {
+      IteratorType num_job_entries_iter = num_job_entries_per_relation_beg;
+      for (int idx_relationship = 0; idx_relationship < num_relations;
+           idx_relationship++) {
+        int num_blocks_along_dimx_for_this_relation =
+            (*num_job_entries_iter + block_size - 1) / block_size;
+        num_blocks_along_dimx_for_same_relation_vect.push_back(
+            num_blocks_along_dimx_for_this_relation +
+            num_blocks_along_dimx_for_all_prev_relation_vect.back());
+        num_job_entries_iter++;
       }
-      num_blocks_along_dimx_for_all_prev_relation_vect.push_back(
-          num_blocks_along_dimx_for_this_and_prev_relation);
-      num_blocks_along_dimx_for_same_relation_vect.push_back(
-          num_blocks_along_dimx_for_this_and_prev_relation -
-          num_blocks_along_dimx_for_all_prev_relation_vect
-              [num_blocks_along_dimx_for_all_prev_relation_vect.size() - 2]);
+    } else {
+      int total_num_job_entries = 0;
+      for (IteratorType iter = num_job_entries_per_relation_beg;
+           iter != num_job_entries_per_relation_end; iter++) {
+        total_num_job_entries += *iter;
+      }
+      int num_job_entries_for_this_and_prev_relation = 0;
+      IteratorType curr_iter = num_job_entries_per_relation_beg;
+      // in this branch, let's allocate blocks according to the amount of
+      // workload
+      for (int idx_relationship = 0; idx_relationship < num_relations;
+           idx_relationship++) {
+        int num_job_entries_for_current_relation = *curr_iter;
+        num_job_entries_for_this_and_prev_relation +=
+            num_job_entries_for_current_relation;
 
-      curr_iter++;
+        int num_blocks_along_dimx_for_this_and_prev_relation =
+            (num_job_entries_for_this_and_prev_relation + 0.0) /
+            (total_num_job_entries)*num_blocks_along_dimx;
+        if (num_blocks_along_dimx_for_this_and_prev_relation ==
+            num_blocks_along_dimx_for_all_prev_relation_vect.back()) {
+          // if there is too few jobs for current relation, we still need to
+          // assign at least one block to it.
+          num_blocks_along_dimx_for_this_and_prev_relation += 1;
+        }
+        num_blocks_along_dimx_for_all_prev_relation_vect.push_back(
+            num_blocks_along_dimx_for_this_and_prev_relation);
+        num_blocks_along_dimx_for_same_relation_vect.push_back(
+            num_blocks_along_dimx_for_this_and_prev_relation -
+            num_blocks_along_dimx_for_all_prev_relation_vect
+                [num_blocks_along_dimx_for_all_prev_relation_vect.size() - 2]);
+
+        curr_iter++;
+      }
     }
-    if (num_blocks_along_dimx_for_all_prev_relation_vect
-            [num_blocks_along_dimx_for_all_prev_relation_vect.size() - 1] !=
+    if (num_blocks_along_dimx_for_all_prev_relation_vect.back() !=
         num_blocks_along_dimx) {
       printf(
           "WARNING: we have corrected the number of blocks from %d to %d in "
           "order to make sure each relation get at least 1 blocks in "
           "get_schedule_by_relation_kernel_launch_metadata()",
           num_blocks_along_dimx,
-          num_blocks_along_dimx_for_all_prev_relation_vect
-              [num_blocks_along_dimx_for_all_prev_relation_vect.size() - 1]);
+          num_blocks_along_dimx_for_all_prev_relation_vect.back());
     }
   }
 

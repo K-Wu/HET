@@ -3,10 +3,10 @@
 #include <c10/cuda/CUDAStream.h>
 #include <torch/extension.h>
 #include <torch/library.h>
-#include "DGLHackKernel/FusedGAT.cu.h"
-#include "DGLHackKernel/FusedGATBackward.cu.h"
-#include "DGLHackKernel/RGATLayersBackwardKernels.cu.h"
-#include "DGLHackKernel/RGATLayersKernels.cu.h"
+#include "DGLHackKernel/GAT/FusedGAT.cu.h"
+#include "DGLHackKernel/GAT/FusedGATBackward.cu.h"
+#include "DGLHackKernel/RGAT/RGATLayersBackwardKernels.cu.h"
+#include "DGLHackKernel/RGAT/RGATLayersKernels.cu.h"
 #include "GATOps.inc.h"
 
 template </*int XPU, */ typename Idx, typename DType, bool CompactAsOfNodeFlag>

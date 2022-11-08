@@ -1,7 +1,7 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
-#include "DGLHackKernel/RGCNLayersBackwardKernels.cu.h"
-#include "DGLHackKernel/RGCNLayersKernels.cu.h"
+#include "DGLHackKernel/RGCN/RGCNLayersBackwardKernels.cu.h"
+#include "DGLHackKernel/RGCN/RGCNLayersKernels.cu.h"
 
 // the referential implementation from seastar
 template </*int XPU, */ typename Idx, typename DType>

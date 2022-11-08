@@ -1,11 +1,11 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
-#include "DGLHackKernel/HGTExperimental.h"
-#include "DGLHackKernel/HGTLayersBackwardKernels.cu.h"
-#include "DGLHackKernel/HGTLayersKernels.cu.h"
+#include "DGLHackKernel/HGT/HGTExperimental.h"
+#include "DGLHackKernel/HGT/HGTLayersBackwardKernels.cu.h"
+#include "DGLHackKernel/HGT/HGTLayersKernels.cu.h"
 #include "DGLHackKernel/NodeLinear.h"
 #include "DGLHackKernel/OpPrototyping/HGTIntermediateData.h"
-#include "DGLHackKernel/OpPrototyping/HGTOps.h"
+#include "DGLHackKernel/OpPrototyping/HGTProtoOps.h"
 
 // TODO: collect input data into a struct; malloc intermediate and output data.
 

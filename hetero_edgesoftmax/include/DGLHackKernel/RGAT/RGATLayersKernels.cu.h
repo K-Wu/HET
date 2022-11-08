@@ -1,6 +1,6 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
-#include "DGLHackKernel/FusedGAT.cu.h"
+#include "DGLHackKernel/GAT/FusedGAT.cu.h"
 
 template <typename Idx, typename DType>
 __global__ void
