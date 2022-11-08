@@ -218,7 +218,7 @@ __global__ void RGNNFeatPerEdgeFWProp(
     int* accum_num_blocks_per_relation, Idx num_relations) {
   int idx_block_assignment = Idx idx_block_assignment =
       blockIdx.x / ceil_div<Idx>(num_B_cols, BLOCK_SIZE);
-  Idx idx_relation = binary_search(
+  Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BlockSize, false, true, false, false, false, true, false,
                       Idx, IdxPtr>(
@@ -235,7 +235,7 @@ __global__ void RGNNFeatCompactFWProp(
     Idx num_B_cols, Idx num_heads, int* num_blocks_per_relation,
     int* accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.x / ceil_div<Idx>(num_B_cols, BLOCK_SIZE);
-  Idx idx_relation = binary_search(
+  Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BlockSize, false, true, false, false, false, true, true,
                       Idx, IdxPtr>(
@@ -253,7 +253,7 @@ __global__ void RGNNDeltaNodeFeatInputBWProp(
     Idx num_B_cols, Idx num_heads, int* num_blocks_per_relation,
     int* accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.x / ceil_div<Idx>(num_B_cols, BLOCK_SIZE);
-  Idx idx_relation = binary_search(
+  Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BlockSize, false, true, false, false, false, true, false,
                       Idx, IdxPtr>(
@@ -269,7 +269,7 @@ __global__ void RGNNDeltaWeightBWProp(
     Idx num_A_cols, Idx num_B_cols, Idx num_heads, int* num_blocks_per_relation,
     int* accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.x / ceil_div<Idx>(num_B_cols, BLOCK_SIZE);
-  Idx idx_relation = binary_search(
+  Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BlockSize, true, true, false, true, false, false, false,
                       Idx, IdxPtr>(
@@ -287,7 +287,7 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWProp(
     Idx num_B_cols, Idx num_heads, int* num_blocks_per_relation,
     int* accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.x / ceil_div<Idx>(num_B_cols, BLOCK_SIZE);
-  Idx idx_relation = binary_search(
+  Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BlockSize, false, true, true, false, false, false, false,
                       Idx, IdxPtr>(
@@ -305,7 +305,7 @@ __global__ void RGNNDeltaWeightCompactBWProp(
     Idx num_B_cols, Idx num_heads, int* num_blocks_per_relation,
     int* accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.x / ceil_div<Idx>(num_B_cols, BLOCK_SIZE);
-  Idx idx_relation = binary_search(
+  Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BlockSize, true, true, false, true, true, false, false,
                       Idx, IdxPtr>(

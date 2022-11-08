@@ -32,13 +32,14 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
       Idx row_idx;
       if constexpr (CSRInsteadOfCOOFlag) {
         // do binary search in row_ptrs if CSR
-        row_idx = binary_search(num_edges, row_indices_or_row_ptrs, edge_idx);
+        row_idx = binary_search<Idx, Idx*>(num_edges, row_indices_or_row_ptrs,
+                                           edge_idx);
       } else {
         // if COO, just index the row_idx directly
         row_idx = row_indices_or_row_ptrs[edge_idx];
       }  // if constexpr (CSRInsteadOfCOOFlag) {
       if constexpr (BinarySearchToGetEtypeNodeOffsetFlag) {
-        unqiue_node_index_for_curr_etype = binary_search(
+        unqiue_node_index_for_curr_etype = binary_search<Idx, Idx*>(
             etype_unique_node_offsets[etype + 1] -
                 etype_unique_node_offsets[etype],
             &MapAmongEtypeNodeAndOffsetArray[etype_unique_node_offsets[etype]],
@@ -135,7 +136,8 @@ __global__ void EdgeMessageGeneration(
     //             COARSE_SGEMM_EDGES_PER_BLOCK;
     // relation_idx = blockid_relation_id_vect[blockIdx.x];
   } else {
-    relation_idx = binary_search(num_etypes, etype_block_offsets, blockIdx.x);
+    relation_idx =
+        binary_search<Idx, Idx*>(num_etypes, etype_block_offsets, blockIdx.x);
     stride =
         COARSE_SGEMM_EDGES_PER_BLOCK * (etype_block_offsets[relation_idx + 1] -
                                         etype_block_offsets[relation_idx]);

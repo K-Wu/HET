@@ -635,7 +635,7 @@ __global__ void HGTExperimentalEdgeAttentionFusedCOOKernel_512_32(
   constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
   constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
 
-  int relation_idx = binary_search(
+  int relation_idx = binary_search<int, int *>(
       num_relations, exclusive_scan_num_blocks_per_relation, blockIdx.x);
   // printf("blockIdx.x%d relation_idx %d,
   // exclusive_scan_num_blocks_per_relation[relation_idx] %d,
@@ -696,7 +696,7 @@ __global__ void HGTExperimentalEdgeAttentionResidueCSR(
   // asserting IN_DIM == OUT_DIM
   // each block is in charge of one edge at a time and
   // NUM_EDGES_TO_PROCESS_PER_BLOCK edges in total
-  int relation_idx = binary_search(
+  int relation_idx = binary_search<int, int *>(
       num_relations, exclusive_scan_numBlocks_per_relationship, blockIdx.x);
   assert(blockIdx.x >=
              exclusive_scan_numBlocks_per_relationship[relation_idx] &&
@@ -704,7 +704,7 @@ __global__ void HGTExperimentalEdgeAttentionResidueCSR(
           blockIdx.x <
               exclusive_scan_numBlocks_per_relationship[relation_idx + 1]));
   assert(rel_ptr[relation_idx] == row_ptr[relation_idx * num_rows]);
-  int srcIdx = binary_search(
+  int srcIdx = binary_search<int, int *>(
       num_rows, &row_ptr[relation_idx * num_rows],
       blockIdx.x * NUM_EDGES_TO_PROCESS_PER_BLOCK - rel_ptr[relation_idx]);
   bool flagSrcIdxChanged = true;

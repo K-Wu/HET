@@ -90,15 +90,16 @@ __device__ __forceinline__ unsigned int getlaneid() {
   return r;
 }
 
-__device__ __forceinline__ int binary_search(int num_elements,
-                                             const int *__restrict__ arr,
-                                             int target) {
-  int lo = 0, hi = num_elements;
+template <typename Idx, typename IdxPtr>
+__device__ __forceinline__ Idx binary_search(Idx num_elements,
+                                             const IdxPtr __restrict__ arr,
+                                             Idx target) {
+  Idx lo = 0, hi = num_elements;
   // find element in arr[i] where i in [lo, hi)
   // This below check covers all cases , so need to check
   // for mid=lo-(hi-lo)/2
   while (hi - lo > 1) {
-    int mid = (hi + lo) / 2;
+    Idx mid = (hi + lo) / 2;
     if (arr[mid] <= target) {
       lo = mid;
     } else {
@@ -117,9 +118,10 @@ __device__ __forceinline__ Idx find_relational_compact_as_of_node_index(
   Idx idx_relation_plus_one_offset =
       unique_srcs_and_dests_rel_ptr[idx_relation + 1];
   return idx_relation_offset +
-         binary_search(idx_relation_plus_one_offset - idx_relation_offset,
-                       &unique_srcs_and_dests_node_indices[idx_relation_offset],
-                       idx_node);
+         binary_search<Idx, IdxPtr>(
+             idx_relation_plus_one_offset - idx_relation_offset,
+             &unique_srcs_and_dests_node_indices[idx_relation_offset],
+             idx_node);
 }
 
 // workaround to assert an if constexpr clause won't be emitted during compile
