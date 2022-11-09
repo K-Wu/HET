@@ -1140,6 +1140,7 @@ std::vector<thrust::host_vector<IdxType>> ConvertIntegratedCOOToSeparateCOO(
   return result;
 }
 
+// TODO: use template to merge with ToSeparateCSR_CPU
 template <typename IdxType>
 std::vector<thrust::host_vector<IdxType>> ToSeparateCOO(
     const MyHeteroIntegratedCSR<IdxType, std::allocator<IdxType>> &csr) {
