@@ -7,6 +7,8 @@
 #include "DGLHackKernel/GAT/FusedGATBackward.cu.h"
 #include "DGLHackKernel/RGAT/RGATLayersBackwardKernels.cu.h"
 #include "DGLHackKernel/RGAT/RGATLayersKernels.cu.h"
+#include "DGLHackKernel/mysgemm/my_shmem_sgemm_func.cu.h"
+#include "DGLHackKernel/mysgemm/mysgemm_KernelsBlockConfigurations.h"
 #include "GATOps.inc.h"
 
 template </*int XPU, */ typename Idx, typename DType, bool CompactAsOfNodeFlag>
@@ -145,23 +147,127 @@ constexpr auto
         _BackwardRelationalFusedGATKernel_wrapper_integratedcsr<int64_t, float,
                                                                 true, true>;
 
+template <int BLOCK_SIZE, bool CompactAsOfNodeFlag>
+void _RGATRelationalMatMul_wrapper_separatecoo(
+    at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
+    at::Tensor& separate_coo_eids, at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& weights,
+    at::Tensor& input, at::Tensor& ret) {
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
+  const int64_t num_relations = separate_coo_relptrs.numel() - 1;
+  const int64_t num_edges = separate_coo_eids.numel();
+  const int64_t num_heads = weights.size(1);
+  const int64_t num_input_dim = weights.size(2);
+  const int64_t num_output_dim =
+      weights.size(3) * num_heads;  // weight shape (num_relations, n_heads,
+                                    // in_feat, out_feat // n_heads)
+  auto [num_blocks_assignment_for_same_relation_vect,
+        num_blocks_assignment_for_all_prev_relation_vect] =
+      get_schedule_by_relation_kernel_launch_metadata<false, false, Idx*>(
+          -1, num_relations, BLOCK_SIZE,
+          separate_coo_relptrs.data_ptr<int64_t>(),
+          separate_coo_relptrs.data_ptr<int64_t>() + num_relations);
+
+  thrust::device<int> dev_num_blocks_assignment_for_same_relation_vect(
+      num_blocks_assignment_for_same_relation_vect.data(),
+      num_blocks_assignment_for_same_relation_vect.data() + num_relations);
+  thrust::device<int> dev_num_blocks_assignment_for_all_prev_relation_vect(
+      num_blocks_assignment_for_all_prev_relation_vect.data(),
+      num_blocks_assignment_for_all_prev_relation_vect.data() + num_relations);
+  const dim3 nblks(ceil_div<>(num_output_dim / num_heads, BLOCK_SIZE),
+                   ceil_div(num_edges, BLOCK_SIZE), num_heads);
+  const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
+  if constexpr (CompactAsOfNodeFlag) {
+    RGNNFeatCompactFWProp<BLOCK_SIZE, int64_t, int64_t*>
+        <<<nblks, nthrs, 0, stream>>>(
+            input.data_ptr<float>(), weight.data_ptr<float>(),
+            ret.data_ptr<float>(),
+            separate_coo_node_indices.data_ptr<int64_t>(),
+            separate_coo_relptrs.data_ptr<int64_t>(),
+            unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
+            unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_edges,
+            num_input_dim, num_output_dim, num_heads,
+            thrust::raw_pointer_cast(
+                dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+            num_relations);
+  } else {
+    RGNNFeatPerEdgeFWProp<BLOCK_SIZE, int64_t, int64_t*>
+        <<<nblks, nthrs, 0, stream>>>(
+            input.data_ptr<float>(), weight.data_ptr<float>(),
+            ret.data_ptr<float>(),
+            separate_coo_node_indices.data_ptr<int64_t>(),
+            separate_coo_relptrs.data_ptr<int64_t>(),
+            separate_coo_eids.data_ptr<int64_t>(), num_edges, num_input_dim,
+            num_output_dim, num_heads,
+            thrust::raw_pointer_cast(
+                dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+            num_relations);
+  }
+}
+
 void RGATRelationalMatMul_wrapper_separatecoo(
     at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
     at::Tensor& separate_coo_eids, at::Tensor& weights, at::Tensor& input,
-    at::Tensor& ret) {}
+    at::Tensor& ret) {
+  _RGATRelationalMatMul_wrapper_separatecoo<16, false>(
+      separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
+      /*dummy*/ separate_coo_eids, /*dummy*/ separate_coo_eids, weights, input,
+      ret);
+}
 
-void BackwardRGATRelationalMatMul_wrapper_separatecoo(
+void RGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices(
+    at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
+    at::Tensor& separate_coo_eids, at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_idx, at::Tensor& weight,
+    at::Tensor& node_feat, at::Tensor& ret) {
+  _RGATRelationalMatMul_wrapper_separatecoo<16, true>(
+      separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
+      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_idx, weight,
+      node_feat, ret);
+}
+
+template <int BLOCK_SIZE, bool CompactAsOfNodeFlag>
+void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
     at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
     at::Tensor& separate_coo_eids, at::Tensor& weights_transposed,
     at::Tensor& input, at::Tensor& gradout, at::Tensor& grad_input,
-    at::Tensor& grad_weights) {}
+    at::Tensor& grad_weights) {
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
+  const int64_t num_relations = separate_coo_relptrs.numel() - 1;
+  const int64_t num_edges = separate_coo_eids.numel();
+  const int64_t num_heads = weights_transposed.size(1);
+  const int64_t num_input_dim = weights_transposed.size(3);
+  const int64_t num_output_dim =
+      weights_transposed.size(2) *
+      num_heads;  // weight shape (num_relations, n_heads, in_feat, out_feat //
+                  // n_heads)
+  auto [num_blocks_assignment_for_same_relation_vect,
+        num_blocks_assignment_for_all_prev_relation_vect] =
+      get_schedule_by_relation_kernel_launch_metadata<false, false, Idx*>(
+          -1, num_relations, BLOCK_SIZE,
+          separate_coo_relptrs.data_ptr<int64_t>(),
+          separate_coo_relptrs.data_ptr<int64_t>() + num_relations);
+
+  thrust::device<int> dev_num_blocks_assignment_for_same_relation_vect(
+      num_blocks_assignment_for_same_relation_vect.data(),
+      num_blocks_assignment_for_same_relation_vect.data() + num_relations);
+  thrust::device<int> dev_num_blocks_assignment_for_all_prev_relation_vect(
+      num_blocks_assignment_for_all_prev_relation_vect.data(),
+      num_blocks_assignment_for_all_prev_relation_vect.data() + num_relations);
+  const dim3 nblks(ceil_div<>(num_output_dim / num_heads, BLOCK_SIZE),
+                   ceil_div(num_edges, BLOCK_SIZE), num_heads);
+  const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
+}
 
 void BackwardRGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices(
     at::Tensor& unqiue_srcs_and_dests_rel_ptr,
     at::Tensor& unique_srcs_and_dests_node_idx, at::Tensor& weight,
     at::Tensor& node_feat, at::Tensor& ret, at::Tensor& gradout,
-    at::Tensor& grad_weight, at::Tensor& grad_node_feat) {}
-void RGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices(
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_idx, at::Tensor& weight,
-    at::Tensor& node_feat, at::Tensor& ret) {}
+    at::Tensor& grad_weight, at::Tensor& grad_node_feat) {
+  //_BackwardRGATRelationalMatMul_wrapper_separatecoo<16, true>()
+}
+
+void BackwardRGATRelationalMatMul_wrapper_separatecoo() {
+  //_BackwardRGATRelationalMatMul_wrapper_separatecoo<16,
+  // false>(separate_coo_relptrs, separate_coo_node_indices);
+}

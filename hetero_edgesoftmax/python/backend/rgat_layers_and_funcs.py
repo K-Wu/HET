@@ -375,6 +375,9 @@ class RgatRelationalMatmulCompactAsOfNode(th.autograd.Function):
     @staticmethod
     def forward(
         ctx,
+        separate_coo_relptrs,
+        separate_coo_node_indices,
+        separate_coo_eids,
         unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_idx,
         weight,
@@ -382,6 +385,9 @@ class RgatRelationalMatmulCompactAsOfNode(th.autograd.Function):
         ret,
     ):
         ctx.save_for_backward(
+            separate_coo_relptrs,
+            separate_coo_node_indices,
+            separate_coo_eids,
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
             weight,
@@ -389,6 +395,9 @@ class RgatRelationalMatmulCompactAsOfNode(th.autograd.Function):
             ret,
         )
         K.rgat_relational_matmul_compact_as_of_node(
+            separate_coo_relptrs,
+            separate_coo_node_indices,
+            separate_coo_eids,
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
             weight,
@@ -400,6 +409,9 @@ class RgatRelationalMatmulCompactAsOfNode(th.autograd.Function):
     @staticmethod
     def backward(ctx, gradout):
         (
+            separate_coo_relptrs,
+            separate_coo_node_indices,
+            separate_coo_eids,
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
             weight,
@@ -409,6 +421,9 @@ class RgatRelationalMatmulCompactAsOfNode(th.autograd.Function):
         grad_weight = th.zeros_like(weight)
         grad_node_feat = th.zeros_like(node_feat)
         K.backward_rgat_relational_matmul_compact_as_of_node(
+            separate_coo_relptrs,
+            separate_coo_node_indices,
+            separate_coo_eids,
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
             weight,
@@ -428,7 +443,13 @@ class RgatRelationalMatmulCompactAsOfNode(th.autograd.Function):
 
 
 def rgat_relational_matmul_compact_as_of_node(
-    unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, weight, node_feat
+    separate_coo_relptrs,
+    separate_coo_node_indices,
+    separate_coo_eids,
+    unique_srcs_and_dests_rel_ptr,
+    unique_srcs_and_dests_node_indices,
+    weight,
+    node_feat,
 ):
     ret = th.zeros(
         [unique_srcs_and_dests_rel_ptr[-1], weight.size(1), weight.size(3)],
@@ -437,6 +458,9 @@ def rgat_relational_matmul_compact_as_of_node(
         requires_grad=True,
     )
     return RgatRelationalMatmulCompactAsOfNode.apply(
+        separate_coo_relptrs,
+        separate_coo_node_indices,
+        separate_coo_eids,
         unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices,
         weight,
