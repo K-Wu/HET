@@ -118,12 +118,12 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
 
   Idx e_xlen = gdata.e_xlen;
   for (Idx dst_vid = ty; dst_vid < num_rows;
-       dst_vid += blockDim.y * gridDim.y;) {
+       dst_vid += blockDim.y * gridDim.y) {
     Idx start_off = *(row_offsets + dst_vid);
     Idx end_off = *(row_offsets + dst_vid + 1);
 
     for (Idx feat_idx = tx; feat_idx < e_xlen;
-         feat_idx += blockDim.x * gridDim.x;) {
+         feat_idx += blockDim.x * gridDim.x) {
       // 1. Load dstnation vertex into shared memory
       Idx feat_off_dst;
       if constexpr (CompactAsOfNodeFlag) {
@@ -196,9 +196,10 @@ __global__ void gatExpLeakyReluSumKernel(
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices) {
-  _gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, RelationalFlag>(
-      gdata, row_offsets, column_indices, etypes, num_rows,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
+  _gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, RelationalFlag,
+                            false>(gdata, row_offsets, column_indices, etypes,
+                                   num_rows, unique_srcs_and_dests_rel_ptr,
+                                   unique_srcs_and_dests_node_indices, -1);
 }
 
 template <typename Idx, typename DType>

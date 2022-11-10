@@ -18,6 +18,8 @@ template </*int XPU, */ typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool IntegratedFormatRatherThanSeparateFlag,
           bool CSRRatherThanCOOFlag>
 void _RelationalFusedGATKernel_wrapper(
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
     at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
     at::Tensor& incsr_eids, at::Tensor& incsr_reltypes,
     at::Tensor& unique_srcs_and_dests_rel_ptr,
@@ -28,9 +30,9 @@ void _RelationalFusedGATKernel_wrapper(
   const Idx MAX_NTHRS = 1024;
   GatFusedData<Idx, DType> gdata;
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  int64_t el_xlen = SeastarComputeXLength(el);
-  int64_t feat_src_xlen = SeastarComputeXLength(feat_src);
-  int64_t ret_len = SeastarComputeXLength(ret);
+  int64_t el_xlen = SeastarComputeXLength<>(el);
+  int64_t feat_src_xlen = SeastarComputeXLength<>(feat_src);
+  int64_t ret_len = SeastarComputeXLength<>(ret);
 
   gdata.feat_src = feat_src.data_ptr<DType>();
   gdata.el = el.data_ptr<DType>();
@@ -44,11 +46,11 @@ void _RelationalFusedGATKernel_wrapper(
   gdata.feat_src_xlen = feat_src_xlen;
   gdata.feat_src_hidden = feat_src_xlen / el_xlen;
   gdata.ret_xlen = ret_len;
-  gdata.eids = incsr_eids.data_ptr<Idx>();
 
   if constexpr (IntegratedFormatRatherThanSeparateFlag &&
                 CSRRatherThanCOOFlag) {
     // Integrated CSR
+    gdata.eids = incsr_eids.data_ptr<Idx>();
     // Configure kernel launch parameters.
     int nthrs_x = 32;
     int nthrs_y = 1;
@@ -81,6 +83,39 @@ void _RelationalFusedGATKernel_wrapper(
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
     // separate coo
+    gdata.eids = separate_coo_eids.data_ptr<Idx>();
+    int64_t num_edges = separate_coo_row_indices.numel();
+    int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
+    int nthrs_x = 32;
+    int nthrs_y = 1;
+    int nblks_x = (el_xlen + nthrs_x - 1) / (nthrs_x);
+    int nblks_y = std::min(num_edges, MAX_NBLKS);
+    const dim3 nblks(nblks_x, nblks_y);
+    const dim3 nthrs(nthrs_x, nthrs_y);
+
+    gatExpLeakyReluSumKernel_relational_separate_coo<Idx, DType,
+                                                     CompactAsOfNodeFlag>
+        <<<nblks, nthrs, 0, stream>>>(
+            gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
+            separate_coo_row_indices.data_ptr<Idx>(),
+            separate_coo_col_indices.data_ptr<Idx>(), num_edges,
+            unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
+
+    nthrs_x = SeastarFindNumThreads(el_xlen, 64);
+    nthrs_y = SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
+    nblks_x = 1;
+    nblks_y = std::min(num_edges, MAX_NBLKS);
+    const dim3 nthrs2(nthrs_x, nthrs_y);
+    const dim3 nblks2(nblks_x, nblks_y);
+    gatSumProdZipDivKernel_relational_separate_coo<Idx, DType,
+                                                   CompactAsOfNodeFlag>
+        <<<nblks2, nthrs2, 0, stream>>>(
+            gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
+            separate_coo_row_indices.data_ptr<Idx>(),
+            separate_coo_col_indices.data_ptr<Idx>(), num_edges,
+            unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
 
   } else {
     assert(0 && "Not implemented");
@@ -91,6 +126,8 @@ template </*int XPU, */ typename Idx, typename DType, bool FLAG_KERNEL_FUSED,
           bool CompactAsOfNodeFlag, bool IntegratedFormatRatherThanSeparateFlag,
           bool CSRRatherThanCOOFlag>
 void _BackwardRelationalFusedGATKernel_wrapper(
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
     at::Tensor& outcsr_row_ptr, at::Tensor& outcsr_col_idx,
     at::Tensor& outcsr_eids, at::Tensor& outcsr_reltypes,
     at::Tensor& unique_srcs_and_dests_rel_ptr,
@@ -102,8 +139,8 @@ void _BackwardRelationalFusedGATKernel_wrapper(
   const Idx MAX_NBLKS = 65535;
   const Idx MAX_NTHRS = 1024;
   BackwardGatFusedData<Idx, DType> gdata;
-  int64_t el_xlen = SeastarComputeXLength(el);
-  int64_t feat_src_xlen = SeastarComputeXLength(feat_src);
+  int64_t el_xlen = SeastarComputeXLength<>(el);
+  int64_t feat_src_xlen = SeastarComputeXLength<>(feat_src);
   gdata.feat_src = feat_src.data_ptr<DType>();
   gdata.el = el.data_ptr<DType>();
   gdata.er = er.data_ptr<DType>();
@@ -119,11 +156,11 @@ void _BackwardRelationalFusedGATKernel_wrapper(
   gdata.e_xlen = el_xlen;
   gdata.feat_src_xlen = feat_src_xlen;
   gdata.feat_src_hidden = feat_src_xlen / el_xlen;
-  gdata.eids = outcsr_eids.data_ptr<Idx>();
 
   if constexpr (IntegratedFormatRatherThanSeparateFlag &&
                 CSRRatherThanCOOFlag) {
     // Integrated CSR
+    gdata.eids = outcsr_eids.data_ptr<Idx>();
     int nthrs_x = SeastarFindNumThreads(el_xlen, 64);
     int nthrs_y =
         SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
@@ -156,6 +193,45 @@ void _BackwardRelationalFusedGATKernel_wrapper(
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
     // separate coo
+    gdata.eids = separate_coo_eids.data_ptr<Idx>();
+    int64_t num_edges = separate_coo_row_indices.numel();
+    int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
+    int nthrs_x = SeastarFindNumThreads(el_xlen, 64);
+    int nthrs_y =
+        SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
+    int nblks_x = 1;
+    int nblks_y = std::min(num_edges, MAX_NBLKS);
+    int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
+    const dim3 nthrs(nthrs_x, nthrs_y);
+    const dim3 nblks(nblks_x, nblks_y);
+    if constexpr (!FLAG_KERNEL_FUSED) {
+      fusedGatBackwardGradFeatSrc_relational_separate_coo<Idx, DType,
+                                                          CompactAsOfNodeFlag>
+          <<<nblks, nthrs, 0, stream>>>(
+              gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
+              separate_coo_row_indices.data_ptr<Idx>(),
+              separate_coo_col_indices.data_ptr<Idx>(), num_edges,
+              unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+              unique_srcs_and_dests_node_indices.data_ptr<Idx>(),
+              num_relations);
+      fusedGatBackwardGradElEr_relational_separate_coo<Idx, DType,
+                                                       CompactAsOfNodeFlag>
+          <<<nblks, nthrs, 0, stream>>>(
+              gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
+              separate_coo_row_indices.data_ptr<Idx>(),
+              separate_coo_col_indices.data_ptr<Idx>(), num_edges,
+              unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+              unique_srcs_and_dests_node_indices.data_ptr<Idx>(),
+              num_relations);
+    } else {
+      fusedGatBackwardGradElErFeatSrcFused_relational_separate_coo<
+          Idx, DType, CompactAsOfNodeFlag><<<nblks, nthrs, 0, stream>>>(
+          gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
+          separate_coo_row_indices.data_ptr<Idx>(),
+          separate_coo_col_indices.data_ptr<Idx>(), num_edges,
+          unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
+    }
   } else {
     assert(0 && "Not implemented");
   }
@@ -168,10 +244,12 @@ void RelationalFusedGATKernel_wrapper_integratedcsr(
     at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
     at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
     at::Tensor& ret, double slope) {
+  at::Tensor dummy_tensor;
   _RelationalFusedGATKernel_wrapper<int64_t, float, false, true, true>(
-      incsr_row_ptr, incsr_col_idx, incsr_eids, incsr_reltypes,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-      feat_src, el, er, sum, exp, ret, slope);
+      dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, incsr_row_ptr,
+      incsr_col_idx, incsr_eids, incsr_reltypes, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
+      slope);
 }
 void BackwardRelationalFusedGATKernel_wrapper_integratedcsr(
     at::Tensor& outcsr_row_ptr, at::Tensor& outcsr_col_idx,
@@ -181,9 +259,11 @@ void BackwardRelationalFusedGATKernel_wrapper_integratedcsr(
     at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
     at::Tensor& ret, at::Tensor& gradout, at::Tensor& grad_feat_src,
     at::Tensor& grad_el, at::Tensor& grad_er, double slope) {
+  at::Tensor dummy_tensor;
   _BackwardRelationalFusedGATKernel_wrapper<int64_t, float, true, false, true,
                                             true>(
-      outcsr_row_ptr, outcsr_col_idx, outcsr_eids, outcsr_reltypes,
+      dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, outcsr_row_ptr,
+      outcsr_col_idx, outcsr_eids, outcsr_reltypes,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       feat_src, el, er, sum, exp, ret, gradout, grad_feat_src, grad_el, grad_er,
       slope);
@@ -195,10 +275,12 @@ void RGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr(
     at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
     at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
     at::Tensor& ret, double slope) {
+  at::Tensor dummy_tensor;
   _RelationalFusedGATKernel_wrapper<int64_t, float, true, true, true>(
-      incsr_row_ptr, incsr_col_idx, incsr_eids, incsr_reltypes,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-      feat_src, el, er, sum, exp, ret, slope);
+      dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, incsr_row_ptr,
+      incsr_col_idx, incsr_eids, incsr_reltypes, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
+      slope);
 }
 void BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr(
     at::Tensor& outcsr_row_ptr, at::Tensor& outcsr_col_idx,
@@ -208,28 +290,82 @@ void BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr(
     at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
     at::Tensor& ret, at::Tensor& gradout, at::Tensor& grad_feat_src,
     at::Tensor& grad_el, at::Tensor& grad_er, double slope) {
+  at::Tensor dummy_tensor;
   _BackwardRelationalFusedGATKernel_wrapper<int64_t, float, true, true, true,
                                             true>(
-      outcsr_row_ptr, outcsr_col_idx, outcsr_eids, outcsr_reltypes,
+      dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, outcsr_row_ptr,
+      outcsr_col_idx, outcsr_eids, outcsr_reltypes,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       feat_src, el, er, sum, exp, ret, gradout, grad_feat_src, grad_el, grad_er,
       slope);
 }
 
-void BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_edge_parallel_separatecoo() {
-  assert(0 && "Not implemented");
+void BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_edge_parallel_separatecoo(
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
+    at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
+    at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
+    at::Tensor& ret, at::Tensor& gradout, at::Tensor& grad_feat_src,
+    at::Tensor& grad_el, at::Tensor& grad_er, double slope) {
+  at::Tensor dummy_tensor;
+  _BackwardRelationalFusedGATKernel_wrapper<int64_t, float, true, true, false,
+                                            false>(
+      separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+      dummy_tensor, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
+      gradout, grad_feat_src, grad_el, grad_er, slope);
 }
 
-void RGATRelationalFusedGATKernelCompactAsOfNode_wrapper_edge_parallel_separatecoo() {
-  assert(0 && "Not implemented");
+void RGATRelationalFusedGATKernelCompactAsOfNode_wrapper_edge_parallel_separatecoo(
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
+    at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
+    at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
+    at::Tensor& ret, double slope) {
+  at::Tensor dummy_tensor;
+  _RelationalFusedGATKernel_wrapper<int64_t, float, true, false, false>(
+      separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+      dummy_tensor, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
+      slope);
 }
 
-void RelationalFusedGATKernel_wrapper_edge_parallel_separatecoo() {
-  assert(0 && "Not implemented");
+void RelationalFusedGATKernel_wrapper_edge_parallel_separatecoo(
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
+    at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
+    at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
+    at::Tensor& ret, double slope) {
+  at::Tensor dummy_tensor;
+  _RelationalFusedGATKernel_wrapper<int64_t, float, false, false, false>(
+      separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+      dummy_tensor, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
+      slope);
 }
 
-void BackwardRelationalFusedGATKernel_wrapper_edge_parallel_separatecoo() {
-  assert(0 && "Not implemented");
+void BackwardRelationalFusedGATKernel_wrapper_edge_parallel_separatecoo(
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
+    at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
+    at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
+    at::Tensor& ret, at::Tensor& gradout, at::Tensor& grad_feat_src,
+    at::Tensor& grad_el, at::Tensor& grad_er, double slope) {
+  at::Tensor dummy_tensor;
+  _BackwardRelationalFusedGATKernel_wrapper<int64_t, float, false, false, false,
+                                            false>(
+      separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+      dummy_tensor, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
+      gradout, grad_feat_src, grad_el, grad_er, slope);
 }
 
 template <int BLOCK_SIZE, bool CompactAsOfNodeFlag>
@@ -247,43 +383,49 @@ void _RGATRelationalMatMul_wrapper_separatecoo(
                                     // in_feat, out_feat // n_heads)
   auto [num_blocks_assignment_for_same_relation_vect,
         num_blocks_assignment_for_all_prev_relation_vect] =
-      get_schedule_by_relation_kernel_launch_metadata<false, false, Idx*>(
+      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
           -1, num_relations, BLOCK_SIZE,
           separate_coo_relptrs.data_ptr<int64_t>(),
           separate_coo_relptrs.data_ptr<int64_t>() + num_relations);
 
-  thrust::device<int> dev_num_blocks_assignment_for_same_relation_vect(
+  thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
       num_blocks_assignment_for_same_relation_vect.data(),
       num_blocks_assignment_for_same_relation_vect.data() + num_relations);
-  thrust::device<int> dev_num_blocks_assignment_for_all_prev_relation_vect(
-      num_blocks_assignment_for_all_prev_relation_vect.data(),
-      num_blocks_assignment_for_all_prev_relation_vect.data() + num_relations);
+  thrust::device_vector<int>
+      dev_num_blocks_assignment_for_all_prev_relation_vect(
+          num_blocks_assignment_for_all_prev_relation_vect.data(),
+          num_blocks_assignment_for_all_prev_relation_vect.data() +
+              num_relations);
 
   if constexpr (CompactAsOfNodeFlag) {
+    const int64_t num_edges = separate_coo_eids.numel();
+    const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
+                     ceil_div<>(num_edges, (int64_t)BLOCK_SIZE), num_heads);
+    const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     RGNNFeatCompactFWProp<BLOCK_SIZE, int64_t, int64_t*>
         <<<nblks, nthrs, 0, stream>>>(
-            input.data_ptr<float>(), weight.data_ptr<float>(),
+            input.data_ptr<float>(), weights.data_ptr<float>(),
             ret.data_ptr<float>(),
             separate_coo_node_indices.data_ptr<int64_t>(),
             separate_coo_relptrs.data_ptr<int64_t>(),
             unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
-            unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_edges,
+            unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
             num_input_dim, num_output_dim, num_heads,
             thrust::raw_pointer_cast(
                 dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
             num_relations);
   } else {
     const int64_t num_edges = separate_coo_eids.numel();
-    const dim3 nblks(ceil_div<>(num_output_dim / num_heads, BLOCK_SIZE),
-                     ceil_div(num_edges, BLOCK_SIZE), num_heads);
+    const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
+                     ceil_div<>(num_edges, (int64_t)BLOCK_SIZE), num_heads);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     RGNNFeatPerEdgeFWProp<BLOCK_SIZE, int64_t, int64_t*>
         <<<nblks, nthrs, 0, stream>>>(
-            input.data_ptr<float>(), weight.data_ptr<float>(),
+            input.data_ptr<float>(), weights.data_ptr<float>(),
             ret.data_ptr<float>(),
             separate_coo_node_indices.data_ptr<int64_t>(),
             separate_coo_relptrs.data_ptr<int64_t>(),
-            separate_coo_eids.data_ptr<int64_t>(), num_edges, num_input_dim,
+            separate_coo_eids.data_ptr<int64_t>(), num_input_dim,
             num_output_dim, num_heads,
             thrust::raw_pointer_cast(
                 dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
@@ -303,12 +445,12 @@ void RGATRelationalMatMul_wrapper_separatecoo(
 
 void RGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices(
     at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_idx, at::Tensor& weight,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& weight,
     at::Tensor& node_feat, at::Tensor& ret) {
   at::Tensor dummy_tensor;
   _RGATRelationalMatMul_wrapper_separatecoo<16, true>(
       /*dummy*/ dummy_tensor, /*dummy*/ dummy_tensor, /*dummy*/ dummy_tensor,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_idx, weight,
+      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, weight,
       node_feat, ret);
 }
 
@@ -316,9 +458,9 @@ template <int BLOCK_SIZE, bool CompactAsOfNodeFlag>
 void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
     at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
     at::Tensor& separate_coo_eids, at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_idx, at::Tensor& weights_transposed,
-    at::Tensor& input, at::Tensor& gradout, at::Tensor& grad_input,
-    at::Tensor& grad_weights) {
+    at::Tensor& unique_srcs_and_dests_node_indices,
+    at::Tensor& weights_transposed, at::Tensor& input, at::Tensor& gradout,
+    at::Tensor& grad_input, at::Tensor& grad_weights) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   const int64_t num_relations = separate_coo_relptrs.numel() - 1;
   const int64_t num_heads = weights_transposed.size(1);
@@ -329,19 +471,25 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
                   // n_heads)
   auto [num_blocks_assignment_for_same_relation_vect,
         num_blocks_assignment_for_all_prev_relation_vect] =
-      get_schedule_by_relation_kernel_launch_metadata<false, false, Idx*>(
+      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
           -1, num_relations, BLOCK_SIZE,
           separate_coo_relptrs.data_ptr<int64_t>(),
           separate_coo_relptrs.data_ptr<int64_t>() + num_relations);
 
-  thrust::device<int> dev_num_blocks_assignment_for_same_relation_vect(
+  thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
       num_blocks_assignment_for_same_relation_vect.data(),
       num_blocks_assignment_for_same_relation_vect.data() + num_relations);
-  thrust::device<int> dev_num_blocks_assignment_for_all_prev_relation_vect(
-      num_blocks_assignment_for_all_prev_relation_vect.data(),
-      num_blocks_assignment_for_all_prev_relation_vect.data() + num_relations);
+  thrust::device_vector<int>
+      dev_num_blocks_assignment_for_all_prev_relation_vect(
+          num_blocks_assignment_for_all_prev_relation_vect.data(),
+          num_blocks_assignment_for_all_prev_relation_vect.data() +
+              num_relations);
 
   if constexpr (CompactAsOfNodeFlag) {
+    const int64_t num_edges = separate_coo_eids.numel();
+    const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
+                     ceil_div<>(num_edges, (int64_t)BLOCK_SIZE), num_heads);
+    const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     RGNNDeltaNodeFeatInputCompactBWProp<BLOCK_SIZE, int64_t, int64_t*>
         <<<nblks, nthrs, 0, stream>>>(
             gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
@@ -364,50 +512,53 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
             num_relations);
   } else {
     const int64_t num_edges = separate_coo_eids.numel();
-    const dim3 nblks(ceil_div<>(num_output_dim / num_heads, BLOCK_SIZE),
-                     ceil_div(num_edges, BLOCK_SIZE), num_heads);
+    const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
+                     ceil_div(num_edges, (int64_t)BLOCK_SIZE), num_heads);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
-    RGNNDeltaNodeFeatInputBWProp<BLOCK_SIZE, int64_t, int64_t*>(
-        gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
-        grad_input.data_ptr<float>(), separate_coo_eids.data_ptr<int64_t>(),
-        separate_coo_relptrs.data_ptr<int64_t>(),
-        separate_coo_node_indices.data_ptr<int64_t>(), num_edges,
-        num_output_dim, num_input_dim, num_heads,
-        thrust::raw_pointer_cast(
-            dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-        num_relations);
-    RGNNDeltaWeightBWProp<BLOCK_SIZE, int64_t, int64_t*>(
-        gradout.data_ptr<float>(), input.data_ptr<float>(),
-        grad_weights.data_ptr<float>(), separate_coo_eids.data_ptr<int64_t>(),
-        separate_coo_relptrs.data_ptr<int64_t>(),
-        separate_coo_node_indices.data_ptr<int64_t>(), num_edges,
-        num_output_dim, num_input_dim, num_heads,
-        thrust::raw_pointer_cast(
-            dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-        num_relations);
+    RGNNDeltaNodeFeatInputBWProp<BLOCK_SIZE, int64_t, int64_t*>
+        <<<nblks, nthrs, 0, stream>>>(
+            gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
+            grad_input.data_ptr<float>(), separate_coo_eids.data_ptr<int64_t>(),
+            separate_coo_relptrs.data_ptr<int64_t>(),
+            separate_coo_node_indices.data_ptr<int64_t>(), num_output_dim,
+            num_input_dim, num_heads,
+            thrust::raw_pointer_cast(
+                dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+            num_relations);
+    RGNNDeltaWeightBWProp<BLOCK_SIZE, int64_t, int64_t*>
+        <<<nblks, nthrs, 0, stream>>>(
+            input.data_ptr<float>(), gradout.data_ptr<float>(),
+            grad_weights.data_ptr<float>(),
+            separate_coo_eids.data_ptr<int64_t>(),
+            separate_coo_relptrs.data_ptr<int64_t>(),
+            separate_coo_node_indices.data_ptr<int64_t>(), num_output_dim,
+            num_input_dim, num_heads,
+            thrust::raw_pointer_cast(
+                dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+            num_relations);
   }
 }
 
 void BackwardRGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices(
     at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_idx, at::Tensor& weights_transposed,
-    at::Tensor& input, at::Tensor& gradout, at::Tensor& grad_input,
-    at::Tensor& grad_weights) {
+    at::Tensor& unique_srcs_and_dests_node_indices,
+    at::Tensor& weights_transposed, at::Tensor& input, at::Tensor& gradout,
+    at::Tensor& grad_input, at::Tensor& grad_weights) {
   at::Tensor dummy_tensor;
   _BackwardRGATRelationalMatMul_wrapper_separatecoo<16, true>(
       dummy_tensor /*dummy*/, dummy_tensor /*dummy*/, dummy_tensor /*dummy*/,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_idx,
+      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       weights_transposed, input, gradout, grad_input, grad_weights);
 }
 
 void BackwardRGATRelationalMatMul_wrapper_separatecoo(
     at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
     at::Tensor& separate_coo_eids, at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_idx, at::Tensor& weights_transposed,
-    at::Tensor& input, at::Tensor& gradout, at::Tensor& grad_input,
-    at::Tensor& grad_weights) {
+    at::Tensor& unique_srcs_and_dests_node_indices,
+    at::Tensor& weights_transposed, at::Tensor& input, at::Tensor& gradout,
+    at::Tensor& grad_input, at::Tensor& grad_weights) {
   _BackwardRGATRelationalMatMul_wrapper_separatecoo<16, false>(
       separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_idx,
+      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       weights_transposed, input, gradout, grad_input, grad_weights);
 }

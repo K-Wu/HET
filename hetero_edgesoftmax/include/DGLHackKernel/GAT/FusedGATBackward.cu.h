@@ -76,9 +76,9 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
               // Idx etype = etypes[e];
               Idx etype;
               if constexpr (ETypeRelPtrFlag) {
-                etype = binary_search(num_relations, etypes, eidx);
+                etype = binary_search(num_relations, etypes, e);
               } else {
-                etype = etypes[eidx];
+                etype = etypes[e];
               }
               dst_vid_relational = find_relational_compact_as_of_node_index(
                   etype, dst_vid, unique_srcs_and_dests_rel_ptr,
@@ -195,9 +195,9 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
               // Idx etype = etypes[e];
               Idx etype;
               if constexpr (ETypeRelPtrFlag) {
-                etype = binary_search(num_relations, etypes, eidx);
+                etype = binary_search(num_relations, etypes, e);
               } else {  // !ETypeRelPtrFlag
-                etype = etypes[eidx];
+                etype = etypes[e];
               }
               Idx src_vid_temp = find_relational_compact_as_of_node_index(
                   etype, src_vid, unique_srcs_and_dests_rel_ptr,
@@ -325,9 +325,9 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
               // Idx etype = etypes[e];
               Idx etype;
               if constexpr (ETypeRelPtrFlag) {
-                etype = binary_search(num_relations, etypes, eidx);
+                etype = binary_search(num_relations, etypes, e);
               } else {
-                etype = etypes[eidx];
+                etype = etypes[e];
               }
               dst_vid_relational = find_relational_compact_as_of_node_index(
                   etype, dst_vid, unique_srcs_and_dests_rel_ptr,

@@ -123,7 +123,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
       // Get sub-matrix Asub of A
       // Asub = &A[m * BLOCK_SIZE * num_A_cols + blockRow * BLOCK_SIZE];
       As[col][row] =
-          (row + m * BLOCK_SIZE < num_A_rows &&
+          (row + m * BLOCK_SIZE < blockRowEntryEndOrNumARows &&
            blockRow * BLOCK_SIZE + col < A_feat_dim_per_head &&
            idx_head < num_heads)
               ? GetRowMajorElement<Idx, IdxPtr, GatherAFlag,
@@ -133,18 +133,17 @@ __device__ __forceinline__ void _basic_MatMulKernel(
                     row + m * BLOCK_SIZE, idx_head, col + blockRow * BLOCK_SIZE,
                     num_heads, A_feat_dim_per_head)
               : 0.0f;
-      Bs[row][col] = (m * BLOCK_SIZE + row < num_A_rows &&
-                      blockCol * BLOCK_SIZE + col < B_feat_dim_per_head &&
-                      idx_head < num_heads)
-                         ? GetRowMajorElement<Idx, IdxPtr, GatherBFlag,
-                                              AdvancedGatherBFlag>(
-                               B, B_gather_list, unique_srcs_and_dests_rel_ptr,
-                               unique_srcs_and_dests_node_indices, idx_relation,
-                               m * BLOCK_SIZE + row,
-                               blockCol * BLOCK_SIZE + col +
-                                   idx_head * B_feat_dim_per_head,
-                               num_heads, B_feat_dim_per_head)
-                         : 0.0f;
+      Bs[row][col] =
+          (m * BLOCK_SIZE + row < blockRowEntryEndOrNumARows &&
+           blockCol * BLOCK_SIZE + col < B_feat_dim_per_head &&
+           idx_head < num_heads)
+              ? GetRowMajorElement<Idx, IdxPtr, GatherBFlag,
+                                   AdvancedGatherBFlag>(
+                    B, B_gather_list, unique_srcs_and_dests_rel_ptr,
+                    unique_srcs_and_dests_node_indices, idx_relation,
+                    m * BLOCK_SIZE + row, idx_head, blockCol * BLOCK_SIZE + col,
+                    num_heads, B_feat_dim_per_head)
+              : 0.0f;
     } else {
       // Get sub-matrix Asub of A
       // Asub = &A[blockRow * BLOCK_SIZE * num_A_cols + m * BLOCK_SIZE];
@@ -159,18 +158,17 @@ __device__ __forceinline__ void _basic_MatMulKernel(
                     row + blockRow * BLOCK_SIZE + blockRowEntryBeg, idx_head,
                     col + m * BLOCK_SIZE, num_heads, A_feat_dim_per_head)
               : 0.0f;
-      Bs[row][col] = (m * BLOCK_SIZE + row < num_A_cols &&
-                      blockCol * BLOCK_SIZE + col < B_feat_dim_per_head &&
-                      idx_head < num_heads)
-                         ? GetRowMajorElement<Idx, IdxPtr, GatherBFlag,
-                                              AdvancedGatherBFlag>(
-                               B, B_gather_list, unique_srcs_and_dests_rel_ptr,
-                               unique_srcs_and_dests_node_indices, idx_relation,
-                               m * BLOCK_SIZE + row,
-                               blockCol * BLOCK_SIZE + col +
-                                   idx_head * B_feat_dim_per_head,
-                               num_heads, B_feat_dim_per_head)
-                         : 0.0f;
+      Bs[row][col] =
+          (m * BLOCK_SIZE + row < num_A_cols &&
+           blockCol * BLOCK_SIZE + col < B_feat_dim_per_head &&
+           idx_head < num_heads)
+              ? GetRowMajorElement<Idx, IdxPtr, GatherBFlag,
+                                   AdvancedGatherBFlag>(
+                    B, B_gather_list, unique_srcs_and_dests_rel_ptr,
+                    unique_srcs_and_dests_node_indices, idx_relation,
+                    m * BLOCK_SIZE + row, idx_head, blockCol * BLOCK_SIZE + col,
+                    num_heads, B_feat_dim_per_head)
+              : 0.0f;
     }
 
     // Synchronize to make sure the sub-matrices are loaded
@@ -240,19 +238,20 @@ template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void RGNNFeatPerEdgeFWProp(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
     IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
-    IdxPtr C_eid_scatter_list, Idx num_A_rows, Idx num_A_cols, Idx num_B_cols,
-    Idx num_heads, int* accum_num_blocks_per_relation, Idx num_relations) {
+    IdxPtr C_eid_scatter_list, Idx num_A_cols, Idx num_B_cols, Idx num_heads,
+    int* accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BlockSize, false, true, false, false, false, true, false,
+  _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
                       Idx, IdxPtr>(
       node_feat_input,
       &weight[idx_relation * num_A_cols * num_B_cols / num_heads],
       node_feat_per_edge, A_col_row_idx_gather_list, nullptr,
-      C_eid_scatter_list, nullptr, nullptr, idx_relation, num_A_rows,
-      accum_num_blocks_per_relation[idx_relation], A_rel_ptr[idx_relation + 1],
-      num_A_cols / num_heads, num_B_cols / num_heads, num_heads);
+      C_eid_scatter_list, nullptr, nullptr, idx_relation,
+      A_rel_ptr[idx_relation + 1], accum_num_blocks_per_relation[idx_relation],
+      A_rel_ptr[idx_relation], num_A_cols / num_heads, num_B_cols / num_heads,
+      num_heads);
 }
 
 template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
@@ -260,56 +259,55 @@ __global__ void RGNNFeatCompactFWProp(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
     IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
     IdxPtr unique_srcs_and_dests_rel_ptr,
-    IdxPtr unique_srcs_and_dests_node_indices, Idx num_A_rows, Idx num_A_cols,
-    Idx num_B_cols, Idx num_heads, int* accum_num_blocks_per_relation,
-    Idx num_relations) {
+    IdxPtr unique_srcs_and_dests_node_indices, Idx num_A_cols, Idx num_B_cols,
+    Idx num_heads, int* accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BlockSize, false, true, false, false, false, true, true,
+  _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, true,
                       Idx, IdxPtr>(
       node_feat_input, weight, node_feat_per_edge, A_col_row_idx_gather_list,
       nullptr, A_col_row_idx_gather_list, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_indices, idx_relation, num_A_rows,
-      accum_num_blocks_per_relation[idx_relation], A_rel_ptr[idx_relation + 1],
-      num_A_cols / num_heads, num_B_cols / num_heads, num_heads);
+      unique_srcs_and_dests_node_indices, idx_relation,
+      A_rel_ptr[idx_relation + 1], accum_num_blocks_per_relation[idx_relation],
+      A_rel_ptr[idx_relation], num_A_cols / num_heads, num_B_cols / num_heads,
+      num_heads);
 }
 
 template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void RGNNDeltaNodeFeatInputBWProp(
     float* delta_feat_per_edge, float* weight_transposed,
     float* delta_node_input, IdxPtr A_eid_gather_list, IdxPtr A_rel_ptr,
-    IdxPtr C_col_row_idx_scatter_list, Idx num_A_rows, Idx num_A_cols,
-    Idx num_B_cols, Idx num_heads, int* accum_num_blocks_per_relation,
-    Idx num_relations) {
+    IdxPtr C_col_row_idx_scatter_list, Idx num_A_cols, Idx num_B_cols,
+    Idx num_heads, int* accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BlockSize, false, true, false, false, false, true, false,
+  _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
                       Idx, IdxPtr>(
       delta_feat_per_edge, weight_transposed, delta_node_input,
       A_eid_gather_list, nullptr, C_col_row_idx_scatter_list, nullptr, nullptr,
-      idx_relation, num_A_rows, accum_num_blocks_per_relation[idx_relation],
-      A_rel_ptr[idx_relation + 1], num_A_cols / num_heads,
-      num_B_cols / num_heads, num_heads);
+      idx_relation, A_rel_ptr[idx_relation + 1],
+      accum_num_blocks_per_relation[idx_relation], A_rel_ptr[idx_relation],
+      num_A_cols / num_heads, num_B_cols / num_heads, num_heads);
 }
 
 template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void RGNNDeltaWeightBWProp(
     float* node_feat_input, float* delta_feat_per_edge, float* delta_weight,
     IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
-    IdxPtr B_eid_gather_list, Idx num_A_rows, Idx num_A_cols, Idx num_B_cols,
-    Idx num_heads, int* accum_num_blocks_per_relation, Idx num_relations) {
+    IdxPtr B_eid_gather_list, Idx num_A_cols, Idx num_B_cols, Idx num_heads,
+    int* accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BlockSize, true, true, false, true, false, false, false,
+  _basic_MatMulKernel<BLOCK_SIZE, true, true, false, true, false, false, false,
                       Idx, IdxPtr>(
       node_feat_input, delta_feat_per_edge, delta_weight,
       A_col_row_idx_gather_list, B_eid_gather_list, nullptr, nullptr, nullptr,
-      idx_relation, num_A_rows, accum_num_blocks_per_relation[idx_relation],
-      A_rel_ptr[idx_relation + 1], num_A_cols / num_heads,
-      num_B_cols / num_heads, num_heads);
+      idx_relation, A_rel_ptr[idx_relation + 1],
+      accum_num_blocks_per_relation[idx_relation], A_rel_ptr[idx_relation],
+      num_A_cols / num_heads, num_B_cols / num_heads, num_heads);
 }
 
 // blockDim.y == ceil_div(A_col_row_idx_gather_list.size(), BLOCK_SIZE)
@@ -317,20 +315,19 @@ template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void RGNNDeltaNodeFeatInputCompactBWProp(
     float* delta_feat_compact, float* weight_transpose,
     float* delta_node_feat_input, IdxPtr unique_srcs_and_dests_rel_ptr,
-    IdxPtr unique_srcs_and_dests_node_indices, Idx num_A_rows, Idx num_A_cols,
+    IdxPtr unique_srcs_and_dests_node_indices, Idx num_edges, Idx num_A_cols,
     Idx num_B_cols, Idx num_heads, int* accum_num_blocks_per_relation,
     Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BlockSize, false, true, true, false, false, false, false,
+  _basic_MatMulKernel<BLOCK_SIZE, false, true, true, false, false, false, false,
                       Idx, IdxPtr>(
       delta_feat_compact, weight_transpose, delta_node_feat_input,
       unique_srcs_and_dests_node_indices, nullptr, nullptr,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-      idx_relation, num_A_rows, accum_num_blocks_per_relation[idx_relation],
-      unique_srcs_and_dests_rel_ptr[idx_relation + 1], num_A_cols / num_heads,
-      num_B_cols / num_heads, num_heads);
+      idx_relation, num_edges, accum_num_blocks_per_relation[idx_relation], 0,
+      num_A_cols / num_heads, num_B_cols / num_heads, num_heads);
 }
 
 // blockDim.y == ceil_div(A_col_row_idx_gather_list.size(), BLOCK_SIZE)
@@ -338,20 +335,19 @@ template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void RGNNDeltaWeightCompactBWProp(
     float* delta_weight, float* feat_input, float* delta_feat_compact,
     IdxPtr unique_srcs_and_dests_rel_ptr,
-    IdxPtr unique_srcs_and_dests_node_indices, Idx num_A_rows, Idx num_A_cols,
+    IdxPtr unique_srcs_and_dests_node_indices, Idx num_edges, Idx num_A_cols,
     Idx num_B_cols, Idx num_heads, int* accum_num_blocks_per_relation,
     Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BlockSize, true, true, false, true, true, false, false,
+  _basic_MatMulKernel<BLOCK_SIZE, true, true, false, true, true, false, false,
                       Idx, IdxPtr>(
       feat_input, delta_feat_compact,
       &delta_weight[idx_relation * num_B_cols * num_A_cols / num_heads],
       unique_srcs_and_dests_node_indices, unique_srcs_and_dests_node_indices,
       nullptr, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_indices, idx_relation, num_A_rows,
-      accum_num_blocks_per_relation[idx_relation],
-      unique_srcs_and_dests_rel_ptr[idx_relation + 1], num_A_cols / num_heads,
+      unique_srcs_and_dests_node_indices, idx_relation, num_edges,
+      accum_num_blocks_per_relation[idx_relation], 0, num_A_cols / num_heads,
       num_B_cols / num_heads, num_heads);
 }

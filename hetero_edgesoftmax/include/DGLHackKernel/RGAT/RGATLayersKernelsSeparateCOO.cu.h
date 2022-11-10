@@ -15,7 +15,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
   Idx e_xlen = gdata.e_xlen;
   Idx hidden_xlen = gdata.feat_src_xlen / e_xlen;
   for (Idx eidx = blockIdx.y; eidx < num_edges; eidx += gridDim.y) {
-    Idx dst_vid = col_indices[e];
+    Idx dst_vid = col_indices[eidx];
     // for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y)
     // { Idx start_off = *(row_offsets + dst_vid); Idx end_off = *(row_offsets +
     // dst_vid + 1);
@@ -25,7 +25,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
            feat_idx += blockDim.y) {
         DType s = 0.;
         // for (Idx eidx = start_off; eidx < end_off; eidx++) {
-        Idx src_vid = column_indices[eidx];
+        Idx src_vid = row_indices[eidx];
         Idx feat_src_entry_id;
         Idx edge_id = gdata.eids[eidx];
         if constexpr (RelationalFlag) {
@@ -52,9 +52,12 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
                 gdata.sum[sum_idx * e_xlen + head_idx] *
                 gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                head_idx * hidden_xlen + feat_idx]);
-          atomicAdd(gdata.feat_dst + dst_vid * gdata.feat_dst_xlen +
-                        head_idx * hidden_xlen + feat_idx,
-                    s);
+          atomicAdd(&gdata.ret[dst_vid * gdata.feat_src_xlen +
+                               head_idx * hidden_xlen + feat_idx],
+                    gdata.exp[edge_id * e_xlen + head_idx] /
+                        gdata.sum[sum_idx * e_xlen + head_idx] *
+                        gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
+                                       head_idx * hidden_xlen + feat_idx]);
         } else {  // !RelationalFlag
           feat_src_entry_id = edge_id;
           s += gdata.exp[edge_id * e_xlen + head_idx] /
@@ -62,10 +65,14 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
                gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx];
 
-          atomicAdd(gdata.feat_dst + dst_vid * gdata.feat_dst_xlen +
-                        head_idx * hidden_xlen + feat_idx,
-                    s);
+          atomicAdd(&gdata.ret[dst_vid * gdata.feat_src_xlen +
+                               head_idx * hidden_xlen + feat_idx],
+                    gdata.exp[edge_id * e_xlen + head_idx] /
+                        gdata.sum[dst_vid * e_xlen + head_idx] *
+                        gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
+                                       head_idx * hidden_xlen + feat_idx]);
         }
+
         //}
         // gdata.ret[dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen +
         //           feat_idx] = s;
@@ -74,14 +81,13 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
   }
 }
 
-template <typename Idx, typename DType>
-__global__ void
-gatSumProdZipDivKernel_relational_separate_coo_compact_as_of_node(
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
+__global__ void gatSumProdZipDivKernel_relational_separate_coo(
     GatFusedData<Idx, DType> gdata, const Idx* rel_ptrs, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  _gatSumProdZipDivKernel_edge_parallel<Idx, DType, true, true>(
+  _gatSumProdZipDivKernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag, true>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       num_relations);
@@ -109,7 +115,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
     // Idx end_off = *(row_offsets + dst_vid + 1);
 
     for (Idx feat_idx = tx; feat_idx < e_xlen;
-         feat_idx += blockDim.x * gridDim.x;) {
+         feat_idx += blockDim.x * gridDim.x) {
       // 1. Load dstnation vertex into shared memory
       Idx feat_off_dst;
       if constexpr (CompactAsOfNodeFlag) {
@@ -120,7 +126,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
       // 2. Do the computation
       DType sum = 0.;
       // for (Idx eidx = start_off; eidx < end_off; ++eidx) {
-      Idx src_id = *(column_indices + eidx);
+      Idx src_id = *(row_indices + eidx);
       Idx feat_off_src;
       Idx edge_id = gdata.eids[eidx];
       Idx dst_vid_relational;
@@ -175,14 +181,14 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
   }
 }
 
-template <typename Idx, typename DType>
-__global__ void
-gatExpLeakyReluSumKernel_relational_separate_coo_compact_as_of_node(
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
+__global__ void gatExpLeakyReluSumKernel_relational_separate_coo(
     GatFusedData<Idx, DType> gdata, const Idx* rel_ptrs, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  _gatExpLeakyReluSumKernel_edge_parallel<Idx, DType, true, true>(
+  _gatExpLeakyReluSumKernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag,
+                                          true>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       num_relations);

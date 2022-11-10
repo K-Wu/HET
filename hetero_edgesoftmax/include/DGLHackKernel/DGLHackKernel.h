@@ -14,7 +14,6 @@
 #include "../hetero_edgesoftmax.h"
 #include "../utils.cu.h"
 
-#include "DGLHackUtils.h"
 #include "GAT/FusedGAT.cu.h"
 #include "GAT/FusedGATBackward.cu.h"
 #include "OpPrototyping/GATProtoOps.h"
