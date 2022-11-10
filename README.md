@@ -29,3 +29,20 @@ cmake --build . --verbose
 
 ## Warning on Infidel Sort by Src Out Degree and by Etype
 This repo contains data sorted in infidel manner (in [[hetero_edgesoftmax/data]]) with ".infidel_sorted" mark and utility to do such sort (in [[hetero_edgesoftmax/python/utils/coo_sorters.py]]). This is a sort mechanism solely for load balance in RGCN and is not a general purpose sort. The sorted elements, i.e., source node index or etype, are reindexed while other elements, i.e., one of source node index or etype, and eids and destination node index, are not. Also "transposed.<dataset_name>.coo.infidel_sorted.by_srcs_outgoing_freq.<element_name>.npy" are sorted after transposed so using the same eid should refer to the same edge in the original data.
+
+
+## Working in submodules
+To change the url of a submodule, use the following command:
+```
+git submodule set-url </reporoot/to/submodule_name> <new_url>
+```
+
+To set a different push url than the fetch url, inside the submodule directory, use the following command:
+```
+git remote set-url --push <branch_name> <new_url>
+```
+
+Try the following command to push in a submodule:
+```
+git push origin HEAD:master
+```
