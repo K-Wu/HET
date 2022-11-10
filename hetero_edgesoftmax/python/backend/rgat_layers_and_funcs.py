@@ -162,6 +162,8 @@ class RgatRelationalMatmul(th.autograd.Function):
         separate_coo_relptrs,
         separate_coo_node_indicies,
         separate_coo_eids,
+        unique_srcs_and_dests_rel_ptr,
+        unique_srcs_and_dests_node_indices,
         weights,
         input,
         ret,
@@ -170,6 +172,8 @@ class RgatRelationalMatmul(th.autograd.Function):
             separate_coo_relptrs,
             separate_coo_node_indicies,
             separate_coo_eids,
+            unique_srcs_and_dests_rel_ptr,
+            unique_srcs_and_dests_node_indices,
             weights,
             input,
         )
@@ -177,6 +181,8 @@ class RgatRelationalMatmul(th.autograd.Function):
             separate_coo_relptrs,
             separate_coo_node_indicies,
             separate_coo_eids,
+            unique_srcs_and_dests_rel_ptr,
+            unique_srcs_and_dests_node_indices,
             weights,
             input,
             ret,
@@ -189,6 +195,8 @@ class RgatRelationalMatmul(th.autograd.Function):
             separate_coo_relptrs,
             separate_coo_node_indicies,
             separate_coo_eids,
+            unique_srcs_and_dests_rel_ptr,
+            unique_srcs_and_dests_node_indices,
             weights,
             input,
         ) = ctx.saved_tensors
@@ -198,6 +206,8 @@ class RgatRelationalMatmul(th.autograd.Function):
             separate_coo_relptrs,
             separate_coo_node_indicies,
             separate_coo_eids,
+            unique_srcs_and_dests_rel_ptr,
+            unique_srcs_and_dests_node_indices,
             th.transpose(weights, 2, 3),
             input,
             gradout,
@@ -215,7 +225,13 @@ class RgatRelationalMatmul(th.autograd.Function):
 
 
 def rgat_relational_matmul(
-    separate_coo_relptrs, separate_coo_node_indicies, separate_coo_eids, weights, input
+    separate_coo_relptrs,
+    separate_coo_node_indicies,
+    separate_coo_eids,
+    unique_srcs_and_dests_rel_ptr,
+    unique_srcs_and_dests_node_indices,
+    weights,
+    input,
 ):
     ret = th.zeros(
         (separate_coo_node_indicies.numel(), weights.size(1), weights.size(3)),
@@ -227,6 +243,8 @@ def rgat_relational_matmul(
         separate_coo_relptrs,
         separate_coo_node_indicies,
         separate_coo_eids,
+        unique_srcs_and_dests_rel_ptr,
+        unique_srcs_and_dests_node_indices,
         weights,
         input,
         ret,
@@ -375,9 +393,6 @@ class RgatRelationalMatmulCompactAsOfNode(th.autograd.Function):
     @staticmethod
     def forward(
         ctx,
-        separate_coo_relptrs,
-        separate_coo_node_indices,
-        separate_coo_eids,
         unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_idx,
         weight,
@@ -385,9 +400,6 @@ class RgatRelationalMatmulCompactAsOfNode(th.autograd.Function):
         ret,
     ):
         ctx.save_for_backward(
-            separate_coo_relptrs,
-            separate_coo_node_indices,
-            separate_coo_eids,
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
             weight,
@@ -395,9 +407,6 @@ class RgatRelationalMatmulCompactAsOfNode(th.autograd.Function):
             ret,
         )
         K.rgat_relational_matmul_compact_as_of_node(
-            separate_coo_relptrs,
-            separate_coo_node_indices,
-            separate_coo_eids,
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
             weight,
@@ -443,9 +452,6 @@ class RgatRelationalMatmulCompactAsOfNode(th.autograd.Function):
 
 
 def rgat_relational_matmul_compact_as_of_node(
-    separate_coo_relptrs,
-    separate_coo_node_indices,
-    separate_coo_eids,
     unique_srcs_and_dests_rel_ptr,
     unique_srcs_and_dests_node_indices,
     weight,
@@ -458,9 +464,6 @@ def rgat_relational_matmul_compact_as_of_node(
         requires_grad=True,
     )
     return RgatRelationalMatmulCompactAsOfNode.apply(
-        separate_coo_relptrs,
-        separate_coo_node_indices,
-        separate_coo_eids,
         unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices,
         weight,

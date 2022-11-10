@@ -9,11 +9,11 @@ __device__ __forceinline__ float& GetRowMajorElementBasic(
     Idx feat_dim_per_head, Idx row, Idx idx_head, Idx idx_feat) {
   Idx num_cols = num_heads * feat_dim_per_head;
   if constexpr (GatherFlag) {
-    return matrix_data[(idx_head * feat_dim_per_head) +
-                       (gather_list[row]) * num_cols + (idx_feat)];
+    return matrix_data[idx_head * feat_dim_per_head +
+                       gather_list[row] * num_cols + idx_feat];
   } else {
-    return matrix_data[(idx_head * feat_dim_per_head) + (row)*num_cols +
-                       (idx_feat)];
+    return matrix_data[idx_head * feat_dim_per_head + row * num_cols +
+                       idx_feat];
   }
 }
 
@@ -215,8 +215,8 @@ __device__ __forceinline__ void _basic_MatMulKernel(
 // feat_per_edge = input * weight. C needs eid scatter list, A needs col|row_idx
 // gather list. GatherA = true, ScatterC = true
 
-// feat_compact = input * weight. C needs (eid, idx_relation, unique) -> offset
-// map. A needs col|row_idx gather list, GatherA =true, ScatterC = true,
+// feat_compact = input * weight. C needs (col|row_idx, idx_relation, unique) ->
+// offset map. A needs col|row_idx gather list, GatherA =true, ScatterC = true,
 // AdvancedScatterC = true.
 
 // configurations of backward propagation procedures
@@ -228,10 +228,10 @@ __device__ __forceinline__ void _basic_MatMulKernel(
 // list, A needs col|row_idx as gather list. GatherA = true, GatherB = true,
 // AInFlyTranspose = true
 
-// delta input = delta feat_compact * weight T : A needs (eid, idx_relation,
-// unique) -> offset map, GatherA=true, AdvancedGatherA=true
+// delta input = delta feat_compact * weight T : A needs (col|row_idx,
+// idx_relation, unique) -> offset map, GatherA=true, AdvancedGatherA=true
 
-// delta weight =  feat_input T * delta feat_compact: B needs (eid,
+// delta weight =  feat_input T * delta feat_compact: B needs (col|row_idx,
 // idx_relation, unique) -> offset map, A needs col|row_idx as gather list.
 // GatherA=true, GatherB=true, AdvancedGatherB=true, AInFlyTranspose = true
 
@@ -241,8 +241,7 @@ __global__ void RGNNFeatPerEdgeFWProp(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
     IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
     IdxPtr C_eid_scatter_list, Idx num_A_rows, Idx num_A_cols, Idx num_B_cols,
-    Idx num_heads, int* num_blocks_per_relation,
-    int* accum_num_blocks_per_relation, Idx num_relations) {
+    Idx num_heads, int* accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
@@ -262,8 +261,8 @@ __global__ void RGNNFeatCompactFWProp(
     IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx num_A_rows, Idx num_A_cols,
-    Idx num_B_cols, Idx num_heads, int* num_blocks_per_relation,
-    int* accum_num_blocks_per_relation, Idx num_relations) {
+    Idx num_B_cols, Idx num_heads, int* accum_num_blocks_per_relation,
+    Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
@@ -281,8 +280,8 @@ __global__ void RGNNDeltaNodeFeatInputBWProp(
     float* delta_feat_per_edge, float* weight_transposed,
     float* delta_node_input, IdxPtr A_eid_gather_list, IdxPtr A_rel_ptr,
     IdxPtr C_col_row_idx_scatter_list, Idx num_A_rows, Idx num_A_cols,
-    Idx num_B_cols, Idx num_heads, int* num_blocks_per_relation,
-    int* accum_num_blocks_per_relation, Idx num_relations) {
+    Idx num_B_cols, Idx num_heads, int* accum_num_blocks_per_relation,
+    Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
@@ -300,8 +299,7 @@ __global__ void RGNNDeltaWeightBWProp(
     float* node_feat_input, float* delta_feat_per_edge, float* delta_weight,
     IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
     IdxPtr B_eid_gather_list, Idx num_A_rows, Idx num_A_cols, Idx num_B_cols,
-    Idx num_heads, int* num_blocks_per_relation,
-    int* accum_num_blocks_per_relation, Idx num_relations) {
+    Idx num_heads, int* accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
@@ -318,21 +316,20 @@ __global__ void RGNNDeltaWeightBWProp(
 template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void RGNNDeltaNodeFeatInputCompactBWProp(
     float* delta_feat_compact, float* weight_transpose,
-    float* delta_node_feat_input, IdxPtr A_col_row_idx_gather_list,
-    IdxPtr A_rel_ptr, IdxPtr unique_srcs_and_dests_rel_ptr,
+    float* delta_node_feat_input, IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx num_A_rows, Idx num_A_cols,
-    Idx num_B_cols, Idx num_heads, int* num_blocks_per_relation,
-    int* accum_num_blocks_per_relation, Idx num_relations) {
+    Idx num_B_cols, Idx num_heads, int* accum_num_blocks_per_relation,
+    Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BlockSize, false, true, true, false, false, false, false,
                       Idx, IdxPtr>(
       delta_feat_compact, weight_transpose, delta_node_feat_input,
-      A_col_row_idx_gather_list, nullptr, nullptr,
+      unique_srcs_and_dests_node_indices, nullptr, nullptr,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       idx_relation, num_A_rows, accum_num_blocks_per_relation[idx_relation],
-      A_rel_ptr[idx_relation + 1], num_A_cols / num_heads,
+      unique_srcs_and_dests_rel_ptr[idx_relation + 1], num_A_cols / num_heads,
       num_B_cols / num_heads, num_heads);
 }
 
@@ -340,11 +337,10 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWProp(
 template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void RGNNDeltaWeightCompactBWProp(
     float* delta_weight, float* feat_input, float* delta_feat_compact,
-    IdxPtr A_col_row_idx, IdxPtr A_rel_ptr,
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx num_A_rows, Idx num_A_cols,
-    Idx num_B_cols, Idx num_heads, int* num_blocks_per_relation,
-    int* accum_num_blocks_per_relation, Idx num_relations) {
+    Idx num_B_cols, Idx num_heads, int* accum_num_blocks_per_relation,
+    Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
@@ -352,8 +348,10 @@ __global__ void RGNNDeltaWeightCompactBWProp(
                       Idx, IdxPtr>(
       feat_input, delta_feat_compact,
       &delta_weight[idx_relation * num_B_cols * num_A_cols / num_heads],
-      A_col_row_idx, A_col_row_idx, nullptr, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, unique_srcs_and_dests_node_indices,
+      nullptr, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices, idx_relation, num_A_rows,
-      accum_num_blocks_per_relation[idx_relation], A_rel_ptr[idx_relation + 1],
-      num_A_cols / num_heads, num_B_cols / num_heads, num_heads);
+      accum_num_blocks_per_relation[idx_relation],
+      unique_srcs_and_dests_rel_ptr[idx_relation + 1], num_A_cols / num_heads,
+      num_B_cols / num_heads, num_heads);
 }

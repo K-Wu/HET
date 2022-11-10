@@ -1,13 +1,14 @@
 // from
 // https://stackoverflow.com/questions/68401650/how-can-i-make-a-pytorch-extension-with-cmake
 // kernels defined in this file are simply wrapped up in
-// hetero_edgesoftmax/python/kernels.py to provide python API, then used to
-// define autograd functions and layers in hetero_edgesoftmax/python/kernels.py,
+// hetero_edgesoftmax/python/kernels to provide python API, then used to
+// define autograd functions and layers in hetero_edgesoftmax/python/kernels,
 // which is finally referred to by end2end cases in
 // hetero_edgesoftmax/python/<model name>/.*.py
 // NB: This contains wrapper versions for python api export originally
-// implemented at hetero_edgesoftmax/include/DGLHackKernel/RGCNLayers.h. Please
-// update accordingly whenever there is update.
+// implemented at
+// [[hetero_edgesoftmax/include/DGLHackKernel/RGCN/RGCNLayersKernels.cu.h]].
+// Please update accordingly whenever there is update.
 #include <c10/cuda/CUDAException.h>
 #include <c10/cuda/CUDAStream.h>
 #include <torch/extension.h>
@@ -121,21 +122,35 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("backward_fused_gat_csr",
         BackwardFusedGatKernelImpl_wrapper_integratedcsr);
   // RGAT Declaration
-  m.def("relational_fused_gat_kernel_csr",
-        RelationalFusedGATKernel_wrapper_integratedcsr);
-  m.def("backward_relational_fused_gat_csr",
-        BackwardRelationalFusedGATKernel_wrapper_integratedcsr);
+  // RGAT Relational GEMM
   m.def("rgat_relational_matmul", RGATRelationalMatMul_wrapper_separatecoo);
   m.def("rgat_relational_matmul_backward",
         BackwardRGATRelationalMatMul_wrapper_separatecoo);
-  m.def(
-      "backward_rgat_relational_fused_gat_compact_as_of_node_csr",
-      BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr);
-  m.def("rgat_relational_fused_gat_compact_as_of_node_csr",
-        RGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr);
   m.def(
       "backward_rgat_relational_matmul_compact_as_of_node",
       BackwardRGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices);
   m.def("rgat_relational_matmul_compact_as_of_node",
         RGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices);
+
+  // RGAT Relational SpMM
+  m.def(
+      "backward_rgat_relational_fused_gat_compact_as_of_node_edge_parallel_"
+      "separate_coo",
+      BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_edge_parallel_separatecoo);
+  m.def(
+      "rgat_relational_fused_gat_compact_as_of_node_edge_parallel_separate_coo",
+      RGATRelationalFusedGATKernelCompactAsOfNode_wrapper_edge_parallel_separatecoo);
+  m.def("relational_fused_gat_kernel_edge_parallel_separate_coo",
+        RelationalFusedGATKernel_wrapper_edge_parallel_separatecoo);
+  m.def("backward_relational_fused_gat_edge_parallel_separate_coo",
+        BackwardRelationalFusedGATKernel_wrapper_edge_parallel_separatecoo);
+  m.def(
+      "backward_rgat_relational_fused_gat_compact_as_of_node_csr",
+      BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr);
+  m.def("rgat_relational_fused_gat_compact_as_of_node_csr",
+        RGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr);
+  m.def("relational_fused_gat_kernel_csr",
+        RelationalFusedGATKernel_wrapper_integratedcsr);
+  m.def("backward_relational_fused_gat_csr",
+        BackwardRelationalFusedGATKernel_wrapper_integratedcsr);
 }

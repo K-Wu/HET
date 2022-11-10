@@ -7,7 +7,8 @@
 // C = A * B (all are row-major matrices)
 
 // Get a matrix element
-__device__ float& GetElement(float* A, int num_cols, int row, int col) {
+__device__ __forceinline__ float& GetElement(float* A, int num_cols, int row,
+                                             int col) {
   return A[row * num_cols + col];
 }
 

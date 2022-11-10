@@ -21,7 +21,7 @@ struct GatFusedData {
 };
 
 template <typename DType>
-__device__ DType gatLeakyReluExp(DType val, DType slope) {
+__device__ __forceinline__ DType gatLeakyReluExp(DType val, DType slope) {
   return val > 0 ? exp(val) : exp(slope * val);
 }
 
@@ -29,24 +29,21 @@ __device__ DType gatLeakyReluExp(DType val, DType slope) {
 // NB: when CompactAsOfNodeFlag is false, gdata.el, gdata.er, gdata.feat_src are
 // edge-wise data instead of node-wise.
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag>
-__global__ void gatSumProdZipDivKernel(
+          bool RelationalFlag, bool ETypeRelPtrFlag>
+__device__ __forceinline__ void _gatSumProdZipDivKernel(
     GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices) {
-  Idx dst_vid = blockIdx.y;
-  Idx stride_vid = gridDim.y;
-  Idx stride_head = blockDim.x * gridDim.x;
+    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx e_xlen = gdata.e_xlen;
   Idx hidden_xlen = gdata.feat_src_xlen / e_xlen;
-  while (dst_vid < num_rows) {
+  for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
     Idx start_off = *(row_offsets + dst_vid);
     Idx end_off = *(row_offsets + dst_vid + 1);
-    Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    while (head_idx < e_xlen) {
-      Idx feat_idx = threadIdx.y;
-      while (feat_idx < hidden_xlen) {
+    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
+         head_idx < e_xlen; head_idx += blockDim.x * gridDim.x) {
+      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
+           feat_idx += blockDim.y) {
         DType s = 0.;
         for (Idx eidx = start_off; eidx < end_off; eidx++) {
           Idx src_vid = column_indices[eidx];
@@ -54,7 +51,12 @@ __global__ void gatSumProdZipDivKernel(
           Idx edge_id = gdata.eids[eidx];
           if constexpr (RelationalFlag) {
             Idx sum_idx;
-            Idx etype = etypes[eidx];
+            Idx etype;
+            if constexpr (ETypeRelPtrFlag) {
+              etype = binary_search(num_relations, etypes, eidx);
+            } else {
+              etype = etypes[eidx];
+            }
             if constexpr (CompactAsOfNodeFlag) {
               feat_src_entry_id = src_vid;
               sum_idx = find_relational_compact_as_of_node_index(
@@ -71,7 +73,7 @@ __global__ void gatSumProdZipDivKernel(
                   gdata.sum[sum_idx * e_xlen + head_idx] *
                   gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                  head_idx * hidden_xlen + feat_idx]);
-          } else {
+          } else {  // !RelationalFlag
             feat_src_entry_id = edge_id;
             s += gdata.exp[edge_id * e_xlen + head_idx] /
                  gdata.sum[dst_vid * e_xlen + head_idx] *
@@ -82,37 +84,46 @@ __global__ void gatSumProdZipDivKernel(
 
         gdata.ret[dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen +
                   feat_idx] = s;
-
-        feat_idx += blockDim.y;
       }
-      head_idx += stride_head;
     }
-    dst_vid += stride_vid;
   }
+}
+
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag>
+__global__ void gatSumProdZipDivKernel(
+    GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices) {
+  _gatSumProdZipDivKernel<Idx, DType, CompactAsOfNodeFlag, RelationalFlag,
+                          false>(gdata, row_offsets, column_indices, etypes,
+                                 num_rows, unique_srcs_and_dests_rel_ptr,
+                                 unique_srcs_and_dests_node_indices, -1);
 }
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 // NB: when CompactAsOfNodeFlag is false, gdata.el, gdata.er, gdata.feat_src are
 // edge-wise data instead of node-wise.
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag>
-__global__ void gatExpLeakyReluSumKernel(
+          bool RelationalFlag, bool ETypeRelPtrFlag>
+__device__ __forceinline__ void _gatExpLeakyReluSumKernel(
     GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices) {
+    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
   // extern __shared__ DType er[];
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
-  Idx stride_x = blockDim.x * gridDim.x;
-  Idx stride_y = blockDim.y * gridDim.y;
-  Idx dst_vid = ty;
+
   Idx e_xlen = gdata.e_xlen;
-  while (dst_vid < num_rows) {
+  for (Idx dst_vid = ty; dst_vid < num_rows;
+       dst_vid += blockDim.y * gridDim.y;) {
     Idx start_off = *(row_offsets + dst_vid);
     Idx end_off = *(row_offsets + dst_vid + 1);
-    Idx feat_idx = tx;
-    while (feat_idx < e_xlen) {
+
+    for (Idx feat_idx = tx; feat_idx < e_xlen;
+         feat_idx += blockDim.x * gridDim.x;) {
       // 1. Load dstnation vertex into shared memory
       Idx feat_off_dst;
       if constexpr (CompactAsOfNodeFlag) {
@@ -129,7 +140,13 @@ __global__ void gatExpLeakyReluSumKernel(
         Idx dst_vid_relational;
         if constexpr (CompactAsOfNodeFlag) {
           if constexpr (RelationalFlag) {
-            Idx etype = etypes[eidx];
+            // Idx etype = etypes[eidx];
+            Idx etype;
+            if constexpr (ETypeRelPtrFlag) {
+              etype = binary_search(num_relations, etypes, eidx);
+            } else {
+              etype = etypes[eidx];
+            }
             Idx src_vid_temp = find_relational_compact_as_of_node_index(
                 etype, src_id, unique_srcs_and_dests_node_indices,
                 unique_srcs_and_dests_rel_ptr);
@@ -168,10 +185,20 @@ __global__ void gatExpLeakyReluSumKernel(
       if constexpr (!RelationalFlag) {
         gdata.sum[Idx(dst_vid * e_xlen) + feat_idx] = sum;
       }
-      feat_idx += stride_x;
     }
-    dst_vid += stride_y;
   }
+}
+
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag>
+__global__ void gatExpLeakyReluSumKernel(
+    GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices) {
+  _gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, RelationalFlag>(
+      gdata, row_offsets, column_indices, etypes, num_rows,
+      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
 }
 
 template <typename Idx, typename DType>

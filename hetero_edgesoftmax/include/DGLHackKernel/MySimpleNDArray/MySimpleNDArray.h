@@ -88,7 +88,7 @@ class MySimpleNDArray {
     return thrust::equal(data.begin(), data.end(), other.data.begin());
   }
 
-  int64_t ComputeXLength() {
+  int64_t SeastarComputeXLength() {
     int64_t ret = 1;
     for (int i = 1; i < shape.size(); ++i) {
       ret *= shape[i];

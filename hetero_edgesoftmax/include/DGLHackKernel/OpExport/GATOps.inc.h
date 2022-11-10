@@ -4,14 +4,7 @@
 #include <c10/cuda/CUDAStream.h>
 #include <torch/extension.h>
 #include <torch/library.h>
-
-int64_t ComputeXLength(at::Tensor& tensor) {
-  int64_t ret = 1;
-  for (int i = 1; i < tensor.dim(); ++i) {
-    ret *= tensor.size(i);
-  }
-  return ret;
-}
+#include "DGLHackKernel/DGLHackUtils.h"
 
 template </*int XPU, */ typename Idx, typename DType>
 void _FusedGatKernelImpl_wrapper_integratedcsr(at::Tensor& incsr_row_ptr,
@@ -32,9 +25,9 @@ void _FusedGatKernelImpl_wrapper_integratedcsr(at::Tensor& incsr_row_ptr,
   // struct using raw float pointers get csr matrix
   GatFusedData<Idx, DType> gdata;
 
-  int64_t el_xlen = ComputeXLength(el);
-  int64_t feat_src_xlen = ComputeXLength(feat_src);
-  int64_t ret_len = ComputeXLength(ret);
+  int64_t el_xlen = SeastarComputeXLength(el);
+  int64_t feat_src_xlen = SeastarComputeXLength(feat_src);
+  int64_t ret_len = SeastarComputeXLength(ret);
 
   gdata.feat_src = feat_src.data_ptr<DType>();
   gdata.el = el.data_ptr<DType>();
@@ -95,8 +88,8 @@ void _FusedGatKernelImpl_wrapper_integratedcsr(at::Tensor& incsr_row_ptr,
 
   // cuda_err_chk(cudaPeekAtLastError());
   // cuda_err_chk(cudaDeviceSynchronize());
-  nthrs_x = FindNumThreads(el_xlen, 64);
-  nthrs_y = FindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
+  nthrs_x = SeastarFindNumThreads(el_xlen, 64);
+  nthrs_y = SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
   nblks_x = 1;
   nblks_y = std::min(gdata.n, MAX_NBLKS);
   const dim3 nthrs2(nthrs_x, nthrs_y);
@@ -135,7 +128,7 @@ void _BackwardFusedGatKernelImpl_wrapper_integratedcsr(
     at::Tensor& grad_out, at::Tensor& grad_feat_src, at::Tensor& grad_el,
     at::Tensor& grad_er,
     // MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids,
-    // //thrust::sequence<Idx>(eids.data.begin(),eids.data.end(), 0); TODO:
+    // thrust::sequence<Idx>(eids.data.begin(),eids.data.end(), 0); TODO:
     // check if it needs a different eid
     double slope) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
@@ -149,8 +142,8 @@ void _BackwardFusedGatKernelImpl_wrapper_integratedcsr(
   // zero out ret, and packing feat_src, el, er, ret, graph together into one
   // struct using raw float pointers get csr matrix
   BackwardGatFusedData<Idx, DType> gdata;
-  int64_t el_xlen = ComputeXLength(el);
-  int64_t feat_src_xlen = ComputeXLength(feat_src);
+  int64_t el_xlen = SeastarComputeXLength(el);
+  int64_t feat_src_xlen = SeastarComputeXLength(feat_src);
   gdata.feat_src = feat_src.data_ptr<DType>();
   gdata.el = el.data_ptr<DType>();
   gdata.er = er.data_ptr<DType>();
@@ -185,8 +178,9 @@ void _BackwardFusedGatKernelImpl_wrapper_integratedcsr(
   // feat_src_xlen);
   // Configure kernel launch parameters.
   // auto* thr_entry = runtime::CUDAThreadEntry::ThreadLocal();
-  int nthrs_x = FindNumThreads(el_xlen, 64);
-  int nthrs_y = FindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
+  int nthrs_x = SeastarFindNumThreads(el_xlen, 64);
+  int nthrs_y =
+      SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
   int nblks_x = 1;
   int nblks_y = std::min(gdata.n, MAX_NBLKS);
   int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;

@@ -135,6 +135,8 @@ class HET_RelationalAttLayer(nn.Module):
             # feat_dst_compact = B.rgat_relational_matmul_compact_as_of_node(
             #     g["separate"]["unique_srcs_and_dests"]["rel_ptr"],g["separate"]["unique_srcs_and_dests"]["unique_node_idxes"], self.conv_weight, input
             # )
+
+            # TODO: separate feat_compact_src and feat_compact_dst
             feat_compact = B.rgat_relational_matmul_compact_as_of_node(
                 g["separate"]["unique_srcs_and_dests"]["rel_ptr"],
                 g["separate"]["unique_srcs_and_dests"]["unique_node_idxes"],
@@ -152,6 +154,8 @@ class HET_RelationalAttLayer(nn.Module):
                 g["separate"]["coo"]["original"]["rel_ptr"],
                 g["separate"]["coo"]["original"]["row_idx"],
                 g["separate"]["coo"]["original"]["eids"],
+                g["separate"]["unique_srcs_and_dests"]["rel_ptr"],
+                g["separate"]["unique_srcs_and_dests"]["unique_node_idxes"],
                 self.conv_weights,
                 input,
             )
@@ -159,6 +163,8 @@ class HET_RelationalAttLayer(nn.Module):
                 g["separate"]["coo"]["original"]["rel_ptr"],
                 g["separate"]["coo"]["original"]["col_idx"],
                 g["separate"]["coo"]["original"]["eids"],
+                g["separate"]["unique_srcs_and_dests"]["rel_ptr"],
+                g["separate"]["unique_srcs_and_dests"]["unique_node_idxes"],
                 self.conv_weights,
                 input,
             )

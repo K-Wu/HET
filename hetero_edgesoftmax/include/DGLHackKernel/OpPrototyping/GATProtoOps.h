@@ -30,9 +30,9 @@ void FusedGatKernelImpl(
   // int64_t feat_src_xlen =  SeastarComputeXLength(feat_src);
   // int64_t ret_len =  SeastarComputeXLength(ret);
 
-  int64_t el_xlen = el.ComputeXLength();
-  int64_t feat_src_xlen = feat_src.ComputeXLength();
-  int64_t ret_len = ret.ComputeXLength();
+  int64_t el_xlen = el.SeastarComputeXLength();
+  int64_t feat_src_xlen = feat_src.SeastarComputeXLength();
+  int64_t ret_len = ret.SeastarComputeXLength();
 
   gdata.feat_src = feat_src.Ptr();
   gdata.el = el.Ptr();
@@ -91,8 +91,8 @@ void FusedGatKernelImpl(
       gdata, static_cast<Idx*>(thrust::raw_pointer_cast(incsr.row_ptr.data())),
       static_cast<Idx*>(thrust::raw_pointer_cast(incsr.col_idx.data())),
       nullptr, incsr.num_rows, nullptr, nullptr);
-  nthrs_x = FindNumThreads(el_xlen, 64);
-  nthrs_y = FindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
+  nthrs_x = SeastarFindNumThreads(el_xlen, 64);
+  nthrs_y = SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
   nblks_x = 1;
   nblks_y = std::min(gdata.n, MAX_NBLKS);
   const dim3 nthrs2(nthrs_x, nthrs_y);
@@ -151,8 +151,8 @@ void BackwardFusedGatKernelImpl(
   // zero out ret, and packing feat_src, el, er, ret, graph together into one
   // struct using raw float pointers get csr matrix
   BackwardGatFusedData<Idx, DType> gdata;
-  int64_t el_xlen = el.ComputeXLength();
-  int64_t feat_src_xlen = feat_src.ComputeXLength();
+  int64_t el_xlen = el.SeastarComputeXLength();
+  int64_t feat_src_xlen = feat_src.SeastarComputeXLength();
   gdata.feat_src = feat_src.Ptr();
   gdata.el = el.Ptr();
   gdata.er = er.Ptr();
@@ -187,8 +187,9 @@ void BackwardFusedGatKernelImpl(
   // feat_src_xlen);
   // Configure kernel launch parameters.
   // auto* thr_entry = runtime::CUDAThreadEntry::ThreadLocal();
-  int nthrs_x = FindNumThreads(el_xlen, 64);
-  int nthrs_y = FindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
+  int nthrs_x = SeastarFindNumThreads(el_xlen, 64);
+  int nthrs_y =
+      SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
   int nblks_x = 1;
   int nblks_y = std::min(gdata.n, MAX_NBLKS);
   const dim3 nthrs(nthrs_x, nthrs_y);
