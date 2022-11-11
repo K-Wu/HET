@@ -257,7 +257,6 @@ __global__ void RGNNFeatPerEdgeFWProp(
 template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void RGNNFeatCompactFWProp(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
-    IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx num_A_cols, Idx num_B_cols,
     Idx num_heads, int* accum_num_blocks_per_relation, Idx num_relations) {
@@ -266,12 +265,14 @@ __global__ void RGNNFeatCompactFWProp(
       num_relations + 1, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, true,
                       Idx, IdxPtr>(
-      node_feat_input, weight, node_feat_per_edge, A_col_row_idx_gather_list,
-      nullptr, A_col_row_idx_gather_list, unique_srcs_and_dests_rel_ptr,
+      node_feat_input, weight, node_feat_per_edge,
+      unique_srcs_and_dests_node_indices, nullptr,
+      unique_srcs_and_dests_node_indices, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices, idx_relation,
-      A_rel_ptr[idx_relation + 1], accum_num_blocks_per_relation[idx_relation],
-      A_rel_ptr[idx_relation], num_A_cols / num_heads, num_B_cols / num_heads,
-      num_heads);
+      unique_srcs_and_dests_rel_ptr[idx_relation + 1],
+      accum_num_blocks_per_relation[idx_relation],
+      unique_srcs_and_dests_rel_ptr[idx_relation], num_A_cols / num_heads,
+      num_B_cols / num_heads, num_heads);
 }
 
 template <int BLOCK_SIZE, typename Idx, typename IdxPtr>

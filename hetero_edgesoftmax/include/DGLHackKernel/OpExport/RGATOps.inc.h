@@ -406,8 +406,6 @@ void _RGATRelationalMatMul_wrapper_separatecoo(
         <<<nblks, nthrs, 0, stream>>>(
             input.data_ptr<float>(), weights.data_ptr<float>(),
             ret.data_ptr<float>(),
-            separate_coo_node_indices.data_ptr<int64_t>(),
-            separate_coo_relptrs.data_ptr<int64_t>(),
             unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
             unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
             num_input_dim, num_output_dim, num_heads,
@@ -435,12 +433,14 @@ void _RGATRelationalMatMul_wrapper_separatecoo(
 
 void RGATRelationalMatMul_wrapper_separatecoo(
     at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
-    at::Tensor& separate_coo_eids, at::Tensor& weights, at::Tensor& input,
-    at::Tensor& ret) {
+    at::Tensor& separate_coo_eids, at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& weights,
+    at::Tensor& input, at::Tensor& ret) {
   at::Tensor dummy_tensor;
   _RGATRelationalMatMul_wrapper_separatecoo<16, false>(
       separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
-      /*dummy*/ dummy_tensor, /*dummy*/ dummy_tensor, weights, input, ret);
+      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+      weights, input, ret);
 }
 
 void RGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices(
@@ -449,9 +449,8 @@ void RGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices(
     at::Tensor& node_feat, at::Tensor& ret) {
   at::Tensor dummy_tensor;
   _RGATRelationalMatMul_wrapper_separatecoo<16, true>(
-      /*dummy*/ dummy_tensor, /*dummy*/ dummy_tensor, /*dummy*/ dummy_tensor,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, weight,
-      node_feat, ret);
+      dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, weight, node_feat, ret);
 }
 
 template <int BLOCK_SIZE, bool CompactAsOfNodeFlag>
@@ -546,9 +545,9 @@ void BackwardRGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices
     at::Tensor& grad_input, at::Tensor& grad_weights) {
   at::Tensor dummy_tensor;
   _BackwardRGATRelationalMatMul_wrapper_separatecoo<16, true>(
-      dummy_tensor /*dummy*/, dummy_tensor /*dummy*/, dummy_tensor /*dummy*/,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-      weights_transposed, input, gradout, grad_input, grad_weights);
+      dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, weights_transposed, input, gradout,
+      grad_input, grad_weights);
 }
 
 void BackwardRGATRelationalMatMul_wrapper_separatecoo(

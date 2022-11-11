@@ -6,7 +6,6 @@ import torch.nn.functional as F
 
 # import dgl.nn as dglnn
 from .. import backend as B
-from .models_dgl import RGAT_main_procedure, RGAT_parse_args
 
 
 class HET_RelationalAttLayer(nn.Module):
@@ -309,8 +308,3 @@ class HET_RelationalGATEncoderSingleLayer(HET_RelationalGATEncoder):
             use_self_loop=use_self_loop,
             last_layer_act=last_layer_act,
         )
-
-
-if __name__ == "__main__":
-    args = RGAT_parse_args()
-    RGAT_main_procedure(args, dgl_model_flag=False)
