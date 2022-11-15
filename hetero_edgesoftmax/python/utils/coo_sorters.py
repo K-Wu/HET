@@ -3,7 +3,7 @@ import numpy as np
 import torch as th
 
 
-def get_array_creation_func(torch_flag):
+def get_array_creation_func(torch_flag: bool):
     if torch_flag:
         # return lambda x, dtype: torch.Tensor(x,dtype = dtype)
         return th.tensor
@@ -11,21 +11,22 @@ def get_array_creation_func(torch_flag):
         return np.array
 
 
-def get_array_flip_func(torch_flag):
+def get_array_flip_func(torch_flag: bool):
     if torch_flag:
         return lambda x: th.flip(x, dims=[0])
     else:
         return np.flip
 
 
-def get_array_concatenate_func(torch_flag):
+def get_array_concatenate_func(torch_flag: bool):
     if torch_flag:
         return th.cat
     else:
         return np.concatenate
 
 
-def remap_etype_according_to_number_of_edges(etypes, torch_flag):
+@th.no_grad()
+def remap_etype_according_to_number_of_edges(etypes, torch_flag: bool):
     if torch_flag:
         np_or_th = th
     else:
@@ -50,8 +51,9 @@ def remap_etype_according_to_number_of_edges(etypes, torch_flag):
     return remapped_etype
 
 
+@th.no_grad()
 def get_node_index_remap_dict_according_to_number_of_edges(
-    srcs, number_of_nodes, torch_flag
+    srcs, number_of_nodes, torch_flag: bool
 ):
     if torch_flag:
         np_or_th = th
@@ -75,7 +77,8 @@ def get_node_index_remap_dict_according_to_number_of_edges(
     return original_src_to_new_src_map
 
 
-def remap_node_indices_according_to_number_of_edges(srcs, dests, torch_flag):
+@th.no_grad()
+def remap_node_indices_according_to_number_of_edges(srcs, dests, torch_flag: bool):
     # if torch_flag:
     #     np_or_th = th
     # else:
@@ -96,7 +99,10 @@ def remap_node_indices_according_to_number_of_edges(srcs, dests, torch_flag):
     return remapped_src, remapped_dest
 
 
-def sort_coo_by_etype(srcs, dsts, etypes, eids, torch_flag=False, infidel_flag=False):
+@th.no_grad()
+def sort_coo_by_etype(
+    srcs, dsts, etypes, eids, torch_flag: bool = False, infidel_flag: bool = False
+):
     print(
         "WARNING: you are using infidel sort utility. See readme.md for more details."
     )
@@ -120,6 +126,7 @@ def sort_coo_by_etype(srcs, dsts, etypes, eids, torch_flag=False, infidel_flag=F
     return sorted_srcs, sorted_dsts, sorted_etypes, sorted_eids
 
 
+@th.no_grad()
 def sort_coo_by_etype_eids_torch_tensors(rel_ptr, srcs, dsts, eids):
     result_srcs = th.empty([0], dtype=srcs.dtype)
     result_dsts = th.empty([0], dtype=dsts.dtype)
@@ -136,6 +143,7 @@ def sort_coo_by_etype_eids_torch_tensors(rel_ptr, srcs, dsts, eids):
     return rel_ptr, result_srcs, result_dsts, result_eids
 
 
+@th.no_grad()
 def sort_coo_by_src_outgoing_edges(
     srcs, dsts, etypes, eids, torch_flag=False, infidel_flag=False
 ):

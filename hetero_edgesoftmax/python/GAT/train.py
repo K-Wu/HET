@@ -78,9 +78,9 @@ def evaluate(model, features, labels, mask):
         )
 
 
-def GAT_train(args, single_layer_flag):
+def GAT_train(args, single_layer_flag: bool):
     # load and preprocess dataset
-    mydgl_graph = utils.RGCN_get_mydgl_graph(
+    mydgl_graph = utils.RGNN_get_mydgl_graph(
         args.dataset,
         args.sort_by_src,
         args.sort_by_etype,
@@ -96,7 +96,7 @@ def GAT_train(args, single_layer_flag):
     print("# of edges : {}".format(num_edges))
     print("# of nodes : {}".format(num_nodes))
     print("# of features : {}".format(args.num_feats))
-    features = torch.randn(num_nodes, args.num_feats)
+    features = torch.randn(num_nodes, args.num_feats, requires_grad=True)
     # features = torch.FloatTensor(features)
     labels = torch.from_numpy(np.random.randint(0, args.num_classes, num_nodes))
     # labels = torch.LongTensor(labels)
@@ -258,7 +258,7 @@ def GAT_train(args, single_layer_flag):
     print("^^^{:6f}^^^{:6f}".format(Used_memory, avg_run_time))
 
 
-def GAT_get_parser(single_layer_flag):
+def GAT_get_parser(single_layer_flag: bool):
     parser = argparse.ArgumentParser(description="GAT")
     # register_data_args(parser)
     parser.add_argument(

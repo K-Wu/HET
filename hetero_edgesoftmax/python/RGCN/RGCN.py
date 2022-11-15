@@ -254,7 +254,7 @@ def get_model(args, mydglgraph):
 
 
 def main(args):
-    g = utils.RGCN_get_mydgl_graph(
+    g = utils.RGNN_get_mydgl_graph(
         args.dataset,
         args.sort_by_src,
         args.sort_by_etype,
@@ -393,7 +393,7 @@ def RGCN_main_procedure(args, g, model, feats):
     print("^^^{:6f}^^^{:6f}".format(Used_memory, avg_run_time))
 
 
-def create_RGCN_parser(RGCN_single_layer_flag):
+def create_RGCN_parser(RGCN_single_layer_flag: bool):
     parser = argparse.ArgumentParser(description="RGCN")
     parser.add_argument("--dropout", type=float, default=0, help="dropout probability")
     if RGCN_single_layer_flag:

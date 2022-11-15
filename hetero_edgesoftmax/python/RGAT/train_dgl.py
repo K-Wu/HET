@@ -2,9 +2,13 @@ import argparse
 from .models import (
     HET_RelationalGATEncoder,
     HET_RelationalAttLayer,
-    HET_RelationalGATEncoderSingleLayer,
 )
-from .models_dgl import RelationalGATEncoder, RelationalAttLayer, RelGraphEmbed
+from .models_dgl import (
+    RelationalGATEncoder,
+    RelationalAttLayer,
+    RelGraphEmbed,
+    HET_RelGraphEmbed,
+)
 import dgl
 import argparse
 import itertools
@@ -24,7 +28,7 @@ def extract_embed(node_embed, input_nodes):
     return emb
 
 
-def RGAT_parse_args():
+def RGAT_parse_args() -> argparse.Namespace:
     # DGL
     parser = argparse.ArgumentParser(description="RGAT")
     parser.add_argument(
@@ -42,6 +46,10 @@ def RGAT_parse_args():
     parser.add_argument(
         "-e", "--n-epochs", type=int, default=3, help="number of training epochs"
     )
+    parser.add_argument("--fanout", type=int, nargs="+", default=[25, 20])
+    parser.add_argument("--batch_size", type=int, default=1024)
+    parser.add_argument("--full_graph_training", action="store_true")
+    parser.add_argument("--num_layers", type=int, default=1)
 
     # OGB
     parser.add_argument("--runs", type=int, default=10)
@@ -75,8 +83,10 @@ def RGAT_get_model(g, num_classes, hypermeters):
     return embed_layer, model
 
 
-def RGAT_get_our_model(g, num_classes, args):
-    embed_layer = RelGraphEmbed(g, args.n_hidden, exclude=[])  # exclude=["paper"])
+def RGAT_get_our_model(
+    g: utils.MyDGLGraph, num_classes, args: argparse.Namespace
+) -> tuple[HET_RelGraphEmbed, HET_RelationalGATEncoder]:
+    embed_layer = HET_RelGraphEmbed(g, args.n_hidden, exclude=[])  # exclude=["paper"])
 
     model = HET_RelationalGATEncoder(
         g,
@@ -98,7 +108,7 @@ def RGAT_get_our_model(g, num_classes, args):
     return embed_layer, model
 
 
-def prepare_data(args):
+def prepare_data(args: argparse.Namespace):
     dataset = DglNodePropPredDataset(name="ogbn-mag")
     split_idx = dataset.get_idx_split()
     g, labels = dataset[
@@ -106,7 +116,7 @@ def prepare_data(args):
     ]  # graph: dgl graph object, label: torch tensor of shape (num_nodes, num_tasks)
     labels = labels["paper"].flatten()
 
-    def add_reverse_hetero(g, combine_like=True):
+    def add_reverse_hetero(g, combine_like: bool = True):
         r"""
         Parameters
         ----------
@@ -155,12 +165,15 @@ def prepare_data(args):
     # logger = Logger(args['runs'], args)
 
     # train sampler
-    sampler = dgl.dataloading.MultiLayerNeighborSampler(args["fanout"])
+    if args.full_graph_training:
+        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(args.num_layers)
+    else:
+        sampler = dgl.dataloading.MultiLayerNeighborSampler(args.fanout)
     train_loader = dgl.dataloading.NodeDataLoader(
         g,
         split_idx["train"],
         sampler,
-        batch_size=args["batch_size"],
+        batch_size=args.batch_size,
         shuffle=True,
         num_workers=0,
     )
@@ -168,15 +181,134 @@ def prepare_data(args):
     return (g, labels, dataset.num_classes, split_idx, train_loader)
 
 
-def train(
-    g, model, node_embed, optimizer, train_loader, split_idx, labels, device, run, args
+def HET_RGAT_train_with_sampler(
+    g, model, node_embed, optimizer, train_loader, labels, device, hypermeters
+):
+    raise NotImplementedError("HET_RGAT_train_with_sampler not implemented yet")
+
+
+def HET_RGAT_train_full_graph(
+    g: utils.MyDGLGraph,
+    model,
+    node_embed: th.Tensor,
+    optimizer,
+    labels: th.Tensor,
+    device,
+    hypermeters: dict,
 ):
     # training loop
     print("start training...")
-    category = "paper"
+    for epoch in range(hypermeters["n_epochs"]):
 
-    for epoch in range(args["n_epochs"]):
-        N_train = split_idx["train"][category].shape[0]
+        print(f"Epoch {epoch:02d}")
+        model.train()
+
+        total_loss = 0
+        print(
+            "WARNING: ignoring the hard-coded paper features in the original dataset. This script is solely for performance R&D purposes."
+        )
+
+        # emb = extract_embed(node_embed, input_nodes)
+        # emb = node_embed
+
+        # Add the batch's raw "paper" features
+        # emb.update({"paper": g.ndata["feat"]["paper"][input_nodes["paper"]]})
+
+        if th.cuda.is_available():
+            node_embed = {k: e.cuda() for k, e in node_embed.items()}
+            labels = {k: e.cuda() for k, e in labels.items()}
+
+        optimizer.zero_grad()
+
+        logits = model(g, node_embed)
+        # logits = model(emb, blocks)
+
+        y_hat = logits.log_softmax(dim=-1)
+        loss = F.nll_loss(y_hat, labels)
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item() * args.batch_size
+
+        # result = test(g, model, node_embed, labels, device, split_idx, args)
+        # logger.add_result(run, result)
+        # train_acc, valid_acc, test_acc = result
+        print(
+            f"Epoch: {epoch + 1 :02d}, " f"Loss (w/o dividing sample num): {loss:.4f}, "
+        )
+    #              f'Train: {100 * train_acc:.2f}%, '
+    #              f'Valid: {100 * valid_acc:.2f}%, '
+    #              f'Test: {100 * test_acc:.2f}%')
+
+    return  # logger
+
+
+# * g(dglgraph) is already set as a member of model
+def RGAT_train_full_graph(model, node_embed, optimizer, labels, hypermeters: dict):
+    # training loop
+    print("start training...")
+    category = "paper"
+    for epoch in range(hypermeters["n_epochs"]):
+
+        print(f"Epoch {epoch:02d}")
+        model.train()
+
+        total_loss = 0
+        print(
+            "WARNING: ignoring the hard-coded paper features in the original dataset. This script is solely for performance R&D purposes."
+        )
+
+        # emb = extract_embed(node_embed, input_nodes)
+        emb = node_embed
+
+        # Add the batch's raw "paper" features
+        # emb.update({"paper": g.ndata["feat"]["paper"][input_nodes["paper"]]})
+
+        lbl = labels
+
+        if th.cuda.is_available():
+            emb = {k: e.cuda() for k, e in emb.items()}
+            lbl = {k: e.cuda() for k, e in lbl.items()}
+
+        optimizer.zero_grad()
+
+        logits = model(emb)
+        # logits = model(emb, blocks)
+        loss = None
+        for category in logits:
+            y_hat = logits[category].log_softmax(dim=-1)
+            if loss is None:
+                loss = F.nll_loss(y_hat, lbl)
+            else:
+                loss += F.nll_loss(y_hat, lbl)
+
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item() * args.batch_size
+
+        # result = test(g, model, node_embed, labels, device, split_idx, args)
+        # logger.add_result(run, result)
+        # train_acc, valid_acc, test_acc = result
+        print(
+            f"Epoch: {epoch + 1 :02d}, " f"Loss (w/o dividing sample num): {loss:.4f}, "
+        )
+    #              f'Train: {100 * train_acc:.2f}%, '
+    #              f'Valid: {100 * valid_acc:.2f}%, '
+    #              f'Test: {100 * test_acc:.2f}%')
+
+    return  # logger
+
+
+# * g(dglgraph) is already set as a member of model
+def RGAT_train_with_sampler(
+    model, node_embed, optimizer, train_loader, labels, device, hypermeters: dict
+):
+    # training loop
+    print("start training...")
+
+    for epoch in range(hypermeters["n_epochs"]):
+
         print(f"Epoch {epoch:02d}")
         model.train()
 
@@ -186,37 +318,53 @@ def train(
         )
         for input_nodes, seeds, blocks in train_loader:
             blocks = [blk.to(device) for blk in blocks]
-            seeds = seeds[category]  # we only predict the nodes with type "category"
-            batch_size = seeds.shape[0]
+            # seeds = seeds[category]  # we only predict the nodes with type "category"
 
             emb = extract_embed(node_embed, input_nodes)
             # Add the batch's raw "paper" features
             # emb.update({"paper": g.ndata["feat"]["paper"][input_nodes["paper"]]})
 
-            lbl = labels[seeds]
+            # lbl = th.concat([labels[seeds[category]] for category in seeds])
+            # lbl = labels[seeds]
+            lbl = labels
 
             if th.cuda.is_available():
                 emb = {k: e.cuda() for k, e in emb.items()}
                 lbl = lbl.cuda()
 
             optimizer.zero_grad()
-            logits = model(emb, blocks)[category]
+            if 0:
+                # the following is the original code. Keep it for reference
+                category = "paper"
+                logits = model(emb, blocks)[category]
+                # logits = model(emb, blocks)
 
-            y_hat = logits.log_softmax(dim=-1)
-            loss = F.nll_loss(y_hat, lbl)
+                y_hat = logits.log_softmax(dim=-1)
+                # y_hat = th.concat([logits[category][seeds[category]] for category in logits if category in seeds]).log_softmax(dim=-1)
+                loss = F.nll_loss(y_hat, lbl)
+            else:
+                logits = model(emb, blocks)
+                # logits = model(emb, blocks)
+                loss = None
+                for category in logits:
+                    if category in seeds:
+                        y_hat = logits[category].log_softmax(dim=-1)
+                        if loss is None:
+                            loss = F.nll_loss(y_hat, lbl[seeds[category]])
+                        else:
+                            loss += F.nll_loss(y_hat, lbl[seeds[category]])
+
             loss.backward()
             optimizer.step()
 
-            total_loss += loss.item() * batch_size
+            total_loss += loss.item() * args.batch_size
             # pbar.update(batch_size)
-
-        loss = total_loss / N_train
 
         # result = test(g, model, node_embed, labels, device, split_idx, args)
         # logger.add_result(run, result)
         # train_acc, valid_acc, test_acc = result
         print(
-            f"Run: {run + 1:02d}, " f"Epoch: {epoch + 1 :02d}, " f"Loss: {loss:.4f}, "
+            f"Epoch: {epoch + 1 :02d}, " f"Loss (w/o dividing sample num): {loss:.4f}, "
         )
     #              f'Train: {100 * train_acc:.2f}%, '
     #              f'Valid: {100 * valid_acc:.2f}%, '
@@ -225,23 +373,49 @@ def train(
     return  # logger
 
 
-def RGAT_main_procedure(args, dgl_model_flag):
+def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
+
     # Static parameters
-    hyperparameters = dict(
-        # num_layers=2,
-        fanout=[25, 20],
-        batch_size=1024,
-    )
-    hyperparameters.update(vars(args))
+    # NB: default values are all moved to args
+    # hyperparameters = dict(
+    # num_layers=2,
+    # fanout=[25, 20],
+    # batch_size=1024,
+    # )
+    # hyperparameters.update(vars(args))
+    hyperparameters = vars(args)
     print(hyperparameters)
-
+    if not args.full_graph_training:
+        assert len(args.fanout) == args.num_layers
     device = f"cuda:0" if th.cuda.is_available() else "cpu"
+    # loading data
+    if dgl_model_flag:
+        (g, labels, num_classes, split_idx, train_loader) = prepare_data(args)
+    else:
+        # (g, labels, num_classes, split_idx, train_loader) = prepare_data(hyperparameters)
+        g = utils.RGNN_get_mydgl_graph(
+            args.dataset,
+            args.sort_by_src,
+            args.sort_by_etype,
+            args.reindex_eid,
+            args.sparse_format,
+        )
+        if args.use_real_labels_and_features:
+            raise NotImplementedError(
+                "Not implemented loading real labels and features in utils.RGNN_get_mydgl_graph"
+            )
 
-    (g, labels, num_classes, split_idx, train_loader) = prepare_data(hyperparameters)
     # TODO: now this script from dgl repo uses the num_classes properties of dataset. Align this with graphiler's randomizing label, or add an option whether to randomize classification.
+    # creating model
     if not args.use_real_labels_and_features:
         num_classes = args.num_classes
-        labels = th.randint(0, args.num_classes, labels.shape)
+        if dgl_model_flag:
+            labels = th.randint(0, args.num_classes, labels.shape)
+        else:
+            print(
+                "WARNING: assuming node classification in RGAT_main_procedure(dgl_model_flag == False)"
+            )
+            labels = th.randint(0, args.num_classes, g.num_nodes())
     if dgl_model_flag:
         print("Using DGL RGAT model")
         embed_layer, model = RGAT_get_model(g, num_classes, hyperparameters)
@@ -249,8 +423,10 @@ def RGAT_main_procedure(args, dgl_model_flag):
         g = utils.create_mydgl_graph_coo_from_dgl_graph(g)
         print("Using our RGAT model")
         embed_layer, model = RGAT_get_our_model(g, num_classes, args)
+        # TODO: only certain design choices call for this. Add an option to choose.
         g.get_separate_node_idx_for_each_etype()
-        g.generate_separate_coo_adj_for_each_etype()
+        g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
+        g.generate_separate_coo_adj_for_each_etype(transposed_flag=False)
         g = g.to(device)
     model = model.to(device)
 
@@ -261,17 +437,14 @@ def RGAT_main_procedure(args, dgl_model_flag):
         # optimizer
         all_params = itertools.chain(model.parameters(), embed_layer.parameters())
         optimizer = th.optim.Adam(all_params, lr=args.lr)
-
-        train(
-            g,
+        print(f"Run: {run + 1:02d}, ")
+        RGAT_train_with_sampler(
             model,
             embed_layer(),
             optimizer,
             train_loader,
-            split_idx,
             labels,
             device,
-            run,
             hyperparameters,
         )
 
@@ -282,6 +455,6 @@ def RGAT_main_procedure(args, dgl_model_flag):
 
 
 if __name__ == "__main__":
-    args = RGAT_parse_args()
+    args: argparse.Namespace = RGAT_parse_args()
     print(args)
     RGAT_main_procedure(args, dgl_model_flag=True)

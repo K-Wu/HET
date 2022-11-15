@@ -13,6 +13,8 @@ from .. import utils
 
 import torch
 
+import dgl
+
 
 class MyDGLGraph:
     # TODO: impl ["legacy_metadata_from_dgl"]["canonical_etypes"] elements are (srctype, etype, dsttype) in G.canonical_etypes
@@ -83,7 +85,13 @@ class MyDGLGraph:
     def __contains__(self, key):
         return key in self.graph_data
 
-    def get_sparse_format(self, transpose_flag=False):
+    def save_to_disk(self, filename):
+        torch.save(self.graph_data, filename)
+
+    def load_from_disk(self, filename):
+        self.graph_data = torch.load(filename)
+
+    def get_sparse_format(self, transpose_flag: bool = False):
         original_or_transpose = "transposed" if transpose_flag else "original"
         if "row_ptr" in self.graph_data[original_or_transpose]:
             return "csr"
@@ -95,6 +103,7 @@ class MyDGLGraph:
         else:
             raise ValueError("unknown sparse format")
 
+    @torch.no_grad()
     def transpose(self):
         if self.get_sparse_format() == "csr":
             (
@@ -137,6 +146,7 @@ class MyDGLGraph:
             self.graph_data["transposed"]["eids"] = transposed_eids
         return self
 
+    @torch.no_grad()
     def generate_separate_csr_adj_for_each_etype(
         self, transposed_flag, sorted_rel_eid_flag=True
     ):
@@ -225,6 +235,7 @@ class MyDGLGraph:
             "eids"
         ] = separate_csr_eids
 
+    @torch.no_grad()
     def generate_separate_coo_adj_for_each_etype(
         self, transposed_flag, rel_eid_sorted_flag=True
     ):
@@ -321,6 +332,7 @@ class MyDGLGraph:
             "eids"
         ] = separate_coo_eids
 
+    @torch.no_grad()
     def generate_separate_adj_for_each_etype(
         self, separate_sparse_format, transposed_flag
     ):
@@ -331,6 +343,7 @@ class MyDGLGraph:
         else:
             raise NotImplementedError()
 
+    @torch.no_grad()
     def get_separate_node_idx_for_each_etype(self):
         if (
             "separate" not in self.graph_data
@@ -389,6 +402,16 @@ class MyDGLGraph:
         self["legacy_metadata_from_dgl"]["canonical_etypes"] = dglgraph.canonical_etypes
         self["legacy_metadata_from_dgl"]["ntypes"] = dglgraph.ntypes
         self["legacy_metadata_from_dgl"]["number_of_nodes"] = dglgraph.number_of_nodes()
+        self["legacy_metadata_from_dgl"]["number_of_nodes_per_type"] = dict(
+            [(ntype, dglgraph.number_of_nodes(ntype)) for ntype in dglgraph.ntypes]
+        )
+        self["legacy_metadata_from_dgl"]["number_of_edges"] = dglgraph.number_of_edges()
+        self["legacy_metadata_from_dgl"]["number_of_edges_per_type"] = dict(
+            [
+                (etype, dglgraph.number_of_edges(etype))
+                for etype in dglgraph.canonical_etypes
+            ]
+        )
         self["legacy_metadata_from_dgl"]["node_dict"] = dict(
             zip(dglgraph.ntypes, range(len(dglgraph.ntypes)))
         )
@@ -396,6 +419,65 @@ class MyDGLGraph:
             zip(dglgraph.canonical_etypes, range(len(dglgraph.canonical_etypes)))
         )
 
+    def get_dgl_graph(self, transposed_flag: bool = False):
+        if (
+            "separate" not in self.graph_data
+            or "coo" not in self.graph_data["separate"]
+        ):
+            self.generate_separate_coo_adj_for_each_etype(
+                transposed_flag=transposed_flag
+            )
+        if transposed_flag and "transposed" not in self.graph_data["separate"]["coo"]:
+            self.generate_separate_coo_adj_for_each_etype(
+                transposed_flag=transposed_flag
+            )
+        if (not transposed_flag) and "original" not in self.graph_data["separate"][
+            "coo"
+        ]:
+            self.generate_separate_coo_adj_for_each_etype(
+                transposed_flag=transposed_flag
+            )
+
+        sub_dict_name = "transposed" if transposed_flag else "original"
+
+        data_dict = dict()
+        for etype_idx in range(self.get_num_rels()):
+            if (
+                "legacy_metadata_from_dgl" not in self.graph_data
+                or "canonical_etypes" not in self.graph_data["legacy_metadata_from_dgl"]
+            ):
+                print(
+                    "WARNING: legacy_metadata_from_dgl not found, assuming only one node type in get_dgl_graph()"
+                )
+                curr_etype_canonical_name = (0, etype_idx, 0)
+            else:
+                curr_etype_canonical_name = self["legacy_metadata_from_dgl"][
+                    "canonical_etypes"
+                ][etype_idx]
+            if transposed_flag:
+                row_indices = self.graph_data["separate"]["coo"][sub_dict_name][
+                    "row_idx"
+                ][
+                    self.graph_data["separate"]["coo"][sub_dict_name]["rel_ptr"][
+                        etype_idx
+                    ] : self.graph_data["separate"]["coo"][sub_dict_name]["rel_ptr"][
+                        etype_idx + 1
+                    ]
+                ]
+                col_indices = self.graph_data["separate"]["coo"][sub_dict_name][
+                    "col_idx"
+                ][
+                    self.graph_data["separate"]["coo"][sub_dict_name]["rel_ptr"][
+                        etype_idx
+                    ] : self.graph_data["separate"]["coo"][sub_dict_name]["rel_ptr"][
+                        etype_idx + 1
+                    ]
+                ]
+                data_dict[curr_etype_canonical_name] = (col_indices, row_indices)
+
+        return dgl.heterograph(data_dict)
+
+    @torch.no_grad()
     def calc_node_type_offset_from_dgl_heterograph(self, dglgraph):
         assert "original" in self.graph_data, "original not exists"
         self["original"]["node_type_offsets"] = torch.zeros(
@@ -408,3 +490,11 @@ class MyDGLGraph:
         self["original"]["node_type_offsets"] = self["original"][
             "node_type_offsets"
         ].to(self["original"]["eids"].device)
+
+    def get_device(self):
+        if "original" in self:
+            return self["original"]["eids"].device
+        elif "transposed" in self:
+            return self["transposed"]["eids"].device
+        else:
+            raise ValueError("Missing original or transposed data in graph_data")

@@ -8,3 +8,4 @@ from .graphiler_datasets import *
 from .coo_sorters import *
 from .graphiler_bench import *
 from .graph_synthesizers import *
+from .graph_sampler import *

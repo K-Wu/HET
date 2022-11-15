@@ -27,7 +27,7 @@ def get_single_layer_model(args, mydglgraph):
 
 
 def main(args):
-    g = utils.RGCN_get_mydgl_graph(
+    g = utils.RGNN_get_mydgl_graph(
         args.dataset,
         args.sort_by_src,
         args.sort_by_etype,
@@ -41,7 +41,7 @@ def main(args):
         assert args.sparse_format == "csr"
         num_nodes = g["original"]["row_ptr"].numel() - 1
     num_nodes = g.get_num_nodes()
-    feats = th.randn(num_nodes, args.input_dim)
+    feats = th.randn(num_nodes, args.input_dim, requires_grad=True)
     RGCN_main_procedure(args, g, model, feats)
 
 

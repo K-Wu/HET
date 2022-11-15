@@ -3,7 +3,10 @@ import numpy as np
 import torch as th
 
 
-def coo2csr(edge_srcs, edge_dsts, edge_etypes, edge_referential_eids, torch_flag=False):
+@th.no_grad()
+def coo2csr(
+    edge_srcs, edge_dsts, edge_etypes, edge_referential_eids, torch_flag: bool = False
+):
     if torch_flag:
         curr_namespace = th
     else:
@@ -28,6 +31,7 @@ def coo2csr(edge_srcs, edge_dsts, edge_etypes, edge_referential_eids, torch_flag
     )  # the returned variables are row_ptr, col_idx, rel_types, eids, respectively
 
 
+@th.no_grad()
 def csr2coo(row_ptr, col_idx, rel_types, eids):
     # we don't need to provide csr2coo for torch because coo should be the natural product of applying loading utility onto a torch Tensor
     # And torch does not provide funcitons like torch.repeat counterpart to numpy.repeat anyway.

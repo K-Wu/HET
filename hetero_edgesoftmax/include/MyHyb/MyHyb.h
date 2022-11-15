@@ -1013,6 +1013,8 @@ MyHeteroSeparateCSR<IdxType, std::allocator<IdxType>> ToSeparateCSR_CPU(
           std::make_pair(IdxDestNode, IdxEids));
     }
   }
+  // result_row_ptr stores the absolute offset from base address of the whole
+  // col_idx array, rather than relative offset per relation
   for (int64_t IdxRelationship = 0; IdxRelationship < csr.num_rels;
        IdxRelationship++) {
     for (IdxType IdxRow = 0; IdxRow < csr.num_rows; IdxRow++) {

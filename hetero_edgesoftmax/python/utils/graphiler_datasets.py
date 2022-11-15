@@ -28,7 +28,7 @@ GRAPHILER_HOMO_DATASET = {
 GRAPHILER_HETERO_DATASET = ["aifb", "mutag", "bgs", "biokg", "am", "mag", "wikikg2"]
 
 
-def graphiler_load_data(name, feat_dim=GRAPHILER_DEFAULT_DIM, to_homo=True):
+def graphiler_load_data(name, feat_dim=GRAPHILER_DEFAULT_DIM, to_homo: bool = True):
     if name == "arxiv":
         dataset = DglNodePropPredDataset(name="ogbn-arxiv")
         g = dataset[0][0]

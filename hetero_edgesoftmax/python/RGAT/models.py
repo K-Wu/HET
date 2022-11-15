@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 # import itertools
+from typing import Union
 import torch as th
 from torch import nn
 import torch.nn.functional as F
+import dgl
 
 # import dgl.nn as dglnn
 from .. import backend as B
+from .. import utils
 
 
 class HET_RelationalAttLayer(nn.Module):
@@ -42,9 +45,9 @@ class HET_RelationalAttLayer(nn.Module):
         rel_names,
         n_heads,
         *,
-        bias=True,
+        bias: bool = True,
         activation=None,
-        self_loop=False,
+        self_loop: bool = False,
         dropout=0.0,
     ):
         super(HET_RelationalAttLayer, self).__init__()
@@ -102,7 +105,9 @@ class HET_RelationalAttLayer(nn.Module):
         #     module.reset_parameters()
 
     # pylint: disable=invalid-name
-    def forward(self, g, inputs):
+    def forward(
+        self, g: utils.MyDGLGraph, inputs: th.Tensor, myblock: Union[None, list] = None
+    ):
         """Forward computation
 
         Parameters
@@ -118,7 +123,7 @@ class HET_RelationalAttLayer(nn.Module):
             New node features for each node type.
         """
 
-        if g.is_block:
+        if myblock is not None:
             raise NotImplementedError("Block is not supported by us yet")
             inputs_src = inputs
             inputs_dst = {k: v[: g.number_of_dst_nodes(k)] for k, v in inputs.items()}
@@ -193,8 +198,6 @@ class HET_RelationalGATEncoder(nn.Module):
     r"""Relational graph attention encoder
 
     Parameters
-    g : DGLHeteroGraph
-        Input graph.
     h_dim: int
         Hidden dimension size
     out_dim: int
@@ -213,18 +216,18 @@ class HET_RelationalGATEncoder(nn.Module):
 
     def __init__(
         self,
-        g,
+        etypes,
         h_dim,
         out_dim,
         n_heads,
         num_hidden_layers=1,
         dropout=0,
-        use_self_loop=True,
-        last_layer_act=False,
+        use_self_loop: bool = True,
+        last_layer_act: bool = False,
     ):
         super(HET_RelationalGATEncoder, self).__init__()
         self.n_heads = n_heads
-        self.g = g
+        self.etypes = etypes
         self.h_dim = h_dim
         self.out_dim = out_dim
         self.n_heads = n_heads
@@ -243,7 +246,7 @@ class HET_RelationalGATEncoder(nn.Module):
                 HET_RelationalAttLayer(
                     self.h_dim,
                     self.h_dim,
-                    self.g.etypes,
+                    self.etypes,
                     self.n_heads,
                     activation=F.relu,
                     self_loop=self.use_self_loop,
@@ -255,7 +258,7 @@ class HET_RelationalGATEncoder(nn.Module):
             HET_RelationalAttLayer(
                 self.h_dim,
                 self.out_dim,
-                self.g.etypes,
+                self.etypes,
                 1,  # overwrting the n_head setting as the classification should be output in this stage
                 activation=F.relu if self.last_layer_act else None,
                 self_loop=self.use_self_loop,
@@ -266,11 +269,17 @@ class HET_RelationalGATEncoder(nn.Module):
         for layer in self.layers:
             layer.reset_parameters()
 
-    def forward(self, h=None, blocks=None):
+    def forward(
+        self,
+        g: utils.MyDGLGraph,
+        h: Union[th.Tensor, None] = None,
+        blocks: Union[None, list] = None,
+    ):
         """Forward computation
 
         Parameters
         ----------
+        g: mydglgraph
         h: dict[str, torch.Tensor]
             Input node feature for each node type.
         blocks: DGL MFGs
@@ -279,32 +288,9 @@ class HET_RelationalGATEncoder(nn.Module):
         if blocks is None:
             # full graph training
             for layer in self.layers:
-                h = layer(self.g, h)
+                h = layer(g, h)
         else:
             # minibatch training
             for layer, block in zip(self.layers, blocks):
                 h = layer(block, h)
         return h
-
-
-class HET_RelationalGATEncoderSingleLayer(HET_RelationalGATEncoder):
-    def __init__(
-        self,
-        g,
-        h_dim,
-        out_dim,
-        n_heads,
-        dropout=0,
-        use_self_loop=True,
-        last_layer_act=False,
-    ):
-        super(HET_RelationalGATEncoderSingleLayer, self).__init__(
-            g,
-            h_dim,
-            out_dim,
-            n_heads,
-            num_hidden_layers=0,
-            dropout=dropout,
-            use_self_loop=use_self_loop,
-            last_layer_act=last_layer_act,
-        )

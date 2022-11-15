@@ -7,7 +7,7 @@ from . import mydgl_graph
 from .coo_sorters import sort_coo_by_src_outgoing_edges, sort_coo_by_etype
 
 
-def RGCN_get_mydgl_graph(
+def RGNN_get_mydgl_graph(
     dataset, sort_by_src_flag, sort_by_etype_flag, reindex_eid_flag, sparse_format
 ):
     # TODO: add args for dataset, and refactor these following lines into dedicated load data function
@@ -301,11 +301,12 @@ def create_mydgl_graph_csr_numpy(row_ptr, col_idx, rel_types, eids):
     return create_mydgl_graph_csr_torch(row_ptr, col_idx, rel_types, eids)
 
 
+@th.no_grad()
 def create_mydgl_graph_coo_from_dgl_graph(g):
-    total_edge_srcs = th.zeros(g.number_of_edges(), dtype=th.int64)
-    total_edge_dsts = th.zeros(g.number_of_edges(), dtype=th.int64)
-    total_edge_etypes = th.zeros(g.number_of_edges(), dtype=th.int64)
-    total_edge_referential_eids = th.arange(g.number_of_edges(), dtype=th.int64)
+    # total_edge_srcs = th.zeros(g.number_of_edges(), dtype=th.int64)
+    # total_edge_dsts = th.zeros(g.number_of_edges(), dtype=th.int64)
+    # total_edge_etypes = th.zeros(g.number_of_edges(), dtype=th.int64)
+    # total_edge_referential_eids = th.arange(g.number_of_edges(), dtype=th.int64)
     etype_offsets = np.zeros(len(g.etypes) + 1, dtype=np.int64)
 
     # calculate the offsets for each node type. See the following NB for more details.
@@ -315,31 +316,47 @@ def create_mydgl_graph_coo_from_dgl_graph(g):
     for idx, ntype in enumerate(g.ntypes):
         ntype_offsets[idx + 1] = ntype_offsets[idx] + g.number_of_nodes(ntype)
         ntype_id_map[ntype] = idx
+    edge_srcs_list = []
+    edge_dsts_list = []
+    edge_etypes_list = []
+    # edge_referential_eids_list = []
     for etype_idx, etype in enumerate(g.canonical_etypes):
         last_etype_offsets = etype_offsets[etype_idx - 1] if etype_idx > 0 else 0
         etype_offsets[etype_idx] = g.number_of_edges(etype=etype) + last_etype_offsets
+        print("getting view for etype", etype)
         edge_srcs, edge_dsts = g.edges(etype=etype)  # both are int64 Torch.Tensor
-        # NB: we need to add offsets to edge_srcs and edge_dsts because indices restart from 0 in every new node type
+        print("got view for etype", etype)
+        # NB: we here add offsets to edge_srcs and edge_dsts because indices restart from 0 in every new node type
         edge_srcs = edge_srcs + ntype_offsets[ntype_id_map[etype[0]]]
         edge_dsts = edge_dsts + ntype_offsets[ntype_id_map[etype[2]]]
-
-        print(
-            etype,
-            "edge_srcs \in [",
-            min(edge_srcs),
-            max(edge_srcs),
-            "], edge_dests \in [",
-            min(edge_dsts),
-            max(edge_dsts),
-            "]",
-        )
+        print("added offsets for etype", etype)
+        # print(
+        #     etype,
+        #     "edge_srcs \in [",
+        #     min(edge_srcs),
+        #     max(edge_srcs),
+        #     "], edge_dests \in [",
+        #     min(edge_dsts),
+        #     max(edge_dsts),
+        #     "]",
+        # )
         # add to total
-        total_edge_srcs[last_etype_offsets : etype_offsets[etype_idx]] = edge_srcs
-        total_edge_dsts[last_etype_offsets : etype_offsets[etype_idx]] = edge_dsts
-        total_edge_etypes[last_etype_offsets : etype_offsets[etype_idx]] = etype_idx
-    return create_mydgl_graph_coo_torch(
+        # total_edge_srcs[last_etype_offsets : etype_offsets[etype_idx]] = edge_srcs
+        # total_edge_dsts[last_etype_offsets : etype_offsets[etype_idx]] = edge_dsts
+        # total_edge_etypes[last_etype_offsets : etype_offsets[etype_idx]] = etype_idx
+        edge_srcs_list.append(edge_srcs)
+        edge_dsts_list.append(edge_dsts)
+        edge_etypes_list.append(th.full_like(edge_srcs, etype_idx))
+        print("added to total for etype", etype)
+    total_edge_srcs = th.cat(edge_srcs_list)
+    total_edge_dsts = th.cat(edge_dsts_list)
+    total_edge_etypes = th.cat(edge_etypes_list)
+    total_edge_referential_eids = th.arange(g.number_of_edges(), dtype=th.int64)
+    mydgl_graph = create_mydgl_graph_coo_torch(
         total_edge_srcs, total_edge_dsts, total_edge_etypes, total_edge_referential_eids
     )
+    mydgl_graph.import_metadata_from_dgl_heterograph(g)
+    return mydgl_graph
 
 
 def create_mydgl_graph_coo_with_transpose_torch(
@@ -570,7 +587,7 @@ def load_wikikg2(
         )
 
 
-def get_ogbnmag(sorted, sorted_by_srcs, transposed, infidel_sort_flag=False):
+def get_ogbnmag(sorted, sorted_by_srcs, transposed, infidel_sort_flag: bool = False):
     if sorted_by_srcs and (not sorted):
         raise ValueError("sorted_by_srcs is only valid when sorted is True")
     if infidel_sort_flag:
