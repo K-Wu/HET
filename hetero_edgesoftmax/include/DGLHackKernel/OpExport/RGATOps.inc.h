@@ -381,27 +381,37 @@ void _RGATRelationalMatMul_wrapper_separatecoo(
   const int64_t num_output_dim =
       weights.size(3) * num_heads;  // weight shape (num_relations, n_heads,
                                     // in_feat, out_feat // n_heads)
+  at::Tensor separate_coo_relptrs_cpu_contiguous =
+      separate_coo_relptrs.cpu().contiguous();
+  const int64_t num_edges = separate_coo_eids.numel();
+  int grid_dim_y = std::min(
+      ceil_div<>(num_edges, (int64_t)BLOCK_SIZE),
+      (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
+                        // case the total number of blocks is slightly larger
+                        // due to relationship with very few workloads
   auto [num_blocks_assignment_for_same_relation_vect,
         num_blocks_assignment_for_all_prev_relation_vect] =
       get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
-          -1, num_relations, BLOCK_SIZE,
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>() + num_relations);
-
-  thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
-      num_blocks_assignment_for_same_relation_vect.data(),
-      num_blocks_assignment_for_same_relation_vect.data() + num_relations);
-  thrust::device_vector<int>
-      dev_num_blocks_assignment_for_all_prev_relation_vect(
-          num_blocks_assignment_for_all_prev_relation_vect.data(),
-          num_blocks_assignment_for_all_prev_relation_vect.data() +
+          grid_dim_y, num_relations, BLOCK_SIZE,
+          separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
+          separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
               num_relations);
 
+  thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
+      num_blocks_assignment_for_same_relation_vect.begin(),
+      num_blocks_assignment_for_same_relation_vect.end());
+  thrust::device_vector<int>
+      dev_num_blocks_assignment_for_all_prev_relation_vect(
+          num_blocks_assignment_for_all_prev_relation_vect.begin(),
+          num_blocks_assignment_for_all_prev_relation_vect.end());
+
   if constexpr (CompactAsOfNodeFlag) {
-    const int64_t num_edges = separate_coo_eids.numel();
     const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
-                     ceil_div<>(num_edges, (int64_t)BLOCK_SIZE), num_heads);
+                     num_blocks_assignment_for_all_prev_relation_vect.back(),
+                     num_heads);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
+    std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
+              << " nblks.z: " << nblks.z << std::endl;
     RGNNFeatCompactFWProp<BLOCK_SIZE, int64_t, int64_t*>
         <<<nblks, nthrs, 0, stream>>>(
             input.data_ptr<float>(), weights.data_ptr<float>(),
@@ -413,10 +423,12 @@ void _RGATRelationalMatMul_wrapper_separatecoo(
                 dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
             num_relations);
   } else {
-    const int64_t num_edges = separate_coo_eids.numel();
     const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
-                     ceil_div<>(num_edges, (int64_t)BLOCK_SIZE), num_heads);
+                     num_blocks_assignment_for_all_prev_relation_vect.back(),
+                     num_heads);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
+    std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
+              << " nblks.z: " << nblks.z << std::endl;
     RGNNFeatPerEdgeFWProp<BLOCK_SIZE, int64_t, int64_t*>
         <<<nblks, nthrs, 0, stream>>>(
             input.data_ptr<float>(), weights.data_ptr<float>(),
@@ -468,12 +480,21 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
       weights_transposed.size(2) *
       num_heads;  // weight shape (num_relations, n_heads, in_feat, out_feat //
                   // n_heads)
+  at::Tensor separate_coo_relptrs_cpu_contiguous =
+      separate_coo_relptrs.cpu().contiguous();
+  const int64_t num_edges = separate_coo_eids.numel();
+  int grid_dim_y = std::min(
+      ceil_div<>(num_edges, (int64_t)BLOCK_SIZE),
+      (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
+                        // case the total number of blocks is slightly larger
+                        // due to relationship with very few workloads
   auto [num_blocks_assignment_for_same_relation_vect,
         num_blocks_assignment_for_all_prev_relation_vect] =
       get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
-          -1, num_relations, BLOCK_SIZE,
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>() + num_relations);
+          grid_dim_y, num_relations, BLOCK_SIZE,
+          separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
+          separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
+              num_relations);
 
   thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
       num_blocks_assignment_for_same_relation_vect.data(),
@@ -485,9 +506,9 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
               num_relations);
 
   if constexpr (CompactAsOfNodeFlag) {
-    const int64_t num_edges = separate_coo_eids.numel();
     const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
-                     ceil_div<>(num_edges, (int64_t)BLOCK_SIZE), num_heads);
+                     num_blocks_assignment_for_all_prev_relation_vect.back(),
+                     num_heads);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     RGNNDeltaNodeFeatInputCompactBWProp<BLOCK_SIZE, int64_t, int64_t*>
         <<<nblks, nthrs, 0, stream>>>(
@@ -510,7 +531,6 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
                 dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
             num_relations);
   } else {
-    const int64_t num_edges = separate_coo_eids.numel();
     const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
                      ceil_div(num_edges, (int64_t)BLOCK_SIZE), num_heads);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);

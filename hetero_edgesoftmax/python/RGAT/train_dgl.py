@@ -34,8 +34,20 @@ def RGAT_parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dropout", type=float, default=0.5, help="dropout probability"
     )
+    parser.add_argument("-d", "--dataset", type=str, default="ogbn-mag", help="dataset")
+
     parser.add_argument(
         "--n-hidden", type=int, default=64, help="number of hidden units"
+    )
+    parser.add_argument(
+        "--sparse_format", type=str, default="csr", help="sparse format to use"
+    )
+    parser.add_argument("--sort_by_src", action="store_true", help="sort by src")
+    parser.add_argument("--sort_by_etype", action="store_true", help="sort by etype")
+    parser.add_argument(
+        "--reindex_eid",
+        action="store_true",
+        help="use new eid after sorting rather than load referential eids",
     )
     parser.add_argument("--num_classes", type=int, default=8, help="number of classes")
     parser.add_argument(
@@ -50,7 +62,7 @@ def RGAT_parse_args() -> argparse.Namespace:
     parser.add_argument("--batch_size", type=int, default=1024)
     parser.add_argument("--full_graph_training", action="store_true")
     parser.add_argument("--num_layers", type=int, default=1)
-
+    parser.add_argument("--compact_as_of_node_flag", action="store_true")
     # OGB
     parser.add_argument("--runs", type=int, default=10)
 
@@ -89,13 +101,14 @@ def RGAT_get_our_model(
     embed_layer = HET_RelGraphEmbed(g, args.n_hidden, exclude=[])  # exclude=["paper"])
 
     model = HET_RelationalGATEncoder(
-        g,
+        g["legacy_metadata_from_dgl"]["canonical_etypes"],
         h_dim=args.n_hidden,
         out_dim=num_classes,
         n_heads=args.n_head,
         num_hidden_layers=args.num_layers - 1,
         dropout=args.dropout,
         use_self_loop=True,
+        compact_as_of_node_flag=args.compact_as_of_node_flag,
     )
 
     print(embed_layer)
@@ -215,8 +228,8 @@ def HET_RGAT_train_full_graph(
         # emb.update({"paper": g.ndata["feat"]["paper"][input_nodes["paper"]]})
 
         if th.cuda.is_available():
-            node_embed = {k: e.cuda() for k, e in node_embed.items()}
-            labels = {k: e.cuda() for k, e in labels.items()}
+            node_embed = node_embed.cuda()
+            labels = labels.cuda()
 
         optimizer.zero_grad()
 
@@ -390,6 +403,10 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
     device = f"cuda:0" if th.cuda.is_available() else "cpu"
     # loading data
     if dgl_model_flag:
+        if args.dataset != "ogbn-mag":
+            raise NotImplementedError(
+                "Only ogbn-mag dataset is supported for dgl model."
+            )
         (g, labels, num_classes, split_idx, train_loader) = prepare_data(args)
     else:
         # (g, labels, num_classes, split_idx, train_loader) = prepare_data(hyperparameters)
@@ -415,21 +432,36 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
             print(
                 "WARNING: assuming node classification in RGAT_main_procedure(dgl_model_flag == False)"
             )
-            labels = th.randint(0, args.num_classes, g.num_nodes())
+            labels = th.randint(0, args.num_classes, [g.get_num_nodes()])
     if dgl_model_flag:
         print("Using DGL RGAT model")
         embed_layer, model = RGAT_get_model(g, num_classes, hyperparameters)
     else:
-        g = utils.create_mydgl_graph_coo_from_dgl_graph(g)
         print("Using our RGAT model")
         embed_layer, model = RGAT_get_our_model(g, num_classes, args)
         # TODO: only certain design choices call for this. Add an option to choose.
-        g.get_separate_node_idx_for_each_etype()
+
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=False)
+        g.get_separate_node_idx_for_each_etype()
+        if not args.full_graph_training:
+            # need to prepare dgl graph for sampler
+            g_dglgraph = g.get_dgl_graph()
+            # train sampler
+            # TODO: figure out split_idx train for this case
+            sampler = dgl.dataloading.MultiLayerNeighborSampler(args.fanout)
+            train_loader = dgl.dataloading.NodeDataLoader(
+                g_dglgraph,
+                split_idx["train"],
+                sampler,
+                batch_size=args.batch_size,
+                shuffle=True,
+                num_workers=0,
+            )
         g = g.to(device)
-    model = model.to(device)
 
+    embed_layer = embed_layer.to(device)
+    model = model.to(device)
     for run in range(args.runs):
         embed_layer.reset_parameters()
         model.reset_parameters()
@@ -438,16 +470,40 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         all_params = itertools.chain(model.parameters(), embed_layer.parameters())
         optimizer = th.optim.Adam(all_params, lr=args.lr)
         print(f"Run: {run + 1:02d}, ")
-        RGAT_train_with_sampler(
-            model,
-            embed_layer(),
-            optimizer,
-            train_loader,
-            labels,
-            device,
-            hyperparameters,
-        )
-
+        if dgl_model_flag:
+            if args.full_graph_training:
+                RGAT_train_full_graph(
+                    model,
+                    embed_layer,
+                    labels,
+                    # device,
+                    optimizer,
+                    hyperparameters,
+                )
+            else:
+                RGAT_train_with_sampler(
+                    model,
+                    embed_layer(),
+                    optimizer,
+                    train_loader,
+                    labels,
+                    device,
+                    hyperparameters,
+                )
+        else:
+            if not args.full_graph_training:
+                raise NotImplementedError(
+                    "Not implemented full_graph_training in RGAT_main_procedure(dgl_model_flag == False)"
+                )
+            HET_RGAT_train_full_graph(
+                g,
+                model,
+                embed_layer(),
+                optimizer,
+                labels,
+                device,
+                hyperparameters,
+            )
         # logger.print_statistics(run)
 
     print("Final performance: ")

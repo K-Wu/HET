@@ -12,15 +12,15 @@ class LegendrePolynomial3(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, input, dummy_list, dummy_scalar):
+    def forward(ctx, inputs, dummy_list, dummy_scalar):
         """
         In the forward pass we receive a Tensor containing the input and return
         a Tensor containing the output. ctx is a context object that can be used
         to stash information for backward computation. You can cache arbitrary
         objects for use in the backward pass using the ctx.save_for_backward method.
         """
-        ctx.save_for_backward(input)
-        return 0.5 * (5 * input**3 - 3 * input)
+        ctx.save_for_backward(inputs)
+        return 0.5 * (5 * inputs**3 - 3 * inputs)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -29,8 +29,8 @@ class LegendrePolynomial3(torch.autograd.Function):
         with respect to the output, and we need to compute the gradient of the loss
         with respect to the input.
         """
-        (input,) = ctx.saved_tensors
-        return grad_output * 1.5 * (5 * input**2 - 1), None, None
+        (inputs,) = ctx.saved_tensors
+        return grad_output * 1.5 * (5 * inputs**2 - 1), None, None
 
 
 dtype = torch.float

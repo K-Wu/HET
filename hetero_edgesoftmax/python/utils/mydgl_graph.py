@@ -16,10 +16,25 @@ import torch
 import dgl
 
 
+def recursive_apply_to_each_tensor_in_dict(func, dict_var, filter_key_set):
+    for second_key in dict_var:
+        if second_key in filter_key_set:
+            continue
+        if type(dict_var[second_key]) == torch.Tensor:
+            dict_var[second_key] = func(dict_var[second_key])
+        elif type(dict_var[second_key]) == dict:
+            recursive_apply_to_each_tensor_in_dict(
+                func, dict_var[second_key], filter_key_set
+            )
+        else:
+            print(
+                "WARNING in apply_to_each_tensor_in_dict: second_key{second_key} unknown type {type}".format(
+                    second_key=second_key, type=type(second_key)
+                )
+            )
+
+
 class MyDGLGraph:
-    # TODO: impl ["legacy_metadata_from_dgl"]["canonical_etypes"] elements are (srctype, etype, dsttype) in G.canonical_etypes
-    # TODO: impl G["legacy_metadata_from_dgl"]["ntypes"] elements are in G.ntypes
-    # TODO: impl G["legacy_metadata_from_dgl"]["number_of_nodes"] element is G.number_of_nodes()
     # TODO: impl G["original"]["node_type_offsets"]
     def __init__(self):
         import platform
@@ -46,34 +61,21 @@ class MyDGLGraph:
     def get_num_edges(self):
         return self.graph_data["original"]["rel_types"].numel()
 
+    def apply_to_each_tensor(self, func):
+        recursive_apply_to_each_tensor_in_dict(
+            func, self.graph_data, {"legacy_metadata_from_dgl"}
+        )
+
     def to(self, device):
-        for key in self.graph_data:
-            if key == "legacy_metadata_from_dgl":
-                continue
-            for second_key in self.graph_data[key]:
-                self.graph_data[key][second_key] = self.graph_data[key][second_key].to(
-                    device
-                )
+        self.apply_to_each_tensor(lambda x: x.to(device))
         return self
 
     def cuda(self):
-        for key in self.graph_data:
-            if key == "legacy_metadata_from_dgl":
-                continue
-            for second_key in self.graph_data[key]:
-                self.graph_data[key][second_key] = self.graph_data[key][
-                    second_key
-                ].cuda()
+        self.apply_to_each_tensor(lambda x: x.cuda())
         return self
 
     def cpu(self):
-        for key in self.graph_data:
-            if key == "legacy_metadata_from_dgl":
-                continue
-            for second_key in self.graph_data[key]:
-                self.graph_data[key][second_key] = self.graph_data[key][
-                    second_key
-                ].cpu()
+        self.apply_to_each_tensor(lambda x: x.cpu())
         return self
 
     def __setitem__(self, key, value):
@@ -247,13 +249,13 @@ class MyDGLGraph:
             self.graph_data["separate"] = dict()
         else:
             print(
-                "WARNING : in generating_separate separate already exists, will be overwritten"
+                "WARNING : in generating_separate separate already exists, may be overwritten"
             )
         if "coo" not in self.graph_data["separate"]:
             self.graph_data["separate"]["coo"] = dict()
         else:
             print(
-                "WARNING : in generating_separate coo already exists, will be overwritten"
+                "WARNING : in generating_separate coo already exists, may be overwritten"
             )
 
         if transposed_flag:
@@ -261,7 +263,7 @@ class MyDGLGraph:
                 self.graph_data["separate"]["coo"]["transposed"] = dict()
             else:
                 print(
-                    "WARNING: in generating_separate transposed already exists, will be overwritten"
+                    "WARNING: in generating_separate transposed already exists, may be overwritten"
                 )
             if "transposed" not in self.graph_data:
                 self.transpose()
@@ -274,7 +276,7 @@ class MyDGLGraph:
                 self.graph_data["separate"]["coo"]["original"] = dict()
             else:
                 print(
-                    "WARNING : in generating_separate original already exists, will be overwritten"
+                    "WARNING : in generating_separate original already exists, may be overwritten"
                 )
 
         original_or_transposed = "transposed" if transposed_flag else "original"
@@ -352,26 +354,26 @@ class MyDGLGraph:
             raise ValueError(
                 "separate coo graph data not found, please generate it first"
             )
-        result_node_idx = torch.empty([0], dtype=torch.int64)
-        result_rel_ptr = torch.empty([0], dtype=torch.int64)
+        result_node_idx = []
+        result_rel_ptr = [0]
         for idx_relation in range(self.get_num_rels()):
             node_idx_for_curr_relation = torch.unique(
                 torch.concat(
                     [
                         self.graph_data["separate"]["coo"]["original"]["row_idx"][
-                            self.graph_data["separate"]["coo"]["original"]["row_ptr"][
+                            self.graph_data["separate"]["coo"]["original"]["rel_ptr"][
                                 idx_relation
                             ] : self.graph_data["separate"]["coo"]["original"][
-                                "row_ptr"
+                                "rel_ptr"
                             ][
                                 idx_relation + 1
                             ]
                         ],
                         self.graph_data["separate"]["coo"]["original"]["col_idx"][
-                            self.graph_data["separate"]["coo"]["original"]["row_ptr"][
+                            self.graph_data["separate"]["coo"]["original"]["rel_ptr"][
                                 idx_relation
                             ] : self.graph_data["separate"]["coo"]["original"][
-                                "row_ptr"
+                                "rel_ptr"
                             ][
                                 idx_relation + 1
                             ]
@@ -380,13 +382,13 @@ class MyDGLGraph:
                 )
             )
 
-            result_node_idx = torch.cat([result_node_idx, node_idx_for_curr_relation])
-            result_rel_ptr = torch.cat(
-                [
-                    result_rel_ptr,
-                    (result_rel_ptr[-1] + node_idx_for_curr_relation.shape[0]),
-                ]
+            result_node_idx.append(node_idx_for_curr_relation)
+            result_rel_ptr.append(
+                (result_rel_ptr[-1] + node_idx_for_curr_relation.shape[0])
             )
+
+        result_node_idx = torch.concat(result_node_idx)
+        result_rel_ptr = torch.tensor(result_rel_ptr, dtype=torch.int64)
 
         if "unique_node_idx" in self.graph_data["separate"]:
             print("WARNING: unique_node_idx already exists, will be overwritten")
@@ -441,6 +443,8 @@ class MyDGLGraph:
         sub_dict_name = "transposed" if transposed_flag else "original"
 
         data_dict = dict()
+        print(self.get_num_rels())
+        print(self["legacy_metadata_from_dgl"]["canonical_etypes"])
         for etype_idx in range(self.get_num_rels()):
             if (
                 "legacy_metadata_from_dgl" not in self.graph_data

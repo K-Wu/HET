@@ -48,6 +48,7 @@ class HET_RelationalAttLayer(nn.Module):
         bias: bool = True,
         activation=None,
         self_loop: bool = False,
+        compact_as_of_node_flag: bool = False,
         dropout=0.0,
     ):
         super(HET_RelationalAttLayer, self).__init__()
@@ -57,6 +58,7 @@ class HET_RelationalAttLayer(nn.Module):
         self.bias = bias
         self.activation = activation
         self.self_loop = self_loop
+        self.compact_as_of_node_flag = compact_as_of_node_flag
 
         # NB: RGAT model definition
         assert out_feat % n_heads == 0, "out_feat must be a multiple of n_heads"
@@ -131,21 +133,21 @@ class HET_RelationalAttLayer(nn.Module):
             inputs_src = inputs_dst = inputs
 
         # NB: this line originally calls DGL R(GAT) impl and is now replaced with our own logic
-        # hs = B.rgat_layer_csr(g, self.conv_weights, input)
+        # hs = B.rgat_layer_csr(g, self.conv_weights, inputs)
         if self.compact_as_of_node_flag:
             # feat_src_compact = B.rgat_relational_matmul_compact_as_of_node(
-            #     g, self.conv_weight, input
+            #     g, self.conv_weight, inputs
             # )
             # feat_dst_compact = B.rgat_relational_matmul_compact_as_of_node(
-            #     g["separate"]["unique_srcs_and_dests"]["rel_ptr"],g["separate"]["unique_srcs_and_dests"]["unique_node_idxes"], self.conv_weight, input
+            #     g["separate"]["unique_node_idx"]["rel_ptr"],g["separate"]["unique_node_idx"]["node_idx"], self.conv_weight, inputs
             # )
 
             # TODO: separate feat_compact_src and feat_compact_dst
             feat_compact = B.rgat_relational_matmul_compact_as_of_node(
-                g["separate"]["unique_srcs_and_dests"]["rel_ptr"],
-                g["separate"]["unique_srcs_and_dests"]["unique_node_idxes"],
+                g["separate"]["unique_node_idx"]["rel_ptr"],
+                g["separate"]["unique_node_idx"]["node_idx"],
                 self.conv_weight,
-                input,
+                inputs,
             )
             el_compact = (feat_compact * self.attn_l).sum(dim=-1).unsqueeze(-1)
             er_compact = (feat_compact * self.attn_r).sum(dim=-1).unsqueeze(-1)
@@ -158,19 +160,19 @@ class HET_RelationalAttLayer(nn.Module):
                 g["separate"]["coo"]["original"]["rel_ptr"],
                 g["separate"]["coo"]["original"]["row_idx"],
                 g["separate"]["coo"]["original"]["eids"],
-                g["separate"]["unique_srcs_and_dests"]["rel_ptr"],
-                g["separate"]["unique_srcs_and_dests"]["unique_node_idxes"],
+                g["separate"]["unique_node_idx"]["rel_ptr"],
+                g["separate"]["unique_node_idx"]["node_idx"],
                 self.conv_weights,
-                input,
+                inputs,
             )
             feat_dst_per_edge = B.rgat_relational_matmul(
                 g["separate"]["coo"]["original"]["rel_ptr"],
                 g["separate"]["coo"]["original"]["col_idx"],
                 g["separate"]["coo"]["original"]["eids"],
-                g["separate"]["unique_srcs_and_dests"]["rel_ptr"],
-                g["separate"]["unique_srcs_and_dests"]["unique_node_idxes"],
+                g["separate"]["unique_node_idx"]["rel_ptr"],
+                g["separate"]["unique_node_idx"]["node_idx"],
                 self.conv_weights,
-                input,
+                inputs,
             )
             el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
             er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
@@ -224,6 +226,7 @@ class HET_RelationalGATEncoder(nn.Module):
         dropout=0,
         use_self_loop: bool = True,
         last_layer_act: bool = False,
+        compact_as_of_node_flag: bool = False,
     ):
         super(HET_RelationalGATEncoder, self).__init__()
         self.n_heads = n_heads
@@ -235,6 +238,7 @@ class HET_RelationalGATEncoder(nn.Module):
         self.dropout = dropout
         self.use_self_loop = use_self_loop
         self.last_layer_act = last_layer_act
+        self.compact_as_of_node_flag = compact_as_of_node_flag
         self.init_encoder()
 
     def init_encoder(self):
@@ -251,6 +255,7 @@ class HET_RelationalGATEncoder(nn.Module):
                     activation=F.relu,
                     self_loop=self.use_self_loop,
                     dropout=self.dropout,
+                    compact_as_of_node_flag=self.compact_as_of_node_flag,
                 )
             )
         # h2o

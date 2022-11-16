@@ -8,7 +8,11 @@ from . import coo2csr
 
 
 def extract_adj_arrays_from_dgl_subgraph(
-    parent_mydgl_graph, block, sparse_format, etype_ptr_instead_of_id_flag: bool = False
+    parent_mydgl_graph,
+    block,
+    sparse_format,
+    etype_ptr_instead_of_id_flag: bool = False,
+    transpose_flag: bool = False,
 ):
     # block being either DGLBlock or DGLSubblock should be fine
     subgraph_etype_set = set(block.canonical_etypes)
@@ -28,6 +32,15 @@ def extract_adj_arrays_from_dgl_subgraph(
             continue
         curr_subgraph_row_indices_before_index_remap = block.edges(etype=etype)[0]
         curr_subgraph_col_indices_before_index_remap = block.edges(etype=etype)[1]
+
+        if transpose_flag:
+            (
+                curr_subgraph_row_indices_before_index_remap,
+                curr_subgraph_col_indices_before_index_remap,
+            ) = (
+                curr_subgraph_col_indices_before_index_remap,
+                curr_subgraph_row_indices_before_index_remap,
+            )
 
         curr_subgraph_eids = parent_eid[etype]
         curr_subgraph_row_indices = parent_nid[etype][0][

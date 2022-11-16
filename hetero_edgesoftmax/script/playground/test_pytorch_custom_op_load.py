@@ -10,4 +10,5 @@ def test_pass_argument(*args):
 
 
 if __name__ == "__main__":
-    test_pass_argument(torch.tensor([1, 2, 3, 4, 5]))
+    torch.ops.torch_hetero_edgesoftmax.try_get_schedule_by_relations(100, 100)
+    # test_pass_argument(torch.tensor([1, 2, 3, 4, 5]))

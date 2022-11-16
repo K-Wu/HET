@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 # from ogb.nodeproppred import DglNodePropPredDataset
 import dgl.nn as dglnn
-import dgl
+from dgl.heterograph import DGLBlock
 
 # from hetero_edgesoftmax.python.utils.mydgl_graph import MyDGLGraph
 # from ogb.nodeproppred import DglNodePropPredDataset
@@ -52,7 +52,7 @@ class RelGraphEmbed(nn.Module):
         for emb in self.embeds.values():
             nn.init.xavier_uniform_(emb)
 
-    def forward(self, block: Union[None, dgl.heterograph.DGLBlock] = None):
+    def forward(self, block: Union[None, DGLBlock] = None):
         return self.embeds
 
 
@@ -72,20 +72,16 @@ class HET_RelGraphEmbed(nn.Module):
     def __init__(self, g: utils.MyDGLGraph, embed_size, exclude=list()):
 
         super(HET_RelGraphEmbed, self).__init__()
-        self.g = g
         self.embed_size = embed_size
 
         # create learnable embeddings for all nodes, except those with a node-type in the "exclude" list
 
         self.embeds = nn.Parameter(th.Tensor(g.get_num_nodes(), self.embed_size))
 
-        self.reset_parameters()
-
     def reset_parameters(self):
-        for emb in self.embeds.values():
-            nn.init.xavier_uniform_(emb)
+        nn.init.xavier_uniform_(self.embeds)
 
-    def forward(self, block: Union[None, dgl.heterograph.DGLBlock] = None):
+    def forward(self, block: Union[None, DGLBlock] = None):
         return self.embeds
 
 
@@ -298,7 +294,7 @@ class RelationalGATEncoder(nn.Module):
         for layer in self.layers:
             layer.reset_parameters()
 
-    def forward(self, h=None, blocks: Union[None, dgl.heterograph.DGLBlock] = None):
+    def forward(self, h=None, blocks: Union[None, DGLBlock] = None):
         """Forward computation
 
         Parameters

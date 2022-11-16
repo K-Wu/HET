@@ -19,11 +19,10 @@ get_schedule_by_relation_kernel_launch_per_block_metadata(
   int curr_beg_node_entry_idx = 0;
   for (int idx_block = 0; idx_block < num_blocks_along_dimx; idx_block++) {
     if (idx_curr_relation <
-            num_blocks_along_dimx_for_all_prev_relation_vect.size() - 1 &&
-        idx_block >= num_blocks_along_dimx_for_all_prev_relation_vect
-                         [idx_curr_relation]) {
-      assert(curr_beg_node_entry_idx / num_node_per_block_per_iteration ==
-             num_blocks_along_dimx_for_same_relation_vect[idx_curr_relation]);
+            num_blocks_along_dimx_for_all_prev_relation_vect.size() - 2 &&
+        idx_block >=
+            num_blocks_along_dimx_for_all_prev_relation_vect[idx_curr_relation +
+                                                             1]) {
       idx_curr_relation++;
       // NB: current implementation assumes the node entry index starts from 0
       // whenever the iteration of dealing with a new relation begins. May need
@@ -56,6 +55,7 @@ get_schedule_by_relation_kernel_launch_metadata(
   if (EqualPartitionFlag) {
     // for ease of programming equally partition the workload to different
     // blocks at this moment.
+    assert(num_blocks_along_dimx > 0);
     for (int idx_relationship = 0; idx_relationship < num_relations;
          idx_relationship++) {
       int num_blocks_along_dimx_for_this_and_prev_relation =
@@ -78,6 +78,10 @@ get_schedule_by_relation_kernel_launch_metadata(
         num_job_entries_iter++;
       }
     } else {
+      // in this branch, let's allocate blocks according to the amount of
+      // workload and the number of blocks.
+      assert(num_blocks_along_dimx > 0);
+
       int total_num_job_entries = 0;
       for (IteratorType iter = num_job_entries_per_relation_beg;
            iter != num_job_entries_per_relation_end; iter++) {
@@ -85,8 +89,7 @@ get_schedule_by_relation_kernel_launch_metadata(
       }
       int num_job_entries_for_this_and_prev_relation = 0;
       IteratorType curr_iter = num_job_entries_per_relation_beg;
-      // in this branch, let's allocate blocks according to the amount of
-      // workload
+
       for (int idx_relationship = 0; idx_relationship < num_relations;
            idx_relationship++) {
         int num_job_entries_for_current_relation = *curr_iter;
@@ -129,8 +132,8 @@ get_schedule_by_relation_kernel_launch_metadata(
         num_blocks_along_dimx_for_all_prev_relation_vect[idx_relationship + 1] -
         num_blocks_along_dimx_for_all_prev_relation_vect[idx_relationship]);
   }
-  num_blocks_along_dimx_for_all_prev_relation_vect.erase(
-      num_blocks_along_dimx_for_all_prev_relation_vect.begin());
+  // num_blocks_along_dimx_for_all_prev_relation_vect.erase(
+  //    num_blocks_along_dimx_for_all_prev_relation_vect.begin());
 
   return std::make_pair(num_blocks_along_dimx_for_same_relation_vect,
                         num_blocks_along_dimx_for_all_prev_relation_vect);
