@@ -50,6 +50,7 @@ class HET_RelationalAttLayer(nn.Module):
         self_loop: bool = False,
         compact_as_of_node_flag: bool = False,
         dropout=0.0,
+        leaky_relu_slope=0.2,
     ):
         super(HET_RelationalAttLayer, self).__init__()
         self.in_feat = in_feat
@@ -59,6 +60,7 @@ class HET_RelationalAttLayer(nn.Module):
         self.activation = activation
         self.self_loop = self_loop
         self.compact_as_of_node_flag = compact_as_of_node_flag
+        self.leaky_relu_slope = leaky_relu_slope
 
         # NB: RGAT model definition
         assert out_feat % n_heads == 0, "out_feat must be a multiple of n_heads"
@@ -152,7 +154,7 @@ class HET_RelationalAttLayer(nn.Module):
             el_compact = (feat_compact * self.attn_l).sum(dim=-1).unsqueeze(-1)
             er_compact = (feat_compact * self.attn_r).sum(dim=-1).unsqueeze(-1)
             h = B.relational_fused_gat_compact_as_of_node(
-                g, feat_compact, el_compact, er_compact, self.negative_slope
+                g, feat_compact, el_compact, er_compact, self.leaky_relu_slope
             )
 
         else:
@@ -177,7 +179,7 @@ class HET_RelationalAttLayer(nn.Module):
             el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
             er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
             h = B.relational_fused_gat_csr(
-                g, feat_src_per_edge, el, er, self.negative_slope
+                g, feat_src_per_edge, el, er, self.leaky_relu_slope
             )
 
         # hs = self.conv(g, inputs_src)
@@ -187,7 +189,7 @@ class HET_RelationalAttLayer(nn.Module):
 
         h = h.view(-1, self.out_feat)
         if self.self_loop:
-            h = h + th.matmul(h, self.loop_weight)
+            h = h + th.matmul(inputs_dst, self.loop_weight)
         if self.bias:
             h = h + self.h_bias
         if self.activation:
