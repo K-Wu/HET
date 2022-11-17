@@ -4,7 +4,7 @@
 #include "utils.cu.h"
 
 // from https://stackoverflow.com/a/12742980
-// ex: return tuple_with_removed_refs{result};
+// e.g.: return tuple_with_removed_refs{result};
 template <typename... T>
 using tuple_with_removed_refs =
     std::tuple<typename std::remove_reference<T>::type...>;

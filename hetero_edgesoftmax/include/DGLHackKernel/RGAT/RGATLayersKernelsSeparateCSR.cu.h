@@ -29,7 +29,7 @@ gatExpLeakyReluSumKernel_relational_separate_csr_vertex_parallel(
     const Idx* col_indices, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  _gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, true, true>(
+  _gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, true, true, false>(
       gdata, row_offsets, col_indices, rel_ptrs, num_rows,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       num_relations);

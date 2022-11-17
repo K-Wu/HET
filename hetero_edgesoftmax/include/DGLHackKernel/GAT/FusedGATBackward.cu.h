@@ -9,7 +9,7 @@ struct BackwardGatFusedData {
   Idx e_xlen{0};
   Idx ret_xlen{0};
   // num nodes
-  Idx n{0};
+  // Idx n{0};
   Idx* eids;
   DType leaky_relu_slope;
   // Inputs

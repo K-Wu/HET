@@ -9,7 +9,7 @@ struct GatFusedData {
   Idx e_xlen{0};
   Idx ret_xlen{0};
   // num nodes
-  Idx n{0};
+  // Idx n{0};
   Idx* eids;
   DType leaky_relu_slope;
   // Inputs
@@ -29,7 +29,7 @@ __device__ __forceinline__ DType gatLeakyReluExp(DType val, DType slope) {
 // NB: when CompactAsOfNodeFlag is false, gdata.el, gdata.er, gdata.feat_src are
 // edge-wise data instead of node-wise.
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag, bool ETypeRelPtrFlag>
+          bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _gatSumProdZipDivKernel(
     GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
@@ -59,16 +59,23 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
             }
             if constexpr (CompactAsOfNodeFlag) {
               feat_src_entry_id = src_vid;
-              sum_idx = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_node_indices,
-                  unique_srcs_and_dests_rel_ptr);
             } else {
+              feat_src_entry_id = eidx;
+            }
+
+            if constexpr (FullCartesianFlag) {
               // NB: This is the case where we have the data stored in
               // (relation, node) but do not compress the (relation, node)
               // matrix. It could be a case in subgraph where compressing along
               // the node dimension may not be worth it.
-              assert(0 && "should be non-reachable not implemented");
+              CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                  FullCartesianFlag, "should be non-reachable not implemented");
+            } else {
+              sum_idx = find_relational_compact_as_of_node_index(
+                  etype, dst_vid, unique_srcs_and_dests_node_indices,
+                  unique_srcs_and_dests_rel_ptr);
             }
+
             s += (gdata.exp[edge_id * e_xlen + head_idx] /
                   gdata.sum[sum_idx * e_xlen + head_idx] *
                   gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
@@ -97,16 +104,16 @@ __global__ void gatSumProdZipDivKernel(
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices) {
   _gatSumProdZipDivKernel<Idx, DType, CompactAsOfNodeFlag, RelationalFlag,
-                          false>(gdata, row_offsets, column_indices, etypes,
-                                 num_rows, unique_srcs_and_dests_rel_ptr,
-                                 unique_srcs_and_dests_node_indices, -1);
+                          false, false>(
+      gdata, row_offsets, column_indices, etypes, num_rows,
+      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
 }
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 // NB: when CompactAsOfNodeFlag is false, gdata.el, gdata.er, gdata.feat_src are
 // edge-wise data instead of node-wise.
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag, bool ETypeRelPtrFlag>
+          bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
     GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
@@ -141,6 +148,13 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
         if constexpr (CompactAsOfNodeFlag) {
           if constexpr (RelationalFlag) {
             // Idx etype = etypes[eidx];
+            if constexpr (FullCartesianFlag) {
+              // NB: This is the case where we have the data stored in
+              // (relation, node) but do not compress the (relation, node)
+              // matrix. It could be a case in subgraph where compressing along
+              // the node dimension may not be worth it.
+              assert(0 && "should be non-reachable not implemented");
+            }
             Idx etype;
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, eidx);
@@ -159,16 +173,9 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
             feat_off_src = src_id * e_xlen + feat_idx;
           }
         } else {
-          if constexpr (RelationalFlag) {
-            // NB: This is the case where we have the data stored in
-            // (relation, node) but do not compress the (relation, node)
-            // matrix. It could be a case in subgraph where compressing along
-            // the node dimension may not be worth it.
-            assert(0 && "should be non-reachable not implemented");
-          } else {
-            feat_off_src = edge_id * e_xlen + feat_idx;
-            feat_off_dst = edge_id * e_xlen + feat_idx;
-          }
+          // per edge
+          feat_off_src = edge_id * e_xlen + feat_idx;
+          feat_off_dst = edge_id * e_xlen + feat_idx;
         }
         // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] + er[threadIdx.x],
         // gdata.leaky_relu_slope);
@@ -197,14 +204,14 @@ __global__ void gatExpLeakyReluSumKernel(
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices) {
   _gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, RelationalFlag,
-                            false>(gdata, row_offsets, column_indices, etypes,
-                                   num_rows, unique_srcs_and_dests_rel_ptr,
-                                   unique_srcs_and_dests_node_indices, -1);
+                            false, false>(
+      gdata, row_offsets, column_indices, etypes, num_rows,
+      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
 }
 
 template <typename Idx, typename DType>
 constexpr auto relational_gatExpLeakyReluSumKernel_per_edge =
-    gatExpLeakyReluSumKernel<Idx, DType, false, false>;
+    gatExpLeakyReluSumKernel<Idx, DType, false, false, false>;
 template <typename Idx, typename DType>
 constexpr auto relational_gatSumProdZipDivKernel_per_edge =
     gatSumProdZipDivKernel<Idx, DType, false, false>;

@@ -178,6 +178,11 @@ class HET_RelationalAttLayer(nn.Module):
             )
             el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
             er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
+            print("el", el.shape)
+            print("er", er.shape)
+            print("max eids", g["separate"]["coo"]["original"]["eids"].max())
+            print("max eids", g["original"]["eids"].max())
+
             h = B.relational_fused_gat_csr(
                 g, feat_src_per_edge, el, er, self.leaky_relu_slope
             )
@@ -189,6 +194,7 @@ class HET_RelationalAttLayer(nn.Module):
 
         h = h.view(-1, self.out_feat)
         if self.self_loop:
+            print(inputs_dst.shape)
             h = h + th.matmul(inputs_dst, self.loop_weight)
         if self.bias:
             h = h + self.h_bias

@@ -33,7 +33,8 @@ void _RelationalFusedGATKernel_wrapper(
   int64_t el_xlen = SeastarComputeXLength<>(el);
   int64_t feat_src_xlen = SeastarComputeXLength<>(feat_src);
   int64_t ret_len = SeastarComputeXLength<>(ret);
-
+  // NB: in this case gdata.n, calculation is removed since el is now per edge
+  // rather than per node
   gdata.feat_src = feat_src.data_ptr<DType>();
   gdata.el = el.data_ptr<DType>();
   gdata.er = er.data_ptr<DType>();
@@ -41,7 +42,7 @@ void _RelationalFusedGATKernel_wrapper(
   gdata.exp = exp.data_ptr<DType>();
   gdata.ret = ret.data_ptr<DType>();
   gdata.leaky_relu_slope = slope;
-  gdata.n = el.numel() / el_xlen;
+  // gdata.n = el.numel() / el_xlen;
   gdata.e_xlen = el_xlen;
   gdata.feat_src_xlen = feat_src_xlen;
   gdata.feat_src_hidden = feat_src_xlen / el_xlen;
@@ -55,10 +56,10 @@ void _RelationalFusedGATKernel_wrapper(
     int nthrs_x = 32;
     int nthrs_y = 1;
     int nblks_x = (el_xlen + nthrs_x - 1) / (nthrs_x);
-    int nblks_y = std::min(gdata.n, MAX_NBLKS);
+    int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
+    int nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
     const dim3 nblks(nblks_x, nblks_y);
     const dim3 nthrs(nthrs_x, nthrs_y);
-    int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
 
     gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, true>
         <<<nblks, nthrs, 0, stream>>>(
@@ -70,7 +71,7 @@ void _RelationalFusedGATKernel_wrapper(
     nthrs_x = SeastarFindNumThreads(el_xlen, 64);
     nthrs_y = SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
     nblks_x = 1;
-    nblks_y = std::min(gdata.n, MAX_NBLKS);
+    nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
     const dim3 nthrs2(nthrs_x, nthrs_y);
     const dim3 nblks2(nblks_x, nblks_y);
 
@@ -152,7 +153,7 @@ void _BackwardRelationalFusedGATKernel_wrapper(
   gdata.grad_el = grad_el.data_ptr<DType>();
   gdata.grad_er = grad_er.data_ptr<DType>();
   gdata.leaky_relu_slope = slope;
-  gdata.n = el.numel() / el_xlen;
+  // gdata.n = el.numel() / el_xlen;
   gdata.e_xlen = el_xlen;
   gdata.feat_src_xlen = feat_src_xlen;
   gdata.feat_src_hidden = feat_src_xlen / el_xlen;
@@ -165,8 +166,8 @@ void _BackwardRelationalFusedGATKernel_wrapper(
     int nthrs_y =
         SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
     int nblks_x = 1;
-    int nblks_y = std::min(gdata.n, MAX_NBLKS);
     int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
+    int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
     const dim3 nthrs(nthrs_x, nthrs_y);
     const dim3 nblks(nblks_x, nblks_y);
     if constexpr (!FLAG_KERNEL_FUSED) {
@@ -509,6 +510,11 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
     const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
                      num_blocks_assignment_for_all_prev_relation_vect.back(),
                      num_heads);
+    const dim3 nblks_outer_product(
+        ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
+        num_blocks_assignment_for_all_prev_relation_vect.back(),
+        num_heads * 128);
+
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     RGNNDeltaNodeFeatInputCompactBWProp<BLOCK_SIZE, int64_t, int64_t*>
         <<<nblks, nthrs, 0, stream>>>(
@@ -521,7 +527,7 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
                 dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
             num_relations);
     RGNNDeltaWeightCompactBWProp<BLOCK_SIZE, int64_t, int64_t*>
-        <<<nblks, nthrs, 0, stream>>>(
+        <<<nblks_outer_product, nthrs, 0, stream>>>(
             gradout.data_ptr<float>(), input.data_ptr<float>(),
             grad_weights.data_ptr<float>(),
             unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
@@ -533,9 +539,12 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
   } else {
     const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
                      ceil_div(num_edges, (int64_t)BLOCK_SIZE), num_heads);
+    const dim3 nblks_outer_product(
+        ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
+        ceil_div(num_edges, (int64_t)BLOCK_SIZE), num_heads * 128);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     RGNNDeltaNodeFeatInputBWProp<BLOCK_SIZE, int64_t, int64_t*>
-        <<<nblks, nthrs, 0, stream>>>(
+        <<<nblks_outer_product, nthrs, 0, stream>>>(
             gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
             grad_input.data_ptr<float>(), separate_coo_eids.data_ptr<int64_t>(),
             separate_coo_relptrs.data_ptr<int64_t>(),

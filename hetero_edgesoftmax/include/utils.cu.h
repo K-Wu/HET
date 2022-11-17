@@ -127,7 +127,13 @@ __device__ __forceinline__ Idx find_relational_compact_as_of_node_index(
 // workaround to assert an if constexpr clause won't be emitted during compile
 // time Use the following: static_assert(dependent_false<T>::value); See
 // https://stackoverflow.com/a/53945555/5555077
-template <class T>
-struct dependent_false : std::false_type {};
-#define CONSTEXPR_CLAUSE_NONREACHABLE(T, reason) \
-  static_assert(dependent_false<T>::value && reason)
+// example https://godbolt.org/z/jP5zz1GhY
+#define CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(FLAG, reason)                   \
+  static_assert(std::is_same<std::true_type,                               \
+                             std::integral_constant<bool, FLAG>>::value && \
+                reason)
+
+#define CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(FLAG, reason)                    \
+  static_assert(std::is_same<std::false_type,                              \
+                             std::integral_constant<bool, FLAG>>::value && \
+                reason)

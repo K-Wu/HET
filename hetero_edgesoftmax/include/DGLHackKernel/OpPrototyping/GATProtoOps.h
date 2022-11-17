@@ -42,7 +42,8 @@ void FusedGatKernelImpl(
   gdata.exp = exp.Ptr();
   gdata.ret = ret.Ptr();
   gdata.leaky_relu_slope = slope;
-  gdata.n = el.data.size() / el_xlen;
+  // gdata.n = el.data.size() / el_xlen;
+  int64_t num_rows = el.data.size() / el_xlen;
   gdata.e_xlen = el_xlen;
   gdata.feat_src_xlen = feat_src_xlen;
   gdata.feat_src_hidden = feat_src_xlen / el_xlen;
@@ -72,7 +73,7 @@ void FusedGatKernelImpl(
   int nthrs_x = 32;
   int nthrs_y = 1;
   int nblks_x = (el_xlen + nthrs_x - 1) / (nthrs_x);
-  int nblks_y = std::min(gdata.n, MAX_NBLKS);
+  int nblks_y = std::min(num_rows, MAX_NBLKS);
   const dim3 nblks(nblks_x, nblks_y);
   const dim3 nthrs(nthrs_x, nthrs_y);
   // LOG(INFO) << "kernel1 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:"
@@ -95,7 +96,7 @@ void FusedGatKernelImpl(
   nthrs_x = SeastarFindNumThreads(el_xlen, 64);
   nthrs_y = SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
   nblks_x = 1;
-  nblks_y = std::min(gdata.n, MAX_NBLKS);
+  nblks_y = std::min(num_rows, MAX_NBLKS);
   const dim3 nthrs2(nthrs_x, nthrs_y);
   const dim3 nblks2(nblks_x, nblks_y);
   // LOG(INFO) << "kernel2 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:"
@@ -166,7 +167,8 @@ void BackwardFusedGatKernelImpl(
   gdata.grad_er = grad_er.Ptr();
   gdata.leaky_relu_slope = slope;
   // gdata.n = el.GetSize()/sizeof(DType)/el_xlen;
-  gdata.n = el.data.size() / el_xlen;
+  // gdata.n = el.data.size() / el_xlen;
+  int num_rows = el.data.size() / el_xlen;
   gdata.e_xlen = el_xlen;
   gdata.feat_src_xlen = feat_src_xlen;
   gdata.feat_src_hidden = feat_src_xlen / el_xlen;
@@ -192,7 +194,8 @@ void BackwardFusedGatKernelImpl(
   int nthrs_y =
       SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
   int nblks_x = 1;
-  int nblks_y = std::min(gdata.n, MAX_NBLKS);
+
+  int nblks_y = std::min(num_rows, MAX_NBLKS);
   const dim3 nthrs(nthrs_x, nthrs_y);
   const dim3 nblks(nblks_x, nblks_y);
   // LOG(INFO) << "GradFeatSrc kernel blk dim:" << nblks_x << "*" <<nblks_y << "

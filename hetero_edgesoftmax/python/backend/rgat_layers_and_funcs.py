@@ -131,9 +131,15 @@ class RelationalFusedGatCSR(th.autograd.Function):
 def relational_fused_gat_csr(graph, feat_src, el, er, slope):
     # NB: notice that in rgcn, in-adjacency list is used and therefore, we input the transposed adj list to forward propagation, and the original to backward propagation.
 
-    exp = el.new_empty([graph["transposed"]["col_idx"].numel()] + list(el.size()[1:]))
-    s = th.empty_like(el)
-    ret = th.empty_like(feat_src)
+    exp = el.new_empty(
+        [graph["transposed"]["col_idx"].numel()] + list(el.size()[1:])
+    )  # [num_edges, num_heads]
+    s = el.new_empty(
+        [graph.get_num_nodes()] + [el.size()[1]]
+    )  # [num_dest_nodes, num_heads]
+    ret = el.new_empty(
+        [graph.get_num_nodes()] + list(feat_src.size()[1:])
+    )  # [num_dest_nodes, num_heads, out_feats]
     return RelationalFusedGatCSR.apply(
         graph["transposed"]["row_ptr"],
         graph["transposed"]["col_idx"],
@@ -236,7 +242,7 @@ def rgat_relational_matmul(
     inputs,
 ):
     ret = th.zeros(
-        (unique_srcs_and_dests_node_indices.numel(), weights.size(1), weights.size(3)),
+        (separate_coo_node_indicies.numel(), weights.size(1), weights.size(3)),
         dtype=weights.dtype,
         device=weights.device,
         requires_grad=True,
