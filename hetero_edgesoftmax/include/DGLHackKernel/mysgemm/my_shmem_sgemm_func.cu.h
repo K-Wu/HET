@@ -317,6 +317,7 @@ __global__ void RGNNFeatPerEdgeFWProp(
       num_heads);
 }
 
+template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void RGNNFeatCompactFWProp(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
     IdxPtr unique_srcs_and_dests_rel_ptr,
