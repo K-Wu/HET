@@ -44,8 +44,8 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
            feat_idx += blockDim.y) {
         DType s = 0.;
         DType sfeatsrc = 0.;
-        Idx feat_src_offset;
-        Idx el_idx;
+        Idx feat_src_offset = -1;
+        Idx el_idx = -1;
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
           // in this case, feat_src_offset is the same regardless of which
           // outgoing edge we deal with
@@ -56,9 +56,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
         for (Idx e = start_off; e < end_off; ++e) {
           Idx eid = gdata.eids[e];
           Idx dst_vid = column_indices[e];
-          Idx er_idx;
-          Idx dst_vid_relational;
+          Idx er_idx = -1;
+          Idx dst_vid_relational = -1;
           if constexpr (!CompactAsOfNodeFlag) {
+            // FIXME: debugging this part
             // in this case, feat_src_offset, er_idx and el_idx are related to
             // edge id, regardless of the type of the edge
             feat_src_offset =
@@ -74,7 +75,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
               // index) feat_src_offset is related to (relation, unique node
               // index)
               // Idx etype = etypes[e];
-              Idx etype;
+              Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
                 etype = binary_search(num_relations, etypes, e);
               } else {
@@ -84,11 +85,12 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
                   etype, dst_vid, unique_srcs_and_dests_rel_ptr,
                   unique_srcs_and_dests_node_indices);
               er_idx = dst_vid_relational * e_xlen + head_idx;
-              Idx src_vid_temp = find_relational_compact_as_of_node_index(
+              Idx src_vid_relational = find_relational_compact_as_of_node_index(
                   etype, src_vid, unique_srcs_and_dests_rel_ptr,
                   unique_srcs_and_dests_node_indices);
-              el_idx = src_vid_temp * e_xlen + head_idx;
-              feat_src_offset = src_vid_temp * gdata.feat_src_xlen +
+              el_idx = src_vid_relational * e_xlen + head_idx;
+
+              feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;
             }
           }
@@ -111,6 +113,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
             sum_vid = dst_vid_relational;
           }
           if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
+            // FIXME: debugging this part
             atomicAdd(gdata.grad_el + el_idx, tmp2);
             atomicAdd(gdata.grad_feat_src + feat_src_offset,
                       gdata.exp[eid * e_xlen + head_idx] /
@@ -174,7 +177,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
       for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
            feat_idx += blockDim.y) {
         DType s = 0.;
-        Idx feat_src_offset;
+        Idx feat_src_offset = -1;
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
           // in this case, feat_src_offset is the same regardless of which
           // outgoing edge we deal with
@@ -184,7 +187,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
         for (Idx e = start_off; e < end_off; ++e) {
           Idx eid = gdata.eids[e];
           Idx dst_vid = column_indices[e];
-          Idx dst_vid_relational;
+          Idx dst_vid_relational = -1;
           if constexpr (!CompactAsOfNodeFlag) {
             // in this case, feat_src_offset, er_idx and el_idx are related to
             // edge id, regardless of the type of the edge
@@ -193,16 +196,16 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
           } else {  // CompactAsOfNodeFlag
             if constexpr (RelationalFlag) {
               // Idx etype = etypes[e];
-              Idx etype;
+              Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
                 etype = binary_search(num_relations, etypes, e);
               } else {  // !ETypeRelPtrFlag
                 etype = etypes[e];
               }
-              Idx src_vid_temp = find_relational_compact_as_of_node_index(
+              Idx src_vid_relational = find_relational_compact_as_of_node_index(
                   etype, src_vid, unique_srcs_and_dests_rel_ptr,
                   unique_srcs_and_dests_node_indices);
-              feat_src_offset = src_vid_temp * gdata.feat_src_xlen +
+              feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;
               dst_vid_relational = find_relational_compact_as_of_node_index(
                   etype, dst_vid, unique_srcs_and_dests_rel_ptr,
@@ -292,8 +295,8 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
       for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
            feat_idx += blockDim.y) {
         DType s = 0.;
-        Idx feat_src_offset;
-        Idx el_idx;
+        Idx feat_src_offset = -1;
+        Idx el_idx = -1;
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
           // in this case, feat_src_offset is the same regardless of which
           // outgoing edge we deal with
@@ -305,8 +308,8 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
           Idx edge_offset = gdata.eids[e] * e_xlen + head_idx;
           Idx eid = gdata.eids[e];
           Idx dst_vid = column_indices[e];
-          Idx er_idx;
-          Idx dst_vid_relational;
+          Idx er_idx = -1;
+          Idx dst_vid_relational = -1;
           if constexpr (!CompactAsOfNodeFlag) {
             // in this case, feat_src_offset, er_idx and el_idx are related to
             // edge id, regardless of the type of the edge
@@ -323,7 +326,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
               // index) feat_src_offset is related to (relation, unique node
               // index)
               // Idx etype = etypes[e];
-              Idx etype;
+              Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
                 etype = binary_search(num_relations, etypes, e);
               } else {
@@ -333,11 +336,11 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
                   etype, dst_vid, unique_srcs_and_dests_rel_ptr,
                   unique_srcs_and_dests_node_indices);
               er_idx = dst_vid_relational * e_xlen + head_idx;
-              Idx src_vid_temp = find_relational_compact_as_of_node_index(
+              Idx src_vid_relational = find_relational_compact_as_of_node_index(
                   etype, src_vid, unique_srcs_and_dests_rel_ptr,
                   unique_srcs_and_dests_node_indices);
-              el_idx = src_vid_temp * e_xlen + head_idx;
-              feat_src_offset = src_vid_temp * gdata.feat_src_xlen +
+              el_idx = src_vid_relational * e_xlen + head_idx;
+              feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;
             }
           }

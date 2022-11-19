@@ -52,7 +52,7 @@ get_schedule_by_relation_kernel_launch_metadata(
   std::vector<int> num_blocks_along_dimx_for_all_prev_relation_vect;
   num_blocks_along_dimx_for_all_prev_relation_vect.push_back(0);
 
-  if (EqualPartitionFlag) {
+  if constexpr (EqualPartitionFlag) {
     // for ease of programming equally partition the workload to different
     // blocks at this moment.
     assert(num_blocks_along_dimx > 0);
@@ -99,11 +99,12 @@ get_schedule_by_relation_kernel_launch_metadata(
         int num_blocks_along_dimx_for_this_and_prev_relation =
             (num_job_entries_for_this_and_prev_relation + 0.0) /
             (total_num_job_entries)*num_blocks_along_dimx;
-        if (num_blocks_along_dimx_for_this_and_prev_relation ==
+        if (num_blocks_along_dimx_for_this_and_prev_relation <=
             num_blocks_along_dimx_for_all_prev_relation_vect.back()) {
           // if there is too few jobs for current relation, we still need to
           // assign at least one block to it.
-          num_blocks_along_dimx_for_this_and_prev_relation += 1;
+          num_blocks_along_dimx_for_this_and_prev_relation =
+              num_blocks_along_dimx_for_all_prev_relation_vect.back() + 1;
         }
         num_blocks_along_dimx_for_all_prev_relation_vect.push_back(
             num_blocks_along_dimx_for_this_and_prev_relation);

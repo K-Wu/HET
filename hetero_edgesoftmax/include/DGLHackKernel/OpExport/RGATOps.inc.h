@@ -64,7 +64,7 @@ void _RelationalFusedGATKernel_wrapper(
     gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, true>
         <<<nblks, nthrs, 0, stream>>>(
             gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
-            nullptr, incsr_num_rows,
+            incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
             unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
             unique_srcs_and_dests_node_indices.data_ptr<Idx>());
 
@@ -397,6 +397,7 @@ void _RGATRelationalMatMul_wrapper_separatecoo(
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
               num_relations);
+  grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
 
   thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
       num_blocks_assignment_for_same_relation_vect.begin(),
@@ -408,8 +409,7 @@ void _RGATRelationalMatMul_wrapper_separatecoo(
 
   if constexpr (CompactAsOfNodeFlag) {
     const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
-                     num_blocks_assignment_for_all_prev_relation_vect.back(),
-                     num_heads);
+                     grid_dim_y, num_heads);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
               << " nblks.z: " << nblks.z << std::endl;
@@ -425,8 +425,7 @@ void _RGATRelationalMatMul_wrapper_separatecoo(
             num_relations);
   } else {
     const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
-                     num_blocks_assignment_for_all_prev_relation_vect.back(),
-                     num_heads);
+                     grid_dim_y, num_heads);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
               << " nblks.z: " << nblks.z << std::endl;
@@ -496,7 +495,7 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
               num_relations);
-
+  grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
   thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
       num_blocks_assignment_for_same_relation_vect.data(),
       num_blocks_assignment_for_same_relation_vect.data() + num_relations);
@@ -508,11 +507,9 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
 
   if constexpr (CompactAsOfNodeFlag) {
     const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
-                     num_blocks_assignment_for_all_prev_relation_vect.back(),
-                     num_heads);
+                     grid_dim_y, num_heads);
     const dim3 nblks_outer_product(
-        ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
-        num_blocks_assignment_for_all_prev_relation_vect.back(),
+        ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE), grid_dim_y,
         num_heads * 128);
 
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
@@ -538,10 +535,10 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
             num_relations);
   } else {
     const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
-                     ceil_div(num_edges, (int64_t)BLOCK_SIZE), num_heads);
+                     grid_dim_y, num_heads);
     const dim3 nblks_outer_product(
-        ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),
-        ceil_div(num_edges, (int64_t)BLOCK_SIZE), num_heads * 128);
+        ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE), grid_dim_y,
+        num_heads * 128);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     RGNNDeltaNodeFeatInputBWProp<BLOCK_SIZE, int64_t, int64_t*>
         <<<nblks_outer_product, nthrs, 0, stream>>>(

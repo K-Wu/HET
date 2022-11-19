@@ -178,6 +178,7 @@ class HET_RelationalAttLayer(nn.Module):
             )
             el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
             er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
+            # TODO: remove these print lines
             print("el", el.shape)
             print("er", er.shape)
             print("max eids", g["separate"]["coo"]["original"]["eids"].max())

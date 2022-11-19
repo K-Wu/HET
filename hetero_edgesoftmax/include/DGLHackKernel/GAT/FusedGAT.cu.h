@@ -47,20 +47,24 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
         DType s = 0.;
         for (Idx eidx = start_off; eidx < end_off; eidx++) {
           Idx src_vid = column_indices[eidx];
-          Idx feat_src_entry_id;
+          Idx feat_src_entry_id = -1;
           Idx edge_id = gdata.eids[eidx];
           if constexpr (RelationalFlag) {
-            Idx sum_idx;
-            Idx etype;
+            Idx sum_idx = -1;
+            Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, eidx);
             } else {
               etype = etypes[eidx];
             }
             if constexpr (CompactAsOfNodeFlag) {
-              feat_src_entry_id = src_vid;
+              feat_src_entry_id = find_relational_compact_as_of_node_index(
+                  etype, src_vid, unique_srcs_and_dests_node_indices,
+                  unique_srcs_and_dests_rel_ptr);
+
             } else {
-              feat_src_entry_id = eidx;
+              // NB: we need to use edge_id instead of eidx here
+              feat_src_entry_id = edge_id;
             }
 
             if constexpr (FullCartesianFlag) {
@@ -81,7 +85,13 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
                   gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                  head_idx * hidden_xlen + feat_idx]);
           } else {  // !RelationalFlag
-            feat_src_entry_id = edge_id;
+            // NB: feat_src_entry_id varies between edge_id and src_vid
+            // depending on compactasofnodeflag
+            if constexpr (CompactAsOfNodeFlag) {
+              feat_src_entry_id = src_vid;
+            } else {
+              feat_src_entry_id = edge_id;
+            }
             s += gdata.exp[edge_id * e_xlen + head_idx] /
                  gdata.sum[dst_vid * e_xlen + head_idx] *
                  gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
@@ -132,7 +142,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
     for (Idx feat_idx = tx; feat_idx < e_xlen;
          feat_idx += blockDim.x * gridDim.x) {
       // 1. Load dstnation vertex into shared memory
-      Idx feat_off_dst;
+      Idx feat_off_dst = -1;
       if constexpr (CompactAsOfNodeFlag) {
         feat_off_dst = dst_vid * e_xlen + feat_idx;
       }
@@ -142,9 +152,20 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
       DType sum = 0.;
       for (Idx eidx = start_off; eidx < end_off; ++eidx) {
         Idx src_id = *(column_indices + eidx);
-        Idx feat_off_src;
+        Idx feat_off_src = -1;
         Idx edge_id = gdata.eids[eidx];
-        Idx dst_vid_relational;
+        Idx dst_vid_relational = -1;
+        if constexpr (RelationalFlag) {
+          Idx etype = -1;
+          if constexpr (ETypeRelPtrFlag) {
+            etype = binary_search(num_relations, etypes, eidx);
+          } else {
+            etype = etypes[eidx];
+          }
+          dst_vid_relational = find_relational_compact_as_of_node_index(
+              etype, dst_vid, unique_srcs_and_dests_node_indices,
+              unique_srcs_and_dests_rel_ptr);
+        }
         if constexpr (CompactAsOfNodeFlag) {
           if constexpr (RelationalFlag) {
             // Idx etype = etypes[eidx];
@@ -155,7 +176,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
               // the node dimension may not be worth it.
               assert(0 && "should be non-reachable not implemented");
             }
-            Idx etype;
+            Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, eidx);
             } else {
@@ -184,6 +205,10 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
                             gdata.leaky_relu_slope);
         gdata.exp[Idx(edge_id * e_xlen) + feat_idx] = tmp;
         if constexpr (RelationalFlag) {
+          // FIXME: dst_vid_relational is undefined when !CompactAsOfNodeFlag &&
+          // RelationalFlag
+          // TODO: fix this and align it with
+          // _fusedGatBackwardGradElErFeatSrcFused
           atomicAdd(&gdata.sum[Idx(dst_vid_relational * e_xlen) + feat_idx],
                     tmp);
         }

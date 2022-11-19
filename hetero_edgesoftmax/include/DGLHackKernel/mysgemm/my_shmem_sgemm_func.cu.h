@@ -93,7 +93,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
   Idx NumInnerProductionPartitions = blockDim.z / num_heads;
 
   assert((blockDim.z == num_heads));
-
+  assert(NumInnerProductionPartitions > 0);
   if constexpr (OuterProductFlag) {
     assert(blockIdxAlongRowBeg == 0);
     assert(blockRowJobEntryBeg == 0);
@@ -133,9 +133,9 @@ __device__ __forceinline__ void _basic_MatMulKernel(
 
     Idx mLoopBeg, mLoopEnd;
     if constexpr (AInFlyTransposeFlag) {
-      mLoopBeg = ceil_div<Idx>(num_A_rows, BLOCK_SIZE) *
+      mLoopBeg = ceil_div<Idx>(numARows, BLOCK_SIZE) *
                  InnerProductPartitionIdx / NumInnerProductionPartitions;
-      mLoopEnd = ceil_div<Idx>(num_A_rows, BLOCK_SIZE) *
+      mLoopEnd = ceil_div<Idx>(numARows, BLOCK_SIZE) *
                  (InnerProductPartitionIdx + 1) / NumInnerProductionPartitions;
     } else {
       mLoopBeg = ceil_div<Idx>(num_A_cols, BLOCK_SIZE) *
@@ -222,42 +222,48 @@ __device__ __forceinline__ void _basic_MatMulKernel(
     // Each thread writes one element
 
     if constexpr (OuterProductFlag) {
-      if (row + blockRow * BLOCK_SIZE < numARows && idx_head < num_heads &&
-          blockCol * BLOCK_SIZE + col < B_feat_dim_per_head)
-        atomicAdd(
-            &GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
-                                AdvancedScatterCFlag>(
-                C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
-                unique_srcs_and_dests_node_indices, idx_relation,
-                blockRow * BLOCK_SIZE + row + blockRowJobEntryBeg, idx_head,
-                blockCol * BLOCK_SIZE + col, num_heads, B_feat_dim_per_head),
-            Cvalue);
-    }
-  }
-  else {
-    if (row + blockRow * BLOCK_SIZE + blockRowJobEntryBeg < numARows &&
-        idx_head < num_heads &&
-        blockCol * BLOCK_SIZE + col < B_feat_dim_per_head) {
       if constexpr (AtomicUpdateFlag) {
-        atomicAdd(
-            &GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
-                                AdvancedScatterCFlag>(
-                C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
-                unique_srcs_and_dests_node_indices, idx_relation,
-                row + blockRow * BLOCK_SIZE + blockRowJobEntryBeg, idx_head,
-                blockCol * BLOCK_SIZE + col, num_heads, B_feat_dim_per_head),
-            Cvalue);
+        if (row + blockRow * BLOCK_SIZE < numARows && idx_head < num_heads &&
+            blockCol * BLOCK_SIZE + col < B_feat_dim_per_head)
+          atomicAdd(
+              &GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
+                                  AdvancedScatterCFlag>(
+                  C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices, idx_relation,
+                  blockRow * BLOCK_SIZE + row + blockRowJobEntryBeg, idx_head,
+                  blockCol * BLOCK_SIZE + col, num_heads, B_feat_dim_per_head),
+              Cvalue);
       } else {
-        GetRowMajorElement<Idx, IdxPtr, ScatterCFlag, AdvancedScatterCFlag>(
-            C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices, idx_relation,
-            row + blockRow * BLOCK_SIZE + blockRowJobEntryBeg, idx_head,
-            blockCol * BLOCK_SIZE + col, num_heads, B_feat_dim_per_head) =
-            Cvalue;
+        CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(
+            OuterProductFlag && AtomicUpdateFlag,
+            "OuterproductFlag==true case must use atomic update");
+      }
+    }
+
+    else {
+      if (row + blockRow * BLOCK_SIZE + blockRowJobEntryBeg < numARows &&
+          idx_head < num_heads &&
+          blockCol * BLOCK_SIZE + col < B_feat_dim_per_head) {
+        if constexpr (AtomicUpdateFlag) {
+          atomicAdd(
+              &GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
+                                  AdvancedScatterCFlag>(
+                  C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices, idx_relation,
+                  row + blockRow * BLOCK_SIZE + blockRowJobEntryBeg, idx_head,
+                  blockCol * BLOCK_SIZE + col, num_heads, B_feat_dim_per_head),
+              Cvalue);
+        } else {
+          GetRowMajorElement<Idx, IdxPtr, ScatterCFlag, AdvancedScatterCFlag>(
+              C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
+              unique_srcs_and_dests_node_indices, idx_relation,
+              row + blockRow * BLOCK_SIZE + blockRowJobEntryBeg, idx_head,
+              blockCol * BLOCK_SIZE + col, num_heads, B_feat_dim_per_head) =
+              Cvalue;
+        }
       }
     }
   }
-}
 }
 
 // C = A * B all are row major
@@ -310,20 +316,7 @@ __global__ void RGNNFeatPerEdgeFWProp(
       A_rel_ptr[idx_relation], num_A_cols / num_heads, num_B_cols / num_heads,
       num_heads);
 }
-template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
-__global__ void RGNNFeatCompactFWPropDummy(
-    float* node_feat_input, float* weight, float* node_feat_per_edge,
-    IdxPtr unique_srcs_and_dests_rel_ptr,
-    IdxPtr unique_srcs_and_dests_node_indices, Idx num_A_cols, Idx num_B_cols,
-    Idx num_heads, int* accum_num_blocks_per_relation, Idx num_relations) {}
 
-template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
-__global__ void RGNNFeatPerEdgeFWPropDummy(
-    float* node_feat_input, float* weight, float* node_feat_per_edge,
-    IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
-    IdxPtr C_eid_scatter_list, Idx num_A_cols, Idx num_B_cols, Idx num_heads,
-    int* accum_num_blocks_per_relation, Idx num_relations) {}
-template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void RGNNFeatCompactFWProp(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
     IdxPtr unique_srcs_and_dests_rel_ptr,
@@ -377,6 +370,7 @@ __global__ void RGNNDeltaWeightBWProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  // FIXME: the accum_num_blocks_per_relation might be corrupted
   _basic_MatMulKernel<BLOCK_SIZE, true, true, false, true, false, false, false,
                       true, Idx, IdxPtr>(
       node_feat_input, delta_feat_per_edge, delta_weight,

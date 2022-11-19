@@ -26,11 +26,11 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
         DType s = 0.;
         // for (Idx eidx = start_off; eidx < end_off; eidx++) {
         Idx src_vid = row_indices[eidx];
-        Idx feat_src_entry_id;
+        Idx feat_src_entry_id = -1;
         Idx edge_id = gdata.eids[eidx];
         if constexpr (RelationalFlag) {
-          Idx sum_idx;
-          Idx etype;
+          Idx sum_idx = -1;
+          Idx etype = -1;
           if constexpr (ETypeRelPtrFlag) {
             etype = binary_search(num_relations, etypes, eidx);
           } else {
@@ -117,7 +117,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
     for (Idx feat_idx = tx; feat_idx < e_xlen;
          feat_idx += blockDim.x * gridDim.x) {
       // 1. Load dstnation vertex into shared memory
-      Idx feat_off_dst;
+      Idx feat_off_dst = -1;
       if constexpr (CompactAsOfNodeFlag) {
         feat_off_dst = dst_vid * e_xlen + feat_idx;
       }
@@ -127,13 +127,13 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
       DType sum = 0.;
       // for (Idx eidx = start_off; eidx < end_off; ++eidx) {
       Idx src_id = *(row_indices + eidx);
-      Idx feat_off_src;
+      Idx feat_off_src = -1;
       Idx edge_id = gdata.eids[eidx];
-      Idx dst_vid_relational;
+      Idx dst_vid_relational = -1;
       if constexpr (CompactAsOfNodeFlag) {
         if constexpr (RelationalFlag) {
           // Idx etype = etypes[eidx];
-          Idx etype;
+          Idx etype = -1;
           if constexpr (ETypeRelPtrFlag) {
             etype = binary_search(num_relations, etypes, eidx);
           } else {

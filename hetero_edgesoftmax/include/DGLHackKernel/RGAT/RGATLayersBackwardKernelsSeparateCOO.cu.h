@@ -28,8 +28,8 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
            feat_idx += blockDim.y) {
         DType s = 0.;
         DType sfeatsrc = 0.;
-        Idx feat_src_offset;
-        Idx el_idx;
+        Idx feat_src_offset = -1;
+        Idx el_idx = -1;
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
           // in this case, feat_src_offset is the same regardless of which
           // outgoing edge we deal with
@@ -40,8 +40,8 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
         // for (Idx e = start_off; e < end_off; ++e) {
         Idx eid = gdata.eids[e];
         Idx dst_vid = col_indices[e];
-        Idx er_idx;
-        Idx dst_vid_relational;
+        Idx er_idx = -1;
+        Idx dst_vid_relational = -1;
         if constexpr (!CompactAsOfNodeFlag) {
           // in this case, feat_src_offset, er_idx and el_idx are related to
           // edge id, regardless of the type of the edge
@@ -58,7 +58,7 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
             // index) feat_src_offset is related to (relation, unique node
             // index)
             // Idx etype = etypes[e];
-            Idx etype;
+            Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, e);
             } else {
@@ -154,7 +154,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
       for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
            feat_idx += blockDim.y) {
         DType s = 0.;
-        Idx feat_src_offset;
+        Idx feat_src_offset = -1;
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
           // in this case, feat_src_offset is the same regardless of which
           // outgoing edge we deal with
@@ -164,7 +164,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
         // for (Idx e = start_off; e < end_off; ++e) {
         Idx eid = gdata.eids[e];
         Idx dst_vid = col_indices[e];
-        Idx dst_vid_relational;
+        Idx dst_vid_relational = -1;
         if constexpr (!CompactAsOfNodeFlag) {
           // in this case, feat_src_offset, er_idx and el_idx are related to
           // edge id, regardless of the type of the edge
@@ -173,7 +173,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
         } else {  // CompactAsOfNodeFlag
           if constexpr (RelationalFlag) {
             // Idx etype = etypes[e];
-            Idx etype;
+            Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, e);
             } else {  // !ETypeRelPtrFlag
@@ -242,8 +242,8 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
       for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
            feat_idx += blockDim.y) {
         DType s = 0.;
-        Idx feat_src_offset;
-        Idx el_idx;
+        Idx feat_src_offset = -1;
+        Idx el_idx = -1;
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
           // in this case, feat_src_offset is the same regardless of which
           // outgoing edge we deal with
@@ -255,8 +255,8 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
         Idx edge_offset = gdata.eids[e] * e_xlen + head_idx;
         Idx eid = gdata.eids[e];
         Idx dst_vid = column_indices[e];
-        Idx er_idx;
-        Idx dst_vid_relational;
+        Idx er_idx = -1;
+        Idx dst_vid_relational = -1;
         if constexpr (!CompactAsOfNodeFlag) {
           // in this case, feat_src_offset, er_idx and el_idx are related to
           // edge id, regardless of the type of the edge
@@ -273,7 +273,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
             // index) feat_src_offset is related to (relation, unique node
             // index)
             // Idx etype = etypes[e];
-            Idx etype;
+            Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, e);
             } else {

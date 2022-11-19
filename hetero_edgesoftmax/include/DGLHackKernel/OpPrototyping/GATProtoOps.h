@@ -73,7 +73,7 @@ void FusedGatKernelImpl(
   int nthrs_x = 32;
   int nthrs_y = 1;
   int nblks_x = (el_xlen + nthrs_x - 1) / (nthrs_x);
-  int nblks_y = std::min(num_rows, MAX_NBLKS);
+  int nblks_y = std::min(num_rows, (int64_t)MAX_NBLKS);
   const dim3 nblks(nblks_x, nblks_y);
   const dim3 nthrs(nthrs_x, nthrs_y);
   // LOG(INFO) << "kernel1 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:"
@@ -96,7 +96,7 @@ void FusedGatKernelImpl(
   nthrs_x = SeastarFindNumThreads(el_xlen, 64);
   nthrs_y = SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
   nblks_x = 1;
-  nblks_y = std::min(num_rows, MAX_NBLKS);
+  nblks_y = std::min(num_rows, (int64_t)MAX_NBLKS);
   const dim3 nthrs2(nthrs_x, nthrs_y);
   const dim3 nblks2(nblks_x, nblks_y);
   // LOG(INFO) << "kernel2 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:"

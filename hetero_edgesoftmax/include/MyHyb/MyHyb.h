@@ -195,32 +195,59 @@ class MyHeteroSeparateCSR {
   // template<typename OtherType, typename OtherAlloc>
   void Transpose(/*std::optional<typename std::reference_wrapper<typename thrust::detail::vector_base<OtherType, OtherAlloc>>> eids*/)
     {
-    // FIXME: this transpose CSR only works for single-relationship CSR. Needs
-    // to execute one relationship by one relationship in this heteroseparateCSR
-    // case
-    thrust::host_vector<IdxType> permutation = TransposeCSR(row_ptr, col_idx);
+    assert(this->num_rels == 1);
+    // The TransposeCSR() this function relies on only works for
+    // single-relationship CSR. Needs to execute one relationship by one
+    // relationship in this heteroseparateCSR case
     assert(num_rows == num_cols);
-    // if (eids.has_value()){
-    // thrust::detail::vector_base<IdxType, OtherAlloc>& eids_ref =
-    // eids.value().get();
-    thrust::detail::vector_base<IdxType, Alloc> new_eids(eids.size());
-    typedef typename thrust::detail::vector_base<IdxType, Alloc>::iterator
-        ElementIterator;
-    typedef typename thrust::host_vector<IdxType>::iterator IndexIterator;
-    // thrust::permutation_iterator<ElementIterator, IndexIterator>
-    // permute_iter_temp(eids.begin(), permutation.begin());
-    // print_range("permute_iter_temp",permute_iter_temp, permute_iter_temp +
-    // eids.size());
-    thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter(
-        eids.begin(), permutation.begin());
-    // for (int64_t idx = 0; idx < eids_ref.size(); idx++) {
-    //     new_eids[idx] = *permute_iter;
-    //     permute_iter++;
-    // }
-    thrust::copy(permute_iter, permute_iter + eids.size(), new_eids.begin());
-    // print_range("new_eids",new_eids.begin(), new_eids.end());
-    thrust::copy(new_eids.begin(), new_eids.end(), eids.begin());
-    //}
+    for (int64_t idx_relation = 0; idx_relation < this->num_rels;
+         idx_relation++) {
+      thrust::host_vector<IdxType> row_ptr_curr_relation(
+          this->row_ptr.begin() + idx_relation * this->num_rows,
+          this->row_ptr.begin() + (idx_relation + 1) * this->num_rows);
+      thrust::host_vector<IdxType> col_idx_curr_relation(
+          this->col_idx.begin() + this->row_ptr[idx_relation * this->num_rows],
+          this->col_idx.begin() +
+              this->row_ptr[(idx_relation + 1) * this->num_rows]);
+      thrust::host_vector<IdxType> eids_curr_relation(
+          this->eids.begin() + this->row_ptr[idx_relation * this->num_rows],
+          this->eids.begin() +
+              this->row_ptr[(idx_relation + 1) * this->num_rows]);
+      thrust::host_vector<IdxType> permutation =
+          TransposeCSR(row_ptr_curr_relation, col_idx_curr_relation);
+
+      // if (eids.has_value()){
+      // thrust::detail::vector_base<IdxType, OtherAlloc>& eids_ref =
+      // eids.value().get();
+      thrust::detail::vector_base<IdxType, Alloc> new_eids_curr_relation(
+          eids_curr_relation.size());
+      typedef typename thrust::detail::vector_base<IdxType, Alloc>::iterator
+          ElementIterator;
+      typedef typename thrust::host_vector<IdxType>::iterator IndexIterator;
+      // thrust::permutation_iterator<ElementIterator, IndexIterator>
+      // permute_iter_temp(eids.begin(), permutation.begin());
+      // print_range("permute_iter_temp",permute_iter_temp, permute_iter_temp +
+      // eids.size());
+      thrust::permutation_iterator<ElementIterator, IndexIterator> permute_iter(
+          eids_curr_relation.begin(), permutation.begin());
+      // for (int64_t idx = 0; idx < eids_ref.size(); idx++) {
+      //     new_eids[idx] = *permute_iter;
+      //     permute_iter++;
+      // }
+      thrust::copy(permute_iter, permute_iter + eids.size(),
+                   new_eids_curr_relation.begin());
+      // print_range("new_eids",new_eids.begin(), new_eids.end());
+      thrust::copy(new_eids_curr_relation.begin(), new_eids_curr_relation.end(),
+                   eids.begin() + this->row_ptr[idx_relation * this->num_rows]);
+      thrust::copy(row_ptr_curr_relation.begin(),
+                   row_ptr_curr_relation.begin() + row_ptr_curr_relation.size(),
+                   this->row_ptr.begin() + idx_relation * this->num_rows);
+      thrust::copy(
+          col_idx_curr_relation.begin(),
+          col_idx_curr_relation.begin() + col_idx_curr_relation.size(),
+          this->col_idx.begin() + this->row_ptr[idx_relation * this->num_rows]);
+      //}
+    }
   }
 
   template <typename OtherAlloc>
