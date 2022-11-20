@@ -546,7 +546,7 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
         num_heads * 128);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     RGNNDeltaNodeFeatInputBWProp<BLOCK_SIZE, int64_t, int64_t*>
-        <<<nblks_outer_product, nthrs, 0, stream>>>(
+        <<<nblks, nthrs, 0, stream>>>(
             gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
             grad_input.data_ptr<float>(), separate_coo_eids.data_ptr<int64_t>(),
             separate_coo_relptrs.data_ptr<int64_t>(),
@@ -556,7 +556,7 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
                 dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
             num_relations);
     RGNNDeltaWeightBWProp<BLOCK_SIZE, int64_t, int64_t*>
-        <<<nblks, nthrs, 0, stream>>>(
+        <<<nblks_outer_product, nthrs, 0, stream>>>(
             input.data_ptr<float>(), gradout.data_ptr<float>(),
             grad_weights.data_ptr<float>(),
             separate_coo_eids.data_ptr<int64_t>(),

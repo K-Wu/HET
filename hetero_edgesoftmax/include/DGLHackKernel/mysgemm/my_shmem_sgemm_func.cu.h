@@ -92,11 +92,12 @@ __device__ __forceinline__ void _basic_MatMulKernel(
   Idx InnerProductPartitionIdx = blockIdx.z / num_heads;
   Idx NumInnerProductionPartitions = blockDim.z / num_heads;
 
-  assert((blockDim.z == num_heads));
   assert(NumInnerProductionPartitions > 0);
   if constexpr (OuterProductFlag) {
     assert(AtomicUpdateFlag);
     assert(blockRowJobEntryBeg == 0);
+  } else {
+    assert((blockDim.z == num_heads));
   }
 
   // Idx blockRow = blockIdx.y - blockIdxAlongRowBeg;
