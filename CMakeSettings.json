@@ -1,0 +1,14 @@
+﻿{
+  "configurations": [
+    {
+      "name": "x64-Debug",
+      "generator": "Visual Studio 17 2022 Win64",
+      "configurationType": "Debug",
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "-DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=TRUE -DCUDNN_INCLUDE_DIR=\"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\cudnn-windows-x86_64-8.6.0.163_cuda11-archive\\include\" -DCUDNN_LIBRARY_PATH=\"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\cudnn-windows-x86_64-8.6.0.163_cuda11-archive\\lib\\x64\" -DTorch_DIR=D:\\.conda_actual_location\\envs\\dev_dgl\\Lib\\site-packages\\torch\\share\\cmake\\Torch -DCUDA_ARCHS=\"75\" -DBUILD_TEST=ON -DBUILD_BENCHMARK=ON -DGLOG_ROOT_DIR=\"D:/external-repos/glog/out/install/x64-Debug\" -DGLOG_INCLUDE_DIR=\"D:/external-repos/glog/out/install/x64-Debug/include\" -DGLOG_LIBRARY=\"D:/external-repos/glog/out/install/x64-Debug/lib/glogd.lib\"",
+      "ctestCommandArgs": ""
+    }
+  ]
+}
