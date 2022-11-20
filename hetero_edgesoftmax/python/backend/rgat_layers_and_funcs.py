@@ -226,8 +226,8 @@ class RgatRelationalMatmul(th.autograd.Function):
             None,
             None,
             None,
-            grad_input,
             grad_weight,
+            grad_input,
             None,
         )
 

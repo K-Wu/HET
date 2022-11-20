@@ -496,14 +496,19 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
               num_relations);
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
+  // print num_blocks_assignment_for_all_prev_relation_vect
+  // std::cout << "num_blocks_assignment_for_all_prev_relation_vect: [";
+  // for (auto i : num_blocks_assignment_for_all_prev_relation_vect) {
+  // std::cout << i << " ";
+  // }
+  // std::cout << "]"<< std::endl;
   thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
-      num_blocks_assignment_for_same_relation_vect.data(),
-      num_blocks_assignment_for_same_relation_vect.data() + num_relations);
+      num_blocks_assignment_for_same_relation_vect.begin(),
+      num_blocks_assignment_for_same_relation_vect.end());
   thrust::device_vector<int>
       dev_num_blocks_assignment_for_all_prev_relation_vect(
-          num_blocks_assignment_for_all_prev_relation_vect.data(),
-          num_blocks_assignment_for_all_prev_relation_vect.data() +
-              num_relations);
+          num_blocks_assignment_for_all_prev_relation_vect.begin(),
+          num_blocks_assignment_for_all_prev_relation_vect.end());
 
   if constexpr (CompactAsOfNodeFlag) {
     const dim3 nblks(ceil_div<>(num_output_dim / num_heads, (long)BLOCK_SIZE),

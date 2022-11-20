@@ -52,6 +52,6 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${CUDA_GENCODE_FLAGS}")
 ##
 ### Project build.
 ##
-
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 add_subdirectory(hetero_edgesoftmax)

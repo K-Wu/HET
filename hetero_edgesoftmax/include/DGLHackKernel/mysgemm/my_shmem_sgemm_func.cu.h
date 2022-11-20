@@ -95,9 +95,8 @@ __device__ __forceinline__ void _basic_MatMulKernel(
   assert((blockDim.z == num_heads));
   assert(NumInnerProductionPartitions > 0);
   if constexpr (OuterProductFlag) {
-    assert(blockIdxAlongRowBeg == 0);
-    assert(blockRowJobEntryBeg == 0);
     assert(AtomicUpdateFlag);
+    assert(blockRowJobEntryBeg == 0);
   }
 
   // Idx blockRow = blockIdx.y - blockIdxAlongRowBeg;
@@ -110,7 +109,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
     blockRowLoopInc = 1;
   } else {
     blockRowLoopBeg = blockIdx.y - blockIdxAlongRowBeg;
-    blockRowLoopEnd = numARows;
+    blockRowLoopEnd = ceil_div<>(numARows, (int64_t)BLOCK_SIZE);
     blockRowLoopInc = strideAlongRow;
   }
 
@@ -184,7 +183,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
         // Get sub-matrix Asub of A
         // Asub = &A[blockRow * BLOCK_SIZE * num_A_cols + m * BLOCK_SIZE];
         As[row][col] =
-            (row + blockRow * BLOCK_SIZE + blockRowJobEntryBeg < numARows &&
+            (row + blockRow * BLOCK_SIZE < numARows &&
              m * BLOCK_SIZE + col < A_feat_dim_per_head && idx_head < num_heads)
                 ? GetRowMajorElement<Idx, IdxPtr, GatherAFlag,
                                      AdvancedGatherAFlag>(
@@ -221,29 +220,36 @@ __device__ __forceinline__ void _basic_MatMulKernel(
     // Write Csub to device memory
     // Each thread writes one element
 
+    bool WriteCInRangeFlag;
+    if constexpr (AInFlyTransposeFlag) {
+      WriteCInRangeFlag = blockRow * BLOCK_SIZE + row < A_feat_dim_per_head &&
+                          blockCol * BLOCK_SIZE + col < B_feat_dim_per_head &&
+                          idx_head < num_heads;
+    } else {
+      WriteCInRangeFlag = row + blockRow * BLOCK_SIZE < numARows &&
+                          idx_head < num_heads &&
+                          blockCol * BLOCK_SIZE + col < B_feat_dim_per_head;
+    }
     if constexpr (OuterProductFlag) {
-      if constexpr (AtomicUpdateFlag) {
-        if (row + blockRow * BLOCK_SIZE < numARows && idx_head < num_heads &&
-            blockCol * BLOCK_SIZE + col < B_feat_dim_per_head)
-          atomicAdd(
-              &GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
-                                  AdvancedScatterCFlag>(
-                  C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices, idx_relation,
-                  blockRow * BLOCK_SIZE + row + blockRowJobEntryBeg, idx_head,
-                  blockCol * BLOCK_SIZE + col, num_heads, B_feat_dim_per_head),
-              Cvalue);
-      } else {
+      if constexpr (!AtomicUpdateFlag) {
         CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(
             OuterProductFlag && AtomicUpdateFlag,
             "OuterproductFlag==true case must use atomic update");
       }
+      if (WriteCInRangeFlag)
+        atomicAdd(
+            &GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
+                                AdvancedScatterCFlag>(
+                C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
+                unique_srcs_and_dests_node_indices, idx_relation,
+                blockRow * BLOCK_SIZE + row + blockRowJobEntryBeg, idx_head,
+                blockCol * BLOCK_SIZE + col, num_heads, B_feat_dim_per_head),
+            Cvalue);
+
     }
 
-    else {
-      if (row + blockRow * BLOCK_SIZE + blockRowJobEntryBeg < numARows &&
-          idx_head < num_heads &&
-          blockCol * BLOCK_SIZE + col < B_feat_dim_per_head) {
+    else {  //  !OuterProductFlag
+      if (WriteCInRangeFlag) {
         if constexpr (AtomicUpdateFlag) {
           atomicAdd(
               &GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
@@ -253,7 +259,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
                   row + blockRow * BLOCK_SIZE + blockRowJobEntryBeg, idx_head,
                   blockCol * BLOCK_SIZE + col, num_heads, B_feat_dim_per_head),
               Cvalue);
-        } else {
+        } else {  // !AtomicUpdateFlag
           GetRowMajorElement<Idx, IdxPtr, ScatterCFlag, AdvancedScatterCFlag>(
               C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
               unique_srcs_and_dests_node_indices, idx_relation,
@@ -311,8 +317,8 @@ __global__ void RGNNFeatPerEdgeFWProp(
       C_eid_scatter_list, nullptr, nullptr, idx_relation,
       A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
       accum_num_blocks_per_relation[idx_relation],
-      BLOCK_SIZE * (accum_num_blocks_per_relation[idx_relation + 1] -
-                    accum_num_blocks_per_relation[idx_relation]),
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
       A_rel_ptr[idx_relation], num_A_cols / num_heads, num_B_cols / num_heads,
       num_heads);
 }
@@ -335,8 +341,8 @@ __global__ void RGNNFeatCompactFWProp(
       unique_srcs_and_dests_rel_ptr[idx_relation + 1] -
           unique_srcs_and_dests_rel_ptr[idx_relation],
       accum_num_blocks_per_relation[idx_relation],
-      BLOCK_SIZE * (accum_num_blocks_per_relation[idx_relation + 1] -
-                    accum_num_blocks_per_relation[idx_relation]),
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
       unique_srcs_and_dests_rel_ptr[idx_relation], num_A_cols / num_heads,
       num_B_cols / num_heads, num_heads);
 }
@@ -356,8 +362,8 @@ __global__ void RGNNDeltaNodeFeatInputBWProp(
       A_eid_gather_list, nullptr, C_col_row_idx_scatter_list, nullptr, nullptr,
       idx_relation, A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
       accum_num_blocks_per_relation[idx_relation],
-      BLOCK_SIZE * (accum_num_blocks_per_relation[idx_relation + 1] -
-                    accum_num_blocks_per_relation[idx_relation]),
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
       A_rel_ptr[idx_relation], num_A_cols / num_heads, num_B_cols / num_heads,
       num_heads);
 }
@@ -374,14 +380,14 @@ __global__ void RGNNDeltaWeightBWProp(
   // FIXME: the accum_num_blocks_per_relation might be corrupted
   _basic_MatMulKernel<BLOCK_SIZE, true, true, false, true, false, false, false,
                       true, Idx, IdxPtr>(
-      node_feat_input, delta_feat_per_edge, delta_weight,
+      node_feat_input, delta_feat_per_edge,
+      &delta_weight[idx_relation * num_A_cols / num_heads * num_B_cols],
       A_col_row_idx_gather_list, B_eid_gather_list, nullptr, nullptr, nullptr,
       idx_relation, A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
       accum_num_blocks_per_relation[idx_relation],
-      BLOCK_SIZE * (accum_num_blocks_per_relation[idx_relation + 1] -
-                    accum_num_blocks_per_relation[idx_relation]),
-      A_rel_ptr[idx_relation], num_A_cols / num_heads, num_B_cols / num_heads,
-      num_heads);
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
+      0, num_A_cols / num_heads, num_B_cols / num_heads, num_heads);
 }
 
 // blockDim.y == ceil_div(A_col_row_idx_gather_list.size(), BLOCK_SIZE)
@@ -401,8 +407,8 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWProp(
       unique_srcs_and_dests_node_indices, nullptr, nullptr,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       idx_relation, num_edges, accum_num_blocks_per_relation[idx_relation],
-      BLOCK_SIZE * (accum_num_blocks_per_relation[idx_relation + 1] -
-                    accum_num_blocks_per_relation[idx_relation]),
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
       0, num_A_cols / num_heads, num_B_cols / num_heads, num_heads);
 }
 
@@ -425,7 +431,7 @@ __global__ void RGNNDeltaWeightCompactBWProp(
       nullptr, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices, idx_relation, num_edges,
       accum_num_blocks_per_relation[idx_relation],
-      BLOCK_SIZE * (accum_num_blocks_per_relation[idx_relation + 1] -
-                    accum_num_blocks_per_relation[idx_relation]),
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
       0, num_A_cols / num_heads, num_B_cols / num_heads, num_heads);
 }

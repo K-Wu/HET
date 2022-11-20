@@ -241,7 +241,7 @@ def HET_RGAT_train_full_graph(
         loss.backward()
         optimizer.step()
 
-        total_loss += loss.item() * args.batch_size
+        total_loss += loss.item() * hypermeters["batch_size"]
 
         # result = test(g, model, node_embed, labels, device, split_idx, args)
         # logger.add_result(run, result)
