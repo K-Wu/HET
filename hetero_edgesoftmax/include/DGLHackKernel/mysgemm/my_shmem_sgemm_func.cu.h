@@ -335,8 +335,9 @@ __global__ void RGNNFeatCompactFWProp(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, true,
                       false, Idx, IdxPtr>(
-      node_feat_input, weight, node_feat_per_edge,
-      unique_srcs_and_dests_node_indices, nullptr,
+      node_feat_input,
+      &weight[idx_relation * num_B_cols * num_A_cols / num_heads],
+      node_feat_per_edge, unique_srcs_and_dests_node_indices, nullptr,
       unique_srcs_and_dests_node_indices, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices, idx_relation,
       unique_srcs_and_dests_rel_ptr[idx_relation + 1] -
@@ -359,9 +360,11 @@ __global__ void RGNNDeltaNodeFeatInputBWProp(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
                       true, Idx, IdxPtr>(
-      delta_feat_per_edge, weight_transposed, delta_node_input,
-      A_eid_gather_list, nullptr, C_col_row_idx_scatter_list, nullptr, nullptr,
-      idx_relation, A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
+      delta_feat_per_edge,
+      &weight_transposed[idx_relation * num_B_cols * num_A_cols / num_heads],
+      delta_node_input, A_eid_gather_list, nullptr, C_col_row_idx_scatter_list,
+      nullptr, nullptr, idx_relation,
+      A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
       accum_num_blocks_per_relation[idx_relation],
       (accum_num_blocks_per_relation[idx_relation + 1] -
        accum_num_blocks_per_relation[idx_relation]),
@@ -404,10 +407,12 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWProp(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BLOCK_SIZE, false, true, true, false, false, false, false,
                       true, Idx, IdxPtr>(
-      delta_feat_compact, weight_transpose, delta_node_feat_input,
-      unique_srcs_and_dests_node_indices, nullptr, nullptr,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-      idx_relation, num_edges, accum_num_blocks_per_relation[idx_relation],
+      delta_feat_compact,
+      &weight_transpose[idx_relation * num_B_cols * num_A_cols / num_heads],
+      delta_node_feat_input, unique_srcs_and_dests_node_indices, nullptr,
+      nullptr, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, idx_relation, num_edges,
+      accum_num_blocks_per_relation[idx_relation],
       (accum_num_blocks_per_relation[idx_relation + 1] -
        accum_num_blocks_per_relation[idx_relation]),
       0, num_A_cols / num_heads, num_B_cols / num_heads, num_heads);
