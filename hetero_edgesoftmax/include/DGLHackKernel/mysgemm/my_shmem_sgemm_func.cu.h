@@ -50,21 +50,6 @@ __device__ __forceinline__ float& GetRowMajorElement(
   }
 }
 
-template <typename Idx>
-__device__ __host__ __forceinline__ Idx ceil_div(Idx a, Idx b) {
-  return (a + b - 1) / b;
-}
-
-template <typename Idx>
-__device__ __host__ __forceinline__ Idx min2(Idx a, Idx b) {
-  return a < b ? a : b;
-}
-
-template <typename Idx>
-__device__ __host__ __forceinline__ Idx max2(Idx a, Idx b) {
-  return a > b ? a : b;
-}
-
 // code from
 // http://www.shodor.org/media/content//petascale/materials/UPModules/matrixMultiplication/moduleDocument.pdf
 //@@ Example of grid and block configuration
@@ -83,7 +68,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
     IdxPtr unique_srcs_and_dests_node_indices, Idx idx_relation, Idx numARows,
     Idx blockIdxAlongRowBeg, Idx strideAlongRow, Idx blockRowJobEntryBeg,
     Idx A_feat_dim_per_head, Idx B_feat_dim_per_head, Idx num_heads) {
-  constexpr bool AInFlyTransposeFlag = OuterProductFlag;
+  constexpr bool BWeightInsteadOfFeatureFlag = !OuterProductFlag;
   Idx num_A_cols = A_feat_dim_per_head * num_heads;
   Idx num_B_cols = B_feat_dim_per_head * num_heads;
 
@@ -94,7 +79,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
 
   assert(NumInnerProductionPartitions > 0);
   if constexpr (OuterProductFlag) {
-    assert(AtomicUpdateFlag);
+    CONSTEXPR_TRUE_CLAUSE_STATIC_ASSERT(OuterProductFlag, AtomicUpdateFlag, "");
     assert(blockRowJobEntryBeg == 0);
   } else {
     assert((blockDim.z == num_heads));
@@ -132,7 +117,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
     // and accumulate the results
 
     Idx mLoopBeg, mLoopEnd;
-    if constexpr (AInFlyTransposeFlag) {
+    if constexpr (OuterProductFlag) {
       mLoopBeg = ceil_div<Idx>(numARows, BLOCK_SIZE) *
                  InnerProductPartitionIdx / NumInnerProductionPartitions;
       mLoopEnd = ceil_div<Idx>(numARows, BLOCK_SIZE) *
@@ -153,7 +138,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
       // float* Asub;
       // Load Asub and Bsub from device memory to shared memory
       // Each thread loads one element of each sub-matrix
-      if constexpr (AInFlyTransposeFlag) {
+      if constexpr (OuterProductFlag) {
         // Get sub-matrix Asub of A
         // Asub = &A[m * BLOCK_SIZE * num_A_cols + blockRow * BLOCK_SIZE];
         As[col][row] =
@@ -168,6 +153,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
                       col + blockRow * BLOCK_SIZE, num_heads,
                       A_feat_dim_per_head)
                 : 0.0f;
+
         Bs[row][col] =
             (m * BLOCK_SIZE + row < numARows &&
              blockCol * BLOCK_SIZE + col < B_feat_dim_per_head &&
@@ -194,18 +180,31 @@ __device__ __forceinline__ void _basic_MatMulKernel(
                       idx_head, col + m * BLOCK_SIZE, num_heads,
                       A_feat_dim_per_head)
                 : 0.0f;
-        Bs[row][col] =
-            (m * BLOCK_SIZE + row < num_A_cols &&
-             blockCol * BLOCK_SIZE + col < B_feat_dim_per_head &&
-             idx_head < num_heads)
-                ? GetRowMajorElement<Idx, IdxPtr, GatherBFlag,
-                                     AdvancedGatherBFlag>(
-                      B, B_gather_list, unique_srcs_and_dests_rel_ptr,
-                      unique_srcs_and_dests_node_indices, idx_relation,
-                      m * BLOCK_SIZE + row, idx_head,
-                      blockCol * BLOCK_SIZE + col, num_heads,
-                      B_feat_dim_per_head)
-                : 0.0f;
+        if constexpr (BWeightInsteadOfFeatureFlag) {
+          // B matrix the most major dimension is num_heads, i.e., [num_heads,
+          // num_B_rows_feat, num_B_cols_feat] instead of [num_nodes|edges,
+          // num_heads, num_feats]
+          Bs[row][col] =
+              (m * BLOCK_SIZE + row < num_A_cols &&
+               blockCol * BLOCK_SIZE + col < B_feat_dim_per_head &&
+               idx_head < num_heads)
+                  ? B[idx_head * num_A_cols * num_B_cols / num_heads +
+                      row * num_B_cols / num_heads + col]
+                  : 0.0f;
+        } else {
+          Bs[row][col] =
+              (m * BLOCK_SIZE + row < num_A_cols &&
+               blockCol * BLOCK_SIZE + col < B_feat_dim_per_head &&
+               idx_head < num_heads)
+                  ? GetRowMajorElement<Idx, IdxPtr, GatherBFlag,
+                                       AdvancedGatherBFlag>(
+                        B, B_gather_list, unique_srcs_and_dests_rel_ptr,
+                        unique_srcs_and_dests_node_indices, idx_relation,
+                        m * BLOCK_SIZE + row, idx_head,
+                        blockCol * BLOCK_SIZE + col, num_heads,
+                        B_feat_dim_per_head)
+                  : 0.0f;
+        }
       }
 
       // Synchronize to make sure the sub-matrices are loaded
@@ -222,7 +221,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
     // Each thread writes one element
 
     bool WriteCInRangeFlag;
-    if constexpr (AInFlyTransposeFlag) {
+    if constexpr (OuterProductFlag) {
       WriteCInRangeFlag = blockRow * BLOCK_SIZE + row < A_feat_dim_per_head &&
                           blockCol * BLOCK_SIZE + col < B_feat_dim_per_head &&
                           idx_head < num_heads;
@@ -232,21 +231,18 @@ __device__ __forceinline__ void _basic_MatMulKernel(
                           blockCol * BLOCK_SIZE + col < B_feat_dim_per_head;
     }
     if constexpr (OuterProductFlag) {
+      // C is weight instead of feature.
       if constexpr (!AtomicUpdateFlag) {
         CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(
             OuterProductFlag && AtomicUpdateFlag,
             "OuterproductFlag==true case must use atomic update");
       }
       if (WriteCInRangeFlag)
-        atomicAdd(
-            &GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
-                                AdvancedScatterCFlag>(
-                C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
-                unique_srcs_and_dests_node_indices, idx_relation,
-                blockRow * BLOCK_SIZE + row + blockRowJobEntryBeg, idx_head,
-                blockCol * BLOCK_SIZE + col, num_heads, B_feat_dim_per_head),
-            Cvalue);
-
+        atomicAdd(&C[idx_head * num_A_cols /*A is transposed in the fly*/ *
+                         num_B_cols / num_heads +
+                     (blockRow * BLOCK_SIZE + row) * num_B_cols / num_heads +
+                     blockCol * BLOCK_SIZE + col],
+                  Cvalue);
     }
 
     else {  //  !OuterProductFlag

@@ -1,0 +1,1 @@
+This directory stores all godbolt examples mentioned in the comment just in case shortened link won't work some time in future.

@@ -124,10 +124,25 @@ __device__ __forceinline__ Idx find_relational_compact_as_of_node_index(
              idx_node);
 }
 
+template <typename Idx>
+__device__ __host__ __forceinline__ Idx ceil_div(const Idx a, const Idx b) {
+  return (a + b - 1) / b;
+}
+
+template <typename Idx>
+__device__ __host__ __forceinline__ Idx min2(const Idx a, const Idx b) {
+  return a < b ? a : b;
+}
+
+template <typename Idx>
+__device__ __host__ __forceinline__ Idx max2(const Idx a, const Idx b) {
+  return a > b ? a : b;
+}
+
 // workaround to assert an if constexpr clause won't be emitted during compile
 // time Use the following: static_assert(dependent_false<T>::value); See
 // https://stackoverflow.com/a/53945555/5555077
-// example https://godbolt.org/z/jP5zz1GhY
+// example https://godbolt.org/z/3cGdneEKM
 #define CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(FLAG, reason)                   \
   static_assert(std::is_same<std::true_type,                               \
                              std::integral_constant<bool, FLAG>>::value && \
@@ -137,3 +152,17 @@ __device__ __forceinline__ Idx find_relational_compact_as_of_node_index(
   static_assert(std::is_same<std::false_type,                              \
                              std::integral_constant<bool, FLAG>>::value && \
                 reason)
+
+#define CONSTEXPR_FALSE_CLAUSE_STATIC_ASSERT(FLAG, asserted_true_expression,  \
+                                             reason)                          \
+  static_assert(                                                              \
+      std::is_same<std::true_type,                                            \
+                   std::integral_constant<bool, FLAG>>::value /*unreachable*/ \
+      || (/*or true*/ asserted_true_expression && reason))
+
+#define CONSTEXPR_TRUE_CLAUSE_STATIC_ASSERT(FLAG, asserted_true_expression,   \
+                                            reason)                           \
+  static_assert(                                                              \
+      std::is_same<std::false_type,                                           \
+                   std::integral_constant<bool, FLAG>>::value /*unreachable*/ \
+      || (/*or true*/ asserted_true_expression && reason))
