@@ -3,6 +3,7 @@ x64/
 .vscode/
 .idea/
 build**/
+cmake-build**/
 *.log
 *.ncu-rep
 *.do_not_use

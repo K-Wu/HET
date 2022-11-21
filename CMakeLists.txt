@@ -29,7 +29,8 @@ include(cmake/Dependencies.cmake)
 # Requires C++17.
 set(CMAKE_CXX_STANDARD 17)
 
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wall -Wno-sign-compare -maxrregcount 128 -g -G -lineinfo --restrict --extended-lambda -std=c++17 -O3")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wall -Wno-sign-compare -maxrregcount 128 -g -G -lineinfo --restrict --extended-lambda -std=c++17")
+#TODO: add  -O3 in release mode 
 
 if (RES_USAGE)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -res-usage")

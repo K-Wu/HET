@@ -158,12 +158,13 @@ class HET_RelationalAttLayer(nn.Module):
             )
 
         else:
+            # print(th.argmin(g["separate"]["coo"]["original"]["eids"])) # 256546 rel_ptr [183, 184)
             feat_src_per_edge = B.rgat_relational_matmul(
                 g["separate"]["coo"]["original"]["rel_ptr"],
                 g["separate"]["coo"]["original"]["row_idx"],
                 g["separate"]["coo"]["original"]["eids"],
-                g["separate"]["unique_node_idx"]["rel_ptr"],
-                g["separate"]["unique_node_idx"]["node_idx"],
+                # g["separate"]["unique_node_idx"]["rel_ptr"],
+                # g["separate"]["unique_node_idx"]["node_idx"],
                 self.conv_weights,
                 inputs,
             )
@@ -171,8 +172,8 @@ class HET_RelationalAttLayer(nn.Module):
                 g["separate"]["coo"]["original"]["rel_ptr"],
                 g["separate"]["coo"]["original"]["col_idx"],
                 g["separate"]["coo"]["original"]["eids"],
-                g["separate"]["unique_node_idx"]["rel_ptr"],
-                g["separate"]["unique_node_idx"]["node_idx"],
+                # g["separate"]["unique_node_idx"]["rel_ptr"],
+                # g["separate"]["unique_node_idx"]["node_idx"],
                 self.conv_weights,
                 inputs,
             )

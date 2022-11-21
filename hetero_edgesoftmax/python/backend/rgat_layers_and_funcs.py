@@ -139,7 +139,7 @@ def relational_fused_gat_csr(graph, feat_src, el, er, slope):
     )  # [num_dest_nodes, num_heads]
     ret = el.new_empty(
         [graph.get_num_nodes()] + list(feat_src.size()[1:])
-    )  # [num_dest_nodes, num_heads, out_feats]
+    )  # [num_dest_nodes, num_heads, out_feats//num_heads]
     return RelationalFusedGatCSR.apply(
         graph["transposed"]["row_ptr"],
         graph["transposed"]["col_idx"],
@@ -168,8 +168,6 @@ class RgatRelationalMatmul(th.autograd.Function):
         separate_coo_relptrs,
         separate_coo_node_indicies,
         separate_coo_eids,
-        unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices,
         weights,
         inputs,
         ret,
@@ -178,8 +176,6 @@ class RgatRelationalMatmul(th.autograd.Function):
             separate_coo_relptrs,
             separate_coo_node_indicies,
             separate_coo_eids,
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices,
             weights,
             inputs,
         )
@@ -187,8 +183,6 @@ class RgatRelationalMatmul(th.autograd.Function):
             separate_coo_relptrs,
             separate_coo_node_indicies,
             separate_coo_eids,
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices,
             weights,
             inputs,
             ret,
@@ -201,8 +195,6 @@ class RgatRelationalMatmul(th.autograd.Function):
             separate_coo_relptrs,
             separate_coo_node_indicies,
             separate_coo_eids,
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices,
             weights,
             inputs,
         ) = ctx.saved_tensors
@@ -212,8 +204,6 @@ class RgatRelationalMatmul(th.autograd.Function):
             separate_coo_relptrs,
             separate_coo_node_indicies,
             separate_coo_eids,
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices,
             th.transpose(weights, 2, 3),
             inputs,
             gradout,
@@ -221,8 +211,6 @@ class RgatRelationalMatmul(th.autograd.Function):
             grad_weight,
         )
         return (
-            None,
-            None,
             None,
             None,
             None,
@@ -236,13 +224,17 @@ def rgat_relational_matmul(
     separate_coo_relptrs,
     separate_coo_node_indicies,
     separate_coo_eids,
-    unique_srcs_and_dests_rel_ptr,
-    unique_srcs_and_dests_node_indices,
+    # unique_srcs_and_dests_rel_ptr,
+    # unique_srcs_and_dests_node_indices,
     weights,
     inputs,
 ):
     ret = th.zeros(
-        (separate_coo_node_indicies.numel(), weights.size(1), weights.size(3)),
+        (
+            separate_coo_node_indicies.numel(),
+            weights.size(1),
+            weights.size(3),
+        ),  # [num_items, num_heads, out_feats//num_heads]
         dtype=weights.dtype,
         device=weights.device,
         requires_grad=True,
@@ -251,8 +243,8 @@ def rgat_relational_matmul(
         separate_coo_relptrs,
         separate_coo_node_indicies,
         separate_coo_eids,
-        unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices,
+        # unique_srcs_and_dests_rel_ptr,
+        # unique_srcs_and_dests_node_indices,
         weights,
         inputs,
         ret,
