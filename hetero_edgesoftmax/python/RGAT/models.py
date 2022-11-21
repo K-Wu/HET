@@ -24,7 +24,7 @@ class HET_RelationalAttLayer(nn.Module):
         Input feature size.
     out_feat : int
         Output feature size.
-    rel_names : list[str]
+    num_rels: int
         Relation names.
     n_heads : int
         Number of attention heads
@@ -42,7 +42,7 @@ class HET_RelationalAttLayer(nn.Module):
         self,
         in_feat,
         out_feat,
-        rel_names,
+        num_rels,
         n_heads,
         *,
         bias: bool = True,
@@ -55,25 +55,24 @@ class HET_RelationalAttLayer(nn.Module):
         super(HET_RelationalAttLayer, self).__init__()
         self.in_feat = in_feat
         self.out_feat = out_feat
-        self.rel_names = rel_names
+        self.num_rels = num_rels
         self.bias = bias
         self.activation = activation
         self.self_loop = self_loop
         self.compact_as_of_node_flag = compact_as_of_node_flag
         self.leaky_relu_slope = leaky_relu_slope
 
+        assert (
+            num_rels > 1
+        ), "dummy proof assertion num_rels should be larger than 1 normally when calling RGAT_HET"
         # NB: RGAT model definition
         assert out_feat % n_heads == 0, "out_feat must be a multiple of n_heads"
 
         self.conv_weights = nn.Parameter(
-            th.Tensor(len(rel_names), n_heads, in_feat, out_feat // n_heads)
+            th.Tensor(num_rels, n_heads, in_feat, out_feat // n_heads)
         )
-        self.attn_l = nn.Parameter(
-            th.Tensor(len(rel_names), n_heads, out_feat // n_heads)
-        )
-        self.attn_r = nn.Parameter(
-            th.Tensor(len(rel_names), n_heads, out_feat // n_heads)
-        )
+        self.attn_l = nn.Parameter(th.Tensor(num_rels, n_heads, out_feat // n_heads))
+        self.attn_r = nn.Parameter(th.Tensor(num_rels, n_heads, out_feat // n_heads))
         # self.conv = dglnn.HeteroGraphConv(
         #     {
         #         rel: dglnn.GATConv(in_feat, out_feat // n_heads, n_heads, bias=False)
@@ -228,7 +227,7 @@ class HET_RelationalGATEncoder(nn.Module):
 
     def __init__(
         self,
-        etypes,
+        num_etypes,
         h_dim,
         out_dim,
         n_heads,
@@ -240,7 +239,7 @@ class HET_RelationalGATEncoder(nn.Module):
     ):
         super(HET_RelationalGATEncoder, self).__init__()
         self.n_heads = n_heads
-        self.etypes = etypes
+        self.num_etypes = num_etypes
         self.h_dim = h_dim
         self.out_dim = out_dim
         self.n_heads = n_heads
@@ -260,7 +259,7 @@ class HET_RelationalGATEncoder(nn.Module):
                 HET_RelationalAttLayer(
                     self.h_dim,
                     self.h_dim,
-                    self.etypes,
+                    self.num_etypes,
                     self.n_heads,
                     activation=F.relu,
                     self_loop=self.use_self_loop,
@@ -273,7 +272,7 @@ class HET_RelationalGATEncoder(nn.Module):
             HET_RelationalAttLayer(
                 self.h_dim,
                 self.out_dim,
-                self.etypes,
+                self.num_etypes,
                 1,  # overwrting the n_head setting as the classification should be output in this stage
                 activation=F.relu if self.last_layer_act else None,
                 self_loop=self.use_self_loop,

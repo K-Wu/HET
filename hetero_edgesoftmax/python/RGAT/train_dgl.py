@@ -101,7 +101,7 @@ def RGAT_get_our_model(
     embed_layer = HET_RelGraphEmbed(g, args.n_hidden, exclude=[])  # exclude=["paper"])
 
     model = HET_RelationalGATEncoder(
-        g["legacy_metadata_from_dgl"]["canonical_etypes"],
+        g.get_num_rels(),
         h_dim=args.n_hidden,
         out_dim=num_classes,
         n_heads=args.n_head,

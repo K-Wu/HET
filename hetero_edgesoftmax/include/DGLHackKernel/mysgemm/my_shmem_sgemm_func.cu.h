@@ -7,13 +7,13 @@ template <bool GatherFlag, typename Idx, typename IdxPtr>
 __device__ __forceinline__ float& GetRowMajorElementBasic(
     float* matrix_data, IdxPtr gather_list, Idx num_heads,
     Idx feat_dim_per_head, Idx row, Idx idx_head, Idx idx_feat) {
-  Idx num_cols = num_heads * feat_dim_per_head;
   if constexpr (GatherFlag) {
     return matrix_data[idx_head * feat_dim_per_head +
-                       gather_list[row] * num_cols + idx_feat];
-  } else {
-    return matrix_data[idx_head * feat_dim_per_head + row * num_cols +
+                       gather_list[row] * num_heads * feat_dim_per_head +
                        idx_feat];
+  } else {
+    return matrix_data[idx_head * feat_dim_per_head +
+                       row * num_heads * feat_dim_per_head + idx_feat];
   }
 }
 
@@ -211,6 +211,34 @@ __device__ __forceinline__ void _basic_MatMulKernel(
                         num_B_cols)
                   : 0.0f;
         }
+        if (ScatterCFlag && !AdvancedScatterCFlag) {
+          bool WriteCInRangeFlag =
+              thIdxRow + blockRow * BLOCK_SIZE < numARows &&
+              idx_head < num_heads &&
+              blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols;
+          if (C_scatter_list[thIdxRow + blockRow * BLOCK_SIZE +
+                             blockRowJobEntryBeg] == 0 &&
+              WriteCInRangeFlag) {
+            bool bflag = m * BLOCK_SIZE + thIdxRow < num_A_cols &&
+                         blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols &&
+                         idx_head < num_heads;
+            bool aflag = thIdxRow + blockRow * BLOCK_SIZE < numARows &&
+                         m * BLOCK_SIZE + thIdxFeat < num_A_cols &&
+                         idx_head < num_heads;
+
+            printf(
+                "0 found(WriteCInRangeFlag)!!! (thIdxRow %ld, blockRow %ld, "
+                "blockRowJobEntryBeg "
+                "%ld, numARows %ld), (thIdxFeat %ld, blockFeat %ld, num_B_cols "
+                "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld) "
+                "(mLoopBeg %ld mLoopEnd %ld m%ld) (bweightflag %d aflag %d "
+                "bflag %d) (shmem A %f B %f)\n",
+                thIdxRow, blockRow, blockRowJobEntryBeg, numARows, thIdxFeat,
+                blockFeat, num_B_cols, idx_head, num_heads, idx_relation,
+                mLoopBeg, mLoopEnd, m, BWeightInsteadOfFeatureFlag, aflag,
+                bflag, As[thIdxRow][thIdxFeat], Bs[thIdxRow][thIdxFeat]);
+          }
+        }
       }
 
       // Synchronize to make sure the sub-matrices are loaded
@@ -256,10 +284,11 @@ __device__ __forceinline__ void _basic_MatMulKernel(
           printf(
               "0 found(%d)!!! (thIdxRow %ld, blockRow %ld, blockRowJobEntryBeg "
               "%ld, numARows %ld), (thIdxFeat %ld, blockFeat %ld, num_B_cols "
-              "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld)\n",
+              "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld) (mLoopBeg "
+              "%ld mLoopEnd %ld) CValue %f\n",
               WriteCInRangeFlag, thIdxRow, blockRow, blockRowJobEntryBeg,
               numARows, thIdxFeat, blockFeat, num_B_cols, idx_head, num_heads,
-              idx_relation);
+              idx_relation, mLoopBeg, mLoopEnd, Cvalue);
         }
       }
       if (WriteCInRangeFlag) {
