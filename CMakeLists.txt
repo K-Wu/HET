@@ -22,6 +22,31 @@ option(RES_USAGE "show resource usage during nvcc compilation" OFF)
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
 include(cmake/Dependencies.cmake)
 
+#Get git status from https://stackoverflow.com/a/63924044/5555077
+# Get the current working branch
+execute_process(
+    COMMAND git rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+# Get the latest commit hash
+execute_process(
+    COMMAND git rev-parse HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+execute_process(
+    COMMAND git diff HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_DIRTY_MESSAGE
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+if(NOT GIT_DIRTY_MESSAGE STREQUAL "")
+    set(GIT_DIRTY_MESSAGE "-dirty")
+endif()
+
 ##
 ### C++ and CUDA flags.
 ##
@@ -40,7 +65,7 @@ IF(CMAKE_BUILD_TYPE MATCHES Debug)
 ELSE()
     message("release mode: -O3 enabled")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3")
-ENDIF(CMAKE_BUILD_TYPE MATCHES DEBUG)
+ENDIF(CMAKE_BUILD_TYPE MATCHES Debug)
 
 if (RES_USAGE)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -res-usage")

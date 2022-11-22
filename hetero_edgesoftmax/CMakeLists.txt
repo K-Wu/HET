@@ -166,6 +166,7 @@ set(TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_CUDA_SRCS ${TORCH_HETEROEDGESOFTMAX_EXP
 list(FILTER TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_CUDA_SRCS INCLUDE REGEX "\.cu\.cc")
 set_source_files_properties(${TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_CUDA_SRCS} PROPERTIES LANGUAGE CUDA)
 add_library(torch_hetero_edgesoftmax SHARED ${TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS})
+target_compile_definitions(torch_hetero_edgesoftmax PRIVATE "-DGIT_COMMIT_HASH=\"${GIT_BRANCH}/${GIT_COMMIT_HASH}${GIT_DIRTY_MESSAGE}\"")
 target_compile_features(torch_hetero_edgesoftmax PRIVATE cxx_std_14)
 target_link_libraries(torch_hetero_edgesoftmax ${HETEROEDGESOFTMAX_LIBS} ${TORCH_LIBRARIES} Python::Python)
 # Use if the default GCC version gives issues.
