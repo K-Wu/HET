@@ -56,7 +56,8 @@ class MyDGLGraph:
             )
 
     def get_num_rels(self):
-        if int(self.graph_data["original"]["rel_types"].max().item()) + 1 <= 1:
+        result = int(self.graph_data["original"]["rel_types"].max().item()) + 1
+        if result <= 1:
             print("WARNING: get_num_rels <= 1")
         if (
             "legacy_metadata_from_dgl" in self.graph_data
@@ -68,7 +69,18 @@ class MyDGLGraph:
             ):
                 print("WARNING: len(canonical_etypes) <= 1")
                 print(self.graph_data["legacy_metadata_from_dgl"]["canonical_etypes"])
-        return int(self.graph_data["original"]["rel_types"].max().item()) + 1
+            if (
+                len(self.graph_data["legacy_metadata_from_dgl"]["canonical_etypes"])
+                != result
+            ):
+                print(
+                    "WARNING: len(canonical_etypes) != get_num_rels",
+                    len(
+                        self.graph_data["legacy_metadata_from_dgl"]["canonical_etypes"]
+                    ),
+                    result,
+                )
+        return result
 
     def get_num_edges(self):
         return self.graph_data["original"]["rel_types"].numel()

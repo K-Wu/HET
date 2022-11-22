@@ -29,8 +29,18 @@ include(cmake/Dependencies.cmake)
 # Requires C++17.
 set(CMAKE_CXX_STANDARD 17)
 
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wall -Wno-sign-compare -maxrregcount 128 -g -G -lineinfo --restrict --extended-lambda -std=c++17")
-#TODO: add  -O3 in release mode 
+
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wall -Wno-sign-compare -maxrregcount 128 --restrict --extended-lambda -std=c++17 -g -lineinfo")
+
+#NB: add -O3 in release mode 
+IF(CMAKE_BUILD_TYPE MATCHES Debug)
+    message("debug mode: -g -G enabled")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -g -G")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DENABLE_DEBUG_MACRO")
+ELSE()
+    message("release mode: -O3 enabled")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3")
+ENDIF(CMAKE_BUILD_TYPE MATCHES DEBUG)
 
 if (RES_USAGE)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -res-usage")

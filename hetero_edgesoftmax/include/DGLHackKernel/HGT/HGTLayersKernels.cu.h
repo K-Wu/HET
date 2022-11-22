@@ -8,16 +8,12 @@
 // NUM_HEADS, OUT_DIM, COARSE_SGEMM_NODES_PER_BLOCK>
 template <int TILE_SZ_A, int TILE_SZ_B, int OUT_DIM, int NUM_HEADS>
 __global__ void _global_EdgeMessageConcatenatedCOOKernel(
-    float **__restrict__ intermediate_node_vect, int nnz,
-    int *__restrict__ matCols, int *__restrict__ matRelation,
-    float *__restrict__ node_input_data,
-    float *__restrict__ relation_message_matrices,
-    int **__restrict__ dest_node_to_unique_index_per_relation,
-    int *__restrict__ sizes_unique_index_to_dest_node_per_relation,
-    int num_relations,
-    int *__restrict__ num_blocks_xdim_for_same_relation_per_block_vect,
-    int *__restrict__ beg_node_entry_idxes_vect,
-    int *__restrict__ blockid_relation_id_vect) {
+    float **intermediate_node_vect, int nnz, int *matCols, int *matRelation,
+    float *node_input_data, float *relation_message_matrices,
+    int **dest_node_to_unique_index_per_relation,
+    int *sizes_unique_index_to_dest_node_per_relation, int num_relations,
+    int *num_blocks_xdim_for_same_relation_per_block_vect,
+    int *beg_node_entry_idxes_vect, int *blockid_relation_id_vect) {
   constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
   constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
   int beg_node_entry_idx = beg_node_entry_idxes_vect[blockIdx.x];

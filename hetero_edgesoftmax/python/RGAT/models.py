@@ -49,6 +49,7 @@ class HET_RelationalAttLayer(nn.Module):
         activation=None,
         self_loop: bool = False,
         compact_as_of_node_flag: bool = False,
+        multiply_among_weights_first_flag: bool = False,
         dropout=0.0,
         leaky_relu_slope=0.2,
     ):
@@ -60,6 +61,7 @@ class HET_RelationalAttLayer(nn.Module):
         self.activation = activation
         self.self_loop = self_loop
         self.compact_as_of_node_flag = compact_as_of_node_flag
+        self.multiply_among_weights_first_flag = multiply_among_weights_first_flag
         self.leaky_relu_slope = leaky_relu_slope
 
         assert (
@@ -142,7 +144,10 @@ class HET_RelationalAttLayer(nn.Module):
             # feat_dst_compact = B.rgat_relational_matmul_compact_as_of_node(
             #     g["separate"]["unique_node_idx"]["rel_ptr"],g["separate"]["unique_node_idx"]["node_idx"], self.conv_weight, inputs
             # )
-
+            if self.multiply_among_weights_first_flag:
+                raise NotImplementedError(
+                    "multiply_among_weights_first_flag is not supported when compact_as_of_node_flag==True yet"
+                )
             # TODO: separate feat_compact_src and feat_compact_dst
             feat_compact = B.rgat_relational_matmul_compact_as_of_node(
                 g["separate"]["unique_node_idx"]["rel_ptr"],
@@ -157,6 +162,7 @@ class HET_RelationalAttLayer(nn.Module):
             )
 
         else:
+
             # print(th.argmin(g["separate"]["coo"]["original"]["eids"])) # 256546 rel_ptr [183, 184)
             feat_src_per_edge = B.rgat_relational_matmul(
                 g["separate"]["coo"]["original"]["rel_ptr"],
@@ -167,22 +173,46 @@ class HET_RelationalAttLayer(nn.Module):
                 self.conv_weights,
                 inputs,
             )
-            feat_dst_per_edge = B.rgat_relational_matmul(
-                g["separate"]["coo"]["original"]["rel_ptr"],
-                g["separate"]["coo"]["original"]["col_idx"],
-                g["separate"]["coo"]["original"]["eids"],
-                # g["separate"]["unique_node_idx"]["rel_ptr"],
-                # g["separate"]["unique_node_idx"]["node_idx"],
-                self.conv_weights,
-                inputs,
-            )
             el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
-            er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
-            # TODO: remove these print lines
-            print("el", el.shape)
-            print("er", er.shape)
-            print("max eids", g["separate"]["coo"]["original"]["eids"].max())
-            print("max eids", g["original"]["eids"].max())
+
+            if self.multiply_among_weights_first_flag:
+                attn_r_reshaped = th.reshape(
+                    self.attn_r, (-1, self.n_heads, self.out_feat // self.n_heads, 1)
+                )
+                conv_weights_reshaped = th.reshape(
+                    self.conv_weights,
+                    (-1, self.n_heads, self.in_feat, self.out_feat // self.n_heads),
+                )
+
+                product_of_conv_weights_attn_r = th.bmm(
+                    conv_weights_reshaped, attn_r_reshaped
+                )
+                product_of_conv_weights_attn_r = th.reshape(
+                    product_of_conv_weights_attn_r, (-1, self.n_heads, self.in_feat)
+                )
+                er = B.rgat_relational_matmul(
+                    g["separate"]["coo"]["original"]["rel_ptr"],
+                    g["separate"]["coo"]["original"]["eids"],
+                    g["separate"]["coo"]["original"]["eids"],
+                    product_of_conv_weights_attn_r,
+                    inputs,
+                )
+            else:
+                feat_dst_per_edge = B.rgat_relational_matmul(
+                    g["separate"]["coo"]["original"]["rel_ptr"],
+                    g["separate"]["coo"]["original"]["col_idx"],
+                    g["separate"]["coo"]["original"]["eids"],
+                    # g["separate"]["unique_node_idx"]["rel_ptr"],
+                    # g["separate"]["unique_node_idx"]["node_idx"],
+                    self.conv_weights,
+                    inputs,
+                )
+                er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
+
+            # print("el", el.shape)
+            # print("er", er.shape)
+            # print("max eids", g["separate"]["coo"]["original"]["eids"].max())
+            # print("max eids", g["original"]["eids"].max())
 
             h = B.relational_fused_gat_csr(
                 g, feat_src_per_edge, el, er, self.leaky_relu_slope

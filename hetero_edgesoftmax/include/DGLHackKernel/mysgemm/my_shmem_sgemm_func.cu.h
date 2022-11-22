@@ -211,34 +211,35 @@ __device__ __forceinline__ void _basic_MatMulKernel(
                         num_B_cols)
                   : 0.0f;
         }
-        if (ScatterCFlag && !AdvancedScatterCFlag) {
-          bool WriteCInRangeFlag =
-              thIdxRow + blockRow * BLOCK_SIZE < numARows &&
-              idx_head < num_heads &&
-              blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols;
-          if (C_scatter_list[thIdxRow + blockRow * BLOCK_SIZE +
-                             blockRowJobEntryBeg] == 0 &&
-              WriteCInRangeFlag) {
-            bool bflag = m * BLOCK_SIZE + thIdxRow < num_A_cols &&
-                         blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols &&
-                         idx_head < num_heads;
-            bool aflag = thIdxRow + blockRow * BLOCK_SIZE < numARows &&
-                         m * BLOCK_SIZE + thIdxFeat < num_A_cols &&
-                         idx_head < num_heads;
+        // if (ScatterCFlag && !AdvancedScatterCFlag) {
+        //   bool WriteCInRangeFlag =
+        //       thIdxRow + blockRow * BLOCK_SIZE < numARows &&
+        //       idx_head < num_heads &&
+        //       blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols;
+        //   if (C_scatter_list[thIdxRow + blockRow * BLOCK_SIZE +
+        //                      blockRowJobEntryBeg] == 0 &&
+        //       WriteCInRangeFlag) {
+        //     bool bflag = m * BLOCK_SIZE + thIdxRow < num_A_cols &&
+        //                  blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols &&
+        //                  idx_head < num_heads;
+        //     bool aflag = thIdxRow + blockRow * BLOCK_SIZE < numARows &&
+        //                  m * BLOCK_SIZE + thIdxFeat < num_A_cols &&
+        //                  idx_head < num_heads;
 
-            printf(
-                "0 found(WriteCInRangeFlag)!!! (thIdxRow %ld, blockRow %ld, "
-                "blockRowJobEntryBeg "
-                "%ld, numARows %ld), (thIdxFeat %ld, blockFeat %ld, num_B_cols "
-                "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld) "
-                "(mLoopBeg %ld mLoopEnd %ld m%ld) (bweightflag %d aflag %d "
-                "bflag %d) (shmem A %f B %f)\n",
-                thIdxRow, blockRow, blockRowJobEntryBeg, numARows, thIdxFeat,
-                blockFeat, num_B_cols, idx_head, num_heads, idx_relation,
-                mLoopBeg, mLoopEnd, m, BWeightInsteadOfFeatureFlag, aflag,
-                bflag, As[thIdxRow][thIdxFeat], Bs[thIdxRow][thIdxFeat]);
-          }
-        }
+        //     printf(
+        //         "0 found(WriteCInRangeFlag)!!! (thIdxRow %ld, blockRow %ld, "
+        //         "blockRowJobEntryBeg "
+        //         "%ld, numARows %ld), (thIdxFeat %ld, blockFeat %ld,
+        //         num_B_cols "
+        //         "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld) "
+        //         "(mLoopBeg %ld mLoopEnd %ld m%ld) (bweightflag %d aflag %d "
+        //         "bflag %d) (shmem A %f B %f)\n",
+        //         thIdxRow, blockRow, blockRowJobEntryBeg, numARows, thIdxFeat,
+        //         blockFeat, num_B_cols, idx_head, num_heads, idx_relation,
+        //         mLoopBeg, mLoopEnd, m, BWeightInsteadOfFeatureFlag, aflag,
+        //         bflag, As[thIdxRow][thIdxFeat], Bs[thIdxRow][thIdxFeat]);
+        //   }
+        // }
       }
 
       // Synchronize to make sure the sub-matrices are loaded
@@ -278,19 +279,22 @@ __device__ __forceinline__ void _basic_MatMulKernel(
       bool WriteCInRangeFlag = thIdxRow + blockRow * BLOCK_SIZE < numARows &&
                                idx_head < num_heads &&
                                blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols;
-      if (ScatterCFlag && !AdvancedScatterCFlag) {
-        if (C_scatter_list[thIdxRow + blockRow * BLOCK_SIZE +
-                           blockRowJobEntryBeg] == 0) {
-          printf(
-              "0 found(%d)!!! (thIdxRow %ld, blockRow %ld, blockRowJobEntryBeg "
-              "%ld, numARows %ld), (thIdxFeat %ld, blockFeat %ld, num_B_cols "
-              "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld) (mLoopBeg "
-              "%ld mLoopEnd %ld) CValue %f\n",
-              WriteCInRangeFlag, thIdxRow, blockRow, blockRowJobEntryBeg,
-              numARows, thIdxFeat, blockFeat, num_B_cols, idx_head, num_heads,
-              idx_relation, mLoopBeg, mLoopEnd, Cvalue);
-        }
-      }
+      // if (ScatterCFlag && !AdvancedScatterCFlag) {
+      //   if (C_scatter_list[thIdxRow + blockRow * BLOCK_SIZE +
+      //                      blockRowJobEntryBeg] == 0) {
+      //     printf(
+      //         "0 found(%d)!!! (thIdxRow %ld, blockRow %ld,
+      //         blockRowJobEntryBeg "
+      //         "%ld, numARows %ld), (thIdxFeat %ld, blockFeat %ld, num_B_cols
+      //         "
+      //         "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld)
+      //         (mLoopBeg "
+      //         "%ld mLoopEnd %ld) CValue %f\n",
+      //         WriteCInRangeFlag, thIdxRow, blockRow, blockRowJobEntryBeg,
+      //         numARows, thIdxFeat, blockFeat, num_B_cols, idx_head,
+      //         num_heads, idx_relation, mLoopBeg, mLoopEnd, Cvalue);
+      //   }
+      // }
       if (WriteCInRangeFlag) {
         if constexpr (AtomicUpdateFlag) {
           atomicAdd(&GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
@@ -356,6 +360,27 @@ __global__ void RGNNFeatPerEdgeFWProp(
       node_feat_input, &weight[idx_relation * input_dim * output_per_head_dim],
       node_feat_per_edge, A_col_row_idx_gather_list, nullptr,
       C_eid_scatter_list, nullptr, nullptr, idx_relation,
+      A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
+      accum_num_blocks_per_relation[idx_relation],
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
+      A_rel_ptr[idx_relation], input_dim, output_per_head_dim, num_heads);
+}
+
+template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
+__global__ void RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
+    float* node_feat_input, float* weight, float* node_feat_per_edge,
+    IdxPtr A_rel_ptr, IdxPtr AC_eid_gather_scatter_list, Idx input_dim,
+    Idx output_per_head_dim, Idx num_heads, int* accum_num_blocks_per_relation,
+    Idx num_relations) {
+  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_relation = binary_search<int, int*>(
+      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
+                      false, Idx, IdxPtr>(
+      node_feat_input, &weight[idx_relation * input_dim * output_per_head_dim],
+      node_feat_per_edge, AC_eid_gather_scatter_list, nullptr,
+      AC_eid_gather_scatter_list, nullptr, nullptr, idx_relation,
       A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
       accum_num_blocks_per_relation[idx_relation],
       (accum_num_blocks_per_relation[idx_relation + 1] -
@@ -432,6 +457,53 @@ __global__ void RGNNDeltaWeightBWProp(
       &delta_weight[idx_relation * B_delta_output_per_head_dim *
                     A_delta_input_dim],
       A_col_row_idx_gather_list, B_eid_gather_list, nullptr, nullptr, nullptr,
+      idx_relation, A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
+      accum_num_blocks_per_relation[idx_relation],
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
+      0, A_delta_input_dim, B_delta_output_per_head_dim, num_heads);
+}
+
+template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
+__global__ void RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical(
+    float* delta_feat_per_edge, float* weight_transposed,
+    float* delta_node_input, IdxPtr A_C_eid_gather_scatter_list,
+    IdxPtr A_rel_ptr, Idx delta_output_per_head_dim, Idx delta_input_dim,
+    Idx num_heads, int* accum_num_blocks_per_relation, Idx num_relations) {
+  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_relation = binary_search<int, int*>(
+      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
+                      true, Idx, IdxPtr>(
+      delta_feat_per_edge,
+      &weight_transposed[idx_relation * delta_input_dim *
+                         delta_output_per_head_dim],
+      delta_node_input, A_C_eid_gather_scatter_list, nullptr,
+      A_C_eid_gather_scatter_list, nullptr, nullptr, idx_relation,
+      A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
+      accum_num_blocks_per_relation[idx_relation],
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
+      A_rel_ptr[idx_relation], delta_output_per_head_dim, delta_input_dim,
+      num_heads);
+}
+
+template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
+__global__ void RGNNDeltaWeightBWPropACGatherScatterListIdentical(
+    float* node_feat_input, float* delta_feat_per_edge, float* delta_weight,
+    IdxPtr A_rel_ptr, IdxPtr AB_eid_gather_list, Idx A_delta_input_dim,
+    Idx B_delta_output_per_head_dim, Idx num_heads,
+    int* accum_num_blocks_per_relation, Idx num_relations) {
+  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_relation = binary_search<int, int*>(
+      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  // FIXME: the accum_num_blocks_per_relation might be corrupted
+  _basic_MatMulKernel<BLOCK_SIZE, true, true, false, true, false, false, false,
+                      true, Idx, IdxPtr>(
+      node_feat_input, delta_feat_per_edge,
+      &delta_weight[idx_relation * B_delta_output_per_head_dim *
+                    A_delta_input_dim],
+      AB_eid_gather_list, AB_eid_gather_list, nullptr, nullptr, nullptr,
       idx_relation, A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
       accum_num_blocks_per_relation[idx_relation],
       (accum_num_blocks_per_relation[idx_relation + 1] -

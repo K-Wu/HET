@@ -91,8 +91,7 @@ __device__ __forceinline__ unsigned int getlaneid() {
 }
 
 template <typename Idx, typename IdxPtr>
-__device__ __forceinline__ Idx binary_search(Idx num_elements,
-                                             const IdxPtr __restrict__ arr,
+__device__ __forceinline__ Idx binary_search(Idx num_elements, const IdxPtr arr,
                                              Idx target) {
   Idx lo = 0, hi = num_elements;
   // find element in arr[i] where i in [lo, hi)

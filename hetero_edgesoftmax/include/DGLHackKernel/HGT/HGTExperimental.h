@@ -17,13 +17,10 @@
 // dim3 grid(RTX_3090_GRIDSIZE, 1, 1);
 template <int OUT_DIM, int NUM_HEADS>
 __device__ __forceinline__ static void func512_32_mysgemm_exec(
-    int m, int n, int k, float4 *__restrict__ attention,
-    float *__restrict__ Adata, float *__restrict__ Bdata,
-    float *__restrict__ Cdata, int *__restrict__ node_indices,
-    int *__restrict__ dense_edges_per_src_node,
-    int *__restrict__ num_dense_edges_per_src_node,
-    int *__restrict__ starting_pos_dense_edges_per_src_node,
-    int *__restrict__ eids, int BcolBias) {
+    int m, int n, int k, float4 *attention, float *Adata, float *Bdata,
+    float *Cdata, int *node_indices, int *dense_edges_per_src_node,
+    int *num_dense_edges_per_src_node,
+    int *starting_pos_dense_edges_per_src_node, int *eids, int BcolBias) {
   assert(OUT_DIM == 256);
   assert(NUM_HEADS == 4);
   constexpr int TILE_SZ_A = 512;
@@ -619,17 +616,12 @@ __device__ __forceinline__ static void func512_32_mysgemm_exec(
 template <int OUT_DIM, int NUM_HEADS>
 //__launch_bounds__(512,1)
 __global__ void HGTExperimentalEdgeAttentionFusedCOOKernel_512_32(
-    int num_relations, float4 *__restrict__ attention,
-    float *__restrict__ node_input_data,
-    float *__restrict__ relation_attention_matrices,
-    int *__restrict__ num_src_nodes_per_edge_type,
-    int *__restrict__ exclusive_scan_num_src_nodes_per_edge_type,
-    int *__restrict__ exclusive_scan_num_blocks_per_relation,
-    int *__restrict__ src_node_per_edge_type,
-    int *__restrict__ dense_edges_per_src_node,
-    int *__restrict__ num_dense_edges_per_src_node,
-    int *__restrict__ starting_pos_dense_edges_per_src_node,
-    int *__restrict__ eids) {
+    int num_relations, float4 *attention, float *node_input_data,
+    float *relation_attention_matrices, int *num_src_nodes_per_edge_type,
+    int *exclusive_scan_num_src_nodes_per_edge_type,
+    int *exclusive_scan_num_blocks_per_relation, int *src_node_per_edge_type,
+    int *dense_edges_per_src_node, int *num_dense_edges_per_src_node,
+    int *starting_pos_dense_edges_per_src_node, int *eids) {
   constexpr int TILE_SZ_A = 512;
   constexpr int TILE_SZ_B = 32;
   constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
@@ -685,12 +677,9 @@ __device__ __forceinline__ T my_min(T a, T b) {
 
 template <int OUT_DIM, int NUM_HEADS, int NUM_EDGES_TO_PROCESS_PER_BLOCK>
 __global__ void HGTExperimentalEdgeAttentionResidueCSR(
-    int num_relations, int num_rows, float4 *__restrict__ attention,
-    float *__restrict__ node_input_data, float *__restrict__ weights,
-    int *__restrict__ num_nnzs_per_relation, int *__restrict__ rel_ptr,
-    int *__restrict__ row_ptr, int *__restrict__ col_idx,
-    int *__restrict__ eids,
-    int *__restrict__ exclusive_scan_numBlocks_per_relationship) {
+    int num_relations, int num_rows, float4 *attention, float *node_input_data,
+    float *weights, int *num_nnzs_per_relation, int *rel_ptr, int *row_ptr,
+    int *col_idx, int *eids, int *exclusive_scan_numBlocks_per_relationship) {
   assert(OUT_DIM == 256);
   assert(NUM_HEADS == 4);
   // asserting IN_DIM == OUT_DIM
@@ -764,11 +753,9 @@ __global__ void HGTExperimentalEdgeAttentionResidueCSR(
 // TODO: implement float4
 __global__ void
 HGTExpermentalEdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel(
-    float *__restrict__ outEdges, int nnz, int *__restrict__ matCols,
-    int *__restrict__ matRows, int *__restrict__ matRelation,
-    float *__restrict__ node_input_data,
-    float **__restrict__ intermediate_node_vect_per_relation,
-    int **__restrict__ dest_node_to_unique_index_per_relation) {
+    float *outEdges, int nnz, int *matCols, int *matRows, int *matRelation,
+    float *node_input_data, float **intermediate_node_vect_per_relation,
+    int **dest_node_to_unique_index_per_relation) {
   // each warp is in charge of an edge
   int beg_edge_idx = (blockIdx.x * blockDim.x + threadIdx.x) / WARP_SIZE;
   int lane_idx = (blockIdx.x * blockDim.x + threadIdx.x) % WARP_SIZE;

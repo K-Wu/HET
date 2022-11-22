@@ -2,6 +2,7 @@
 import torch
 
 torch.ops.load_library("../build/hetero_edgesoftmax/libtorch_hetero_edgesoftmax.so")
+torch.ops.torch_hetero_edgesoftmax.build_debug_info()
 from .rgcn_kernels import *
 from .hgt_kernels import *
 from .util_kernels import *
