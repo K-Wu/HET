@@ -68,12 +68,21 @@ void try_get_schedule_by_relations(int64_t num_relations, int64_t num_blocks) {
   return;
 }
 
+#ifndef GIT_COMMIT_HASH
+#define GIT_COMMIT_HASH "?"
+#endif
+
 void build_debug_info() {
+  std::cout << "GIT_COMMIT_HASH: " << GIT_COMMIT_HASH << std::endl;
 #ifdef ENABLE_DEBUG_MACRO
   std::cout << "WARNING: library built in debug mode without -O3" << std::endl;
 #else
   std::cout << "library built in release mode with -O3" << std::endl;
 #endif
+  std::cout << "library compiled by gcc " << __GNUC__ << "." << __GNUC_MINOR__
+            << "." << __GNUC_PATCHLEVEL__ << ", nvcc " << __CUDACC_VER_MAJOR__
+            << "." << __CUDACC_VER_MINOR__ << "." << __CUDACC_VER_BUILD__
+            << std::endl;
 }
 
 std::vector<std::vector<at::Tensor>> biops_tensor_info(
@@ -92,10 +101,6 @@ at::Tensor tensor_info(at::Tensor& one_tensor) {
   // implements `inline T* data_ptr_impl() const` as `return
   // storage_.unsafe_data<T>() + storage_offset_;`. Notice that storage_offset
   // count in number of elements, not bytes.
-  std::cout << "library compiled by gcc " << __GNUC__ << "." << __GNUC_MINOR__
-            << "." << __GNUC_PATCHLEVEL__ << ", nvcc " << __CUDACC_VER_MAJOR__
-            << "." << __CUDACC_VER_MINOR__ << "." << __CUDACC_VER_BUILD__
-            << std::endl;
   std::cout << "one_tensor device: " << one_tensor.device() << std::endl;
   std::cout << "one_tensor dtype: " << one_tensor.dtype() << std::endl;
   std::cout << "one_tensor ndim: " << one_tensor.dim() << std::endl;
