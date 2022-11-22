@@ -173,7 +173,14 @@ class HET_RelationalAttLayer(nn.Module):
                 self.conv_weights,
                 inputs,
             )
-            el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
+            el = B.rgat_relational_matmul(
+                g["separate"]["coo"]["original"]["rel_ptr"],
+                g["separate"]["coo"]["original"]["eids"],
+                g["separate"]["coo"]["original"]["eids"],
+                self.attn_l.unsqueeze(-1),
+                feat_src_per_edge,
+            )
+            # el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
 
             if self.multiply_among_weights_first_flag:
                 attn_r_reshaped = th.reshape(
@@ -207,7 +214,14 @@ class HET_RelationalAttLayer(nn.Module):
                     self.conv_weights,
                     inputs,
                 )
-                er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
+                er = B.rgat_relational_matmul(
+                    g["separate"]["coo"]["original"]["rel_ptr"],
+                    g["separate"]["coo"]["original"]["eids"],
+                    g["separate"]["coo"]["original"]["eids"],
+                    self.attn_r.unsqueeze(-1),
+                    feat_dst_per_edge,
+                )
+                # er = (feat_dst_per_edge * self.attn_r).sum(dim=-1).unsqueeze(-1)
 
             # print("el", el.shape)
             # print("er", er.shape)
