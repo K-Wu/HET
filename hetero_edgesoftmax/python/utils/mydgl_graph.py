@@ -4,6 +4,7 @@
 # NB: this class stores type in list and assumes the type order in this class and dglgraph are preserved across run. Therefore one should use the CPython implementation to ensure that.
 from .. import kernels as K
 from .. import utils
+import functools
 
 #    convert_integrated_csr_to_separate_csr,
 #    convert_integrated_csr_to_separate_coo,
@@ -44,6 +45,7 @@ class MyDGLGraph:
         ), "This class assumes the type order in this class and dglgraph are preserved across run. Therefore one should use the CPython implementation to ensure that."
         self.graph_data = dict()
 
+    @functools.cache
     def get_num_nodes(self):
         if "row_ptr" in self.graph_data["original"]:
             return max(
@@ -58,6 +60,7 @@ class MyDGLGraph:
                 int(self.graph_data["original"]["col_idx"].max()) + 1,
             )
 
+    @functools.cache
     def get_num_rels(self):
         result = int(self.graph_data["original"]["rel_types"].max().item()) + 1
         if result <= 1:
@@ -85,6 +88,7 @@ class MyDGLGraph:
                 )
         return result
 
+    @functools.cache
     def get_num_edges(self):
         return self.graph_data["original"]["rel_types"].numel()
 

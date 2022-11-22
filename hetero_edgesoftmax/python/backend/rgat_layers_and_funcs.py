@@ -107,25 +107,9 @@ class RelationalFusedGatCSR(th.autograd.Function):
             grad_er,
             slope,
         )
-        return (
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            grad_feat_src,
-            grad_el,
-            grad_er,
-            None,
-            None,
-            None,
-            None,
-        )
+        # fmt: off
+        return None, None, None, None, None, None, None, None, None, None, grad_feat_src, grad_el, grad_er, None, None, None, None,
+        # fmt: on
 
 
 def relational_fused_gat_csr(graph, feat_src, el, er, slope):
@@ -140,7 +124,7 @@ def relational_fused_gat_csr(graph, feat_src, el, er, slope):
     ret = el.new_empty(
         [graph.get_num_nodes()] + list(feat_src.size()[1:])
     )  # [num_dest_nodes, num_heads, out_feats//num_heads]
-    RelationalFusedGatCSR.apply(
+    return RelationalFusedGatCSR.apply(
         graph["transposed"]["row_ptr"],
         graph["transposed"]["col_idx"],
         graph["transposed"]["eids"],
@@ -159,7 +143,6 @@ def relational_fused_gat_csr(graph, feat_src, el, er, slope):
         ret,
         slope,
     )
-    return ret
 
 
 class RgatRelationalMatmulACScatterGatherListIdentical(th.autograd.Function):
@@ -206,13 +189,9 @@ class RgatRelationalMatmulACScatterGatherListIdentical(th.autograd.Function):
             grad_input,
             grad_weight,
         )
-        return (
-            None,
-            None,
-            grad_weight,
-            grad_input,
-            None,
-        )
+        # fmt: off
+        return None, None, grad_weight, grad_input, None
+        # fmt: on
 
 
 class RgatRelationalMatmul(th.autograd.Function):
@@ -254,6 +233,7 @@ class RgatRelationalMatmul(th.autograd.Function):
         ) = ctx.saved_tensors
         grad_weight = th.zeros_like(weights)
         grad_input = th.zeros_like(inputs)
+        # FIXME: seems there is a deadlock here
         K.rgat_relational_matmul_backward(
             separate_coo_relptrs,
             separate_coo_node_indices,
@@ -264,14 +244,9 @@ class RgatRelationalMatmul(th.autograd.Function):
             grad_input,
             grad_weight,
         )
-        return (
-            None,
-            None,
-            None,
-            grad_weight,
-            grad_input,
-            None,
-        )
+        # fmt: off
+        return None, None, None, grad_weight, grad_input, None
+        # fmt: on
 
 
 def rgat_relational_matmul(
@@ -416,25 +391,9 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
             grad_er_compact,
             slope,
         )
-        return (
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            grad_feat_compact,
-            grad_el_compact,
-            grad_er_compact,
-            None,
-            None,
-            None,
-            None,
-        )
+        # fmt: off
+        return None, None, None, None, None, None, None, None, None, None, grad_feat_compact, grad_el_compact, grad_er_compact, None, None, None, None
+        # fmt: on
 
 
 def relational_fused_gat_compact_as_of_node(
@@ -517,13 +476,9 @@ class RgatRelationalMatmulCompactAsOfNode(th.autograd.Function):
             grad_weight,
             grad_node_feat,
         )
-        return (
-            None,
-            None,
-            grad_weight,
-            grad_node_feat,
-            None,
-        )
+        # fmt: off
+        return None, None, grad_weight, grad_node_feat, None
+        # fmt: on
 
 
 def rgat_relational_matmul_compact_as_of_node(

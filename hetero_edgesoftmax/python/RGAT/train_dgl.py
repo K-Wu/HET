@@ -203,7 +203,7 @@ def HET_RGAT_train_with_sampler(
 def HET_RGAT_train_full_graph(
     g: utils.MyDGLGraph,
     model,
-    node_embed: th.Tensor,
+    node_embed_layer,
     optimizer,
     labels: th.Tensor,
     device,
@@ -215,6 +215,9 @@ def HET_RGAT_train_full_graph(
 
         print(f"Epoch {epoch:02d}")
         model.train()
+        model.requires_grad_(True)
+        node_embed_layer.train()
+        node_embed_layer.requires_grad_(True)
 
         total_loss = 0
         print(
@@ -226,10 +229,7 @@ def HET_RGAT_train_full_graph(
 
         # Add the batch's raw "paper" features
         # emb.update({"paper": g.ndata["feat"]["paper"][input_nodes["paper"]]})
-
-        if th.cuda.is_available():
-            node_embed = node_embed.cuda()
-            labels = labels.cuda()
+        node_embed = node_embed_layer()
 
         optimizer.zero_grad()
         forward_prop_start = th.cuda.Event(enable_timing=True)
@@ -246,8 +246,9 @@ def HET_RGAT_train_full_graph(
         backward_prop_start = th.cuda.Event(enable_timing=True)
         backward_prop_end = th.cuda.Event(enable_timing=True)
         backward_prop_start.record()
-        loss.backward()
-        optimizer.step()
+        # loss.backward()
+
+        # optimizer.step()
         backward_prop_end.record()
         th.cuda.synchronize()
 
@@ -260,9 +261,11 @@ def HET_RGAT_train_full_graph(
         print(
             f"Epoch: {epoch + 1 :02d}, " f"Loss (w/o dividing sample num): {loss:.4f}, "
         )
-        print(f"Forward prop time: {forward_prop_start.elapsed_time(forward_prop_end)}")
         print(
-            f"Backward prop time: {backward_prop_start.elapsed_time(backward_prop_end)}"
+            f"Forward prop time: {forward_prop_start.elapsed_time(forward_prop_end)} ms"
+        )
+        print(
+            f"Backward prop time: {backward_prop_start.elapsed_time(backward_prop_end)} ms"
         )
     #              f'Train: {100 * train_acc:.2f}%, '
     #              f'Valid: {100 * valid_acc:.2f}%, '
@@ -331,9 +334,11 @@ def RGAT_train_full_graph(model, node_embed, optimizer, labels, hypermeters: dic
         print(
             f"Epoch: {epoch + 1 :02d}, " f"Loss (w/o dividing sample num): {loss:.4f}, "
         )
-        print(f"Forward prop time: {forward_prop_start.elapsed_time(forward_prop_end)}")
         print(
-            f"Backward prop time: {backward_prop_start.elapsed_time(backward_prop_end)}"
+            f"Forward prop time: {forward_prop_start.elapsed_time(forward_prop_end)} ms"
+        )
+        print(
+            f"Backward prop time: {backward_prop_start.elapsed_time(backward_prop_end)} ms"
         )
     #              f'Train: {100 * train_acc:.2f}%, '
     #              f'Valid: {100 * valid_acc:.2f}%, '
@@ -495,12 +500,15 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
 
     embed_layer = embed_layer.to(device)
     model = model.to(device)
+    labels = labels.to(device)
     for run in range(args.runs):
         embed_layer.reset_parameters()
         model.reset_parameters()
 
         # optimizer
-        all_params = itertools.chain(model.parameters(), embed_layer.parameters())
+        all_params = [*model.parameters()] + [
+            *embed_layer.parameters()
+        ]  # itertools.chain(model.parameters(), embed_layer.parameters())
         optimizer = th.optim.Adam(all_params, lr=args.lr)
         print(f"Run: {run + 1:02d}, ")
         if dgl_model_flag:
@@ -531,7 +539,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
             HET_RGAT_train_full_graph(
                 g,
                 model,
-                embed_layer(),
+                embed_layer,
                 optimizer,
                 labels,
                 device,

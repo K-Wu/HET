@@ -654,10 +654,10 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
           <<<nblks_outer_product, nthrs, 0, stream>>>(
               input.data_ptr<float>(), gradout.data_ptr<float>(),
               grad_weights.data_ptr<float>(),
-              separate_coo_eids.data_ptr<int64_t>(),
-              separate_coo_relptrs.data_ptr<int64_t>(),
               separate_coo_node_indices.data_ptr<int64_t>(),
-              num_output_per_head_dim, num_input_dim, num_heads,
+              separate_coo_relptrs.data_ptr<int64_t>(),
+              separate_coo_eids.data_ptr<int64_t>(), num_output_per_head_dim,
+              num_input_dim, num_heads,
               thrust::raw_pointer_cast(
                   dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
               num_relations);

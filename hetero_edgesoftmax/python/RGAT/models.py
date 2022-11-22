@@ -50,7 +50,7 @@ class HET_RelationalAttLayer(nn.Module):
         self_loop: bool = False,
         compact_as_of_node_flag: bool = False,
         multiply_among_weights_first_flag: bool = False,
-        dropout=0.0,
+        dropout=0.5,
         leaky_relu_slope=0.2,
     ):
         super(HET_RelationalAttLayer, self).__init__()
@@ -239,7 +239,7 @@ class HET_RelationalAttLayer(nn.Module):
 
         h = h.view(-1, self.out_feat)
         if self.self_loop:
-            print(inputs_dst.shape)
+            # print(inputs_dst.shape)
             h = h + th.matmul(inputs_dst, self.loop_weight)
         if self.bias:
             h = h + self.h_bias
@@ -276,7 +276,7 @@ class HET_RelationalGATEncoder(nn.Module):
         out_dim,
         n_heads,
         num_hidden_layers=1,
-        dropout=0,
+        dropout=0.5,
         use_self_loop: bool = True,
         last_layer_act: bool = False,
         compact_as_of_node_flag: bool = False,

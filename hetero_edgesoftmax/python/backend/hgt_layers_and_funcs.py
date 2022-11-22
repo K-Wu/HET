@@ -144,20 +144,9 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             grad_k,
             grad_q,
         )
-        return (
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            grad_weight,
-            grad_k,
-            grad_q,
-            None,
-        )
+        # fmt: off
+        return None, None, None, None, None, None, None, None, grad_weight, grad_k, grad_q, None
+        # fmt: on
 
 
 class HGTFullGraphMessageMeanAggregationCSR(th.autograd.Function):
@@ -225,19 +214,9 @@ class HGTFullGraphMessageMeanAggregationCSR(th.autograd.Function):
             grad_message,
             grad_attn_score,
         )
-        return (
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            grad_message,
-            grad_attn_score,
-            None,
-        )
+        # fmt: off
+        return None, None, None, None, None, None, None, None, grad_message, grad_attn_score, None
+        # fmt: on
 
 
 def hgt_full_graph_hetero_message_ops_csr(graph, weight, applied_vlinear_node_features):
@@ -403,19 +382,9 @@ class HGTFullGraphEdgeSoftmaxOpsCSR(th.autograd.Function):
             grad_attn_score,
             grad_mu,
         )
-        return (
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            grad_attn_score,
-            grad_mu,
-            None,
-        )
+        # fmt: off
+        return None, None, None, None, None, None, None, None, grad_attn_score, grad_mu, None
+        # fmt: on
 
 
 def hgt_full_graph_edge_softmax_ops_csr(graph, attn_score, mu, scale_factor_reciprocal):
