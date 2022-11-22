@@ -46,7 +46,10 @@ class MyDGLGraph:
 
     def get_num_nodes(self):
         if "row_ptr" in self.graph_data["original"]:
-            return self.graph_data["original"]["row_ptr"].numel() - 1
+            return max(
+                self.graph_data["original"]["row_ptr"].numel() - 1,
+                int(self.graph_data["original"]["col_idx"].max()) + 1,
+            )
         else:
             assert "row_idx" in self.graph_data["original"], "row_idx not exists"
             assert "col_idx" in self.graph_data["original"], "col_idx not exists"

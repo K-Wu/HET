@@ -437,8 +437,8 @@ void _RGATRelationalMatMul_wrapper_separatecoo(
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
-    std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
-              << " nblks.z: " << nblks.z << std::endl;
+    // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
+    //           << " nblks.z: " << nblks.z << std::endl;
     RGNNFeatCompactFWProp<BLOCK_SIZE, int64_t, int64_t*>
         <<<nblks, nthrs, 0, stream>>>(
             input.data_ptr<float>(), weights.data_ptr<float>(),
@@ -453,8 +453,8 @@ void _RGATRelationalMatMul_wrapper_separatecoo(
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
-    std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
-              << " nblks.z: " << nblks.z << std::endl;
+    // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
+    //           << " nblks.z: " << nblks.z << std::endl;
     if constexpr (ACGatherScatterListIdenticalFlag) {
       RGNNFeatPerEdgeFWPropACGatherScatterListIdentical<BLOCK_SIZE, int64_t,
                                                         int64_t*>

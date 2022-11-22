@@ -38,7 +38,7 @@ def RGNN_get_mydgl_graph(
             transposed=True,
             infidel_sort_flag=False,
         )
-        dglgraph = fetch_fb15k237_dglgraph()
+        # dglgraph = fetch_fb15k237_dglgraph()
     elif dataset == "wikikg2":
         print("WARNING - loading wikikg2. Currently we only support a few dataset.")
         (edge_srcs, edge_dsts, edge_etypes, edge_referential_eids,) = load_wikikg2(
@@ -60,8 +60,8 @@ def RGNN_get_mydgl_graph(
             transposed=True,
             infidel_sort_flag=False,
         )
-        dglgraph = fetch_wikikg2_dglgraph()
-    elif dataset == "ogbnmag":
+        # graph_dict = fetch_wikikg2_graph_dict()
+    elif dataset == "ogbn-mag":
         print("WARNING - loading mag. Currently we only support a few dataset.")
         (edge_srcs, edge_dsts, edge_etypes, edge_referential_eids,) = get_ogbnmag(
             dataset_sort_flag,
@@ -80,7 +80,7 @@ def RGNN_get_mydgl_graph(
             transposed=True,
             infidel_sort_flag=False,
         )
-        dglgraph = fetch_ogbnmag_dglgraph()
+        # graph_dict = fetch_ogbnmag_graph_dict()
     else:
         print("ERROR! now only support fb15k and wikikg2. Loading it now")
         exit(1)
@@ -146,7 +146,7 @@ def RGNN_get_mydgl_graph(
         )
     else:
         raise NotImplementedError("sparse format not supported")
-    g.import_metadata_from_dgl_heterograph(dglgraph)
+    # g.import_metadata_from_dgl_heterograph(dglgraph)
     return g
 
 
@@ -472,7 +472,7 @@ def fetch_fb15k237_raw_data():
     return edges_srcs, edges_dsts, edges_etypes, edge_referential_eids
 
 
-def fetch_wikikg2_dglgraph():
+def fetch_wikikg2_graph_dict():
     print("loading wikikg2 from ogb.linkproppred")
     from ogb.linkproppred import LinkPropPredDataset
 
@@ -482,7 +482,7 @@ def fetch_wikikg2_dglgraph():
 
 
 def fetch_wikikg2_raw_data():
-    graph = fetch_wikikg2_dglgraph()
+    graph = fetch_wikikg2_graph_dict()
     edges_srcs = graph["edge_index"][0]
     edges_dsts = graph["edge_index"][1]
     edges_etypes = graph["edge_reltype"].flatten()
@@ -490,7 +490,7 @@ def fetch_wikikg2_raw_data():
     return edges_srcs, edges_dsts, edges_etypes, edge_referential_eids
 
 
-def fetch_ogbnmag_dglgraph():
+def fetch_ogbnmag_graph_dict():
     print("loading ogbn-mag from ogb.linkproppred")
     from ogb.nodeproppred import NodePropPredDataset
 
@@ -502,7 +502,7 @@ def fetch_ogbnmag_dglgraph():
 def fetch_ogbnmag_raw_data():
     # NB: we need to reindex nodes as nodes of any type in this data set originally starts with index 0
     # the ordering of the abosolute node indices from 0 to N-1 is author, paper, institution, field_of_study
-    graph = fetch_ogbnmag_dglgraph()
+    graph = fetch_ogbnmag_graph_dict()
     # edges_srcs = graph.edges()[0].detach().numpy()
     # edges_dsts = graph.edges()[0].detach().numpy()
     # edges_etypes = graph.edata['etype'].detach().numpy()
@@ -544,7 +544,7 @@ def fetch_ogbnmag_raw_data():
         + graph[0]["num_nodes_dict"]["institution"]
     )
     edge_types4 = [3] * len(edge_srcs4)
-    return create_mydgl_graph_coo_numpy(
+    return (
         np.concatenate([edge_srcs, edge_srcs2, edge_srcs3, edge_srcs4]),
         np.concatenate([edge_dsts, edge_dsts2, edge_dsts3, edge_dsts4]),
         np.concatenate([edge_types, edge_types2, edge_types3, edge_types4]),

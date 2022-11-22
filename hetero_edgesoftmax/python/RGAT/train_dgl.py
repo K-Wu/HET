@@ -37,7 +37,7 @@ def RGAT_parse_args() -> argparse.Namespace:
     parser.add_argument("-d", "--dataset", type=str, default="ogbn-mag", help="dataset")
 
     parser.add_argument(
-        "--n-hidden", type=int, default=64, help="number of hidden units"
+        "--n_hidden", type=int, default=64, help="number of hidden units"
     )
     parser.add_argument(
         "--sparse_format", type=str, default="csr", help="sparse format to use"
@@ -54,9 +54,9 @@ def RGAT_parse_args() -> argparse.Namespace:
         "--use_real_labels_and_features", action="store_true", help="use real labels"
     )
     parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
-    parser.add_argument("--n-head", type=int, default=2, help="number of heads")
+    parser.add_argument("--n_head", type=int, default=2, help="number of heads")
     parser.add_argument(
-        "-e", "--n-epochs", type=int, default=3, help="number of training epochs"
+        "-e", "--n_epochs", type=int, default=3, help="number of training epochs"
     )
     parser.add_argument("--fanout", type=int, nargs="+", default=[25, 20])
     parser.add_argument("--batch_size", type=int, default=1024)
@@ -232,15 +232,26 @@ def HET_RGAT_train_full_graph(
             labels = labels.cuda()
 
         optimizer.zero_grad()
-
+        forward_prop_start = th.cuda.Event(enable_timing=True)
+        forward_prop_end = th.cuda.Event(enable_timing=True)
+        forward_prop_start.record()
         logits = model(g, node_embed)
         # logits = model(emb, blocks)
 
         y_hat = logits.log_softmax(dim=-1)
         loss = F.nll_loss(y_hat, labels)
+        forward_prop_end.record()
+        th.cuda.synchronize()
+
+        backward_prop_start = th.cuda.Event(enable_timing=True)
+        backward_prop_end = th.cuda.Event(enable_timing=True)
+        backward_prop_start.record()
         loss.backward()
         optimizer.step()
+        backward_prop_end.record()
+        th.cuda.synchronize()
 
+        # FIXME: should be # edges when training full graph
         total_loss += loss.item() * hypermeters["batch_size"]
 
         # result = test(g, model, node_embed, labels, device, split_idx, args)
@@ -248,6 +259,10 @@ def HET_RGAT_train_full_graph(
         # train_acc, valid_acc, test_acc = result
         print(
             f"Epoch: {epoch + 1 :02d}, " f"Loss (w/o dividing sample num): {loss:.4f}, "
+        )
+        print(f"Forward prop time: {forward_prop_start.elapsed_time(forward_prop_end)}")
+        print(
+            f"Backward prop time: {backward_prop_start.elapsed_time(backward_prop_end)}"
         )
     #              f'Train: {100 * train_acc:.2f}%, '
     #              f'Valid: {100 * valid_acc:.2f}%, '
@@ -284,7 +299,9 @@ def RGAT_train_full_graph(model, node_embed, optimizer, labels, hypermeters: dic
             lbl = {k: e.cuda() for k, e in lbl.items()}
 
         optimizer.zero_grad()
-
+        forward_prop_start = th.cuda.Event(enable_timing=True)
+        forward_prop_end = th.cuda.Event(enable_timing=True)
+        forward_prop_start.record()
         logits = model(emb)
         # logits = model(emb, blocks)
         loss = None
@@ -294,10 +311,18 @@ def RGAT_train_full_graph(model, node_embed, optimizer, labels, hypermeters: dic
                 loss = F.nll_loss(y_hat, lbl)
             else:
                 loss += F.nll_loss(y_hat, lbl)
+        forward_prop_end.record()
+        th.cuda.synchronize()
 
+        backward_prop_start = th.cuda.Event(enable_timing=True)
+        backward_prop_end = th.cuda.Event(enable_timing=True)
+        backward_prop_start.record()
         loss.backward()
         optimizer.step()
+        backward_prop_end.record()
+        th.cuda.synchronize()
 
+        # FIXME: should be # edges when training full graph
         total_loss += loss.item() * args.batch_size
 
         # result = test(g, model, node_embed, labels, device, split_idx, args)
@@ -305,6 +330,10 @@ def RGAT_train_full_graph(model, node_embed, optimizer, labels, hypermeters: dic
         # train_acc, valid_acc, test_acc = result
         print(
             f"Epoch: {epoch + 1 :02d}, " f"Loss (w/o dividing sample num): {loss:.4f}, "
+        )
+        print(f"Forward prop time: {forward_prop_start.elapsed_time(forward_prop_end)}")
+        print(
+            f"Backward prop time: {backward_prop_start.elapsed_time(backward_prop_end)}"
         )
     #              f'Train: {100 * train_acc:.2f}%, '
     #              f'Valid: {100 * valid_acc:.2f}%, '
@@ -438,6 +467,10 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         embed_layer, model = RGAT_get_model(g, num_classes, hyperparameters)
     else:
         print("Using our RGAT model")
+        # print(
+        # int(g["original"]["col_idx"].max()) + 1,
+        # )
+        # print(g["original"]["row_ptr"].numel() - 1)
         embed_layer, model = RGAT_get_our_model(g, num_classes, args)
         # TODO: only certain design choices call for this. Add an option to choose.
 
@@ -506,7 +539,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
             )
         # logger.print_statistics(run)
 
-    print("Final performance: ")
+    # print("Final performance: ")
     # logger.print_statistics()
 
 
