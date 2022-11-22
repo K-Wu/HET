@@ -6,7 +6,7 @@
 	url = https://github.com/cusplibrary/cusplibrary
 [submodule "hetero_edgesoftmax/data/ogbn_mag"]
 	path = hetero_edgesoftmax/data/ogbn_mag
-	url = git@github.com:K-Wu/_hetero_edgesoftmax_data_ogbn_mag.git
+	url = https://K-Wu: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@github.com/K-Wu/_hetero_edgesoftmax_data_ogbn_mag
 [submodule "hetero_edgesoftmax/data/MyHybData"]
 	path = hetero_edgesoftmax/data/MyHybData
 	url = https://tony_wukun_worker:PxXRTULrXSd7w4vAXygq@bitbucket.org/tonywuk/myhyb_dataset.git
