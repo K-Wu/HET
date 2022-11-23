@@ -1,4 +1,6 @@
-# hetero_edgesoftmax
+# HET
+
+The HET Hetero-GNN Kernel Optimization and Code Generation project.
 
 ## Dependencies
 The following repos, as submodules in `third_party/`, are required. Please recursively clone these submodules.
@@ -14,6 +16,9 @@ Besides, as we register our kernels in PyTorch (optional cmake build component),
 
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9c41863c914e4153883f24eeff256280)](https://www.codacy.com?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=K-Wu/hetero_edgesoftmax&amp;utm_campaign=Badge_Grade)
 
+## Warning on Infidel Sort by Src Out Degree and by Etype
+This repo contains data sorted in infidel manner (in [[hetero_edgesoftmax/data]]) with ".infidel_sorted" mark and utility to do such sort (in [[hetero_edgesoftmax/python/utils/coo_sorters.py]]). This is a sort mechanism solely for load balance in RGCN and is not a general purpose sort. The sorted elements, i.e., source node index or etype, are reindexed while other elements, i.e., one of source node index or etype, and eids and destination node index, are not. Also "transposed.<dataset_name>.coo.infidel_sorted.by_srcs_outgoing_freq.<element_name>.npy" are sorted after transposed so using the same eid should refer to the same edge in the original data.
+
 ## CMake Commands
 We need to set BUILD_TEST and BUILD_BENCHMARK as they will be passed on to sub-repo sputnik and build necessary components.
 ```
@@ -27,11 +32,7 @@ for debugging purpose, you may invoke the following command after cmake configur
 cmake --build . --verbose
 ```
 
-## Warning on Infidel Sort by Src Out Degree and by Etype
-This repo contains data sorted in infidel manner (in [[hetero_edgesoftmax/data]]) with ".infidel_sorted" mark and utility to do such sort (in [[hetero_edgesoftmax/python/utils/coo_sorters.py]]). This is a sort mechanism solely for load balance in RGCN and is not a general purpose sort. The sorted elements, i.e., source node index or etype, are reindexed while other elements, i.e., one of source node index or etype, and eids and destination node index, are not. Also "transposed.<dataset_name>.coo.infidel_sorted.by_srcs_outgoing_freq.<element_name>.npy" are sorted after transposed so using the same eid should refer to the same edge in the original data.
-
-
-## Working in submodules
+## Contributing in submodules
 To change the url of a submodule, use the following command:
 ```
 git submodule set-url </reporoot/to/submodule_name> <new_url>
