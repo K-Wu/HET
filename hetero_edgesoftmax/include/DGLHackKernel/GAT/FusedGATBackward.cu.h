@@ -59,7 +59,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
           Idx er_idx = -1;
           Idx dst_vid_relational = -1;
           if constexpr (!CompactAsOfNodeFlag) {
-            // FIXME: debugging this part
             // in this case, feat_src_offset, er_idx and el_idx are related to
             // edge id, regardless of the type of the edge
             feat_src_offset =
@@ -113,7 +112,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
             sum_vid = dst_vid_relational;
           }
           if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
-            // FIXME: debugging this part
             atomicAdd(gdata.grad_el + el_idx, tmp2);
             atomicAdd(gdata.grad_feat_src + feat_src_offset,
                       gdata.exp[eid * e_xlen + head_idx] /

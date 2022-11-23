@@ -144,6 +144,7 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             grad_k,
             grad_q,
         )
+        # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
         # fmt: off
         return None, None, None, None, None, None, None, None, grad_weight, grad_k, grad_q, None
         # fmt: on

@@ -155,8 +155,8 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
         Idx feat_off_src = -1;
         Idx edge_id = gdata.eids[eidx];
         Idx dst_vid_relational = -1;
+        Idx etype = -1;
         if constexpr (RelationalFlag) {
-          Idx etype = -1;
           if constexpr (ETypeRelPtrFlag) {
             etype = binary_search(num_relations, etypes, eidx);
           } else {
@@ -176,17 +176,8 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
               // the node dimension may not be worth it.
               assert(0 && "should be non-reachable not implemented");
             }
-            Idx etype = -1;
-            if constexpr (ETypeRelPtrFlag) {
-              etype = binary_search(num_relations, etypes, eidx);
-            } else {
-              etype = etypes[eidx];
-            }
             Idx src_vid_temp = find_relational_compact_as_of_node_index(
                 etype, src_id, unique_srcs_and_dests_node_indices,
-                unique_srcs_and_dests_rel_ptr);
-            dst_vid_relational = find_relational_compact_as_of_node_index(
-                etype, dst_vid, unique_srcs_and_dests_node_indices,
                 unique_srcs_and_dests_rel_ptr);
             feat_off_src = src_vid_temp * e_xlen + feat_idx;
             feat_off_dst = dst_vid_relational * e_xlen + feat_idx;
@@ -205,9 +196,9 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
                             gdata.leaky_relu_slope);
         gdata.exp[Idx(edge_id * e_xlen) + feat_idx] = tmp;
         if constexpr (RelationalFlag) {
-          // FIXME: dst_vid_relational is undefined when !CompactAsOfNodeFlag &&
-          // RelationalFlag
-          // TODO: fix this and align it with
+          // NB: double check dst_vid_relational is defined when
+          // !CompactAsOfNodeFlag && RelationalFlag
+          // TODO: fix this and align dst_vid_relational definition with
           // _fusedGatBackwardGradElErFeatSrcFused
           atomicAdd(&gdata.sum[Idx(dst_vid_relational * e_xlen) + feat_idx],
                     tmp);

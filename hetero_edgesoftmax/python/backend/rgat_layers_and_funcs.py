@@ -107,6 +107,7 @@ class RelationalFusedGatCSR(th.autograd.Function):
             grad_er,
             slope,
         )
+        # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
         # fmt: off
         return None, None, None, None, None, None, None, None, None, None, grad_feat_src, grad_el, grad_er, None, None, None, None,
         # fmt: on

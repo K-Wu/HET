@@ -586,8 +586,8 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nblks_outer_product(
-        ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE), grid_dim_y,
-        num_heads * 128);
+        ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
+        ceil_div<>(num_input_dim, (long)BLOCK_SIZE), num_heads * 128);
 
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     RGNNDeltaNodeFeatInputCompactBWProp<BLOCK_SIZE, int64_t, int64_t*>
@@ -614,8 +614,8 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nblks_outer_product(
-        ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE), grid_dim_y,
-        num_heads * 128);
+        ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
+        ceil_div<>(num_input_dim, (long)BLOCK_SIZE), num_heads * 128);
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     if constexpr (ACGatherScatterListIdenticalFlag) {
       RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical<
@@ -627,14 +627,19 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
           thrust::raw_pointer_cast(
               dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
           num_relations);
+      // FIXME: outer_product should assume num_heads == 1 and change blockDim.x
+      // and/or blockDim.y accordingly
+      // FIXME: outer_product should have num_heads == 1 and num_heads for input
+      // and output respectively, and therefore distinction should be made when
+      // get row major from A and B
       RGNNDeltaWeightBWPropACGatherScatterListIdentical<BLOCK_SIZE, int64_t,
                                                         int64_t*>
           <<<nblks_outer_product, nthrs, 0, stream>>>(
               input.data_ptr<float>(), gradout.data_ptr<float>(),
               grad_weights.data_ptr<float>(),
               separate_coo_eids.data_ptr<int64_t>(),
-              separate_coo_relptrs.data_ptr<int64_t>(), num_output_per_head_dim,
-              num_input_dim, num_heads,
+              separate_coo_relptrs.data_ptr<int64_t>(), num_input_dim,
+              num_output_per_head_dim, num_heads,
               thrust::raw_pointer_cast(
                   dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
               num_relations);
@@ -656,8 +661,8 @@ void _BackwardRGATRelationalMatMul_wrapper_separatecoo(
               grad_weights.data_ptr<float>(),
               separate_coo_node_indices.data_ptr<int64_t>(),
               separate_coo_relptrs.data_ptr<int64_t>(),
-              separate_coo_eids.data_ptr<int64_t>(), num_output_per_head_dim,
-              num_input_dim, num_heads,
+              separate_coo_eids.data_ptr<int64_t>(), num_input_dim,
+              num_output_per_head_dim, num_heads,
               thrust::raw_pointer_cast(
                   dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
               num_relations);
