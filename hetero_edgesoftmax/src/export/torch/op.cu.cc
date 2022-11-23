@@ -29,6 +29,7 @@
 #include "DGLHackKernel/OpExport/RGATOps.inc.h"
 #include "DGLHackKernel/OpExport/RGCNCOOOps.inc.h"
 #include "DGLHackKernel/OpExport/RGCNOps.inc.h"
+#include "DGLHackKernel/OpExport/RGNNOps.inc.h"
 
 #include "DGLHackKernel/mysgemm/mysgemm_KernelsBlockConfigurations.h"
 
@@ -125,6 +126,8 @@ torch::Dict<std::string, int64_t> test_argument_takein(
   return result;
 }
 
+using namespace HET::TorchExport;
+
 TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   // Utility and debugging functions
   m.def("build_debug_info", build_debug_info);
@@ -154,41 +157,47 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("rgcn_layer1_backward_coo",
         RgcnLayer1BackwardImpl_wrapper_integratedcoo);
   // HGT CSR Declaration
-  m.def("hgt_full_graph_message_mean_aggregation_backward_csr",
-        hgt_full_graph_message_mean_aggregation_backward_wrapper_integratedcsr);
+  m.def(
+      "hgt_full_graph_message_mean_aggregation_backward_csr",
+      HGT::BckProp::
+          hgt_full_graph_message_mean_aggregation_backward_wrapper_integratedcsr);
   m.def("hgt_full_graph_message_mean_aggregation_csr",
-        hgt_full_graph_message_mean_aggregation_wrapper_integratedcsr);
+        HGT::FwProp::
+            hgt_full_graph_message_mean_aggregation_wrapper_integratedcsr);
   m.def("hgt_full_graph_hetero_attention_ops_backward_csr",
-        hgt_full_graph_hetero_attention_ops_backward_wrapper_integratedcsr);
+        HGT::BckProp::
+            hgt_full_graph_hetero_attention_ops_backward_wrapper_integratedcsr);
   m.def("hgt_full_graph_hetero_attention_ops_csr",
-        hgt_full_graph_hetero_attention_ops_wrapper_integratedcsr);
+        HGT::FwProp::hgt_full_graph_hetero_attention_ops_wrapper_integratedcsr);
   m.def("hgt_full_graph_hetero_message_ops_backward_csr",
-        hgt_full_graph_hetero_message_ops_backward_wrapper_integratedcsr);
+        HGT::BckProp::
+            hgt_full_graph_hetero_message_ops_backward_wrapper_integratedcsr);
   m.def("hgt_full_graph_hetero_message_ops_csr",
-        hgt_full_graph_hetero_message_ops_wrapper_integratedcsr);
+        HGT::FwProp::hgt_full_graph_hetero_message_ops_wrapper_integratedcsr);
   m.def("hgt_full_graph_edge_softmax_ops_csr",
-        hgt_full_graph_edge_softmax_ops_wrapper_integratedcsr);
+        HGT::FwProp::hgt_full_graph_edge_softmax_ops_wrapper_integratedcsr);
   m.def("hgt_full_graph_edge_softmax_ops_backward_csr",
-        hgt_full_graph_edge_softmax_ops_backward_wrapper_integratedcsr);
+        HGT::BckProp::
+            hgt_full_graph_edge_softmax_ops_backward_wrapper_integratedcsr);
   // Fused GAT CSR Declaration
   m.def("fused_gat_kernel_csr", FusedGatKernelImpl_wrapper_integratedcsr);
   m.def("backward_fused_gat_csr",
         BackwardFusedGatKernelImpl_wrapper_integratedcsr);
   // RGAT Declaration
   // RGAT Relational GEMM
-  m.def("rgat_relational_matmul", RGATRelationalMatMul_wrapper_separatecoo);
-  m.def("rgat_relational_matmul_backward",
-        BackwardRGATRelationalMatMul_wrapper_separatecoo);
-  m.def("rgat_relational_matmul_ac_gather_scatter_list_identical",
-        RGATRelationalMatMul_ACGatherScatterListIdentical_wrapper_separatecoo);
+  m.def("rgnn_relational_matmul", RGNNRelationalMatMul_wrapper_separatecoo);
+  m.def("rgnn_relational_matmul_backward",
+        BackwardRGNNRelationalMatMul_wrapper_separatecoo);
+  m.def("rgnn_relational_matmul_ac_gather_scatter_list_identical",
+        RGNNRelationalMatMul_ACGatherScatterListIdentical_wrapper_separatecoo);
   m.def(
-      "rgat_relational_matmul_backward_ac_gather_scatter_list_identical",
-      BackwardRGATRelationalMatMul_ACGatherScatterListIdentical_wrapper_separatecoo);
+      "rgnn_relational_matmul_backward_ac_gather_scatter_list_identical",
+      BackwardRGNNRelationalMatMul_ACGatherScatterListIdentical_wrapper_separatecoo);
   m.def(
-      "backward_rgat_relational_matmul_compact_as_of_node",
-      BackwardRGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices);
-  m.def("rgat_relational_matmul_compact_as_of_node",
-        RGATRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices);
+      "backward_rgnn_relational_matmul_compact_as_of_node",
+      BackwardRGNNRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices);
+  m.def("rgnn_relational_matmul_compact_as_of_node",
+        RGNNRelationalMatMulCompactAsOfNode_wrapper_unique_rel_node_indices);
 
   // RGAT Relational SpMM
   m.def(

@@ -138,10 +138,10 @@ class HET_RelationalAttLayer(nn.Module):
         # NB: this line originally calls DGL R(GAT) impl and is now replaced with our own logic
         # hs = B.rgat_layer_csr(g, self.conv_weights, inputs)
         if self.compact_as_of_node_flag:
-            # feat_src_compact = B.rgat_relational_matmul_compact_as_of_node(
+            # feat_src_compact = B.rgnn_relational_matmul_compact_as_of_node(
             #     g, self.conv_weight, inputs
             # )
-            # feat_dst_compact = B.rgat_relational_matmul_compact_as_of_node(
+            # feat_dst_compact = B.rgnn_relational_matmul_compact_as_of_node(
             #     g["separate"]["unique_node_idx"]["rel_ptr"],g["separate"]["unique_node_idx"]["node_idx"], self.conv_weight, inputs
             # )
             if self.multiply_among_weights_first_flag:
@@ -149,7 +149,7 @@ class HET_RelationalAttLayer(nn.Module):
                     "multiply_among_weights_first_flag is not supported when compact_as_of_node_flag==True yet"
                 )
             # TODO: separate feat_compact_src and feat_compact_dst
-            feat_compact = B.rgat_relational_matmul_compact_as_of_node(
+            feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
                 g["separate"]["unique_node_idx"]["rel_ptr"],
                 g["separate"]["unique_node_idx"]["node_idx"],
                 self.conv_weight,
@@ -164,7 +164,7 @@ class HET_RelationalAttLayer(nn.Module):
         else:
 
             # print(th.argmin(g["separate"]["coo"]["original"]["eids"])) # 256546 rel_ptr [183, 184)
-            feat_src_per_edge = B.rgat_relational_matmul(
+            feat_src_per_edge = B.rgnn_relational_matmul(
                 g["separate"]["coo"]["original"]["rel_ptr"],
                 g["separate"]["coo"]["original"]["row_idx"],
                 g["separate"]["coo"]["original"]["eids"],
@@ -173,7 +173,7 @@ class HET_RelationalAttLayer(nn.Module):
                 self.conv_weights,
                 inputs,
             )
-            el = B.rgat_relational_matmul(
+            el = B.rgnn_relational_matmul(
                 g["separate"]["coo"]["original"]["rel_ptr"],
                 g["separate"]["coo"]["original"]["eids"],
                 g["separate"]["coo"]["original"]["eids"],
@@ -197,7 +197,7 @@ class HET_RelationalAttLayer(nn.Module):
                 product_of_conv_weights_attn_r = th.reshape(
                     product_of_conv_weights_attn_r, (-1, self.n_heads, self.in_feat)
                 )
-                er = B.rgat_relational_matmul(
+                er = B.rgnn_relational_matmul(
                     g["separate"]["coo"]["original"]["rel_ptr"],
                     g["separate"]["coo"]["original"]["eids"],
                     g["separate"]["coo"]["original"]["eids"],
@@ -205,7 +205,7 @@ class HET_RelationalAttLayer(nn.Module):
                     inputs,
                 )
             else:
-                feat_dst_per_edge = B.rgat_relational_matmul(
+                feat_dst_per_edge = B.rgnn_relational_matmul(
                     g["separate"]["coo"]["original"]["rel_ptr"],
                     g["separate"]["coo"]["original"]["col_idx"],
                     g["separate"]["coo"]["original"]["eids"],
@@ -214,7 +214,7 @@ class HET_RelationalAttLayer(nn.Module):
                     self.conv_weights,
                     inputs,
                 )
-                er = B.rgat_relational_matmul(
+                er = B.rgnn_relational_matmul(
                     g["separate"]["coo"]["original"]["rel_ptr"],
                     g["separate"]["coo"]["original"]["eids"],
                     g["separate"]["coo"]["original"]["eids"],
