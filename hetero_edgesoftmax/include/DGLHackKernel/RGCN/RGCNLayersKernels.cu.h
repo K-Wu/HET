@@ -68,6 +68,8 @@ __global__ void RgcnLayer0KernelImpl(Idx* ranges, Idx* src_ids, Idx* eids,
   }
 }
 
+// TODO: export hybrid assign kernels in
+// [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/RGCNOps.inc.h]]
 template <typename Idx, typename DType>
 __global__ void RgcnLayer0KernelHybridAssignImpl(
     Idx* ranges, Idx* src_ids, Idx* eids, Idx* types, DType* weight,

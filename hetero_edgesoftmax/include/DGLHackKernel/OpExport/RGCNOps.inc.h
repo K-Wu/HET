@@ -5,11 +5,17 @@
 #include <torch/extension.h>
 #include <torch/library.h>
 
+namespace HET {
+
+namespace TorchExport {
+namespace RGCN {
+namespace FwProp {
+namespace IntegratedCSR {
 template </*int XPU, */ typename Idx, typename DType>
-void _RgcnLayerImpl_wrapper_integratedcsr(
-    at::Tensor& csr_rowptr, at::Tensor& csr_col_idx, at::Tensor& csr_eids,
-    at::Tensor& csr_reltypes, at::Tensor& hidden, at::Tensor& weight,
-    at::Tensor& norm, at::Tensor& ret, bool layer1_flag) {
+void _RgcnLayerImpl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
+                    at::Tensor& csr_eids, at::Tensor& csr_reltypes,
+                    at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
+                    at::Tensor& ret, bool layer1_flag) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   auto range_data = csr_rowptr.data_ptr<Idx>();
   auto ids_data = csr_col_idx.data_ptr<Idx>();
@@ -43,32 +49,31 @@ void _RgcnLayerImpl_wrapper_integratedcsr(
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer0Impl_wrapper_integratedcsr(at::Tensor& csr_rowptr,
-                                          at::Tensor& csr_col_idx,
-                                          at::Tensor& csr_eids,
-                                          at::Tensor& csr_reltypes,
-                                          at::Tensor& weight, at::Tensor& norm,
-                                          at::Tensor& ret) {
+void RgcnLayer0Impl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
+                    at::Tensor& csr_eids, at::Tensor& csr_reltypes,
+                    at::Tensor& weight, at::Tensor& norm, at::Tensor& ret) {
   // NB: graphiler, seastar by default uses int64_t
-  _RgcnLayerImpl_wrapper_integratedcsr<int64_t, float>(
-      csr_rowptr, csr_col_idx, csr_eids, csr_reltypes, /*dummy_tensor*/ weight,
-      weight, norm, ret, false);
+  _RgcnLayerImpl<int64_t, float>(csr_rowptr, csr_col_idx, csr_eids,
+                                 csr_reltypes, /*dummy_tensor*/ weight, weight,
+                                 norm, ret, false);
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer1Impl_wrapper_integratedcsr(
-    at::Tensor& csr_rowptr, at::Tensor& csr_col_idx, at::Tensor& csr_eids,
-    at::Tensor& csr_reltypes, at::Tensor& hidden, at::Tensor& weight,
-    at::Tensor& norm, at::Tensor& ret) {
+void RgcnLayer1Impl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
+                    at::Tensor& csr_eids, at::Tensor& csr_reltypes,
+                    at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
+                    at::Tensor& ret) {
   // NB: graphiler, seastar by default uses int64_t
-  _RgcnLayerImpl_wrapper_integratedcsr<int64_t, float>(
-      csr_rowptr, csr_col_idx, csr_eids, csr_reltypes, hidden, weight, norm,
-      ret, true);
+  _RgcnLayerImpl<int64_t, float>(csr_rowptr, csr_col_idx, csr_eids,
+                                 csr_reltypes, hidden, weight, norm, ret, true);
 }
-
+}  // namespace IntegratedCSR
+}  // namespace FwProp
+namespace BckProp {
+namespace IntegratedCSR {
 // the referential implementation from seastar
 template </*int XPU, */ typename Idx, typename DType>
-void _RgcnLayerBackwardImpl_wrapper_integratedcsr(
+void _RgcnLayerImpl(
     // GraphRef graph,
     at::Tensor& transposed_csr_rowptr, at::Tensor& transposed_csr_col_idx,
     at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
@@ -140,13 +145,13 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcsr(
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer0BackwardImpl_wrapper_integratedcsr(
+void RgcnLayer0Impl(
     // GraphRef graph,
     at::Tensor& transposed_csr_rowptr, at::Tensor& transposed_csr_col_idx,
     at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
     at::Tensor& grad_out, at::Tensor& norm, at::Tensor& ret) {
   // NB: graphiler, seastar by default uses int64_t
-  _RgcnLayerBackwardImpl_wrapper_integratedcsr<int64_t, float>(
+  _RgcnLayerImpl<int64_t, float>(
       transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
       transposed_csr_reltypes, /*hidden_dummy*/ ret, /*weight_dummy*/ ret, norm,
       grad_out,
@@ -154,7 +159,7 @@ void RgcnLayer0BackwardImpl_wrapper_integratedcsr(
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer1BackwardImpl_wrapper_integratedcsr(
+void RgcnLayer1Impl(
     // GraphRef graph,
     at::Tensor& transposed_csr_rowptr, at::Tensor& transposed_csr_col_idx,
     at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
@@ -162,8 +167,13 @@ void RgcnLayer1BackwardImpl_wrapper_integratedcsr(
     at::Tensor& grad_out, at::Tensor& grad_hidden, at::Tensor& grad_weight) {
   // NB: graphiler, seastar by default uses int64_t
   // TODO: create dummy tensor instead
-  _RgcnLayerBackwardImpl_wrapper_integratedcsr<int64_t, float>(
-      transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
-      transposed_csr_reltypes, hidden, weight, norm, grad_out, grad_hidden,
-      grad_weight, /*ret_dummy*/ grad_weight, true);
+  _RgcnLayerImpl<int64_t, float>(transposed_csr_rowptr, transposed_csr_col_idx,
+                                 transposed_csr_eids, transposed_csr_reltypes,
+                                 hidden, weight, norm, grad_out, grad_hidden,
+                                 grad_weight, /*ret_dummy*/ grad_weight, true);
 }
+}  // namespace IntegratedCSR
+}  // namespace BckProp
+}  // namespace RGCN
+}  // namespace TorchExport
+}  // namespace HET

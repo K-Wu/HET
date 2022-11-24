@@ -149,12 +149,11 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
         convert_integrated_coo_to_separate_coo);
   m.def("test_argument_takein", test_argument_takein);
   // RGCN CSR Declaration
-  m.def("rgcn_layer0_csr", RgcnLayer0Impl_wrapper_integratedcsr);
-  m.def("rgcn_layer0_backward_csr",
-        RgcnLayer0BackwardImpl_wrapper_integratedcsr);
-  m.def("rgcn_layer1_csr", RgcnLayer1Impl_wrapper_integratedcsr);
+  m.def("rgcn_layer0_csr", RGCN::FwProp::IntegratedCSR::Layer0Impl);
+  m.def("rgcn_layer0_backward_csr", RGCN::BckProp::IntegratedCSR::Layer0Impl);
+  m.def("rgcn_layer1_csr", RGCN::FwProp::IntegratedCSR::Layer1Impl);
   m.def("rgcn_layer1_backward_csr",
-        RgcnLayer1BackwardImpl_wrapper_integratedcsr);
+        RGCN::BckProp::IntegratedCSR::RgcnLayer1Impl);
   // RGCN COO Declaration
   m.def("rgcn_layer1_coo", RgcnLayer1Impl_wrapper_integratedcoo);
   m.def("rgcn_layer1_backward_coo",
