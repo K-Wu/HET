@@ -7,4 +7,5 @@ from .rgcn_kernels import *
 from .hgt_kernels import *
 from .util_kernels import *
 from .rgat_kernels import *
+from .rgnn_kernels import *
 from .gat_kernels import *

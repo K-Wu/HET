@@ -169,11 +169,6 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
             hgt_full_graph_hetero_attention_ops_backward_wrapper_integratedcsr);
   m.def("hgt_full_graph_hetero_attention_ops_csr",
         HGT::FwProp::hgt_full_graph_hetero_attention_ops_wrapper_integratedcsr);
-  m.def("hgt_full_graph_hetero_message_ops_backward_csr",
-        HGT::BckProp::
-            hgt_full_graph_hetero_message_ops_backward_wrapper_integratedcsr);
-  m.def("hgt_full_graph_hetero_message_ops_csr",
-        HGT::FwProp::hgt_full_graph_hetero_message_ops_wrapper_integratedcsr);
   m.def("hgt_full_graph_edge_softmax_ops_csr",
         HGT::FwProp::hgt_full_graph_edge_softmax_ops_wrapper_integratedcsr);
   m.def("hgt_full_graph_edge_softmax_ops_backward_csr",

@@ -131,20 +131,61 @@ class HET_HGTLayerHetero(nn.Module):
                 -1, self.n_heads, self.d_k
             )
 
-        message_per_edge = B.hgt_full_graph_heterogeneous_message_ops_csr(
-            G, self.relation_msg, v
+        message_per_edge = B.rgnn_relational_matmul(
+            G["separate"]["coo"]["original"]["rel_ptr"],
+            G["separate"]["coo"]["original"]["row_idx"],
+            G["separate"]["coo"]["original"]["eids"],
+            self.relation_msg,
+            v,
         )  # shape (num_edges, n_heads, d_k)
 
-        attn_score = B.hgt_full_graph_heterogeneous_attention_ops_csr(
-            G, self.relation_att, k, q
-        )  # shape (num_edges, n_heads)
+        if self.hgt_fused_attn_score_flag:
+            attn_score = B.hgt_full_graph_hetero_attention_ops_csr(
+                G, self.relation_att, k, q
+            )  # shape (num_edges, n_heads)
+        else:
+            if self.compact_as_of_node_flag:
+                # TODO: implement single-sided matmul for compact_as_of_node_flag
+                attn_weight_dst_product_compact = (
+                    B.rgnn_relational_matmul_compact_as_of_node_single_ended(
+                        G["separate"]["unique_node_idx"]["rel_ptr"],
+                        G["separate"]["unique_node_idx"]["node_idx"],
+                        G["separate"]["coo"]["original"]["rel_ptr"],
+                        G["separate"]["coo"]["original"]["col_idx"],
+                        self.relation_att,
+                        q,
+                    )
+                )
+                attn_score = B.rgnn_inner_product_node_compact_and_node(
+                    G["separate"]["unique_node_idx"]["rel_ptr"],
+                    G["separate"]["unique_node_idx"]["node_idx"],
+                    G["separate"]["coo"]["original"]["rel_ptr"],
+                    G["separate"]["coo"]["original"]["eids"],
+                    G["separate"]["coo"]["original"]["col_idx"],
+                    attn_weight_dst_product_compact,
+                    k,
+                )
+            else:
+                attn_weight_dst_product_per_edge = B.rgnn_relational_matmul(
+                    G["separate"]["coo"]["original"]["rel_ptr"],
+                    G["separate"]["coo"]["original"]["col_idx"],
+                    G["separate"]["coo"]["original"]["eids"],
+                    self.relation_att,
+                    q,
+                )
+                attn_score = B.rgnn_inner_product_edge_and_node(
+                    G["separate"]["coo"]["original"]["eids"],
+                    G["separate"]["coo"]["original"]["col_idx"],
+                    attn_weight_dst_product_per_edge,
+                    k,
+                )
 
         attn_score = B.hgt_full_graph_edge_softmax_ops_csr(
             G, attn_score, mu=(self.relation_pri / self.sqrt_dk)
         )
         # NB: the scaling is: attn_score = relation_pri / self.sqrt_dk * attn_score
 
-        new_h = B.hgt_full_graph_message_mean_aggregation(
+        new_h = B.hgt_full_graph_message_mean_aggregation_csr(
             G, message_per_edge, attn_score
         )  # shape (num_nodes, n_heads, d_k)
 
