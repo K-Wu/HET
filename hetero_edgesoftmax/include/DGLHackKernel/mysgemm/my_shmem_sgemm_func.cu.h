@@ -564,3 +564,80 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWProp(
       unique_srcs_and_dests_rel_ptr[idx_relation], delta_output_per_head_dim,
       delta_input_dim, num_heads);
 }
+
+// blockDim.y == ceil_div(A_col_row_idx_gather_list.size(), BLOCK_SIZE)
+template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
+__global__ void RGNNDeltaNodeFeatInputCompactBWPropSingleSided(
+    float* delta_feat_compact, float* weight_transpose,
+    float* delta_node_feat_input, IdxPtr unique_srcs_and_dests_rel_ptr,
+    IdxPtr unique_srcs_and_dests_node_indices, IdxPtr separate_coo_relptrs,
+    IdxPtr separate_coo_node_indices, Idx num_edges,
+    Idx delta_output_per_head_dim, Idx delta_input_dim, Idx num_heads,
+    int* accum_num_blocks_per_relation, Idx num_relations) {
+  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_relation = binary_search<int, int*>(
+      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  _basic_MatMulKernel<BLOCK_SIZE, false, true, true, false, false, false, false,
+                      true, Idx, IdxPtr>(
+      delta_feat_compact,
+      &weight_transpose[idx_relation * delta_output_per_head_dim *
+                        delta_input_dim],
+      delta_node_feat_input, unique_srcs_and_dests_node_indices, nullptr,
+      nullptr, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, idx_relation, num_edges,
+      accum_num_blocks_per_relation[idx_relation],
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
+      unique_srcs_and_dests_rel_ptr[idx_relation], delta_output_per_head_dim,
+      delta_input_dim, num_heads);
+}
+
+template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
+__global__ void RGNNFeatCompactFWPropSingleSided(
+    float* node_feat_input, float* weight, float* node_feat_per_edge,
+    IdxPtr unique_srcs_and_dests_rel_ptr,
+    IdxPtr unique_srcs_and_dests_node_indices, IdxPtr separate_coo_relptrs,
+    IdxPtr separate_coo_node_indices, Idx input_dim, Idx output_per_head_dim,
+    Idx num_heads, int* accum_num_blocks_per_relation, Idx num_relations) {
+  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_relation = binary_search<int, int*>(
+      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, true,
+                      false, Idx, IdxPtr>(
+      node_feat_input, &weight[idx_relation * input_dim * output_per_head_dim],
+      node_feat_per_edge, unique_srcs_and_dests_node_indices, nullptr,
+      unique_srcs_and_dests_node_indices, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, idx_relation,
+      unique_srcs_and_dests_rel_ptr[idx_relation + 1] -
+          unique_srcs_and_dests_rel_ptr[idx_relation],
+      accum_num_blocks_per_relation[idx_relation],
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
+      unique_srcs_and_dests_rel_ptr[idx_relation], input_dim,
+      output_per_head_dim, num_heads);
+}
+
+template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
+__global__ void RGNNDeltaWeightCompactBWPropSingleSided(
+    float* delta_weight, float* feat_input, float* delta_feat_compact,
+    IdxPtr unique_srcs_and_dests_rel_ptr,
+    IdxPtr unique_srcs_and_dests_node_indices, IdxPtr separate_coo_relptrs,
+    IdxPtr separate_coo_node_indices, Idx num_edges, Idx A_delta_input_dim,
+    Idx B_delta_output_per_head_dim, Idx num_heads,
+    int* accum_num_blocks_per_relation, Idx num_relations) {
+  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_relation = binary_search<int, int*>(
+      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  _basic_MatMulKernel<BLOCK_SIZE, true, true, false, true, true, false, false,
+                      true, Idx, IdxPtr>(
+      feat_input, delta_feat_compact,
+      &delta_weight[idx_relation * B_delta_output_per_head_dim *
+                    A_delta_input_dim],
+      unique_srcs_and_dests_node_indices, unique_srcs_and_dests_node_indices,
+      nullptr, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, idx_relation, num_edges,
+      accum_num_blocks_per_relation[idx_relation],
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
+      0, A_delta_input_dim, B_delta_output_per_head_dim, num_heads);
+}

@@ -294,7 +294,7 @@ class HGTFullGraphEdgeSoftmaxOpsCSR(th.autograd.Function):
         # fmt: on
 
 
-def hgt_full_graph_edge_softmax_ops_csr(graph, attn_score, mu, scale_factor_reciprocal):
+def hgt_full_graph_edge_softmax_ops_csr(graph, attn_score, mu):
     row_ptr = graph["original"]["row_ptr"]
     col_idx = graph["original"]["col_idx"]
     eids = graph["original"]["eids"]
