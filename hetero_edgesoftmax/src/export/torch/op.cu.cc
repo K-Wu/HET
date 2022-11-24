@@ -157,23 +157,18 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("rgcn_layer1_backward_coo",
         RgcnLayer1BackwardImpl_wrapper_integratedcoo);
   // HGT CSR Declaration
-  m.def(
-      "hgt_full_graph_message_mean_aggregation_backward_csr",
-      HGT::BckProp::
-          hgt_full_graph_message_mean_aggregation_backward_wrapper_integratedcsr);
+  m.def("hgt_full_graph_message_mean_aggregation_backward_csr",
+        HGT::BckProp::IntegratedCSR::full_graph_message_mean_aggregation);
   m.def("hgt_full_graph_message_mean_aggregation_csr",
-        HGT::FwProp::
-            hgt_full_graph_message_mean_aggregation_wrapper_integratedcsr);
+        HGT::FwProp::IntegratedCSR::full_graph_message_mean_aggregation);
   m.def("hgt_full_graph_hetero_attention_ops_backward_csr",
-        HGT::BckProp::
-            hgt_full_graph_hetero_attention_ops_backward_wrapper_integratedcsr);
+        HGT::BckProp::IntegratedCSR::full_graph_hetero_attention_ops);
   m.def("hgt_full_graph_hetero_attention_ops_csr",
-        HGT::FwProp::hgt_full_graph_hetero_attention_ops_wrapper_integratedcsr);
+        HGT::FwProp::IntegratedCSR::full_graph_hetero_attention_ops);
   m.def("hgt_full_graph_edge_softmax_ops_csr",
-        HGT::FwProp::hgt_full_graph_edge_softmax_ops_wrapper_integratedcsr);
+        HGT::FwProp::IntegratedCSR::full_graph_edge_softmax_ops);
   m.def("hgt_full_graph_edge_softmax_ops_backward_csr",
-        HGT::BckProp::
-            hgt_full_graph_edge_softmax_ops_backward_wrapper_integratedcsr);
+        HGT::BckProp::IntegratedCSR::full_graph_edge_softmax_ops);
   // Fused GAT CSR Declaration
   m.def("fused_gat_kernel_csr", FusedGatKernelImpl_wrapper_integratedcsr);
   m.def("backward_fused_gat_csr",
@@ -253,21 +248,22 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def(
       "backward_rgat_relational_fused_gat_compact_as_of_node_edge_parallel_"
       "separate_coo",
-      BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_edge_parallel_separatecoo);
+      RGAT::BckProp::
+          RelationalFusedGATKernelCompactAsOfNode_edge_parallel_separatecoo);
   m.def(
       "rgat_relational_fused_gat_compact_as_of_node_edge_parallel_separate_coo",
-      RGATRelationalFusedGATKernelCompactAsOfNode_wrapper_edge_parallel_separatecoo);
+      RGAT::FwProp::
+          RelationalFusedGATKernelCompactAsOfNode_edge_parallel_separatecoo);
   m.def("relational_fused_gat_kernel_edge_parallel_separate_coo",
-        RelationalFusedGATKernel_wrapper_edge_parallel_separatecoo);
+        RGAT::FwProp::RelationalFusedGATKernel_edge_parallel_separatecoo);
   m.def("backward_relational_fused_gat_edge_parallel_separate_coo",
-        BackwardRelationalFusedGATKernel_wrapper_edge_parallel_separatecoo);
-  m.def(
-      "backward_rgat_relational_fused_gat_compact_as_of_node_csr",
-      BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr);
+        RGAT::BckProp::RelationalFusedGATKernel_edge_parallel_separatecoo);
+  m.def("backward_rgat_relational_fused_gat_compact_as_of_node_csr",
+        RGAT::BckProp::RelationalFusedGATKernelCompactAsOfNode_integratedcsr);
   m.def("rgat_relational_fused_gat_compact_as_of_node_csr",
-        RGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr);
+        RGAT::FwProp::RelationalFusedGATKernelCompactAsOfNode_integratedcsr);
   m.def("relational_fused_gat_kernel_csr",
-        RelationalFusedGATKernel_wrapper_integratedcsr);
+        RGAT::FwProp::RelationalFusedGATKernel_integratedcsr);
   m.def("backward_relational_fused_gat_csr",
-        BackwardRelationalFusedGATKernel_wrapper_integratedcsr);
+        RGAT::BckProp::RelationalFusedGATKernel_integratedcsr);
 }

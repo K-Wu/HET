@@ -12,10 +12,14 @@
 #include "DGLHackKernel/RGAT/RGATLayersKernelsSeparateCSR.cu.h"
 #include "GATOps.inc.h"
 
+namespace HET {
+namespace TorchExport {
+namespace RGAT {
+namespace FwProp {
 template </*int XPU, */ typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool IntegratedFormatRatherThanSeparateFlag,
           bool CSRRatherThanCOOFlag>
-void _RelationalFusedGATKernel_wrapper(
+void _RelationalFusedGATKernel(
     at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
     at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
     at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
@@ -121,10 +125,73 @@ void _RelationalFusedGATKernel_wrapper(
   }
 }
 
+void RelationalFusedGATKernelCompactAsOfNode_edge_parallel_separatecoo(
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
+    at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
+    at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
+    at::Tensor& ret, double slope) {
+  at::Tensor dummy_tensor;
+  _RelationalFusedGATKernel<int64_t, float, true, false, false>(
+      separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+      dummy_tensor, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
+      slope);
+}
+
+void RelationalFusedGATKernel_edge_parallel_separatecoo(
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
+    at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
+    at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
+    at::Tensor& ret, double slope) {
+  at::Tensor dummy_tensor;
+  _RelationalFusedGATKernel<int64_t, float, false, false, false>(
+      separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+      dummy_tensor, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
+      slope);
+}
+
+void RelationalFusedGATKernel_integratedcsr(
+    at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
+    at::Tensor& incsr_eids, at::Tensor& incsr_reltypes,
+    at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
+    at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
+    at::Tensor& ret, double slope) {
+  at::Tensor dummy_tensor;
+  _RelationalFusedGATKernel<int64_t, float, false, true, true>(
+      dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, incsr_row_ptr,
+      incsr_col_idx, incsr_eids, incsr_reltypes, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
+      slope);
+}
+
+void RelationalFusedGATKernelCompactAsOfNode_integratedcsr(
+    at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
+    at::Tensor& incsr_eids, at::Tensor& incsr_reltypes,
+    at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
+    at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
+    at::Tensor& ret, double slope) {
+  at::Tensor dummy_tensor;
+  _RelationalFusedGATKernel<int64_t, float, true, true, true>(
+      dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, incsr_row_ptr,
+      incsr_col_idx, incsr_eids, incsr_reltypes, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
+      slope);
+}
+}  // namespace FwProp
+namespace BckProp {
 template </*int XPU, */ typename Idx, typename DType, bool FLAG_KERNEL_FUSED,
           bool CompactAsOfNodeFlag, bool IntegratedFormatRatherThanSeparateFlag,
           bool CSRRatherThanCOOFlag>
-void _BackwardRelationalFusedGATKernel_wrapper(
+void _RelationalFusedGATKernel(
     at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
     at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
     at::Tensor& outcsr_row_ptr, at::Tensor& outcsr_col_idx,
@@ -236,21 +303,7 @@ void _BackwardRelationalFusedGATKernel_wrapper(
   }
 }
 
-void RelationalFusedGATKernel_wrapper_integratedcsr(
-    at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
-    at::Tensor& incsr_eids, at::Tensor& incsr_reltypes,
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
-    at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
-    at::Tensor& ret, double slope) {
-  at::Tensor dummy_tensor;
-  _RelationalFusedGATKernel_wrapper<int64_t, float, false, true, true>(
-      dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, incsr_row_ptr,
-      incsr_col_idx, incsr_eids, incsr_reltypes, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
-      slope);
-}
-void BackwardRelationalFusedGATKernel_wrapper_integratedcsr(
+void RelationalFusedGATKernel_integratedcsr(
     at::Tensor& outcsr_row_ptr, at::Tensor& outcsr_col_idx,
     at::Tensor& outcsr_eids, at::Tensor& outcsr_reltypes,
     at::Tensor& unique_srcs_and_dests_rel_ptr,
@@ -259,29 +312,15 @@ void BackwardRelationalFusedGATKernel_wrapper_integratedcsr(
     at::Tensor& ret, at::Tensor& gradout, at::Tensor& grad_feat_src,
     at::Tensor& grad_el, at::Tensor& grad_er, double slope) {
   at::Tensor dummy_tensor;
-  _BackwardRelationalFusedGATKernel_wrapper<int64_t, float, true, false, true,
-                                            true>(
+  _RelationalFusedGATKernel<int64_t, float, true, false, true, true>(
       dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, outcsr_row_ptr,
       outcsr_col_idx, outcsr_eids, outcsr_reltypes,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       feat_src, el, er, sum, exp, ret, gradout, grad_feat_src, grad_el, grad_er,
       slope);
 }
-void RGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr(
-    at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
-    at::Tensor& incsr_eids, at::Tensor& incsr_reltypes,
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
-    at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
-    at::Tensor& ret, double slope) {
-  at::Tensor dummy_tensor;
-  _RelationalFusedGATKernel_wrapper<int64_t, float, true, true, true>(
-      dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, incsr_row_ptr,
-      incsr_col_idx, incsr_eids, incsr_reltypes, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
-      slope);
-}
-void BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr(
+
+void RelationalFusedGATKernelCompactAsOfNode_integratedcsr(
     at::Tensor& outcsr_row_ptr, at::Tensor& outcsr_col_idx,
     at::Tensor& outcsr_eids, at::Tensor& outcsr_reltypes,
     at::Tensor& unique_srcs_and_dests_rel_ptr,
@@ -290,8 +329,7 @@ void BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr(
     at::Tensor& ret, at::Tensor& gradout, at::Tensor& grad_feat_src,
     at::Tensor& grad_el, at::Tensor& grad_er, double slope) {
   at::Tensor dummy_tensor;
-  _BackwardRelationalFusedGATKernel_wrapper<int64_t, float, true, true, true,
-                                            true>(
+  _RelationalFusedGATKernel<int64_t, float, true, true, true, true>(
       dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, outcsr_row_ptr,
       outcsr_col_idx, outcsr_eids, outcsr_reltypes,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
@@ -299,7 +337,7 @@ void BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_integratedcsr(
       slope);
 }
 
-void BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_edge_parallel_separatecoo(
+void RelationalFusedGATKernelCompactAsOfNode_edge_parallel_separatecoo(
     at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
     at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
     at::Tensor& unique_srcs_and_dests_rel_ptr,
@@ -308,8 +346,7 @@ void BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_edge_parallel_s
     at::Tensor& ret, at::Tensor& gradout, at::Tensor& grad_feat_src,
     at::Tensor& grad_el, at::Tensor& grad_er, double slope) {
   at::Tensor dummy_tensor;
-  _BackwardRelationalFusedGATKernel_wrapper<int64_t, float, true, true, false,
-                                            false>(
+  _RelationalFusedGATKernel<int64_t, float, true, true, false, false>(
       separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
       separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
       dummy_tensor, unique_srcs_and_dests_rel_ptr,
@@ -317,39 +354,7 @@ void BackwardRGATRelationalFusedGATKernelCompactAsOfNode_wrapper_edge_parallel_s
       gradout, grad_feat_src, grad_el, grad_er, slope);
 }
 
-void RGATRelationalFusedGATKernelCompactAsOfNode_wrapper_edge_parallel_separatecoo(
-    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
-    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
-    at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
-    at::Tensor& ret, double slope) {
-  at::Tensor dummy_tensor;
-  _RelationalFusedGATKernel_wrapper<int64_t, float, true, false, false>(
-      separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
-      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
-      dummy_tensor, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
-      slope);
-}
-
-void RelationalFusedGATKernel_wrapper_edge_parallel_separatecoo(
-    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
-    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
-    at::Tensor& el, at::Tensor& er, at::Tensor& sum, at::Tensor& exp,
-    at::Tensor& ret, double slope) {
-  at::Tensor dummy_tensor;
-  _RelationalFusedGATKernel_wrapper<int64_t, float, false, false, false>(
-      separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
-      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
-      dummy_tensor, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
-      slope);
-}
-
-void BackwardRelationalFusedGATKernel_wrapper_edge_parallel_separatecoo(
+void RelationalFusedGATKernel_edge_parallel_separatecoo(
     at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
     at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
     at::Tensor& unique_srcs_and_dests_rel_ptr,
@@ -358,11 +363,15 @@ void BackwardRelationalFusedGATKernel_wrapper_edge_parallel_separatecoo(
     at::Tensor& ret, at::Tensor& gradout, at::Tensor& grad_feat_src,
     at::Tensor& grad_el, at::Tensor& grad_er, double slope) {
   at::Tensor dummy_tensor;
-  _BackwardRelationalFusedGATKernel_wrapper<int64_t, float, false, false, false,
-                                            false>(
+  _RelationalFusedGATKernel<int64_t, float, false, false, false, false>(
       separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
       separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
       dummy_tensor, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices, feat_src, el, er, sum, exp, ret,
       gradout, grad_feat_src, grad_el, grad_er, slope);
 }
+
+}  // namespace BckProp
+}  // namespace RGAT
+}  // namespace TorchExport
+}  // namespace HET
