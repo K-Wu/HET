@@ -127,7 +127,10 @@ torch::Dict<std::string, int64_t> test_argument_takein(
 }
 
 using namespace HET::TorchExport;
-
+// NB: let's establish a convention of namespace hierarchy, i.e.,
+// HET::TorchExport::ModelName::FwOrBwProp::FullGraphOrMinibatch::FormatSpecificationsEGIntegratedCSR::ComputeScheduleSpecificationsEGEdgeParallel::KernelName_VariantName
+// In specific case where there is one level/field of namespace missing, e.g.,
+// FullGraphOrMinibatch, we can just skip and move to the next inner level.
 TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   // Utility and debugging functions
   m.def("build_debug_info", build_debug_info);
