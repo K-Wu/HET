@@ -33,9 +33,9 @@ void full_graph_edge_softmax_ops(at::Tensor& row_ptr, at::Tensor& col_idx,
                                  at::Tensor& eids, at::Tensor& reltypes,
                                  at::Tensor& attn_score, at::Tensor& mu,
                                  at::Tensor& ret) {
-  // we need to implement based on _gatExpLeakyReluSumKernel in
-  // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
-  // alternatively there is an existing implementation with tricky API in
+  // We need to implement based on _gatExpLeakyReluSumKernel in
+  // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]].
+  // There is an existing implementation with tricky API in
   // hetero_edgesoftmax/include/EdgeSoftmax_1/EdgeSoftmaxCSR.h
 }
 }  // namespace IntegratedCSR

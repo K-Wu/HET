@@ -2,7 +2,7 @@
 #include "DGLHackKernel/DGLHackKernel.h"
 #include "DGLHackKernel/HGT/HGTExperimental.h"
 #include "DGLHackKernel/HGT/HGTLayersBackwardKernels.cu.h"
-#include "DGLHackKernel/HGT/HGTLayersKernels.cu.h"
+#include "DGLHackKernel/HGT/HGTLayersForwardKernels.cu.h"
 #include "DGLHackKernel/NodeLinear.h"
 #include "DGLHackKernel/OpPrototyping/HGTIntermediateData.h"
 #include "DGLHackKernel/OpPrototyping/HGTProtoOps.h"
