@@ -1,7 +1,8 @@
-# From sputnik/cmake/Cuda.cmake
-# Helper to find CUDA libraries.
+# From sputnik/cmake/Cuda.cmake Helper to find CUDA libraries.
 function(cuda_find_library out_path lib_name)
-  find_library(${out_path} ${lib_name} PATHS ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}
+  find_library(
+    ${out_path} ${lib_name}
+    PATHS ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}
     PATH_SUFFIXES lib lib64 REQUIRED)
 endfunction()
 
@@ -12,5 +13,7 @@ function(create_cuda_gencode_flags out archs_args)
   foreach(arch IN LISTS archs)
     set(tmp "${tmp} -gencode arch=compute_${arch},code=sm_${arch}")
   endforeach(arch)
-  set(${out} ${tmp} PARENT_SCOPE)
+  set(${out}
+      ${tmp}
+      PARENT_SCOPE)
 endfunction()
