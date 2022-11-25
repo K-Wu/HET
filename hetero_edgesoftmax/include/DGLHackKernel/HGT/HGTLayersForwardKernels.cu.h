@@ -1,6 +1,6 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
-#include "DGLHackKernel/HGTPreprocessing.h"
+#include "DGLHackKernel/HGT/HGTPreprocessing.h"
 #include "EdgeAttention_4/EdgeAttentionCOO.h"
 #include "EdgeAttention_4/mysgemm_functor.cu.h"
 #include "utils.cu.h"
@@ -52,12 +52,12 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
     EdgeMessagesPointerType EdgeMessages, DType* EdgeAttnScores, Idx num_nodes,
     Idx num_edges, Idx num_etypes, Idx num_heads, Idx inout_feat_dim,
     DType* NodeAggregates, Idx* MapAmongEtypeNodeAndOffsetArray,
-    Idx* row_indices_or_row_ptrs) {
+    Idx* etype_unique_node_offsets, Idx* row_indices_or_row_ptrs) {
   // each warp deals with one edge
   Idx edge_idx =
       (blockIdx.x * blockDim.x + threadIdx.x) / warpSize;  // warpSize = 32
-  static_assert(inout_feat_dim % warpSize == 0,
-                "inout_feat_dim must be multiple of warpSize");  // 32
+  assert(inout_feat_dim % warpSize == 0 &&
+         "inout_feat_dim must be multiple of warpSize");  // 32
   for (; edge_idx < num_edges; edge_idx += gridDim.x * blockDim.x / warpSize) {
     Idx col_idx = col_idxes[edge_idx];
     Idx etype = etypes[edge_idx];
@@ -75,7 +75,7 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
         row_idx = row_indices_or_row_ptrs[edge_idx];
       }  // if constexpr (CSRInsteadOfCOOFlag) {
       if constexpr (BinarySearchToGetEtypeNodeOffsetFlag) {
-        unqiue_node_index_for_curr_etype = binary_search<Idx, Idx*>(
+        unique_node_index_for_curr_etype = binary_search<Idx, Idx*>(
             etype_unique_node_offsets[etype + 1] -
                 etype_unique_node_offsets[etype],
             &MapAmongEtypeNodeAndOffsetArray[etype_unique_node_offsets[etype]],
@@ -121,23 +121,23 @@ __global__ void HGTTriviallyEdgeParallelVanillaNodeMeanAggregation(
       /*flag not applicable*/ false, /*flag not applicable*/ false>(
       col_idxes, etypes, eids, EdgeMessages, EdgeAttnScores, num_nodes,
       num_edges, num_etypes, num_heads, inout_feat_dim, NodeAggregates, nullptr,
-      nullptr);
+      nullptr, nullptr);
 }
 
 __global__ void HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation(
-    int64_t* col_idxes, int64_t* etypes, int64_t* eids, float** EdgeMessages,
+    int64_t* col_idxes, int64_t* etypes, int64_t* eids, float* EdgeMessages,
     float* EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
     int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
-    float* NodeAggregates, float* ETypeUniqueIndexToNodeIndexMap,
-    float* row_indices) {
+    float* NodeAggregates, int64_t* ETypeUniqueIndexToNodeIndexMap,
+    int64_t* etype_unique_node_offsets, int64_t* row_indices) {
   _HGTTriviallyEdgeParallelNodeMeanAggregation<
       int64_t, float, /* EdgeMessagesCompactAsOfNodeFlag = */ true,
-      /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ true, float**,
+      /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ true, float*,
       /*BinarySearchToGetEtypeNodeOffsetFlag = */ true,
       /*CSRInsteadOfCOOFlag = */ false>(
-      col_idxes, etypes, eids, EdgeMessages, DType * EdgeAttnScores,
-      Idx num_nodes, num_edges, num_etypes, num_heads, inout_feat_dim,
-      NodeAggregates, ETypeUniqueIndexToNodeIndexMap, row_indices)
+      col_idxes, etypes, eids, EdgeMessages, EdgeAttnScores, num_nodes,
+      num_edges, num_etypes, num_heads, inout_feat_dim, NodeAggregates,
+      ETypeUniqueIndexToNodeIndexMap, etype_unique_node_offsets, row_indices);
 }
 
 // constexpr auto HGTTriviallyEdgeParallelVanillaNodeMeanAggregation =
