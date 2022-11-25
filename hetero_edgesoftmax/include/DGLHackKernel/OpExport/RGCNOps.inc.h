@@ -11,11 +11,12 @@ namespace TorchExport {
 namespace RGCN {
 namespace FwProp {
 namespace IntegratedCSR {
-template </*int XPU, */ typename Idx, typename DType>
-void _RgcnLayerImpl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
-                    at::Tensor& csr_eids, at::Tensor& csr_reltypes,
-                    at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
-                    at::Tensor& ret, bool layer1_flag) {
+template </*int XPU, */ typename Idx, typename DType, bool HybridAssignmentFlag>
+void _LayerImpl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
+                at::Tensor& csr_eids, at::Tensor& csr_reltypes,
+                at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
+                at::Tensor& ret, bool layer1_flag,
+                int num_blocks_on_blocks_per_node) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   auto range_data = csr_rowptr.data_ptr<Idx>();
   auto ids_data = csr_col_idx.data_ptr<Idx>();
@@ -30,56 +31,99 @@ void _RgcnLayerImpl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
   Idx num_edges = csr_eids.numel();
   int nblks = num_nodes;
 
+  if constexpr (HybridAssignmentFlag) {
+    assert(num_blocks_on_blocks_per_node >= 0);
+  } else {
+    assert(num_blocks_on_blocks_per_node == -1);
+  }
+
   if (layer1_flag) {
     Idx ntypes = weight.size(0);
     Idx feat_len_y = weight.size(1);
     Idx feat_len_x = weight.size(2);
     int nthrs = feat_len_y * feat_len_x;
-    RgcnLayer1KernelImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
-        range_data, ids_data, eids_data, typeids_data, hidden_data, weight_data,
-        norm_data, ret_data, num_nodes, feat_len_y, feat_len_x, ntypes);
+    if constexpr (HybridAssignmentFlag) {
+      RgcnLayer1KernelHybridAssignImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
+          range_data, ids_data, eids_data, typeids_data, hidden_data,
+          weight_data, norm_data, ret_data, num_nodes, feat_len_y, feat_len_x,
+          ntypes, num_blocks_on_blocks_per_node);
+    } else {
+      RgcnLayer1KernelImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
+          range_data, ids_data, eids_data, typeids_data, hidden_data,
+          weight_data, norm_data, ret_data, num_nodes, feat_len_y, feat_len_x,
+          ntypes);
+    }
   } else {
     Idx ntypes = weight.size(1);
     Idx feat_len = weight.size(2);
     int nthrs = feat_len;
-    RgcnLayer0KernelImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
-        range_data, ids_data, eids_data, typeids_data, weight_data, norm_data,
-        ret_data, num_nodes, feat_len, ntypes);
+    if constexpr (HybridAssignmentFlag) {
+      RgcnLayer0KernelHybridAssignImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
+          range_data, ids_data, eids_data, typeids_data, weight_data, norm_data,
+          ret_data, num_nodes, feat_len, ntypes, num_blocks_on_blocks_per_node);
+    } else {
+      RgcnLayer0KernelImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
+          range_data, ids_data, eids_data, typeids_data, weight_data, norm_data,
+          ret_data, num_nodes, feat_len, ntypes);
+    }
   }
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer0Impl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
-                    at::Tensor& csr_eids, at::Tensor& csr_reltypes,
-                    at::Tensor& weight, at::Tensor& norm, at::Tensor& ret) {
+void Layer0Impl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
+                at::Tensor& csr_eids, at::Tensor& csr_reltypes,
+                at::Tensor& weight, at::Tensor& norm, at::Tensor& ret) {
   // NB: graphiler, seastar by default uses int64_t
-  _RgcnLayerImpl<int64_t, float>(csr_rowptr, csr_col_idx, csr_eids,
-                                 csr_reltypes, /*dummy_tensor*/ weight, weight,
-                                 norm, ret, false);
+  _LayerImpl<int64_t, float, false>(csr_rowptr, csr_col_idx, csr_eids,
+                                    csr_reltypes, /*dummy_tensor*/ weight,
+                                    weight, norm, ret, false, -1);
+}
+
+void Layer0HybridAssignmentImpl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
+                                at::Tensor& csr_eids, at::Tensor& csr_reltypes,
+                                at::Tensor& weight, at::Tensor& norm,
+                                at::Tensor& ret,
+                                int64_t num_blocks_on_blocks_per_node) {
+  // NB: graphiler, seastar by default uses int64_t
+  _LayerImpl<int64_t, float, true>(
+      csr_rowptr, csr_col_idx, csr_eids, csr_reltypes, /*dummy_tensor*/ weight,
+      weight, norm, ret, false, num_blocks_on_blocks_per_node);
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer1Impl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
-                    at::Tensor& csr_eids, at::Tensor& csr_reltypes,
-                    at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
-                    at::Tensor& ret) {
+void Layer1Impl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
+                at::Tensor& csr_eids, at::Tensor& csr_reltypes,
+                at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
+                at::Tensor& ret) {
   // NB: graphiler, seastar by default uses int64_t
-  _RgcnLayerImpl<int64_t, float>(csr_rowptr, csr_col_idx, csr_eids,
-                                 csr_reltypes, hidden, weight, norm, ret, true);
+  _LayerImpl<int64_t, float, false>(csr_rowptr, csr_col_idx, csr_eids,
+                                    csr_reltypes, hidden, weight, norm, ret,
+                                    true, -1);
+}
+
+void Layer1HybridAssignmentImpl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
+                                at::Tensor& csr_eids, at::Tensor& csr_reltypes,
+                                at::Tensor& hidden, at::Tensor& weight,
+                                at::Tensor& norm, at::Tensor& ret,
+                                int64_t num_blocks_on_blocks_per_node) {
+  // NB: graphiler, seastar by default uses int64_t
+  _LayerImpl<int64_t, float, true>(csr_rowptr, csr_col_idx, csr_eids,
+                                   csr_reltypes, hidden, weight, norm, ret,
+                                   true, num_blocks_on_blocks_per_node);
 }
 }  // namespace IntegratedCSR
 }  // namespace FwProp
 namespace BckProp {
 namespace IntegratedCSR {
 // the referential implementation from seastar
-template </*int XPU, */ typename Idx, typename DType>
-void _RgcnLayerImpl(
+template </*int XPU, */ typename Idx, typename DType, bool HybridAssignmentFlag>
+void _LayerImpl(
     // GraphRef graph,
     at::Tensor& transposed_csr_rowptr, at::Tensor& transposed_csr_col_idx,
     at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
     at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
     at::Tensor& grad_out, at::Tensor& grad_hidden, at::Tensor& grad_weight,
-    at::Tensor& ret, bool layer1_flag) {
+    at::Tensor& ret, bool layer1_flag, int num_blocks_on_blocks_per_node) {
   // assert(csr.IsSortedByEdgeType_CPU());
   // cudaDeviceSynchronize();
   // auto t1 = std::chrono::steady_clock::now();
@@ -123,17 +167,32 @@ void _RgcnLayerImpl(
     Idx feat_len_y = weight.size(1);
     Idx feat_len_x = weight.size(2);
     int nthrs = feat_len_y * feat_len_x;
-    RgcnLayer1BackwardKernelImpl<<<nblks, nthrs, 0, stream>>>(
-        range_data, ids_data, eids_data, typeids_data, hidden_data, weight_data,
-        norm_data, grad_out_data, grad_hidden_data, grad_weight_data, num_nodes,
-        feat_len_y, feat_len_x, ntypes);
+    if constexpr (HybridAssignmentFlag) {
+      RgcnLayer1BackwardKernelHybridAssignImpl<<<nblks, nthrs, 0, stream>>>(
+          range_data, ids_data, eids_data, typeids_data, hidden_data,
+          weight_data, norm_data, grad_out_data, grad_hidden_data,
+          grad_weight_data, num_nodes, feat_len_y, feat_len_x, ntypes,
+          num_blocks_on_blocks_per_node);
+    } else {
+      RgcnLayer1BackwardKernelImpl<<<nblks, nthrs, 0, stream>>>(
+          range_data, ids_data, eids_data, typeids_data, hidden_data,
+          weight_data, norm_data, grad_out_data, grad_hidden_data,
+          grad_weight_data, num_nodes, feat_len_y, feat_len_x, ntypes);
+    }
   } else {
     Idx ntypes = weight.size(1);
     Idx feat_len = ret.size(2);
     int nthrs = feat_len;
-    RgcnLayer0BackwardKernelImpl<<<nblks, nthrs, 0, stream>>>(
-        range_data, ids_data, eids_data, typeids_data, grad_out_data, norm_data,
-        ret_data, num_nodes, feat_len, ntypes);
+    if constexpr (HybridAssignmentFlag) {
+      RgcnLayer0BackwardKernelHybridAssignImpl<<<nblks, nthrs, 0, stream>>>(
+          range_data, ids_data, eids_data, typeids_data, grad_out_data,
+          norm_data, ret_data, num_nodes, feat_len, ntypes,
+          num_blocks_on_blocks_per_node);
+    } else {
+      RgcnLayer0BackwardKernelImpl<<<nblks, nthrs, 0, stream>>>(
+          range_data, ids_data, eids_data, typeids_data, grad_out_data,
+          norm_data, ret_data, num_nodes, feat_len, ntypes);
+    }
   }
   // cudaDeviceSynchronize();
   // auto t2 = std::chrono::steady_clock::now();
@@ -145,21 +204,36 @@ void _RgcnLayerImpl(
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer0Impl(
+void Layer0Impl(
     // GraphRef graph,
     at::Tensor& transposed_csr_rowptr, at::Tensor& transposed_csr_col_idx,
     at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
     at::Tensor& grad_out, at::Tensor& norm, at::Tensor& ret) {
   // NB: graphiler, seastar by default uses int64_t
-  _RgcnLayerImpl<int64_t, float>(
+  _LayerImpl<int64_t, float, false>(
       transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
       transposed_csr_reltypes, /*hidden_dummy*/ ret, /*weight_dummy*/ ret, norm,
       grad_out,
-      /*grad_hidden_dummy*/ ret, /*grad_weight_dummy*/ ret, ret, false);
+      /*grad_hidden_dummy*/ ret, /*grad_weight_dummy*/ ret, ret, false, -1);
+}
+
+void Layer0HybridAssignmentImpl(
+    // GraphRef graph,
+    at::Tensor& transposed_csr_rowptr, at::Tensor& transposed_csr_col_idx,
+    at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
+    at::Tensor& grad_out, at::Tensor& norm, at::Tensor& ret,
+    int64_t num_blocks_on_blocks_per_node) {
+  // NB: graphiler, seastar by default uses int64_t
+  _LayerImpl<int64_t, float, true>(
+      transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
+      transposed_csr_reltypes, /*hidden_dummy*/ ret, /*weight_dummy*/ ret, norm,
+      grad_out,
+      /*grad_hidden_dummy*/ ret, /*grad_weight_dummy*/ ret, ret, false,
+      num_blocks_on_blocks_per_node);
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer1Impl(
+void Layer1Impl(
     // GraphRef graph,
     at::Tensor& transposed_csr_rowptr, at::Tensor& transposed_csr_col_idx,
     at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
@@ -167,11 +241,28 @@ void RgcnLayer1Impl(
     at::Tensor& grad_out, at::Tensor& grad_hidden, at::Tensor& grad_weight) {
   // NB: graphiler, seastar by default uses int64_t
   // TODO: create dummy tensor instead
-  _RgcnLayerImpl<int64_t, float>(transposed_csr_rowptr, transposed_csr_col_idx,
-                                 transposed_csr_eids, transposed_csr_reltypes,
-                                 hidden, weight, norm, grad_out, grad_hidden,
-                                 grad_weight, /*ret_dummy*/ grad_weight, true);
+  _LayerImpl<int64_t, float, false>(
+      transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
+      transposed_csr_reltypes, hidden, weight, norm, grad_out, grad_hidden,
+      grad_weight, /*ret_dummy*/ grad_weight, true, -1);
 }
+
+void Layer1HybridAssignmentImpl(
+    // GraphRef graph,
+    at::Tensor& transposed_csr_rowptr, at::Tensor& transposed_csr_col_idx,
+    at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
+    at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
+    at::Tensor& grad_out, at::Tensor& grad_hidden, at::Tensor& grad_weight,
+    int64_t num_blocks_on_blocks_per_node) {
+  // NB: graphiler, seastar by default uses int64_t
+  // TODO: create dummy tensor instead
+  _LayerImpl<int64_t, float, true>(
+      transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
+      transposed_csr_reltypes, hidden, weight, norm, grad_out, grad_hidden,
+      grad_weight, /*ret_dummy*/ grad_weight, true,
+      num_blocks_on_blocks_per_node);
+}
+
 }  // namespace IntegratedCSR
 }  // namespace BckProp
 }  // namespace RGCN

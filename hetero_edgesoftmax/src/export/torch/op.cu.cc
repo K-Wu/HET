@@ -152,8 +152,15 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("rgcn_layer0_csr", RGCN::FwProp::IntegratedCSR::Layer0Impl);
   m.def("rgcn_layer0_backward_csr", RGCN::BckProp::IntegratedCSR::Layer0Impl);
   m.def("rgcn_layer1_csr", RGCN::FwProp::IntegratedCSR::Layer1Impl);
-  m.def("rgcn_layer1_backward_csr",
-        RGCN::BckProp::IntegratedCSR::RgcnLayer1Impl);
+  m.def("rgcn_layer1_backward_csr", RGCN::BckProp::IntegratedCSR::Layer1Impl);
+  m.def("rgcn_layer0_csr_hybrid_assign",
+        RGCN::FwProp::IntegratedCSR::Layer0HybridAssignmentImpl);
+  m.def("rgcn_layer0_backward_csr_hybrid_assign",
+        RGCN::BckProp::IntegratedCSR::Layer0HybridAssignmentImpl);
+  m.def("rgcn_layer1_csr_hybrid_assign",
+        RGCN::FwProp::IntegratedCSR::Layer1HybridAssignmentImpl);
+  m.def("rgcn_layer1_backward_csr_hybrid_assign",
+        RGCN::BckProp::IntegratedCSR::Layer1HybridAssignmentImpl);
   // RGCN COO Declaration
   m.def("rgcn_layer1_coo", RgcnLayer1Impl_wrapper_integratedcoo);
   m.def("rgcn_layer1_backward_coo",
