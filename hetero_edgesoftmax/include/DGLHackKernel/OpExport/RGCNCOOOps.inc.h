@@ -137,9 +137,9 @@ void RgcnLayer1BackwardImpl_wrapper_integratedcoo(
     at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
     at::Tensor& grad_out, at::Tensor& grad_hidden, at::Tensor& grad_weight) {
   // NB: graphiler, seastar by default uses int64_t
-  // TODO: create dummy tensor instead
+  at::Tensor dummy_tensor;
   _RgcnLayerBackwardImpl_wrapper_integratedcoo<int64_t, float>(
       transposed_coo_row_idx, transposed_coo_col_idx, transposed_coo_eids,
       transposed_coo_reltypes, hidden, weight, norm, grad_out, grad_hidden,
-      grad_weight, /*ret_dummy*/ grad_weight, true);
+      grad_weight, /*ret_dummy*/ dummy_tensor, true);
 }

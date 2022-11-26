@@ -6,6 +6,10 @@
 #include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.h"
 #include "EdgeSoftmax_1/EdgeSoftmaxCSR.h"
 
+// TODO: add torch tensor version of HGTBackPropGradientSMAFusion and
+// HGTForwardImpl from
+// [[hetero_edgesoftmax/include/DGLHackKernel/OpPrototyping/HGTProtoOps.h]]
+
 namespace HET {
 namespace TorchExport {
 namespace HGT {

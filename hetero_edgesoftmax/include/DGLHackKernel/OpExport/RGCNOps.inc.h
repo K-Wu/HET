@@ -5,6 +5,9 @@
 #include <torch/extension.h>
 #include <torch/library.h>
 
+// TODO: create dummy tensor instead whenever unused field in torch export
+// functions
+
 namespace HET {
 
 namespace TorchExport {
@@ -74,8 +77,9 @@ void Layer0Impl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
                 at::Tensor& csr_eids, at::Tensor& csr_reltypes,
                 at::Tensor& weight, at::Tensor& norm, at::Tensor& ret) {
   // NB: graphiler, seastar by default uses int64_t
+  at::Tensor dummy_tensor;
   _LayerImpl<int64_t, float, false>(csr_rowptr, csr_col_idx, csr_eids,
-                                    csr_reltypes, /*dummy_tensor*/ weight,
+                                    csr_reltypes, /*dummy_hidden*/ dummy_tensor,
                                     weight, norm, ret, false, -1);
 }
 
@@ -85,9 +89,11 @@ void Layer0HybridAssignmentImpl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
                                 at::Tensor& ret,
                                 int64_t num_blocks_on_blocks_per_node) {
   // NB: graphiler, seastar by default uses int64_t
-  _LayerImpl<int64_t, float, true>(
-      csr_rowptr, csr_col_idx, csr_eids, csr_reltypes, /*dummy_tensor*/ weight,
-      weight, norm, ret, false, num_blocks_on_blocks_per_node);
+  at::Tensor dummy_tensor;
+  _LayerImpl<int64_t, float, true>(csr_rowptr, csr_col_idx, csr_eids,
+                                   csr_reltypes, /*dummy_hidden*/ dummy_tensor,
+                                   weight, norm, ret, false,
+                                   num_blocks_on_blocks_per_node);
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
@@ -210,11 +216,13 @@ void Layer0Impl(
     at::Tensor& transposed_csr_eids, at::Tensor& transposed_csr_reltypes,
     at::Tensor& grad_out, at::Tensor& norm, at::Tensor& ret) {
   // NB: graphiler, seastar by default uses int64_t
+  at::Tensor dummy_tensor;
   _LayerImpl<int64_t, float, false>(
       transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
-      transposed_csr_reltypes, /*hidden_dummy*/ ret, /*weight_dummy*/ ret, norm,
-      grad_out,
-      /*grad_hidden_dummy*/ ret, /*grad_weight_dummy*/ ret, ret, false, -1);
+      transposed_csr_reltypes, /*hidden_dummy*/ dummy_tensor,
+      /*weight_dummy*/ dummy_tensor, norm, grad_out,
+      /*grad_hidden_dummy*/ ret, /*grad_weight_dummy*/ dummy_tensor, ret, false,
+      -1);
 }
 
 void Layer0HybridAssignmentImpl(
@@ -224,12 +232,13 @@ void Layer0HybridAssignmentImpl(
     at::Tensor& grad_out, at::Tensor& norm, at::Tensor& ret,
     int64_t num_blocks_on_blocks_per_node) {
   // NB: graphiler, seastar by default uses int64_t
+  at::Tensor dummy_tensor;
   _LayerImpl<int64_t, float, true>(
       transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
-      transposed_csr_reltypes, /*hidden_dummy*/ ret, /*weight_dummy*/ ret, norm,
-      grad_out,
-      /*grad_hidden_dummy*/ ret, /*grad_weight_dummy*/ ret, ret, false,
-      num_blocks_on_blocks_per_node);
+      transposed_csr_reltypes, /*hidden_dummy*/ dummy_tensor,
+      /*weight_dummy*/ dummy_tensor, norm, grad_out,
+      /*grad_hidden_dummy*/ dummy_tensor, /*grad_weight_dummy*/ dummy_tensor,
+      ret, false, num_blocks_on_blocks_per_node);
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
@@ -240,11 +249,11 @@ void Layer1Impl(
     at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
     at::Tensor& grad_out, at::Tensor& grad_hidden, at::Tensor& grad_weight) {
   // NB: graphiler, seastar by default uses int64_t
-  // TODO: create dummy tensor instead
+  at::Tensor dummy_tensor;
   _LayerImpl<int64_t, float, false>(
       transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
       transposed_csr_reltypes, hidden, weight, norm, grad_out, grad_hidden,
-      grad_weight, /*ret_dummy*/ grad_weight, true, -1);
+      grad_weight, /*ret_dummy*/ dummy_tensor, true, -1);
 }
 
 void Layer1HybridAssignmentImpl(
@@ -255,11 +264,11 @@ void Layer1HybridAssignmentImpl(
     at::Tensor& grad_out, at::Tensor& grad_hidden, at::Tensor& grad_weight,
     int64_t num_blocks_on_blocks_per_node) {
   // NB: graphiler, seastar by default uses int64_t
-  // TODO: create dummy tensor instead
+  at::Tensor dummy_tensor;
   _LayerImpl<int64_t, float, true>(
       transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
       transposed_csr_reltypes, hidden, weight, norm, grad_out, grad_hidden,
-      grad_weight, /*ret_dummy*/ grad_weight, true,
+      grad_weight, /*ret_dummy*/ dummy_tensor, true,
       num_blocks_on_blocks_per_node);
 }
 

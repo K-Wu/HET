@@ -502,8 +502,8 @@ int _HGTExperimental_main(
   // graph.num_rows, num_heads, out_feat});
   MySimpleNDArray<DTypeVec4, thrust::device_allocator<DTypeVec4>> attention =
       GenerateRandomNDArray<DTypeVec4>({graph.total_num_nnzs, 1});
-  HGTForwardImpl(deivce_graph, num_heads, in_feat, out_feat, node_features,
-                 weight, attention);
+  HET::OpPrototyping::HGTForwardImpl(deivce_graph, num_heads, in_feat, out_feat,
+                                     node_features, weight, attention);
   return 0;
 }
 
