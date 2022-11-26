@@ -174,7 +174,9 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
               // (relation, node) but do not compress the (relation, node)
               // matrix. It could be a case in subgraph where compressing along
               // the node dimension may not be worth it.
-              assert(0 && "should be non-reachable not implemented");
+              CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                  CompactAsOfNodeFlag && RelationalFlag && FullCartesianFlag,
+                  "should be non-reachable not implemented");
             }
             Idx src_vid_temp = find_relational_compact_as_of_node_index(
                 etype, src_id, unique_srcs_and_dests_node_indices,

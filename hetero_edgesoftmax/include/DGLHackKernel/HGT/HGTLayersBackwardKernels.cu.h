@@ -279,3 +279,196 @@ void HGTBackPropGradientSMAFusion(
                    .count()
             << " ms" << std::endl;
 }
+
+// based on _fusedGatBackwardGradFeatSrc, as it is to calculate the gradient of
+// message
+// TODO: add mu into the term
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag, bool ETypeRelPtrFlag>
+__device__ __forceinline__ void
+_hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
+    BackwardGatFusedData<Idx, DType> gdata, const Idx* row_offsets,
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+  Idx e_xlen = gdata.e_xlen;
+  Idx hidden_xlen = gdata.message_src_xlen / e_xlen;
+  for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
+    Idx start_off = row_offsets[src_vid];
+    Idx end_off = row_offsets[src_vid + 1];
+    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
+         head_idx < e_xlen; head_idx += blockDim.x * gridDim.x) {
+      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
+           feat_idx += blockDim.y) {
+        DType s = 0.;
+        Idx message_src_offset = -1;
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          // in this case, message_src_offset is the same regardless of which
+          // outgoing edge we deal with
+          message_src_offset = src_vid * gdata.message_src_xlen +
+                               head_idx * hidden_xlen + feat_idx;
+        }
+        for (Idx e = start_off; e < end_off; ++e) {
+          Idx eid = gdata.eids[e];
+          Idx dst_vid = column_indices[e];
+          Idx dst_vid_relational = -1;
+          if constexpr (!CompactAsOfNodeFlag) {
+            // in this case, message_src_offset, er_idx and el_idx are related
+            // to edge id, regardless of the type of the edge
+            message_src_offset = eid * gdata.message_src_xlen +
+                                 head_idx * hidden_xlen + feat_idx;
+          } else {  // CompactAsOfNodeFlag
+            if constexpr (RelationalFlag) {
+              // Idx etype = etypes[e];
+              Idx etype = -1;
+              if constexpr (ETypeRelPtrFlag) {
+                etype = binary_search(num_relations, etypes, e);
+              } else {  // !ETypeRelPtrFlag
+                etype = etypes[e];
+              }
+              Idx src_vid_relational = find_relational_compact_as_of_node_index(
+                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              message_src_offset = src_vid_relational * gdata.message_src_xlen +
+                                   head_idx * hidden_xlen + feat_idx;
+              dst_vid_relational = find_relational_compact_as_of_node_index(
+                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+            }
+          }
+          // TODO: maybe it's better to cache exp/sum to reduce mem traffic as
+          // well as redundant computation?
+          Idx sum_vid = dst_vid;
+          if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
+            sum_vid = dst_vid_relational;
+          }
+          if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
+            atomicAdd(gdata.grad_message_src + message_src_offset,
+                      gdata.unnormalized_attn_score[eid * e_xlen + head_idx] /
+                          gdata.edge_softmax_sum[sum_vid * e_xlen + head_idx] *
+                          gdata.grad_out[dst_vid * gdata.message_src_xlen +
+                                         head_idx * hidden_xlen + feat_idx]);
+          } else {  // CompactAsOfNodeFlag && !RelationalFlag
+            // exp scheme (both eid and head_idx) could be used for attn_score
+            // message_src's could be used for message_src
+            s += gdata.unnormalized_attn_score[eid * e_xlen + head_idx] /
+                 gdata.edge_softmax_sum[sum_vid * e_xlen + head_idx] *
+                 gdata.grad_out[dst_vid * gdata.message_src_xlen +
+                                head_idx * hidden_xlen + feat_idx];
+          }
+        }
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          gdata.grad_message_src[message_src_offset] = s;
+        }
+      }
+    }
+  }
+}
+// S_j = expf(z_j) / sum_k expf(z_k)
+// deltaz_edge=S_edge*deltaout_dst^T*message_edge - S_edge * deltaout_dst^T *
+// out_dst
+// TODO: add mu into the term
+// based on _fusedGatBackwardGradElEr, as it is to calculate gradient of
+// attention
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag, bool ETypeRelPtrFlag>
+__device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
+    BackwardGatFusedData<Idx, DType> gdata, const Idx* row_offsets,
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+  if constexpr (!CompactAsOfNodeFlag) {
+    CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(CompactAsOfNodeFlag,
+                                       "not implemented yet");
+  }
+  Idx e_xlen = gdata.e_xlen;
+  Idx hidden_xlen = gdata.message_src_xlen / e_xlen;
+  for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
+    Idx start_off = row_offsets[src_vid];
+    Idx end_off = row_offsets[src_vid + 1];
+    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
+         head_idx < e_xlen; head_idx += blockDim.x * gridDim.x) {
+      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
+           feat_idx += blockDim.y) {
+        DType s = 0.;
+        Idx message_src_offset = -1;
+        Idx message_src_idx = -1;
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          // in this case, message_src_offset is the same regardless of which
+          // outgoing edge we deal with
+          message_src_offset = src_vid * gdata.message_src_xlen +
+                               head_idx * hidden_xlen + feat_idx;
+          message_src_idx =
+              (src_vid * e_xlen + head_idx) * hidden_xlen + feat_idx;
+        }
+        for (Idx e = start_off; e < end_off; ++e) {
+          Idx edge_offset = gdata.eids[e] * e_xlen + head_idx;
+          Idx eid = gdata.eids[e];
+          Idx dst_vid = column_indices[e];
+          Idx edge_softmax_sum_idx = -1;
+          Idx dst_vid_relational = -1;
+          if constexpr (!CompactAsOfNodeFlag) {
+            // in this case, message_src_offset, edge_softmax_sum_idx and
+            // message_src_idx are related to edge id, regardless of the type of
+            // the edge
+            message_src_offset = eid * gdata.message_src_xlen +
+                                 head_idx * hidden_xlen + feat_idx;
+            edge_softmax_sum_idx = eid * e_xlen + head_idx;
+            message_src_idx =
+                (eid * e_xlen + head_idx) * hidden_xlen + feat_idx;
+          } else {  // CompactAsOfNodeFlag
+            if constexpr (!RelationalFlag) {
+              edge_softmax_sum_idx = dst_vid * e_xlen + head_idx;
+            } else {
+              // in this case, edge_softmax_sum_idx (sum's index) is related to
+              // (relation, unique node index) message_src_idx is related to
+              // (relation, unique node index) message_src_offset is related to
+              // (relation, unique node index) Idx etype = etypes[e];
+              Idx etype = -1;
+              if constexpr (ETypeRelPtrFlag) {
+                etype = binary_search(num_relations, etypes, e);
+              } else {
+                etype = etypes[e];
+              }
+              dst_vid_relational = find_relational_compact_as_of_node_index(
+                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              edge_softmax_sum_idx = dst_vid_relational * e_xlen + head_idx;
+              Idx src_vid_relational = find_relational_compact_as_of_node_index(
+                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              message_src_idx =
+                  (src_vid_relational * e_xlen + head_idx) * hidden_xlen +
+                  feat_idx;
+              message_src_offset = src_vid_relational * gdata.message_src_xlen +
+                                   head_idx * hidden_xlen + feat_idx;
+            }
+          }
+          Idx dst_out_offset = dst_vid * gdata.message_src_xlen +
+                               head_idx * hidden_xlen + feat_idx;
+          DType grad_exp = gdata.grad_out[dst_out_offset] *
+                           (gdata.message_src[message_src_offset] -
+                            gdata.ret[dst_out_offset]) /
+                           gdata.sum[edge_softmax_sum_idx];
+
+          DType grad_for_this_feat_idx =
+              gdata.grad_out[dst_out_offset] *
+              (gdata.message_src[message_src_offset] -
+               gdata.out[dst_out_offset]) *
+              gdata.attn_score[edge_offset] / gdata.sum[edge_softmax_sum_idx];
+          // el idx scheme could be used for message (only item idx, not the
+          // feature idx scheme) exp idx scheme could be used for attn_score
+
+          s += grad_for_this_feat_idx;
+          if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
+            atomicAdd(gdata.grad_message_src + message_src_idx,
+                      grad_for_this_feat_idx);
+          }
+        }
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          atomicAdd(gdata.grad_message_src + message_src_idx, s);
+        }
+      }
+    }
+  }
+}

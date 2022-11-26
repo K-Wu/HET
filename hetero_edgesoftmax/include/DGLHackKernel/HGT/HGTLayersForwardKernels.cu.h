@@ -233,3 +233,182 @@ constexpr auto HGTVanillaEdgeAttentionSecondStage =
 // and t is stored per node.
 constexpr auto HGTCompactAsOfNodesEdgeAttentionSecondStage =
     GeneralEdgeMessageMultiplyNodeFeature<float, true, false, float**>;
+
+// based on _gatSumProdZipDivKernel originally from seastar dgl-hack
+// src/kernel/cuda/binary_reduce_impl.cu This kernel calculates attn_score based
+// on unnormalized attn_score and edge_sfotmax sum at each destination nodes,
+// and apply it in the fly to each edge message, and finally accumulates the
+// result to the destination node.
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
+__device__ __forceinline__ void
+_hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
+    HgtData<Idx, DType> gdata, const Idx* row_offsets,
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+  Idx e_xlen = gdata.e_xlen;
+  Idx hidden_xlen = gdata.feat_src_xlen / e_xlen;
+  for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
+    Idx start_off = *(row_offsets + dst_vid);
+    Idx end_off = *(row_offsets + dst_vid + 1);
+    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
+         head_idx < e_xlen; head_idx += blockDim.x * gridDim.x) {
+      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
+           feat_idx += blockDim.y) {
+        DType s = 0.;
+        for (Idx eidx = start_off; eidx < end_off; eidx++) {
+          Idx src_vid = column_indices[eidx];
+          Idx feat_src_entry_id = -1;
+          Idx edge_id = gdata.eids[eidx];
+          if constexpr (RelationalFlag) {
+            Idx sum_idx = -1;
+            Idx etype = -1;
+            if constexpr (ETypeRelPtrFlag) {
+              etype = binary_search(num_relations, etypes, eidx);
+            } else {
+              etype = etypes[eidx];
+            }
+            if constexpr (CompactAsOfNodeFlag) {
+              feat_src_entry_id = find_relational_compact_as_of_node_index(
+                  etype, src_vid, unique_srcs_and_dests_node_indices,
+                  unique_srcs_and_dests_rel_ptr);
+
+            } else {
+              // NB: we need to use edge_id instead of eidx here
+              feat_src_entry_id = edge_id;
+            }
+
+            if constexpr (FullCartesianFlag) {
+              // NB: This is the case where we have the data stored in
+              // (relation, node) but do not compress the (relation, node)
+              // matrix. It could be a case in subgraph where compressing along
+              // the node dimension may not be worth it.
+              CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                  FullCartesianFlag, "should be non-reachable not implemented");
+            } else {
+              sum_idx = find_relational_compact_as_of_node_index(
+                  etype, dst_vid, unique_srcs_and_dests_node_indices,
+                  unique_srcs_and_dests_rel_ptr);
+            }
+            // NB: e_xlen is the number of heads, feat_src_xlen is
+            // message_out_dim, hidden_xlen is message_out_dim//num_heads
+            s += (gdata.mu[etype] *
+                  gdata.unnormalized_attn_score[edge_id * e_xlen + head_idx] /
+                  gdata.edge_softmax_sum[sum_idx * e_xlen + head_idx] *
+                  gdata.message[feat_src_entry_id * gdata.feat_src_xlen +
+                                head_idx * hidden_xlen + feat_idx]);
+          } else {  // !RelationalFlag
+            // NB: feat_src_entry_id varies between edge_id and src_vid
+            // depending on compactasofnodeflag
+            if constexpr (CompactAsOfNodeFlag) {
+              feat_src_entry_id = src_vid;
+            } else {
+              feat_src_entry_id = edge_id;
+            }
+            s += (*gdata.mu) *
+                 gdata.unnormalized_attn_score[edge_id * e_xlen + head_idx] /
+                 gdata.edge_softmax_sum[dst_vid * e_xlen + head_idx] *
+                 gdata.message[feat_src_entry_id * gdata.feat_src_xlen +
+                               head_idx * hidden_xlen + feat_idx];
+          }
+        }
+
+        gdata.ret[dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen +
+                  feat_idx] = s;
+      }
+    }
+  }
+}
+
+// based on _gatExpLeakyReluSumKernel originally from seastar dgl-hack
+// src/kernel/cuda/binary_reduce_impl.cu this function only calculates edge
+// softmax sum at each destination node, where the edge softmax normalization of
+// attention was expected to not only do such accumulation, but also use it as
+// the devisor to normalize each edge.
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
+__device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
+    HgtData<Idx, DType> gdata, const Idx* row_offsets,
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+  // extern __shared__ DType er[];
+  Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
+  Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
+
+  Idx e_xlen = gdata.e_xlen;
+  for (Idx dst_vid = ty; dst_vid < num_rows;
+       dst_vid += blockDim.y * gridDim.y) {
+    Idx start_off = *(row_offsets + dst_vid);
+    Idx end_off = *(row_offsets + dst_vid + 1);
+
+    for (Idx feat_idx = tx; feat_idx < e_xlen;
+         feat_idx += blockDim.x * gridDim.x) {
+      // 1. Load dstnation vertex into shared memory
+      // er[threadIdx.x] = gdata.er[feat_off_dst];
+      //__syncthreads();
+      // 2. Do the computation
+      DType sum = 0.;
+      for (Idx eidx = start_off; eidx < end_off; ++eidx) {
+        Idx src_id = *(column_indices + eidx);
+        Idx feat_off_src = -1;
+        Idx edge_id = gdata.eids[eidx];
+        Idx dst_vid_relational = -1;
+        Idx etype = -1;
+        if constexpr (RelationalFlag) {
+          if constexpr (ETypeRelPtrFlag) {
+            etype = binary_search(num_relations, etypes, eidx);
+          } else {
+            etype = etypes[eidx];
+          }
+          dst_vid_relational = find_relational_compact_as_of_node_index(
+              etype, dst_vid, unique_srcs_and_dests_node_indices,
+              unique_srcs_and_dests_rel_ptr);
+        }
+        if constexpr (CompactAsOfNodeFlag) {
+          if constexpr (RelationalFlag) {
+            // Idx etype = etypes[eidx];
+            if constexpr (FullCartesianFlag) {
+              // NB: This is the case where we have the data stored in
+              // (relation, node) but do not compress the (relation, node)
+              // matrix. It could be a case in subgraph where compressing along
+              // the node dimension may not be worth it.
+              CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                  CompactAsOfNodeFlag && RelationalFlag && FullCartesianFlag,
+                  "should be non-reachable not implemented");
+            }
+            Idx src_vid_temp = find_relational_compact_as_of_node_index(
+                etype, src_id, unique_srcs_and_dests_node_indices,
+                unique_srcs_and_dests_rel_ptr);
+            feat_off_src = src_vid_temp * e_xlen + feat_idx;
+          } else {
+            feat_off_src = src_id * e_xlen + feat_idx;
+          }
+        } else {
+          // per edge
+          feat_off_src = edge_id * e_xlen + feat_idx;
+        }
+        // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] + er[threadIdx.x],
+        // gdata.leaky_relu_slope);
+        // TODO: we need to determine where to calculate expf as the
+        // non-linearity of edgesoftmax
+        DType tmp = gdata.unnormalized_attn_score[feat_off_src];
+        // NB: e_xlen is num_heads
+        if constexpr (RelationalFlag) {
+          // NB: double check dst_vid_relational is defined when
+          // !CompactAsOfNodeFlag && RelationalFlag
+          // TODO: fix this and align dst_vid_relational definition with
+          // _fusedGatBackwardGradElErFeatSrcFused
+          atomicAdd(&gdata.edge_softmax_sum[Idx(dst_vid_relational * e_xlen) +
+                                            feat_idx],
+                    tmp);
+        }
+        sum += tmp;
+      }
+      if constexpr (!RelationalFlag) {
+        gdata.edge_softmax_sum[Idx(dst_vid * e_xlen) + feat_idx] = sum;
+      }
+    }
+  }
+}

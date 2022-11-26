@@ -46,7 +46,9 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
             // (relation, node) but do not compress the (relation, node)
             // matrix. It could be a case in subgraph where compressing along
             // the node dimension may not be worth it.
-            assert(0 && "should be non-reachable not implemented");
+            CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                RelationalFlag && !CompactAsOfNodeFlag,
+                "should be non-reachable not implemented");
           }
           s += (gdata.exp[edge_id * e_xlen + head_idx] /
                 gdata.sum[sum_idx * e_xlen + head_idx] *
@@ -156,7 +158,9 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
           // (relation, node) but do not compress the (relation, node)
           // matrix. It could be a case in subgraph where compressing along
           // the node dimension may not be worth it.
-          assert(0 && "should be non-reachable not implemented");
+          CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+              !CompactAsOfNodeFlag && RelationalFlag,
+              "should be non-reachable not implemented");
         } else {
           feat_off_src = edge_id * e_xlen + feat_idx;
           feat_off_dst = edge_id * e_xlen + feat_idx;

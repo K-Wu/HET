@@ -281,7 +281,8 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
   if constexpr (!CompactAsOfNodeFlag) {
-    assert(0 && "not implemented yet");
+    CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(CompactAsOfNodeFlag,
+                                       "not implemented yet");
   }
   Idx e_xlen = gdata.e_xlen;
   Idx hidden_xlen = gdata.feat_src_xlen / e_xlen;
