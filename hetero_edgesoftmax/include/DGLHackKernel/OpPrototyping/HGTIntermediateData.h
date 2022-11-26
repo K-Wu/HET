@@ -3,6 +3,8 @@
 #include "DGLHackKernel/HGT/HGTPreprocessing.h"
 #include "DGLHackKernel/NodeLinear.h"
 
+namespace HET {
+namespace OpPrototyping {
 // this structure also involves input and output data
 struct HGTLayerIntermediateData {
   MySimpleNDArray<float, thrust::device_allocator<float>>
@@ -167,3 +169,5 @@ CreateHGTLayerInputIntermediateOutputData(
       hyper_params.PERF_ltsgemm_workspaceSize, intermediate_node_vect,
       EdgeAttention);
 }
+}  // namespace OpPrototyping
+}  // namespace HET

@@ -66,7 +66,9 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
               // NB: we need to use edge_id instead of eidx here
               feat_src_entry_id = edge_id;
             }
-
+            // TODO: actually full cartesian can be applied both to
+            // feat_src_entry_id and sum_idx, in future we may need to add an
+            // additional FullCartesianFlag to cover all cases
             if constexpr (FullCartesianFlag) {
               // NB: This is the case where we have the data stored in
               // (relation, node) but do not compress the (relation, node)

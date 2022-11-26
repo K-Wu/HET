@@ -58,12 +58,13 @@ int FusedGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph,
 
   float slope = 0.2;
 
-  FusedGatKernelImpl<Idx, DType>(incsr, feat_src, el, er, sum, exp, ret, slope);
+  HET::OpPrototyping::FusedGatKernelImpl<Idx, DType>(incsr, feat_src, el, er,
+                                                     sum, exp, ret, slope);
   // TODO: check if transposed eid is needed here
-  BackwardFusedGatKernelImpl<Idx, DType, true>(
+  HET::OpPrototyping::BackwardFusedGatKernelImpl<Idx, DType, true>(
       outcsr, feat_src, el, er, sum, exp, ret, grad_out, grad_feat_src, grad_el,
       grad_er, slope);
-  BackwardFusedGatKernelImpl<Idx, DType, false>(
+  HET::OpPrototyping::BackwardFusedGatKernelImpl<Idx, DType, false>(
       outcsr, feat_src, el, er, sum, exp, ret, grad_out, grad_feat_src, grad_el,
       grad_er, slope);
   return 0;
@@ -108,7 +109,7 @@ int HGTBackPropGradientSMAFusionProfiling_main(
   MySimpleNDArray<DType, thrust::device_allocator<DType>> sigmas =
       GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, num_heads});
 
-  HGTBackPropGradientSMAFusion<Idx, DType>(
+  HET::OpPrototyping::HGTBackPropGradientSMAFusion<Idx, DType>(
       transposed_csr,
       grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
       grad_a,               // |E| * N_HEADS
@@ -609,9 +610,11 @@ int _RGCNLayer1Profiling_main(
     grad_hidden = GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, in_feat});
     grad_weight =
         GenerateRandomNDArray<DType>({csr_h.num_rels, in_feat, out_feat});
-    RgcnLayer1Impl<Idx, DType>(csr, hidden, weight, norm, ret);
-    RgcnLayer1BackwardImpl<Idx, DType>(transposed_csr, hidden, weight, norm,
-                                       grad_out, grad_hidden, grad_weight);
+    HET::OpPrototyping::RgcnLayer1Impl<Idx, DType>(csr, hidden, weight, norm,
+                                                   ret);
+    HET::OpPrototyping::RgcnLayer1BackwardImpl<Idx, DType>(
+        transposed_csr, hidden, weight, norm, grad_out, grad_hidden,
+        grad_weight);
   }
   if (flagUseMyHyb || flagCheckCorrect) {
     ret2 = GenerateRandomNDArray<DType>({csr_h.num_rows, out_feat});

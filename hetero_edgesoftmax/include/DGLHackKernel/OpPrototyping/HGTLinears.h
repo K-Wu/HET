@@ -7,6 +7,8 @@
 #include "DGLHackKernel/OpPrototyping/HGTIntermediateData.h"
 #include "DGLHackKernel/OpPrototyping/HGTProtoOps.h"
 
+namespace HET {
+namespace OpPrototyping {
 // TODO: collect input data into a struct; malloc intermediate and output data.
 
 // assume nodes indices are currently sorted according to their node type, or
@@ -43,8 +45,8 @@ void KLinearByNodeType(
             << (intermediate_data->NodeInputFeatures).Ptr() << " "
             << (intermediate_data->KLinearOutput).Ptr() << " "
             << (weights->KLinearBias).Ptr() << " "
-            << (weights->KLinearWeight).Ptr() << std::endl;
-  LinearByNodeType((weights->KLinearWeight).Ptr(),
+            << (weights->KLinearWeights).Ptr() << std::endl;
+  LinearByNodeType((weights->KLinearWeights).Ptr(),
                    (intermediate_data->NodeInputFeatures).Ptr(),
                    (intermediate_data->KLinearOutput).Ptr(),
                    (weights->KLinearBias).Ptr(), hyper_params.klinear_out_dim,
@@ -63,8 +65,8 @@ void QLinearByNodeType(
             << (intermediate_data->NodeInputFeatures).Ptr() << " "
             << (intermediate_data->QLinearOutput).Ptr() << " "
             << (weights->QLinearBias).Ptr() << " "
-            << (weights->QLinearWeight).Ptr() << std::endl;
-  LinearByNodeType((weights->QLinearWeight).Ptr(),
+            << (weights->QLinearWeights).Ptr() << std::endl;
+  LinearByNodeType((weights->QLinearWeights).Ptr(),
                    (intermediate_data->NodeInputFeatures).Ptr(),
                    (intermediate_data->QLinearOutput).Ptr(),
                    (weights->QLinearBias).Ptr(), hyper_params.qlinear_out_dim,
@@ -81,8 +83,8 @@ void VLinearByNodeType(
             << (intermediate_data->NodeInputFeatures).Ptr() << " "
             << (intermediate_data->VLinearOutput).Ptr() << " "
             << (weights->VLinearBias).Ptr() << " "
-            << (weights->VLinearWeight).Ptr() << std::endl;
-  LinearByNodeType((weights->VLinearWeight).Ptr(),
+            << (weights->VLinearWeights).Ptr() << std::endl;
+  LinearByNodeType((weights->VLinearWeights).Ptr(),
                    (intermediate_data->NodeInputFeatures).Ptr(),
                    (intermediate_data->VLinearOutput).Ptr(),
                    (weights->VLinearBias).Ptr(), hyper_params.vlinear_out_dim,
@@ -100,8 +102,8 @@ void ALinearByNodeType(
             << (intermediate_data->NodeInputFeatures).Ptr() << " "
             << (intermediate_data->ALinearOutput).Ptr() << " "
             << (weights->ALinearBias).Ptr() << " "
-            << (weights->ALinearWeight).Ptr() << std::endl;
-  LinearByNodeType((weights->ALinearWeight).Ptr(),
+            << (weights->ALinearWeights).Ptr() << std::endl;
+  LinearByNodeType((weights->ALinearWeights).Ptr(),
                    (intermediate_data->NodeInputFeatures).Ptr(),
                    (intermediate_data->ALinearOutput).Ptr(),
                    (weights->ALinearBias).Ptr(), hyper_params.alinear_out_dim,
@@ -110,3 +112,5 @@ void ALinearByNodeType(
                    (intermediate_data->ltsgemm_workspace).Ptr(),
                    intermediate_data->ltsgemm_workspaceSize);
 }
+}  // namespace OpPrototyping
+}  // namespace HET

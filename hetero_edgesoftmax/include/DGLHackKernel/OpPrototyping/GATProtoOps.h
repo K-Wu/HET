@@ -4,6 +4,8 @@
 #include "DGLHackKernel/GAT/FusedGAT.cu.h"
 #include "DGLHackKernel/GAT/FusedGATBackward.cu.h"
 
+namespace HET {
+namespace OpPrototyping {
 // from seastar dgl-hack
 template </*int XPU, */ typename Idx, typename DType>
 void FusedGatKernelImpl(
@@ -234,3 +236,5 @@ void BackwardFusedGatKernelImpl(
       << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
       << " ms" << std::endl;
 }
+}  // namespace OpPrototyping
+}  // namespace HET

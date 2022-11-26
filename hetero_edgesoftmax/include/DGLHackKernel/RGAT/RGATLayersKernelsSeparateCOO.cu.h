@@ -5,7 +5,7 @@
 // edge-centric schedule cf. gatSumProdZipDivKernel in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag>
+          bool RelationalFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
     GatFusedData<Idx, DType> gdata, const Idx* etypes, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
@@ -41,14 +41,20 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
             sum_idx = find_relational_compact_as_of_node_index(
                 etype, dst_vid, unique_srcs_and_dests_node_indices,
                 unique_srcs_and_dests_rel_ptr);
+            if constexpr (FullCartesianFlag) {
+              // NB: This is the case where we have the data stored in
+              // (relation, node) but do not compress the (relation, node)
+              // matrix. It could be a case in subgraph where compressing along
+              // the node dimension may not be worth it.
+              CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                  (FullCartesianFlag) && CompactAsOfNodeFlag,
+                  "should be non-reachable not implemented");
+            }
           } else {
-            // NB: This is the case where we have the data stored in
-            // (relation, node) but do not compress the (relation, node)
-            // matrix. It could be a case in subgraph where compressing along
-            // the node dimension may not be worth it.
-            CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-                RelationalFlag && !CompactAsOfNodeFlag,
-                "should be non-reachable not implemented");
+            feat_src_entry_id = edge_id;
+            sum_idx = find_relational_compact_as_of_node_index(
+                etype, dst_vid, unique_srcs_and_dests_node_indices,
+                unique_srcs_and_dests_rel_ptr);
           }
           s += (gdata.exp[edge_id * e_xlen + head_idx] /
                 gdata.sum[sum_idx * e_xlen + head_idx] *
@@ -89,7 +95,8 @@ __global__ void gatSumProdZipDivKernel_relational_separate_coo(
     const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  _gatSumProdZipDivKernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag, true>(
+  _gatSumProdZipDivKernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag, true,
+                                        false>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       num_relations);
@@ -98,7 +105,7 @@ __global__ void gatSumProdZipDivKernel_relational_separate_coo(
 // edge-centric schedule cf. gatExpLeakyReluSumKernel in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag>
+          bool RelationalFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
     GatFusedData<Idx, DType> gdata, const Idx* etypes, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
@@ -149,22 +156,21 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
               unique_srcs_and_dests_rel_ptr);
           feat_off_src = src_vid_temp * e_xlen + feat_idx;
           feat_off_dst = dst_vid_relational * e_xlen + feat_idx;
+          if constexpr (FullCartesianFlag) {
+            // NB: This is the case where we have the data stored in
+            // (relation, node) but do not compress the (relation, node)
+            // matrix. It could be a case in subgraph where compressing along
+            // the node dimension may not be worth it.
+            CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                CompactAsOfNodeFlag && RelationalFlag && FullCartesianFlag,
+                "should be non-reachable not implemented");
+          }
         } else {
           feat_off_src = src_id * e_xlen + feat_idx;
         }
       } else {
-        if constexpr (RelationalFlag) {
-          // NB: This is the case where we have the data stored in
-          // (relation, node) but do not compress the (relation, node)
-          // matrix. It could be a case in subgraph where compressing along
-          // the node dimension may not be worth it.
-          CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-              !CompactAsOfNodeFlag && RelationalFlag,
-              "should be non-reachable not implemented");
-        } else {
-          feat_off_src = edge_id * e_xlen + feat_idx;
-          feat_off_dst = edge_id * e_xlen + feat_idx;
-        }
+        feat_off_src = edge_id * e_xlen + feat_idx;
+        feat_off_dst = edge_id * e_xlen + feat_idx;
       }
       // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] + er[threadIdx.x],
       // gdata.leaky_relu_slope);
@@ -191,8 +197,8 @@ __global__ void gatExpLeakyReluSumKernel_relational_separate_coo(
     const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  _gatExpLeakyReluSumKernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag,
-                                          true>(
+  _gatExpLeakyReluSumKernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag, true,
+                                          false>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       num_relations);

@@ -3,6 +3,8 @@
 #include "DGLHackKernel/RGCN/RGCNLayersBackwardKernels.cu.h"
 #include "DGLHackKernel/RGCN/RGCNLayersKernels.cu.h"
 
+namespace HET {
+namespace OpPrototyping {
 // the referential implementation from seastar
 template </*int XPU, */ typename Idx, typename DType>
 void _RgcnLayerImpl(
@@ -229,3 +231,6 @@ void RgcnLayer0BackwardImpl(
                                      norm, grad_out, grad_hidden_dummy,
                                      grad_weight_dummy, ret, false);
 }
+
+}  // namespace OpPrototyping
+}  // namespace HET
