@@ -33,6 +33,6 @@
 #include "RGCN/RGCNLayer1MyHYB.h"
 
 #include "HGT/HGTBackwardKernels.cu.h"
-#include "HGT/HGTExperimental.h"
+#include "HGT/HGTExperimental.cu.h"
 
 #include "DGLHackKernelInit.h"

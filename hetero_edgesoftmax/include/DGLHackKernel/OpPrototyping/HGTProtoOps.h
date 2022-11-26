@@ -1,7 +1,7 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
 #include "DGLHackKernel/HGT/HGTBackwardKernels.cu.h"
-#include "DGLHackKernel/HGT/HGTExperimental.h"
+#include "DGLHackKernel/HGT/HGTExperimental.cu.h"
 #include "DGLHackKernel/HGT/HGTForwardKernels.cu.h"
 #include "DGLHackKernel/HGT/HGTPreprocessing.h"
 #include "DGLHackKernel/OpPrototyping/HGTIntermediateData.h"
