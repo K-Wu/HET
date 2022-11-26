@@ -4,6 +4,7 @@
 // npy::LoadArrayFromNumpy() invocations. 1/3 in kernel.cu.cc, test_hypb.cu.cc,
 // DGLHackKernelInit.h
 
+// TODO: move this function to OpPrototyping/ as it uses MySimpleNDArray
 int FusedGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph,
                            int64_t num_heads, int64_t num_hidden) {
   typedef int32_t Idx;
@@ -70,6 +71,7 @@ int FusedGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph,
   return 0;
 }
 
+// TODO: move this function to OpPrototyping/ as it uses MySimpleNDArray
 int HGTBackPropGradientSMAFusionProfiling_main(
     MyHeteroIntegratedCSR<int32_t, std::allocator<int32_t>> csr_h,
     int64_t num_heads, int64_t num_feat_per_head) {
@@ -477,6 +479,7 @@ LoadSegmentCSR_OGBN_MAG() {
   return mysegmentcsr;
 }
 
+// TODO: move this function to OpPrototyping/ as it uses MySimpleNDArray
 int _HGTExperimental_main(
     MySegmentCSR<int, std::allocator<int>,
                  MyHeteroSeparateCSR<int, std::allocator<int>>>& graph,
@@ -504,6 +507,7 @@ int _HGTExperimental_main(
   return 0;
 }
 
+// TODO: move this function to OpPrototyping/ as it uses MySimpleNDArray
 // profiling involve both forward and backward in this function
 // TODO: put in_feat, out_feat into a hyper parametere structure
 int _RGCNLayer1Profiling_main(

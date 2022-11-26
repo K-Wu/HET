@@ -63,6 +63,7 @@ __global__ void RgcnLayer1BackwardMyHYBKernelImpl(
   }
 }
 
+// TODO: move this function to OpPrototyping/ as it uses MySimpleNDArray
 template </*int XPU, */ typename Idx, typename DType, int ELL_logical_width,
           int ELL_physical_width>
 void RgcnLayer1BackwardMyHYBImpl(

@@ -823,6 +823,7 @@ HGTExpermentalEdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediate
   }
 }
 
+// TODO: move this function to OpPrototyping/ as it uses MySimpleNDArray
 void HGTForwardImpl(
     MySegmentCSR<int, thrust::device_allocator<int>,
                  MyHeteroSeparateCSR<int, thrust::device_allocator<int>>>
