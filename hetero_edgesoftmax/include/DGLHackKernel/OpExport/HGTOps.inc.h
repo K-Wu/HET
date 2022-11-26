@@ -15,7 +15,8 @@ void full_graph_message_mean_aggregation(
     at::Tensor& csr_rowptr, at::Tensor& csr_col_idx, at::Tensor& csr_reltypes,
     at::Tensor& csr_eids, at::Tensor& edge_messages,
     at::Tensor& edge_attn_score, at::Tensor& ret) {
-  // We need to implement based on (vertex-centric) _gatSumProdZipDivKernel in
+  // using _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum
+  // NB: based on (vertex-centric) _gatSumProdZipDivKernel in
   // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]] or
   // (edge-centric) _gatSumProdZipDivKernel_edge_parallel in
   // [[hetero_edgesoftmax/include/DGLHackKernel/RGAT/RGATLayersKernelsSeparateCOO.cu.h]]
@@ -49,7 +50,9 @@ void full_graph_edge_softmax_ops(at::Tensor& row_ptr, at::Tensor& col_idx,
 void full_graph_edge_softmax_only_accumu_stage_ops(
     at::Tensor& row_ptr, at::Tensor& col_idx, at::Tensor& eids,
     at::Tensor& reltypes, at::Tensor& attn_score, at::Tensor& mu,
-    at::Tensor& ret) {}
+    at::Tensor& ret) {
+  // using _hgtEdgeSoftmaxAccumStageOnlyKernel
+}
 
 }  // namespace IntegratedCSR
 }  // namespace FwProp
@@ -58,7 +61,9 @@ namespace IntegratedCSR {
 void full_graph_message_mean_aggregation(
     at::Tensor& csr_rowptr, at::Tensor& csr_col_idx, at::Tensor& csr_reltypes,
     at::Tensor& csr_eids, at::Tensor& gradout, at::Tensor& grad_message,
-    at::Tensor& grad_attn_score) {}
+    at::Tensor& grad_attn_score) {
+  // using _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel
+}
 
 void full_graph_hetero_attention_ops(at::Tensor& row_ptr, at::Tensor& col_idx,
                                      at::Tensor& eids, at::Tensor& reltypes,
@@ -81,7 +86,9 @@ void full_graph_edge_softmax_ops(
 void full_graph_edge_softmax_only_accumu_stage_ops(
     at::Tensor& transposed_row_ptr, at::Tensor& transposed_col_idx,
     at::Tensor& transposed_eids, at::Tensor& transposed_reltypes,
-    at::Tensor& gradout, at::Tensor& grad_attn_score, at::Tensor& grad_mu) {}
+    at::Tensor& gradout, at::Tensor& grad_attn_score, at::Tensor& grad_mu) {
+  // using _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel
+}
 
 }  // namespace IntegratedCSR
 }  // namespace BckProp

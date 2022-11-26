@@ -234,6 +234,15 @@ constexpr auto HGTVanillaEdgeAttentionSecondStage =
 constexpr auto HGTCompactAsOfNodesEdgeAttentionSecondStage =
     GeneralEdgeMessageMultiplyNodeFeature<float, true, false, float**>;
 
+template <typename Idx, typename DType>
+struct HgtDstOutData {
+  Idx num_heads{0};
+  Idx message_out_dim{0};
+  Idx* eids;
+  DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
+      *edge_softmax_sum{nullptr}, *message{nullptr}, *ret{nullptr};
+};
+
 // based on _gatSumProdZipDivKernel originally from seastar dgl-hack
 // src/kernel/cuda/binary_reduce_impl.cu This kernel calculates attn_score based
 // on unnormalized attn_score and edge_sfotmax sum at each destination nodes,
@@ -243,17 +252,17 @@ template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void
 _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
-    HgtData<Idx, DType> gdata, const Idx* row_offsets,
+    HgtDstOutData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  Idx e_xlen = gdata.e_xlen;
-  Idx hidden_xlen = gdata.feat_src_xlen / e_xlen;
+  Idx num_heads = gdata.num_heads;
+  Idx hidden_xlen = gdata.message_out_dim / num_heads;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
     Idx start_off = *(row_offsets + dst_vid);
     Idx end_off = *(row_offsets + dst_vid + 1);
     for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-         head_idx < e_xlen; head_idx += blockDim.x * gridDim.x) {
+         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
       for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
            feat_idx += blockDim.y) {
         DType s = 0.;
@@ -293,11 +302,12 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
             }
             // NB: e_xlen is the number of heads, feat_src_xlen is
             // message_out_dim, hidden_xlen is message_out_dim//num_heads
-            s += (gdata.mu[etype] *
-                  gdata.unnormalized_attn_score[edge_id * e_xlen + head_idx] /
-                  gdata.edge_softmax_sum[sum_idx * e_xlen + head_idx] *
-                  gdata.message[feat_src_entry_id * gdata.feat_src_xlen +
-                                head_idx * hidden_xlen + feat_idx]);
+            s +=
+                (gdata.mu[etype] *
+                 gdata.unnormalized_attn_score[edge_id * num_heads + head_idx] /
+                 gdata.edge_softmax_sum[sum_idx * num_heads + head_idx] *
+                 gdata.message[feat_src_entry_id * gdata.message_out_dim +
+                               head_idx * hidden_xlen + feat_idx]);
           } else {  // !RelationalFlag
             // NB: feat_src_entry_id varies between edge_id and src_vid
             // depending on compactasofnodeflag
@@ -307,20 +317,29 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
               feat_src_entry_id = edge_id;
             }
             s += (*gdata.mu) *
-                 gdata.unnormalized_attn_score[edge_id * e_xlen + head_idx] /
-                 gdata.edge_softmax_sum[dst_vid * e_xlen + head_idx] *
-                 gdata.message[feat_src_entry_id * gdata.feat_src_xlen +
+                 gdata.unnormalized_attn_score[edge_id * num_heads + head_idx] /
+                 gdata.edge_softmax_sum[dst_vid * num_heads + head_idx] *
+                 gdata.message[feat_src_entry_id * gdata.message_out_dim +
                                head_idx * hidden_xlen + feat_idx];
           }
         }
 
-        gdata.ret[dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen +
+        gdata.ret[dst_vid * gdata.message_out_dim + head_idx * hidden_xlen +
                   feat_idx] = s;
       }
     }
   }
 }
 
+template <typename Idx, typename DType>
+struct HgtEdgeSoftmaxAccumData {
+  Idx num_heads{0};
+  Idx* eids;
+  DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
+      *edge_softmax_sum{nullptr};
+};
+
+// TODO: add mu
 // based on _gatExpLeakyReluSumKernel originally from seastar dgl-hack
 // src/kernel/cuda/binary_reduce_impl.cu this function only calculates edge
 // softmax sum at each destination node, where the edge softmax normalization of
@@ -329,7 +348,7 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
-    HgtData<Idx, DType> gdata, const Idx* row_offsets,
+    HgtEdgeSoftmaxAccumData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
@@ -337,13 +356,13 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
 
-  Idx e_xlen = gdata.e_xlen;
+  Idx num_heads = gdata.num_heads;
   for (Idx dst_vid = ty; dst_vid < num_rows;
        dst_vid += blockDim.y * gridDim.y) {
     Idx start_off = *(row_offsets + dst_vid);
     Idx end_off = *(row_offsets + dst_vid + 1);
 
-    for (Idx feat_idx = tx; feat_idx < e_xlen;
+    for (Idx feat_idx = tx; feat_idx < num_heads;
          feat_idx += blockDim.x * gridDim.x) {
       // 1. Load dstnation vertex into shared memory
       // er[threadIdx.x] = gdata.er[feat_off_dst];
@@ -381,13 +400,13 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
             Idx src_vid_temp = find_relational_compact_as_of_node_index(
                 etype, src_id, unique_srcs_and_dests_node_indices,
                 unique_srcs_and_dests_rel_ptr);
-            feat_off_src = src_vid_temp * e_xlen + feat_idx;
+            feat_off_src = src_vid_temp * num_heads + feat_idx;
           } else {
-            feat_off_src = src_id * e_xlen + feat_idx;
+            feat_off_src = src_id * num_heads + feat_idx;
           }
         } else {
           // per edge
-          feat_off_src = edge_id * e_xlen + feat_idx;
+          feat_off_src = edge_id * num_heads + feat_idx;
         }
         // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] + er[threadIdx.x],
         // gdata.leaky_relu_slope);
@@ -400,14 +419,15 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
           // !CompactAsOfNodeFlag && RelationalFlag
           // TODO: fix this and align dst_vid_relational definition with
           // _fusedGatBackwardGradElErFeatSrcFused
-          atomicAdd(&gdata.edge_softmax_sum[Idx(dst_vid_relational * e_xlen) +
-                                            feat_idx],
-                    tmp);
+          atomicAdd(
+              &gdata.edge_softmax_sum[Idx(dst_vid_relational * num_heads) +
+                                      feat_idx],
+              tmp);
         }
         sum += tmp;
       }
       if constexpr (!RelationalFlag) {
-        gdata.edge_softmax_sum[Idx(dst_vid * e_xlen) + feat_idx] = sum;
+        gdata.edge_softmax_sum[Idx(dst_vid * num_heads) + feat_idx] = sum;
       }
     }
   }
