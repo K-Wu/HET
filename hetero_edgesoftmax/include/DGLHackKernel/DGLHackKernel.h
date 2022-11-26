@@ -1,4 +1,8 @@
 #pragma once
+// TODO: this should be headers to expose APIs to outside the project, and we
+// need to avoid the reference of this header in this project.
+// TODO: best effort to remove all unused headers in all source files.
+
 // NB: the order here is sensitive. To suppress clang-format change the order, I
 // deliberately add new line among these include statements for the time being.
 
@@ -19,16 +23,16 @@
 #include "OpPrototyping/GATProtoOps.h"
 #include "OpPrototyping/HGTProtoOps.h"
 #include "OpPrototyping/RGCNProtoOps.h"
-#include "RGAT/RGATLayersKernelsSeparateCOO.cu.h"
-#include "RGAT/RGATLayersKernelsSeparateCSR.cu.h"
+#include "RGAT/RGATKernelsSeparateCOO.cu.h"
+#include "RGAT/RGATKernelsSeparateCSR.cu.h"
+#include "RGCN/RGCNBackwardKernels.cu.h"
+#include "RGCN/RGCNBackwardKernelsCOO.cu.h"
+#include "RGCN/RGCNKernels.cu.h"
+#include "RGCN/RGCNKernelsCOO.cu.h"
 #include "RGCN/RGCNLayer1BackwardMyHYB.h"
 #include "RGCN/RGCNLayer1MyHYB.h"
-#include "RGCN/RGCNLayersBackwardKernels.cu.h"
-#include "RGCN/RGCNLayersBackwardKernelsCOO.cu.h"
-#include "RGCN/RGCNLayersKernels.cu.h"
-#include "RGCN/RGCNLayersKernelsCOO.cu.h"
 
+#include "HGT/HGTBackwardKernels.cu.h"
 #include "HGT/HGTExperimental.h"
-#include "HGT/HGTLayersBackwardKernels.cu.h"
 
 #include "DGLHackKernelInit.h"

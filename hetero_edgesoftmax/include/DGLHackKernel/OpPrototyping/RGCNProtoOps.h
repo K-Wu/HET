@@ -1,7 +1,7 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
-#include "DGLHackKernel/RGCN/RGCNLayersBackwardKernels.cu.h"
-#include "DGLHackKernel/RGCN/RGCNLayersKernels.cu.h"
+#include "DGLHackKernel/RGCN/RGCNBackwardKernels.cu.h"
+#include "DGLHackKernel/RGCN/RGCNKernels.cu.h"
 
 namespace HET {
 namespace OpPrototyping {

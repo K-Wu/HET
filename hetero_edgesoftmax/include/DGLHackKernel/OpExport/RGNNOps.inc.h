@@ -458,7 +458,7 @@ void inner_product_node_compact_and_node_separatecoo(
     at::Tensor& grad_left_node_compact_data,
     at::Tensor& grad_right_node_vectors) {
   // We may rely on HGTCompactAsOfNodesEdgeAttentionSecondStage in
-  // [[hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTLayersForwardKernels.cu.h]]
+  // [[hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTForwardKernels.cu.h]]
 }
 
 void inner_product_edge_and_node_separatecoo(

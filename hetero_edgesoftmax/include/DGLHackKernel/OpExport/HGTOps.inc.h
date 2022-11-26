@@ -19,7 +19,7 @@ void full_graph_message_mean_aggregation(
   // NB: based on (vertex-centric) _gatSumProdZipDivKernel in
   // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]] or
   // (edge-centric) _gatSumProdZipDivKernel_edge_parallel in
-  // [[hetero_edgesoftmax/include/DGLHackKernel/RGAT/RGATLayersKernelsSeparateCOO.cu.h]]
+  // [[hetero_edgesoftmax/include/DGLHackKernel/RGAT/RGATKernelsSeparateCOO.cu.h]]
 }
 
 void full_graph_hetero_attention_ops(at::Tensor& row_ptr, at::Tensor& col_idx,

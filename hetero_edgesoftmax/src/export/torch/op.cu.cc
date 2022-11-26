@@ -7,7 +7,7 @@
 // hetero_edgesoftmax/python/<model name>/.*.py
 // NB: This contains wrapper versions for python api export originally
 // implemented at
-// [[hetero_edgesoftmax/include/DGLHackKernel/RGCN/RGCNLayersKernels.cu.h]].
+// [[hetero_edgesoftmax/include/DGLHackKernel/RGCN/RGCNKernels.cu.h]].
 // Please update accordingly whenever there is update.
 #include <c10/cuda/CUDAException.h>
 #include <c10/cuda/CUDAStream.h>
