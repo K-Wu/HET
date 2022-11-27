@@ -241,6 +241,8 @@ struct HgtDstOutData {
       "the program should use partial specialization of this structure");
 };
 
+// TODO: use designated intializer, as explained in
+// https://en.cppreference.com/w/cpp/language/aggregate_initialization
 template <typename Idx, typename DType>
 struct HgtDstOutData<Idx, DType, true> {
   Idx num_heads{0};
@@ -330,7 +332,7 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
             } else {
               mu_applied_unsoftmax_attn_score =
                   gdata.mu[etype] *
-                  gdata.unnormalized_attn_score[edge_id * num_heads + head_idx]
+                  gdata.unnormalized_attn_score[edge_id * num_heads + head_idx];
             }
             s += (mu_applied_unsoftmax_attn_score /
                   gdata.edge_softmax_sum[sum_idx * num_heads + head_idx] *
@@ -345,16 +347,21 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
               feat_src_entry_id = edge_id;
             }
             DType mu_applied_unsoftmax_attn_score;
+            // TODO: extend UseMuAppliedAttnScoreFlag to a switch that could
+            // ouptut softmaxed attn score
             if constexpr (UseMuAppliedAttnScoreFlag) {
               mu_applied_unsoftmax_attn_score =
                   gdata.mu_applied_un_softmax_attn_score[edge_id * num_heads +
-                                                         head_idx];
+                                                         head_idx] /
+                  gdata.edge_softmax_sum[dst_vid * num_heads + head_idx];
             } else {
               mu_applied_unsoftmax_attn_score =
                   (*gdata.mu) *
-                  gdata.unnormalized_attn_score[edge_id * num_heads + head_idx];
+                  gdata
+                      .unnormalized_attn_score[edge_id * num_heads + head_idx] /
+                  gdata.edge_softmax_sum[dst_vid * num_heads + head_idx];
             }
-            s += / gdata.edge_softmax_sum[dst_vid * num_heads + head_idx] *
+            s += mu_applied_unsoftmax_attn_score *
                  gdata.message[feat_src_entry_id * gdata.message_out_dim +
                                head_idx * hidden_xlen + feat_idx];
           }

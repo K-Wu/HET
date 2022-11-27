@@ -276,7 +276,7 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
           }
 
           DType normalized_attn_score;
-          if constexpr (FwdOutputMuAppliedAttnScoreFlag) {
+          if constexpr (UseMuAppliedAttnScoreFlag) {
             normalized_attn_score =
                 gdata.mu_applied_un_softmax_attn_score[eid * num_heads +
                                                        head_idx] /
@@ -389,6 +389,7 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
           Idx dst_vid = column_indices[e];
           Idx edge_softmax_sum_idx = -1;
           Idx dst_vid_relational = -1;
+          Idx etype = -1;
           if constexpr (!CompactAsOfNodeFlag) {
             // in this case, message_src_offset, edge_softmax_sum_idx and
             // message_src_idx are related to edge id, regardless of the type of
@@ -406,7 +407,7 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
               // (relation, unique node index) message_src_idx is related to
               // (relation, unique node index) message_src_offset is related to
               // (relation, unique node index) Idx etype = etypes[e];
-              Idx etype = -1;
+
               if constexpr (ETypeRelPtrFlag) {
                 etype = binary_search(num_relations, etypes, e);
               } else {
@@ -469,7 +470,7 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
                         gdata.unnormalized_attn_score[edge_offset]);
         }
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
-          atomicAdd(gdata.grad_attn_score + edge_offset, s);
+          atomicAdd(gdata.grad_attn_score + message_src_idx, s);
         }
       }
     }

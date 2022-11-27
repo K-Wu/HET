@@ -91,15 +91,15 @@ void HGTBackPropGradientSMAFusion(
   // auto eids = csr[2];
   // auto type_ids = csr[3];
   auto range_data = csr_rowptr.data_ptr<Idx>();
-  auto ids_data = csr_colidx.data_ptr<Idx>();
+  auto ids_data = csr_col_idx.data_ptr<Idx>();
   // auto eids_data = static_cast<Idx*>(thrust::raw_pointer_cast(eids);
   auto eids_data = csr_eids.data_ptr<Idx>();
   auto typeids_data = csr_reltypes.data_ptr<Idx>();
   auto grad_sm_first_stage_data = grad_sm_first_stage.data_ptr<DType>();
-  auto grad_a_data = grad_a.Ptr();
-  auto grad_t_neighbour_data = grad_t_neighbour.Ptr();
-  auto message_data = message.Ptr();
-  auto sigmas_data = sigmas.Ptr();
+  auto grad_a_data = grad_a.data_ptr<DType>();
+  auto grad_t_neighbour_data = grad_t_neighbour.data_ptr<DType>();
+  auto message_data = message.data_ptr<DType>();
+  auto sigmas_data = sigmas.data_ptr<DType>();
 
   // print_dims(hidden);
   // print_dims(weight);
@@ -108,7 +108,7 @@ void HGTBackPropGradientSMAFusion(
   // Idx num_nodes = ranges->shape[0] - 1;
   // Idx num_edges = eids->shape[0];
   Idx num_nodes = csr_rowptr.numel() - 1;
-  Idx num_edges = csr_colidx.numel();
+  Idx num_edges = csr_col_idx.numel();
   Idx num_heads = grad_sm_first_stage.size(2);
   Idx feat_dim_per_head = grad_sm_first_stage.size(3);
   Idx n_rel_types = grad_sm_first_stage.size(1);
