@@ -180,25 +180,46 @@ __global__ void HGTBackwardGradientSmFirstPartImpl(
   }
 }
 
-template <typename Idx, typename DType>
+template <typename Idx, typename DType, bool UseMuAppliedAttnScoreFlag>
 struct BackwardHGTMessageData {
+  CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+      UseMuAppliedAttnScoreFlag || !UseMuAppliedAttnScoreFlag,
+      "the program should use partial specialization of this structure");
+};
+
+template <typename Idx, typename DType>
+struct BackwardHGTMessageData<Idx, DType, true> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
   Idx* eids;
-  DType *grad_message_src{nullptr}, *unnormalized_attn_score{nullptr},
-      *edge_softmax_sum{nullptr}, *out{nullptr}, *grad_out{nullptr};
+  DType *grad_message_src{nullptr}, *edge_softmax_sum{nullptr}, *out{nullptr},
+      *grad_out{nullptr};
+  DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
+  DType* mu_applied_un_softmax_attn_score{nullptr};
+};
+
+template <typename Idx, typename DType>
+struct BackwardHGTMessageData<Idx, DType, false> {
+  Idx num_heads{0};
+  Idx message_src_xlen{0};
+  Idx* eids;
+  DType *grad_message_src{nullptr}, *edge_softmax_sum{nullptr}, *out{nullptr},
+      *grad_out{nullptr};
+  DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
+  // DType *mu_applied_un_softmax_attn_score{nullptr};
 };
 
 // based on _fusedGatBackwardGradFeatSrc, as it is to calculate the gradient of
 // message
 // TODO: add mu into the term
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag, bool ETypeRelPtrFlag>
+          bool RelationalFlag, bool ETypeRelPtrFlag,
+          bool UseMuAppliedAttnScoreFlag>
 __device__ __forceinline__ void
 _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
-    BackwardHGTMessageData<Idx, DType> gdata, const Idx* row_offsets,
-    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
-    const Idx* unique_srcs_and_dests_rel_ptr,
+    BackwardHGTMessageData<Idx, DType, UseMuAppliedAttnScoreFlag> gdata,
+    const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
+    int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
@@ -221,6 +242,7 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
           Idx eid = gdata.eids[e];
           Idx dst_vid = column_indices[e];
           Idx dst_vid_relational = -1;
+          Idx etype = -1;
           if constexpr (!CompactAsOfNodeFlag) {
             // in this case, message_src_offset, er_idx and el_idx are related
             // to edge id, regardless of the type of the edge
@@ -229,7 +251,7 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
           } else {  // CompactAsOfNodeFlag
             if constexpr (RelationalFlag) {
               // Idx etype = etypes[e];
-              Idx etype = -1;
+
               if constexpr (ETypeRelPtrFlag) {
                 etype = binary_search(num_relations, etypes, e);
               } else {  // !ETypeRelPtrFlag
@@ -245,24 +267,41 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
                   unique_srcs_and_dests_node_indices);
             }
           }
+
           // TODO: maybe it's better to cache exp/sum to reduce mem traffic as
           // well as redundant computation?
           Idx sum_vid = dst_vid;
           if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
             sum_vid = dst_vid_relational;
           }
+
+          DType normalized_attn_score;
+          if constexpr (FwdOutputMuAppliedAttnScoreFlag) {
+            normalized_attn_score =
+                gdata.mu_applied_un_softmax_attn_score[eid * num_heads +
+                                                       head_idx] /
+                gdata.edge_softmax_sum[sum_vid * num_heads + head_idx];
+          } else {
+            DType mu;
+            if constexpr (RelationalFlag) {
+              mu = gdata.mu[etype];
+            } else {
+              mu = gdata.mu[0];
+            }
+            normalized_attn_score =
+                gdata.unnormalized_attn_score[eid * num_heads + head_idx] * mu /
+                gdata.edge_softmax_sum[sum_vid * num_heads + head_idx];
+          }
+
           if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
-            atomicAdd(
-                gdata.grad_message_src + message_src_offset,
-                gdata.unnormalized_attn_score[eid * num_heads + head_idx] /
-                    gdata.edge_softmax_sum[sum_vid * num_heads + head_idx] *
-                    gdata.grad_out[dst_vid * gdata.message_src_xlen +
-                                   head_idx * hidden_xlen + feat_idx]);
+            atomicAdd(gdata.grad_message_src + message_src_offset,
+                      normalized_attn_score *
+                          gdata.grad_out[dst_vid * gdata.message_src_xlen +
+                                         head_idx * hidden_xlen + feat_idx]);
           } else {  // CompactAsOfNodeFlag && !RelationalFlag
             // exp scheme (both eid and head_idx) could be used for attn_score
             // message_src's could be used for message_src
-            s += gdata.unnormalized_attn_score[eid * num_heads + head_idx] /
-                 gdata.edge_softmax_sum[sum_vid * num_heads + head_idx] *
+            s += normalized_attn_score *
                  gdata.grad_out[dst_vid * gdata.message_src_xlen +
                                 head_idx * hidden_xlen + feat_idx];
           }
@@ -275,14 +314,35 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
   }
 }
 
-template <typename Idx, typename DType>
+template <typename Idx, typename DType, bool FwdOutputMuAppliedAttnScoreFlag>
 struct BackwardHGTAttnScoreData {
+  CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+      FwdOutputMuAppliedAttnScoreFlag || !FwdOutputMuAppliedAttnScoreFlag,
+      "the program should use partial specialization of this structure");
+};
+
+template <typename Idx, typename DType>
+struct BackwardHGTAttnScoreData<Idx, DType, true> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
   Idx* eids;
-  DType *grad_message_src{nullptr}, message_src{nullptr},
+  DType *grad_attn_score{nullptr}, *message_src{nullptr},
       *unnormalized_attn_score{nullptr}, *edge_softmax_sum{nullptr},
       *out{nullptr}, *grad_out{nullptr};
+  DType *grad_mu{nullptr}, *mu{nullptr};
+  DType* mu_applied_un_softmax_attn_score{nullptr};
+};
+
+template <typename Idx, typename DType>
+struct BackwardHGTAttnScoreData<Idx, DType, false> {
+  Idx num_heads{0};
+  Idx message_src_xlen{0};
+  Idx* eids;
+  DType *grad_attn_score{nullptr}, *message_src{nullptr},
+      *unnormalized_attn_score{nullptr}, *edge_softmax_sum{nullptr},
+      *out{nullptr}, *grad_out{nullptr};
+  DType *grad_mu{nullptr}, *mu{nullptr};
+  // DType *mu_applied_un_softmax_attn_score{nullptr};
 };
 
 // S_j = expf(z_j) / sum_k expf(z_k)
@@ -292,11 +352,12 @@ struct BackwardHGTAttnScoreData {
 // based on _fusedGatBackwardGradElEr, as it is to calculate gradient of
 // attention
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag, bool ETypeRelPtrFlag>
+          bool RelationalFlag, bool ETypeRelPtrFlag,
+          bool FwdOutputMuAppliedAttnScoreFlag>
 __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
-    BackwardHGTAttnScoreData<Idx, DType> gdata, const Idx* row_offsets,
-    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
-    const Idx* unique_srcs_and_dests_rel_ptr,
+    BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreFlag> gdata,
+    const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
+    int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
   if constexpr (!CompactAsOfNodeFlag) {
     CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(CompactAsOfNodeFlag,
@@ -367,28 +428,48 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
           }
           Idx dst_out_offset = dst_vid * gdata.message_src_xlen +
                                head_idx * hidden_xlen + feat_idx;
-          DType grad_exp = gdata.grad_out[dst_out_offset] *
-                           (gdata.message_src[message_src_offset] -
-                            gdata.out[dst_out_offset]) /
-                           gdata.edge_softmax_sum[edge_softmax_sum_idx];
 
+          DType mu;
+          if constexpr (RelationalFlag) {
+            mu = gdata.mu[etype];
+          } else {
+            mu = gdata.mu[0];
+          }
+
+          DType normalized_attn_score;
+          if constexpr (FwdOutputMuAppliedAttnScoreFlag) {
+            normalized_attn_score =
+                gdata.mu_applied_un_softmax_attn_score[edge_offset] /
+                gdata.edge_softmax_sum[edge_softmax_sum_idx];
+          } else {
+            normalized_attn_score =
+                gdata.unnormalized_attn_score[edge_offset] * mu /
+                gdata.edge_softmax_sum[edge_softmax_sum_idx];
+          }
           DType grad_for_this_feat_idx =
               gdata.grad_out[dst_out_offset] *
               (gdata.message_src[message_src_offset] -
                gdata.out[dst_out_offset]) *
-              gdata.attn_score[edge_offset] /
-              gdata.edge_softmax_sum[edge_softmax_sum_idx];
+              normalized_attn_score;
           // el idx scheme could be used for message (only item idx, not the
           // feature idx scheme) exp idx scheme could be used for attn_score
+          // if (RelationalFlag){
+          //   atomicAdd(gdata.grad_mu + etype,
+          //   grad_for_this_feat_idx*gdata.unnormalized_attn_score[edge_offset]);
+          // }
 
-          s += grad_for_this_feat_idx;
+          s += grad_for_this_feat_idx * mu;
           if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
-            atomicAdd(gdata.grad_message_src + message_src_idx,
-                      grad_for_this_feat_idx);
+            atomicAdd(gdata.grad_attn_score + edge_offset,
+                      grad_for_this_feat_idx * mu);
           }
+
+          atomicAdd(gdata.grad_mu + etype,
+                    grad_for_this_feat_idx *
+                        gdata.unnormalized_attn_score[edge_offset]);
         }
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
-          atomicAdd(gdata.grad_message_src + message_src_idx, s);
+          atomicAdd(gdata.grad_attn_score + edge_offset, s);
         }
       }
     }

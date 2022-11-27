@@ -103,6 +103,11 @@ class MySimpleNDArray {
     }
     thrust::counting_iterator<int> iter_beg(0);
     thrust::counting_iterator<int> iter_end(element_num);
+    // NB: thrust stream usage is shown here
+    // https://github.com/NVIDIA/thrust/issues/1626 we will avoid the potential
+    // issue of using thrust together with pytorch by only using MySimpleNDArray
+    // in prototyping ops whereas in the ops exported to pytorch this class
+    // MySimpleNDArray will not be used.
     thrust::transform(iter_beg, iter_end, data.begin(), GenRand<DType>());
   }
 };
