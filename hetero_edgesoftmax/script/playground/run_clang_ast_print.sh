@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+clang++ -Xclang -ast-print -fsyntax-only --std=c++17 src/export/torch/op.cu.cc -I  /home/kwu/anaconda3/envs/dev_dgl_torch/lib/python3.9/site-packages/torch/include/ -I  /home/kwu/anaconda3/envs/dev_dgl_torch/lib/python3.9/site-packages/torch/include/torch/csrc/api/include/ -I /home/kwu/anaconda3/envs/dev_dgl_torch/include/python3.9/ -I include/ -I ../third_party/cusplibrary/ -I ../third_party/libnpy/include -I ../third_party/cutlass/include -I ../third_party/sputnik -I /usr/local/cuda-11/targets/x86_64-linux/include/ >print_template.log

@@ -234,33 +234,47 @@ constexpr auto HGTVanillaEdgeAttentionSecondStage =
 constexpr auto HGTCompactAsOfNodesEdgeAttentionSecondStage =
     GeneralEdgeMessageMultiplyNodeFeature<float, true, false, float**>;
 
-template <typename Idx, typename DType, bool UseMuAppliedAttnScoreFlag>
+template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
 struct HgtDstOutData {
   CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-      UseMuAppliedAttnScoreFlag || !UseMuAppliedAttnScoreFlag,
+      UseMuAppliedAttnScoreSwitch != 0 || UseMuAppliedAttnScoreSwitch == 0,
       "the program should use partial specialization of this structure");
 };
 
 // TODO: use designated intializer, as explained in
 // https://en.cppreference.com/w/cpp/language/aggregate_initialization
 template <typename Idx, typename DType>
-struct HgtDstOutData<Idx, DType, true> {
+struct HgtDstOutData<Idx, DType, 0> {
   Idx num_heads{0};
   Idx message_out_dim{0};
   Idx* eids;
   DType *edge_softmax_sum{nullptr}, *message{nullptr}, *ret{nullptr};
-  DType* mu_applied_un_softmax_attn_score{nullptr};
+  // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
+  // DType* normalized_attn_score{nullptr};
+  DType *mu{nullptr}, *unnormalized_attn_score{nullptr};
+};
+
+template <typename Idx, typename DType>
+struct HgtDstOutData<Idx, DType, 1> {
+  Idx num_heads{0};
+  Idx message_out_dim{0};
+  Idx* eids;
+  DType *edge_softmax_sum{nullptr}, *message{nullptr}, *ret{nullptr};
+  DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
+  // DType* normalized_attn_score{nullptr};
   // DType* mu{nullptr}, *unnormalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
-struct HgtDstOutData<Idx, DType, false> {
+struct HgtDstOutData<Idx, DType, 2> {
   Idx num_heads{0};
   Idx message_out_dim{0};
   Idx* eids;
-  DType *edge_softmax_sum{nullptr}, *message{nullptr}, *ret{nullptr};
-  // DType *mu_applied_un_softmax_attn_score{nullptr};
-  DType *mu{nullptr}, *unnormalized_attn_score{nullptr};
+  DType *message{nullptr}, *ret{nullptr};
+  DType* normalized_attn_score{nullptr};
+  // DType *edge_softmax_sum{nullptr};
+  // DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
+  // DType* mu{nullptr}, *unnormalized_attn_score{nullptr};
 };
 
 // based on _gatSumProdZipDivKernel originally from seastar dgl-hack
@@ -270,10 +284,10 @@ struct HgtDstOutData<Idx, DType, false> {
 // result to the destination node.
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
-          bool UseMuAppliedAttnScoreFlag>
+          int UseMuAppliedAttnScoreSwitch>
 __device__ __forceinline__ void
 _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
-    HgtDstOutData<Idx, DType, UseMuAppliedAttnScoreFlag> gdata,
+    HgtDstOutData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
     const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
     int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
@@ -324,18 +338,29 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
             // NB: e_xlen is the number of heads, feat_src_xlen is
             // message_out_dim, hidden_xlen is message_out_dim//num_heads
 
-            DType mu_applied_unsoftmax_attn_score;
-            if constexpr (UseMuAppliedAttnScoreFlag) {
-              mu_applied_unsoftmax_attn_score =
-                  gdata.mu_applied_un_softmax_attn_score[edge_id * num_heads +
-                                                         head_idx];
+            DType normalized_attn_score;
+            if constexpr (UseMuAppliedAttnScoreSwitch == 0) {
+              normalized_attn_score =
+                  expf(gdata.mu[etype] *
+                       gdata.unnormalized_attn_score[edge_id * num_heads +
+                                                     head_idx]) /
+                  gdata.edge_softmax_sum[sum_idx * num_heads + head_idx];
+            } else if (UseMuAppliedAttnScoreSwitch == 1) {
+              normalized_attn_score =
+                  gdata.mu_softmax_applied_unnormalized_attn_score
+                      [edge_id * num_heads + head_idx] /
+                  gdata.edge_softmax_sum[sum_idx * num_heads + head_idx];
+            } else if (UseMuAppliedAttnScoreSwitch == 2) {
+              normalized_attn_score =
+                  gdata.normalized_attn_score[edge_id * num_heads + head_idx];
             } else {
-              mu_applied_unsoftmax_attn_score =
-                  gdata.mu[etype] *
-                  gdata.unnormalized_attn_score[edge_id * num_heads + head_idx];
+              CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                  UseMuAppliedAttnScoreSwitch != 0 &&
+                      UseMuAppliedAttnScoreSwitch != 1 &&
+                      UseMuAppliedAttnScoreSwitch != 2,
+                  "should be non-reachable");
             }
-            s += (mu_applied_unsoftmax_attn_score /
-                  gdata.edge_softmax_sum[sum_idx * num_heads + head_idx] *
+            s += (normalized_attn_score *
                   gdata.message[feat_src_entry_id * gdata.message_out_dim +
                                 head_idx * hidden_xlen + feat_idx]);
           } else {  // !RelationalFlag
@@ -346,22 +371,32 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
             } else {
               feat_src_entry_id = edge_id;
             }
-            DType mu_applied_unsoftmax_attn_score;
+            DType normalized_attn_score;
             // TODO: extend UseMuAppliedAttnScoreFlag to a switch that could
             // ouptut softmaxed attn score
-            if constexpr (UseMuAppliedAttnScoreFlag) {
-              mu_applied_unsoftmax_attn_score =
-                  gdata.mu_applied_un_softmax_attn_score[edge_id * num_heads +
-                                                         head_idx] /
-                  gdata.edge_softmax_sum[dst_vid * num_heads + head_idx];
-            } else {
-              mu_applied_unsoftmax_attn_score =
+            if constexpr (UseMuAppliedAttnScoreSwitch == 0) {
+              normalized_attn_score =
                   (*gdata.mu) *
                   gdata
                       .unnormalized_attn_score[edge_id * num_heads + head_idx] /
                   gdata.edge_softmax_sum[dst_vid * num_heads + head_idx];
+            } else if constexpr (UseMuAppliedAttnScoreSwitch == 1) {
+              normalized_attn_score =
+                  gdata.mu_softmax_applied_unnormalized_attn_score
+                      [edge_id * num_heads + head_idx] /
+                  gdata.edge_softmax_sum[dst_vid * num_heads + head_idx];
+
+            } else if constexpr (UseMuAppliedAttnScoreSwitch == 2) {
+              normalized_attn_score =
+                  gdata.normalized_attn_score[edge_id * num_heads + head_idx];
+            } else {
+              CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                  UseMuAppliedAttnScoreSwitch != 0 &&
+                      UseMuAppliedAttnScoreSwitch != 1 &&
+                      UseMuAppliedAttnScoreSwitch != 2,
+                  "should be non-reachable");
             }
-            s += mu_applied_unsoftmax_attn_score *
+            s += normalized_attn_score *
                  gdata.message[feat_src_entry_id * gdata.message_out_dim +
                                head_idx * hidden_xlen + feat_idx];
           }
@@ -374,48 +409,79 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
   }
 }
 
-template <typename Idx, typename DType, bool OutputMuAppliedAttnScoreFlag>
+template <typename Idx, typename DType, int OutputMuAppliedAttnScoreSwitch>
 struct HgtEdgeSoftmaxAccumData {
   CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-      OutputMuAppliedAttnScoreFlag || !OutputMuAppliedAttnScoreFlag,
+      OutputMuAppliedAttnScoreSwitch != 0 ||
+          OutputMuAppliedAttnScoreSwitch == 0,
       "the program should use partial specialization of this structure");
 };
 
 template <typename Idx, typename DType>
-struct HgtEdgeSoftmaxAccumData<Idx, DType, true> {
+struct HgtEdgeSoftmaxAccumData<Idx, DType, 0> {
   Idx num_heads{0};
   Idx* eids;
   DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
       *edge_softmax_sum{nullptr};
-  DType* mu_applied_un_softmax_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
-struct HgtEdgeSoftmaxAccumData<Idx, DType, false> {
+struct HgtEdgeSoftmaxAccumData<Idx, DType, 1> {
   Idx num_heads{0};
   Idx* eids;
   DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
       *edge_softmax_sum{nullptr};
+  DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
+};
+
+template <typename Idx, typename DType>
+struct HgtEdgeSoftmaxAccumData<Idx, DType, 2> {
+  Idx num_heads{0};
+  Idx* eids;
+  DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
+      *edge_softmax_sum{nullptr};
+  DType* normalized_attn_score{nullptr};
+};
+
+template <typename Idx, typename DType>
+struct HgtEdgeSoftmaxAccumData<Idx, DType, 3> {
+  Idx num_heads{0};
+  Idx* eids;
+  DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
+      *edge_softmax_sum{nullptr};
+  DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
+  DType* normalized_attn_score{nullptr};
 };
 
 // TODO: add mu
 // based on _gatExpLeakyReluSumKernel originally from seastar dgl-hack
 // src/kernel/cuda/binary_reduce_impl.cu this function only calculates edge
-// softmax sum at each destination node, where the edge softmax normalization of
-// attention was expected to not only do such accumulation, but also use it as
-// the devisor to normalize each edge.
+// softmax sum at each destination node, where the edge softmax normalization
+// of attention was expected to not only do such accumulation, but also use it
+// as the devisor to normalize each edge.
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
-          bool OutputMuAppliedAttnScoreFlag>
+          int OutputMuAppliedAttnScoreSwitch>
 __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
-    HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreFlag> gdata,
+    HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
     int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
   // extern __shared__ DType er[];
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
-
+  if constexpr (OutputMuAppliedAttnScoreSwitch != 0 &&
+                OutputMuAppliedAttnScoreSwitch != 1 &&
+                OutputMuAppliedAttnScoreSwitch != 2 &&
+                OutputMuAppliedAttnScoreSwitch != 3) {
+    CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+        OutputMuAppliedAttnScoreSwitch != 0 &&
+            OutputMuAppliedAttnScoreSwitch != 1 &&
+            OutputMuAppliedAttnScoreSwitch != 2 &&
+            OutputMuAppliedAttnScoreSwitch != 3,
+        "the program should use partial specialization of this "
+        "structure");
+  }
   Idx num_heads = gdata.num_heads;
   for (Idx dst_vid = ty; dst_vid < num_rows;
        dst_vid += blockDim.y * gridDim.y) {
@@ -452,8 +518,8 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
             if constexpr (FullCartesianFlag) {
               // NB: This is the case where we have the data stored in
               // (relation, node) but do not compress the (relation, node)
-              // matrix. It could be a case in subgraph where compressing along
-              // the node dimension may not be worth it.
+              // matrix. It could be a case in subgraph where compressing
+              // along the node dimension may not be worth it.
               CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
                   CompactAsOfNodeFlag && RelationalFlag && FullCartesianFlag,
                   "should be non-reachable not implemented");
@@ -474,11 +540,11 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
         } else {
           mu = gdata.mu[0];
         }
-        // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] + er[threadIdx.x],
-        // gdata.leaky_relu_slope);
+        // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] +
+        // er[threadIdx.x], gdata.leaky_relu_slope);
         // TODO: we need to determine where to calculate expf as the
         // non-linearity of edgesoftmax
-        DType tmp = gdata.unnormalized_attn_score[feat_off_src] * mu;
+        DType tmp = expf(gdata.unnormalized_attn_score[feat_off_src] * mu);
         // NB: e_xlen is num_heads
         if constexpr (RelationalFlag) {
           // NB: double check dst_vid_relational is defined when
@@ -490,13 +556,49 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
                                       feat_idx],
               tmp);
         }
-        if constexpr (OutputMuAppliedAttnScoreFlag) {
-          gdata.mu_applied_un_softmax_attn_score[feat_off_src] = tmp;
+        if constexpr (OutputMuAppliedAttnScoreSwitch == 1 ||
+                      OutputMuAppliedAttnScoreSwitch == 3) {
+          gdata.mu_softmax_applied_unnormalized_attn_score[feat_off_src] = tmp;
         }
+
         sum += tmp;
       }
       if constexpr (!RelationalFlag) {
         gdata.edge_softmax_sum[Idx(dst_vid * num_heads) + feat_idx] = sum;
+      }
+
+      if constexpr (OutputMuAppliedAttnScoreSwitch == 2 ||
+                    OutputMuAppliedAttnScoreSwitch == 3) {
+        for (Idx feat_idx = tx; feat_idx < num_heads;
+             feat_idx += blockDim.x * gridDim.x) {
+          for (Idx eidx = start_off; eidx < end_off; ++eidx) {
+            Idx src_id = *(column_indices + eidx);
+            Idx feat_off_src = -1;
+            Idx edge_id = gdata.eids[eidx];
+            if constexpr (OutputMuAppliedAttnScoreSwitch == 3) {
+              gdata.normalized_attn_score[edge_id * num_heads + feat_idx] =
+                  gdata.mu_softmax_applied_unnormalized_attn_score
+                      [edge_id * num_heads + feat_idx] /
+                  gdata.edge_softmax_sum[Idx(dst_vid * num_heads) + feat_idx];
+            } else {
+              DType mu;
+              if constexpr (RelationalFlag) {
+                Idx etype;
+                if constexpr (ETypeRelPtrFlag) {
+                  etype = binary_search(num_relations, etypes, eidx);
+                } else {
+                  etype = etypes[eidx];
+                }
+                mu = gdata.mu[etype];
+              } else {
+                mu = gdata.mu[0];
+              }
+              gdata.normalized_attn_score[edge_id * num_heads + feat_idx] =
+                  gdata.unnormalized_attn_score[feat_off_src] * mu /
+                  gdata.edge_softmax_sum[Idx(dst_vid * num_heads) + feat_idx];
+            }
+          }
+        }
       }
     }
   }

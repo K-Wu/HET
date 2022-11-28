@@ -5,6 +5,8 @@
 #include <vector>
 #include "DGLHackKernel/DGLHackKernel.h"
 
+namespace HET {
+namespace OpPrototyping {
 // random vectorizer generator code from https://gist.github.com/ashwin/7245048
 template <typename DType>
 struct GenRand {
@@ -138,3 +140,5 @@ MySimpleNDArray<DType, thrust::device_allocator<DType>> GenerateRandomNDArray(
   result.FillInRandomData();
   return result;
 }
+}  // namespace OpPrototyping
+}  // namespace HET

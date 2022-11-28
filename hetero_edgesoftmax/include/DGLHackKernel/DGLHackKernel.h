@@ -12,7 +12,7 @@
 #include <cusp/csr_matrix.h>
 
 #include <npy.hpp>
-#include "MySimpleNDArray/MySimpleNDArray.h"
+#include "OpPrototyping/MySimpleNDArray/MySimpleNDArray.h"
 
 #include "../MyHyb/MyHyb.h"
 #include "../hetero_edgesoftmax.h"

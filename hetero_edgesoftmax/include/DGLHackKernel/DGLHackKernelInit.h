@@ -1,125 +1,6 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
-// TODO: update relative path since switch from make to cmake. Search for
-// npy::LoadArrayFromNumpy() invocations. 1/3 in kernel.cu.cc, test_hypb.cu.cc,
-// DGLHackKernelInit.h
-
-// TODO: move this function to OpPrototyping/ as it uses MySimpleNDArray
-int FusedGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph,
-                           int64_t num_heads, int64_t num_hidden) {
-  typedef int32_t Idx;
-  typedef float DType;
-
-  MySimpleNDArray<Idx, std::allocator<Idx>> eids_h(
-      std::vector<int64_t>{(int64_t)graph.values.size()});
-  thrust::sequence<>(eids_h.data.begin(), eids_h.data.end(), 0);
-  // MySimpleNDArray<Idx, std::allocator<Idx>> transposed_eids_h(eids_h);
-
-  MyHeteroSeparateCSR<Idx, std::allocator<Idx>> incsr_h(
-      std::vector<cusp::csr_matrix<int, int, cusp::host_memory>>{graph},
-      eids_h.data);
-  MyHeteroSeparateCSR<Idx, std::allocator<Idx>> outcsr_h(incsr_h);
-
-  outcsr_h.Transpose();  // std::optional<std::reference_wrapper<typename
-                         // thrust::detail::vector_base<Idx,
-                         // std::allocator<Idx>>>>{transposed_eids_h.data});
-
-  // copy CSR+eid data to device
-
-  MyHeteroSeparateCSR<Idx, thrust::device_allocator<Idx>> incsr(incsr_h);
-  MyHeteroSeparateCSR<Idx, thrust::device_allocator<Idx>> outcsr(outcsr_h);
-  // MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids(eids_h);
-  // MySimpleNDArray<Idx, thrust::device_allocator<Idx>>
-  // transposed_eids(transposed_eids_h);
-
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> feat_src =
-      GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, num_hidden});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> el =
-      GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, 1});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> er =
-      GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, 1});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> sum =
-      GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, 1});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> exp =
-      GenerateRandomNDArray<DType>({incsr.total_num_nnzs, num_heads, 1});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> ret =
-      GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, num_hidden});
-
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_out =
-      GenerateRandomNDArray<DType>(
-          {incsr.num_rows, num_heads,
-           num_hidden});  // TODO: verify if the assumption that the shape is
-                          // the same as ret is correct
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_feat_src =
-      GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, num_hidden});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_el =
-      GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, 1});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_er =
-      GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, 1});
-
-  float slope = 0.2;
-
-  HET::OpPrototyping::FusedGatKernelImpl<Idx, DType>(incsr, feat_src, el, er,
-                                                     sum, exp, ret, slope);
-  // TODO: check if transposed eid is needed here
-  HET::OpPrototyping::BackwardFusedGatKernelImpl<Idx, DType, true>(
-      outcsr, feat_src, el, er, sum, exp, ret, grad_out, grad_feat_src, grad_el,
-      grad_er, slope);
-  HET::OpPrototyping::BackwardFusedGatKernelImpl<Idx, DType, false>(
-      outcsr, feat_src, el, er, sum, exp, ret, grad_out, grad_feat_src, grad_el,
-      grad_er, slope);
-  return 0;
-}
-
-// TODO: move this function to OpPrototyping/ as it uses MySimpleNDArray
-int HGTBackPropGradientSMAFusionProfiling_main(
-    MyHeteroIntegratedCSR<int32_t, std::allocator<int32_t>> csr_h,
-    int64_t num_heads, int64_t num_feat_per_head) {
-  typedef int32_t Idx;
-  typedef float DType;
-
-  MyHeteroIntegratedCSR<Idx, std::allocator<Idx>> transposed_csr_h(csr_h);
-
-  // transposed_csr_h.Transpose<>(std::optional<std::reference_wrapper<typename
-  // thrust::detail::vector_base<Idx,
-  // std::allocator<Idx>>>>{transposed_eids_h.data});
-  transposed_csr_h.Transpose();
-
-  // copy CSR+eid data to device
-  MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> transposed_csr(
-      transposed_csr_h);
-  // MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids(eids_h);
-  // MySimpleNDArray<Idx, thrust::device_allocator<Idx>>
-  // transposed_eids(transposed_eids_h);
-
-  assert(csr_h.num_rels ==
-         4);  // memory footprint 50% reduction hack for grad_sm_first_stage
-              // only effective for ogbn-mag
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_sm_first_stage =
-      GenerateRandomNDArray<DType>(
-          {csr_h.num_rows,
-           2 /*memory footprint hack only effective for ogbn-mag*/, num_heads,
-           num_feat_per_head});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_a =
-      GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, num_heads});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_t_neighbour =
-      GenerateRandomNDArray<DType>(
-          {csr_h.num_rows, num_heads, num_feat_per_head});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> message =
-      GenerateRandomNDArray<DType>(
-          {csr_h.total_num_nnzs, num_heads, num_feat_per_head});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> sigmas =
-      GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, num_heads});
-
-  HET::OpPrototyping::HGTBackPropGradientSMAFusion<Idx, DType>(
-      transposed_csr,
-      grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
-      grad_a,               // |E| * N_HEADS
-      grad_t_neighbour,     //|V| * N_HEADS * DIM_PER_HEAD
-      message,              //|E| * N_HEADS * DIM_PER_HEAD
-      sigmas);              //|E| * N_HEADS
-  return 0;
-}
+#include "DGLHackKernel/OpPrototyping/ModelsProfiling.h"
 
 cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(
     bool sorted = false, bool sorted_by_src = false,
@@ -337,9 +218,10 @@ MyHeteroIntegratedCSR<int, std::allocator<int>> LoadOGBN_MAG(
   cusp::csr_matrix<int, int, cusp::host_memory> citing_csr_h(citing_coo_h);
   cusp::csr_matrix<int, int, cusp::host_memory> writing_csr_h(writing_coo_h);
 
-  MySimpleNDArray<int, std::allocator<int>> eids_h(std::vector<int64_t>{
-      (int64_t)(is_about_data.size() / 2 + affliated_with_data.size() / 2 +
-                citing_data.size() / 2 + writing_data.size() / 2)});
+  HET::OpPrototyping::MySimpleNDArray<int, std::allocator<int>> eids_h(
+      std::vector<int64_t>{
+          (int64_t)(is_about_data.size() / 2 + affliated_with_data.size() / 2 +
+                    citing_data.size() / 2 + writing_data.size() / 2)});
   thrust::sequence<>(eids_h.data.begin(), eids_h.data.end(), 0);
 
   MyHeteroSeparateCSR<int, std::allocator<int>> my_hetero_separate_csr_h(
@@ -379,12 +261,16 @@ LoadSegmentCSR_OGBN_MAG() {
   // npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_0.edge_types.npy",
   // maximal_edge_type_per_src_node_shape, fortran_order,
   // maximal_edge_type_per_src_node);
-  auto maximal_edge_num_per_src_node = LoadMySimpleNDArrayFromNumpy<
-      Idx, std::allocator<Idx>, int64_t>(
-      "data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_0.edge_nums.npy");
-  auto maximal_edge_types_per_src_node = LoadMySimpleNDArrayFromNumpy<
-      Idx, std::allocator<Idx>, int64_t>(
-      "data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_0.edge_types.npy");
+  auto maximal_edge_num_per_src_node =
+      HET::OpPrototyping::LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,
+                                                       int64_t>(
+          "data/MyHybData/SegmentCSR/"
+          "ogbn_mag.segment_csr.part_0.edge_nums.npy");
+  auto maximal_edge_types_per_src_node =
+      HET::OpPrototyping::LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,
+                                                       int64_t>(
+          "data/MyHybData/SegmentCSR/"
+          "ogbn_mag.segment_csr.part_0.edge_types.npy");
 
   // std::vector<int64_t> src_node_per_edge_type, num_src_nodes_per_edge_type;
   // std::vector<unsigned long> src_node_per_edge_type_shape,
@@ -395,11 +281,13 @@ LoadSegmentCSR_OGBN_MAG() {
   // num_src_nodes_per_edge_type_shape, fortran_order,
   // num_src_nodes_per_edge_type);
   auto num_src_nodes_per_edge_type =
-      LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>, int64_t>(
+      HET::OpPrototyping::LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,
+                                                       int64_t>(
           "data/MyHybData/SegmentCSR/"
           "ogbn_mag.segment_csr.part_1.edge_type_num.npy");
   auto src_node_per_edge_type =
-      LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>, int64_t>(
+      HET::OpPrototyping::LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,
+                                                       int64_t>(
           "data/MyHybData/SegmentCSR/"
           "ogbn_mag.segment_csr.part_1.src_node_per_edge_type.npy");
 
@@ -411,7 +299,8 @@ LoadSegmentCSR_OGBN_MAG() {
   // TODO: when padding, both dense_edges and offset_num_src_nodes_per_edge_type
   // (or num_src_nodes_per_edge_type) needs to be padded.
   auto dense_edges =
-      LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>, int64_t>(
+      HET::OpPrototyping::LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,
+                                                       int64_t>(
           "data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_2.edges.npy");
 
   // std::vector<int64_t> residue_srcs_data, residue_dsts_data,
@@ -424,13 +313,16 @@ LoadSegmentCSR_OGBN_MAG() {
   // npy::LoadArrayFromNumpy("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_3.types.npy",
   // residue_etypes_shape, fortran_order, residue_etypes_data);
   auto residue_srcs_data =
-      LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>, int64_t>(
+      HET::OpPrototyping::LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,
+                                                       int64_t>(
           "data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_3.srcs.npy");
   auto residue_dsts_data =
-      LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>, int64_t>(
+      HET::OpPrototyping::LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,
+                                                       int64_t>(
           "data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_3.dsts.npy");
   auto residue_etypes_data =
-      LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>, int64_t>(
+      HET::OpPrototyping::LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,
+                                                       int64_t>(
           "data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_3.types.npy");
 
   cusp::coo_matrix<Idx, Idx, cusp::host_memory> residue_coo_matrix_h(
@@ -479,186 +371,23 @@ LoadSegmentCSR_OGBN_MAG() {
   return mysegmentcsr;
 }
 
-// TODO: move this function to OpPrototyping/ as it uses MySimpleNDArray
-int _HGTExperimental_main(
-    MySegmentCSR<int, std::allocator<int>,
-                 MyHeteroSeparateCSR<int, std::allocator<int>>>& graph,
-    int num_heads, int in_feat, int out_feat) {  // noexcept(false) {
-  assert(num_heads == 4);
-  typedef int32_t Idx;
-  typedef float DType;
-  typedef float4 DTypeVec4;
-
-  MySegmentCSR<int, thrust::device_allocator<int>,
-               MyHeteroSeparateCSR<int, thrust::device_allocator<int>>>
-      deivce_graph = graph;
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> node_features =
-      GenerateRandomNDArray<DType>({graph.num_rows, num_heads, in_feat});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> weight =
-      GenerateRandomNDArray<DType>(
-          {graph.num_rels, num_heads, in_feat, out_feat});
-  // MySimpleNDArray<DType, thrust::device_allocator<DType>>
-  // intermediate_vectors=GenerateRandomNDArray<DType>({graph.num_rels,
-  // graph.num_rows, num_heads, out_feat});
-  MySimpleNDArray<DTypeVec4, thrust::device_allocator<DTypeVec4>> attention =
-      GenerateRandomNDArray<DTypeVec4>({graph.total_num_nnzs, 1});
-  HET::OpPrototyping::HGTForwardImpl(deivce_graph, num_heads, in_feat, out_feat,
-                                     node_features, weight, attention);
-  return 0;
-}
-
-// TODO: move this function to OpPrototyping/ as it uses MySimpleNDArray
-// profiling involve both forward and backward in this function
-// TODO: put in_feat, out_feat into a hyper parametere structure
-int _RGCNLayer1Profiling_main(
-    cusp::csr_matrix<int, int, cusp::host_memory> graph, int64_t in_feat,
-    int64_t out_feat, bool flagUseMyHyb, bool flagCheckCorrect) {
-  typedef int32_t Idx;
-  typedef float DType;
-  if (flagCheckCorrect) {
-    std::cout << "Warning: flagCheckCorrect is true in "
-                 "_RGCNLayer1Profiling_main, ignoring flagUseMyHyb and both "
-                 "myhyb and the original kernels will be run."
-              << std::endl;
-  }
-
-  // load data
-  // MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr;
-  // MySimpleNDArray<Idx, thrust::device_allocator<Idx>>
-  // eids({csr.total_num_nnzs});
-  // thrust::sequence<>(eids.data.begin(),eids.data.end(), 0);
-  // MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>>
-  // transposed_csr(csr); MySimpleNDArray<Idx, thrust::device_allocator<Idx>>
-  // transposed_eids(eids); transposed_csr.Transpose(transposed_eids);
-  MySimpleNDArray<Idx, std::allocator<Idx>> eids_h(
-      std::vector<int64_t>{(int64_t)graph.column_indices.size()});
-  thrust::sequence<>(eids_h.data.begin(), eids_h.data.end(), 0);
-  MySimpleNDArray<Idx, std::allocator<Idx>> transposed_eids_h(eids_h);
-
-  MyHeteroIntegratedCSR<Idx, std::allocator<Idx>> csr_h(
-      graph.row_offsets, graph.column_indices, graph.values, eids_h.data);
-  MyHeteroIntegratedCSR<Idx, std::allocator<Idx>> transposed_csr_h(csr_h);
-
-  // transposed_csr_h.Transpose<>(std::optional<std::reference_wrapper<typename
-  // thrust::detail::vector_base<Idx,
-  // std::allocator<Idx>>>>{transposed_eids_h.data});
-  transposed_csr_h.Transpose();
-
-  // MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr(csr_h);
-  // MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>>
-  // transposed_csr(transposed_csr_h); MySimpleNDArray<Idx,
-  // thrust::device_allocator<Idx>> eids(eids_h); MySimpleNDArray<Idx,
-  // thrust::device_allocator<Idx>> transposed_eids(transposed_eids_h);
-
-  MyHyb<Idx, std::allocator<Idx>,
-        MyHeteroIntegratedCSR<Idx, std::allocator<Idx>>>
-      myhyb_h;  // = IntegratedCSRToHyb_ADHOC_CPU(csr_h, 4, 4, csr_h.num_rows);
-  MyHyb<Idx, std::allocator<Idx>,
-        MyHeteroIntegratedCSR<Idx, std::allocator<Idx>>>
-      transposed_myhyb_h;  // = IntegratedCSRToHyb_ADHOC_CPU(transposed_csr_h,
-                           // 4, 4, transposed_csr_h.num_rows);
-  if (flagUseMyHyb || flagCheckCorrect) {
-    myhyb_h = IntegratedCSRToHyb_ADHOC_CPU(csr_h, 4, 4, csr_h.num_rows);
-    transposed_myhyb_h = IntegratedCSRToHyb_ADHOC_CPU(
-        transposed_csr_h, 4, 4, transposed_csr_h.num_rows);
-  }
-  // copy MyHyb data to device and/or copy CSR+eid data to device
-  MyHyb<Idx, thrust::device_allocator<Idx>,
-        MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>>>
-      myhyb(myhyb_h);
-  MyHyb<Idx, thrust::device_allocator<Idx>,
-        MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>>>
-      transposed_myhyb(transposed_myhyb_h);
-
-  MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr;  //(csr_h);
-  MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>>
-      transposed_csr;  //(transposed_csr_h);
-
-  if ((!flagUseMyHyb) || flagCheckCorrect) {
-    csr = csr_h;
-    transposed_csr = transposed_csr_h;
-  }
-
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden =
-      GenerateRandomNDArray<DType>(
-          {csr_h.num_rows, in_feat});  // TODO: assuming hidden is x. need to
-                                       // verify if that is correct
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> weight =
-      GenerateRandomNDArray<DType>({csr_h.num_rels, in_feat, out_feat});
-  // asuming num_bases == num_rels
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> norm =
-      GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, 1});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>>
-      ret;  //=GenerateRandomNDArray<DType>({myhyb.num_rows, out_feat});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>>
-      ret2;  //=GenerateRandomNDArray<DType>({csr.num_rows, out_feat});
-
-  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_out =
-      GenerateRandomNDArray<DType>(
-          {csr_h.num_rows,
-           out_feat});  // TODO: verify if the assumption that the shape is the
-                        // same as ret is correct
-  MySimpleNDArray<DType, thrust::device_allocator<DType>>
-      grad_hidden;  //=GenerateRandomNDArray<DType>({myhyb.total_num_nnzs,in_feat});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>>
-      grad_weight;  //=GenerateRandomNDArray<DType>({myhyb.num_rels, in_feat,
-                    // out_feat});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>>
-      grad_hidden2;  //=GenerateRandomNDArray<DType>({myhyb.total_num_nnzs,in_feat});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>>
-      grad_weight2;  //=GenerateRandomNDArray<DType>({myhyb.num_rels, in_feat,
-                     // out_feat});
-
-  if ((!flagUseMyHyb) || flagCheckCorrect) {
-    ret = GenerateRandomNDArray<DType>({csr_h.num_rows, out_feat});
-    grad_hidden = GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, in_feat});
-    grad_weight =
-        GenerateRandomNDArray<DType>({csr_h.num_rels, in_feat, out_feat});
-    HET::OpPrototyping::RgcnLayer1Impl<Idx, DType>(csr, hidden, weight, norm,
-                                                   ret);
-    HET::OpPrototyping::RgcnLayer1BackwardImpl<Idx, DType>(
-        transposed_csr, hidden, weight, norm, grad_out, grad_hidden,
-        grad_weight);
-  }
-  if (flagUseMyHyb || flagCheckCorrect) {
-    ret2 = GenerateRandomNDArray<DType>({csr_h.num_rows, out_feat});
-    grad_hidden2 =
-        GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, in_feat});
-    grad_weight2 =
-        GenerateRandomNDArray<DType>({csr_h.num_rels, in_feat, out_feat});
-
-    RgcnLayer1MyHYBImpl<Idx, DType, 4, 4>(myhyb, hidden, weight, norm, ret2);
-    RgcnLayer1BackwardMyHYBImpl<Idx, DType, 4, 4>(transposed_myhyb, hidden,
-                                                  weight, norm, grad_out,
-                                                  grad_hidden2, grad_weight2);
-  }
-
-  if (flagCheckCorrect) {
-    std::cout << "check correctness in _RGCNLayer1Profiling_main" << std::endl;
-    std::cout << "ret: " << ret.IsEqual<>(ret2) << std::endl;
-    std::cout << "grad_hidden: " << grad_hidden.IsEqual<>(grad_hidden2)
-              << std::endl;
-    std::cout << "grad_weight: " << grad_weight.IsEqual<>(grad_weight2)
-              << std::endl;
-  }
-
-  return 0;
-}
-
 int RGCNLayer1Profiling_MyHYB_main(
     cusp::csr_matrix<int, int, cusp::host_memory> graph, int64_t in_feat,
     int64_t out_feat) {
-  return _RGCNLayer1Profiling_main(graph, in_feat, out_feat, true, false);
+  return HET::OpPrototyping::_RGCNLayer1Profiling_main(graph, in_feat, out_feat,
+                                                       true, false);
 }
 
 int RGCNLayer1Profiling_main(
     cusp::csr_matrix<int, int, cusp::host_memory> graph, int64_t in_feat,
     int64_t out_feat) {
-  return _RGCNLayer1Profiling_main(graph, in_feat, out_feat, false, false);
+  return HET::OpPrototyping::_RGCNLayer1Profiling_main(graph, in_feat, out_feat,
+                                                       false, false);
 }
 
 int RGCNLayer1Profiling_main_check_correctness(
     cusp::csr_matrix<int, int, cusp::host_memory> graph, int64_t in_feat,
     int64_t out_feat) {
-  return _RGCNLayer1Profiling_main(graph, in_feat, out_feat, true, true);
+  return HET::OpPrototyping::_RGCNLayer1Profiling_main(graph, in_feat, out_feat,
+                                                       true, true);
 }

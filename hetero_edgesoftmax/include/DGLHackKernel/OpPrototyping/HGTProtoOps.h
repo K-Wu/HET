@@ -449,6 +449,7 @@ void HGTBackPropGradientSMAFusion(
             << " ms" << std::endl;
 }
 
+// TODO: implement its equivalent in OpExport
 void HGTForwardImpl(
     MySegmentCSR<int, thrust::device_allocator<int>,
                  MyHeteroSeparateCSR<int, thrust::device_allocator<int>>>

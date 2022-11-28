@@ -180,33 +180,46 @@ __global__ void HGTBackwardGradientSmFirstPartImpl(
   }
 }
 
-template <typename Idx, typename DType, bool UseMuAppliedAttnScoreFlag>
+template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
 struct BackwardHGTMessageData {
   CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-      UseMuAppliedAttnScoreFlag || !UseMuAppliedAttnScoreFlag,
+      UseMuAppliedAttnScoreSwitch == 0 || !UseMuAppliedAttnScoreSwitch != 0,
       "the program should use partial specialization of this structure");
 };
 
 template <typename Idx, typename DType>
-struct BackwardHGTMessageData<Idx, DType, true> {
+struct BackwardHGTMessageData<Idx, DType, 2> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
   Idx* eids;
-  DType *grad_message_src{nullptr}, *edge_softmax_sum{nullptr}, *out{nullptr},
-      *grad_out{nullptr};
+  DType *grad_message_src{nullptr}, *out{nullptr}, *grad_out{nullptr};
   DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
-  DType* mu_applied_un_softmax_attn_score{nullptr};
+  DType* normalized_attn_score{nullptr};
+  // DType *edge_softmax_sum{nullptr};
 };
 
 template <typename Idx, typename DType>
-struct BackwardHGTMessageData<Idx, DType, false> {
+struct BackwardHGTMessageData<Idx, DType, 1> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
   Idx* eids;
   DType *grad_message_src{nullptr}, *edge_softmax_sum{nullptr}, *out{nullptr},
       *grad_out{nullptr};
   DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
-  // DType *mu_applied_un_softmax_attn_score{nullptr};
+  DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
+  // DType* normalized_attn_score{nullptr};
+};
+
+template <typename Idx, typename DType>
+struct BackwardHGTMessageData<Idx, DType, 0> {
+  Idx num_heads{0};
+  Idx message_src_xlen{0};
+  Idx* eids;
+  DType *grad_message_src{nullptr}, *edge_softmax_sum{nullptr}, *out{nullptr},
+      *grad_out{nullptr};
+  DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
+  // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
+  // DType* normalized_attn_score{nullptr};
 };
 
 // based on _fusedGatBackwardGradFeatSrc, as it is to calculate the gradient of
@@ -214,10 +227,10 @@ struct BackwardHGTMessageData<Idx, DType, false> {
 // TODO: add mu into the term
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag,
-          bool UseMuAppliedAttnScoreFlag>
+          int UseMuAppliedAttnScoreSwitch>
 __device__ __forceinline__ void
 _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
-    BackwardHGTMessageData<Idx, DType, UseMuAppliedAttnScoreFlag> gdata,
+    BackwardHGTMessageData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
     const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
     int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
@@ -276,12 +289,16 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
           }
 
           DType normalized_attn_score;
-          if constexpr (UseMuAppliedAttnScoreFlag) {
+          if constexpr (UseMuAppliedAttnScoreSwitch == 1) {
             normalized_attn_score =
-                gdata.mu_applied_un_softmax_attn_score[eid * num_heads +
-                                                       head_idx] /
+                gdata.mu_softmax_applied_unnormalized_attn_score[eid *
+                                                                     num_heads +
+                                                                 head_idx] /
                 gdata.edge_softmax_sum[sum_vid * num_heads + head_idx];
-          } else {
+          } else if constexpr (UseMuAppliedAttnScoreSwitch == 2) {
+            normalized_attn_score =
+                gdata.normalized_attn_score[eid * num_heads + head_idx];
+          } else if constexpr (UseMuAppliedAttnScoreSwitch == 0) {
             DType mu;
             if constexpr (RelationalFlag) {
               mu = gdata.mu[etype];
@@ -314,27 +331,29 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
   }
 }
 
-template <typename Idx, typename DType, bool FwdOutputMuAppliedAttnScoreFlag>
+template <typename Idx, typename DType, int FwdOutputMuAppliedAttnScoreSwitch>
 struct BackwardHGTAttnScoreData {
   CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-      FwdOutputMuAppliedAttnScoreFlag || !FwdOutputMuAppliedAttnScoreFlag,
+      FwdOutputMuAppliedAttnScoreSwitch != 0 &&
+          FwdOutputMuAppliedAttnScoreSwitch == 0,
       "the program should use partial specialization of this structure");
 };
 
 template <typename Idx, typename DType>
-struct BackwardHGTAttnScoreData<Idx, DType, true> {
+struct BackwardHGTAttnScoreData<Idx, DType, 2> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
   Idx* eids;
   DType *grad_attn_score{nullptr}, *message_src{nullptr},
-      *unnormalized_attn_score{nullptr}, *edge_softmax_sum{nullptr},
-      *out{nullptr}, *grad_out{nullptr};
+      *unnormalized_attn_score{nullptr}, *out{nullptr}, *grad_out{nullptr};
   DType *grad_mu{nullptr}, *mu{nullptr};
-  DType* mu_applied_un_softmax_attn_score{nullptr};
+  DType* normalized_attn_score{nullptr};
+  // DType* edge_softmax_sum{nullptr};
+  // DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
-struct BackwardHGTAttnScoreData<Idx, DType, false> {
+struct BackwardHGTAttnScoreData<Idx, DType, 1> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
   Idx* eids;
@@ -342,7 +361,21 @@ struct BackwardHGTAttnScoreData<Idx, DType, false> {
       *unnormalized_attn_score{nullptr}, *edge_softmax_sum{nullptr},
       *out{nullptr}, *grad_out{nullptr};
   DType *grad_mu{nullptr}, *mu{nullptr};
-  // DType *mu_applied_un_softmax_attn_score{nullptr};
+  // DType* normalized_attn_score{nullptr};
+  DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
+};
+
+template <typename Idx, typename DType>
+struct BackwardHGTAttnScoreData<Idx, DType, 0> {
+  Idx num_heads{0};
+  Idx message_src_xlen{0};
+  Idx* eids;
+  DType *grad_attn_score{nullptr}, *message_src{nullptr},
+      *unnormalized_attn_score{nullptr}, *edge_softmax_sum{nullptr},
+      *out{nullptr}, *grad_out{nullptr};
+  DType *grad_mu{nullptr}, *mu{nullptr};
+  // DType* normalized_attn_score{nullptr};
+  // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
 };
 
 // S_j = expf(z_j) / sum_k expf(z_k)
@@ -353,9 +386,10 @@ struct BackwardHGTAttnScoreData<Idx, DType, false> {
 // attention
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag,
-          bool FwdOutputMuAppliedAttnScoreFlag>
+          int FwdOutputMuAppliedAttnScoreSwitch>
 __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
-    BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreFlag> gdata,
+    BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreSwitch>
+        gdata,
     const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
     int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
@@ -438,14 +472,22 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
           }
 
           DType normalized_attn_score;
-          if constexpr (FwdOutputMuAppliedAttnScoreFlag) {
+          if constexpr (FwdOutputMuAppliedAttnScoreSwitch == 1) {
             normalized_attn_score =
-                gdata.mu_applied_un_softmax_attn_score[edge_offset] /
+                gdata.mu_softmax_applied_unnormalized_attn_score[edge_offset] /
                 gdata.edge_softmax_sum[edge_softmax_sum_idx];
+          } else if constexpr (FwdOutputMuAppliedAttnScoreSwitch == 0) {
+            normalized_attn_score =
+                expf(gdata.unnormalized_attn_score[edge_offset] * mu) /
+                gdata.edge_softmax_sum[edge_softmax_sum_idx];
+          } else if constexpr (FwdOutputMuAppliedAttnScoreSwitch == 2) {
+            normalized_attn_score = gdata.normalized_attn_score[edge_offset];
           } else {
-            normalized_attn_score =
-                gdata.unnormalized_attn_score[edge_offset] * mu /
-                gdata.edge_softmax_sum[edge_softmax_sum_idx];
+            CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                FwdOutputMuAppliedAttnScoreSwitch != 0 &&
+                    FwdOutputMuAppliedAttnScoreSwitch != 1 &&
+                    FwdOutputMuAppliedAttnScoreSwitch != 2,
+                "FwdOutputMuAppliedAttnScoreSwitch must be 0, 1 or 2");
           }
           DType grad_for_this_feat_idx =
               gdata.grad_out[dst_out_offset] *

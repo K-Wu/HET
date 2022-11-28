@@ -1,10 +1,14 @@
 #pragma once
-
+namespace HET {
+namespace TorchExport {
+namespace RGCN {
+namespace FwProp {
+namespace IntegratedCOO {
 template </*int XPU, */ typename Idx, typename DType>
-void _RgcnLayerImpl_wrapper_integratedcoo(
-    at::Tensor& coo_row_idx, at::Tensor& coo_col_idx, at::Tensor& coo_eids,
-    at::Tensor& coo_reltypes, at::Tensor& hidden, at::Tensor& weight,
-    at::Tensor& norm, at::Tensor& ret, bool layer1_flag) {
+void _LayerImpl(at::Tensor& coo_row_idx, at::Tensor& coo_col_idx,
+                at::Tensor& coo_eids, at::Tensor& coo_reltypes,
+                at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
+                at::Tensor& ret, bool layer1_flag) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   auto row_idx_data = coo_row_idx.data_ptr<Idx>();
   auto ids_data = coo_col_idx.data_ptr<Idx>();
@@ -43,19 +47,21 @@ void _RgcnLayerImpl_wrapper_integratedcoo(
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer1Impl_wrapper_integratedcoo(
-    at::Tensor& coo_row_idx, at::Tensor& coo_col_idx, at::Tensor& coo_eids,
-    at::Tensor& coo_reltypes, at::Tensor& hidden, at::Tensor& weight,
-    at::Tensor& norm, at::Tensor& ret) {
+void Layer1Impl(at::Tensor& coo_row_idx, at::Tensor& coo_col_idx,
+                at::Tensor& coo_eids, at::Tensor& coo_reltypes,
+                at::Tensor& hidden, at::Tensor& weight, at::Tensor& norm,
+                at::Tensor& ret) {
   // NB: graphiler, seastar by default uses int64_t
-  _RgcnLayerImpl_wrapper_integratedcoo<int64_t, float>(
-      coo_row_idx, coo_col_idx, coo_eids, coo_reltypes, hidden, weight, norm,
-      ret, true);
+  _LayerImpl<int64_t, float>(coo_row_idx, coo_col_idx, coo_eids, coo_reltypes,
+                             hidden, weight, norm, ret, true);
 }
-
+}  // namespace IntegratedCOO
+}  // namespace FwProp
+namespace BckProp {
+namespace IntegratedCOO {
 // the referential implementation from seastar
 template </*int XPU, */ typename Idx, typename DType>
-void _RgcnLayerBackwardImpl_wrapper_integratedcoo(
+void _LayerBackwardImpl(
     // GraphRef graph,
     at::Tensor& transposed_coo_row_idx, at::Tensor& transposed_coo_col_idx,
     at::Tensor& transposed_coo_eids, at::Tensor& transposed_coo_reltypes,
@@ -130,7 +136,7 @@ void _RgcnLayerBackwardImpl_wrapper_integratedcoo(
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void RgcnLayer1BackwardImpl_wrapper_integratedcoo(
+void Layer1BackwardImpl(
     // GraphRef graph,
     at::Tensor& transposed_coo_row_idx, at::Tensor& transposed_coo_col_idx,
     at::Tensor& transposed_coo_eids, at::Tensor& transposed_coo_reltypes,
@@ -138,8 +144,13 @@ void RgcnLayer1BackwardImpl_wrapper_integratedcoo(
     at::Tensor& grad_out, at::Tensor& grad_hidden, at::Tensor& grad_weight) {
   // NB: graphiler, seastar by default uses int64_t
   at::Tensor dummy_tensor;
-  _RgcnLayerBackwardImpl_wrapper_integratedcoo<int64_t, float>(
+  _LayerBackwardImpl<int64_t, float>(
       transposed_coo_row_idx, transposed_coo_col_idx, transposed_coo_eids,
       transposed_coo_reltypes, hidden, weight, norm, grad_out, grad_hidden,
       grad_weight, /*ret_dummy*/ dummy_tensor, true);
 }
+}  // namespace IntegratedCOO
+}  // namespace BckProp
+}  // namespace RGCN
+}  // namespace TorchExport
+}  // namespace HET

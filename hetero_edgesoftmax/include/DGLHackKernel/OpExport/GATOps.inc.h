@@ -5,15 +5,16 @@
 #include <torch/extension.h>
 #include <torch/library.h>
 #include "DGLHackKernel/DGLHackUtils.h"
-
+namespace HET {
+namespace TorchExport {
+namespace RGCN {
+namespace FwProp {
+namespace IntegratedCSR {
 template </*int XPU, */ typename Idx, typename DType>
-void _FusedGatKernelImpl_wrapper_integratedcsr(at::Tensor& incsr_row_ptr,
-                                               at::Tensor& incsr_col_idx,
-                                               at::Tensor& incsr_eids,
-                                               at::Tensor& feat_src,
-                                               at::Tensor& el, at::Tensor& er,
-                                               at::Tensor& sum, at::Tensor& exp,
-                                               at::Tensor& ret, double slope) {
+void _FusedKernelImpl(at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
+                      at::Tensor& incsr_eids, at::Tensor& feat_src,
+                      at::Tensor& el, at::Tensor& er, at::Tensor& sum,
+                      at::Tensor& exp, at::Tensor& ret, double slope) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   // As GAT only has 1 type of relationship, we use a specialcase of separateCSR
   // where num releationship is asserted as 1
@@ -119,9 +120,13 @@ void _FusedGatKernelImpl_wrapper_integratedcsr(at::Tensor& incsr_row_ptr,
   //    printf("stride_vid: %d\n", nblks_y);
   //    printf("dst_vid: %d\n", nthrs_y);
 }
-
+constexpr auto FusedKernelImpl = _FusedKernelImpl<int64_t, float>;
+}  // namespace IntegratedCSR
+}  // namespace FwProp
+namespace BckProp {
+namespace IntegratedCSR {
 template </*int XPU, */ typename Idx, typename DType, bool FLAG_KERNEL_FUSED>
-void _BackwardFusedGatKernelImpl_wrapper_integratedcsr(
+void _FusedKernelImpl(
     at::Tensor& outcsr_row_ptr, at::Tensor& outcsr_col_idx,
     at::Tensor& outcsr_eids, at::Tensor& feat_src, at::Tensor& el,
     at::Tensor& er, at::Tensor& sum, at::Tensor& exp, at::Tensor& ret,
@@ -221,8 +226,9 @@ void _BackwardFusedGatKernelImpl_wrapper_integratedcsr(
   //       << " ms" << std::endl;
 }
 
-constexpr auto FusedGatKernelImpl_wrapper_integratedcsr =
-    _FusedGatKernelImpl_wrapper_integratedcsr<int64_t, float>;
-
-constexpr auto BackwardFusedGatKernelImpl_wrapper_integratedcsr =
-    _BackwardFusedGatKernelImpl_wrapper_integratedcsr<int64_t, float, true>;
+constexpr auto FusedKernelImpl = _FusedKernelImpl<int64_t, float, true>;
+}  // namespace IntegratedCSR
+}  // namespace BckProp
+}  // namespace RGCN
+}  // namespace TorchExport
+}  // namespace HET
