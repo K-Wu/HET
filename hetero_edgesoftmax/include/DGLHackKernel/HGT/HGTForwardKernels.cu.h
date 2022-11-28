@@ -248,7 +248,7 @@ struct HgtDstOutData<Idx, DType, 0> {
   Idx num_heads{0};
   Idx message_out_dim{0};
   Idx* eids;
-  DType *edge_softmax_sum{nullptr}, *message{nullptr}, *ret{nullptr};
+  DType *edgesoftmax_sum_per_node{nullptr}, *message{nullptr}, *ret{nullptr};
   // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
   DType *mu{nullptr}, *unnormalized_attn_score{nullptr};
@@ -259,7 +259,7 @@ struct HgtDstOutData<Idx, DType, 1> {
   Idx num_heads{0};
   Idx message_out_dim{0};
   Idx* eids;
-  DType *edge_softmax_sum{nullptr}, *message{nullptr}, *ret{nullptr};
+  DType *edgesoftmax_sum_per_node{nullptr}, *message{nullptr}, *ret{nullptr};
   DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
   // DType* mu{nullptr}, *unnormalized_attn_score{nullptr};
@@ -272,7 +272,7 @@ struct HgtDstOutData<Idx, DType, 2> {
   Idx* eids;
   DType *message{nullptr}, *ret{nullptr};
   DType* normalized_attn_score{nullptr};
-  // DType *edge_softmax_sum{nullptr};
+  // DType *edgesoftmax_sum_per_node{nullptr};
   // DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* mu{nullptr}, *unnormalized_attn_score{nullptr};
 };
@@ -285,8 +285,7 @@ struct HgtDstOutData<Idx, DType, 2> {
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int UseMuAppliedAttnScoreSwitch>
-__device__ __forceinline__ void
-_hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
+__global__ void _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
     HgtDstOutData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
     const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
     int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
@@ -344,13 +343,15 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
                   expf(gdata.mu[etype] *
                        gdata.unnormalized_attn_score[edge_id * num_heads +
                                                      head_idx]) /
-                  gdata.edge_softmax_sum[sum_idx * num_heads + head_idx];
-            } else if (UseMuAppliedAttnScoreSwitch == 1) {
+                  gdata
+                      .edgesoftmax_sum_per_node[sum_idx * num_heads + head_idx];
+            } else if constexpr (UseMuAppliedAttnScoreSwitch == 1) {
               normalized_attn_score =
                   gdata.mu_softmax_applied_unnormalized_attn_score
                       [edge_id * num_heads + head_idx] /
-                  gdata.edge_softmax_sum[sum_idx * num_heads + head_idx];
-            } else if (UseMuAppliedAttnScoreSwitch == 2) {
+                  gdata
+                      .edgesoftmax_sum_per_node[sum_idx * num_heads + head_idx];
+            } else if constexpr (UseMuAppliedAttnScoreSwitch == 2) {
               normalized_attn_score =
                   gdata.normalized_attn_score[edge_id * num_heads + head_idx];
             } else {
@@ -379,12 +380,14 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
                   (*gdata.mu) *
                   gdata
                       .unnormalized_attn_score[edge_id * num_heads + head_idx] /
-                  gdata.edge_softmax_sum[dst_vid * num_heads + head_idx];
+                  gdata
+                      .edgesoftmax_sum_per_node[dst_vid * num_heads + head_idx];
             } else if constexpr (UseMuAppliedAttnScoreSwitch == 1) {
               normalized_attn_score =
                   gdata.mu_softmax_applied_unnormalized_attn_score
                       [edge_id * num_heads + head_idx] /
-                  gdata.edge_softmax_sum[dst_vid * num_heads + head_idx];
+                  gdata
+                      .edgesoftmax_sum_per_node[dst_vid * num_heads + head_idx];
 
             } else if constexpr (UseMuAppliedAttnScoreSwitch == 2) {
               normalized_attn_score =
@@ -422,7 +425,9 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 0> {
   Idx num_heads{0};
   Idx* eids;
   DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
-      *edge_softmax_sum{nullptr};
+      *edgesoftmax_sum_per_node{nullptr};
+  // DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
+  // DType* normalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
@@ -430,8 +435,9 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 1> {
   Idx num_heads{0};
   Idx* eids;
   DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
-      *edge_softmax_sum{nullptr};
+      *edgesoftmax_sum_per_node{nullptr};
   DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
+  // DType* normalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
@@ -439,7 +445,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 2> {
   Idx num_heads{0};
   Idx* eids;
   DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
-      *edge_softmax_sum{nullptr};
+      *edgesoftmax_sum_per_node{nullptr};
   DType* normalized_attn_score{nullptr};
 };
 
@@ -448,7 +454,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 3> {
   Idx num_heads{0};
   Idx* eids;
   DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
-      *edge_softmax_sum{nullptr};
+      *edgesoftmax_sum_per_node{nullptr};
   DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
   DType* normalized_attn_score{nullptr};
 };
@@ -462,7 +468,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 3> {
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int OutputMuAppliedAttnScoreSwitch>
-__device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
+__global__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
     int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
@@ -551,10 +557,9 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
           // !CompactAsOfNodeFlag && RelationalFlag
           // TODO: fix this and align dst_vid_relational definition with
           // _fusedGatBackwardGradElErFeatSrcFused
-          atomicAdd(
-              &gdata.edge_softmax_sum[Idx(dst_vid_relational * num_heads) +
-                                      feat_idx],
-              tmp);
+          atomicAdd(&gdata.edgesoftmax_sum_per_node
+                         [Idx(dst_vid_relational * num_heads) + feat_idx],
+                    tmp);
         }
         if constexpr (OutputMuAppliedAttnScoreSwitch == 1 ||
                       OutputMuAppliedAttnScoreSwitch == 3) {
@@ -564,7 +569,8 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
         sum += tmp;
       }
       if constexpr (!RelationalFlag) {
-        gdata.edge_softmax_sum[Idx(dst_vid * num_heads) + feat_idx] = sum;
+        gdata.edgesoftmax_sum_per_node[Idx(dst_vid * num_heads) + feat_idx] =
+            sum;
       }
 
       if constexpr (OutputMuAppliedAttnScoreSwitch == 2 ||
@@ -579,7 +585,8 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
               gdata.normalized_attn_score[edge_id * num_heads + feat_idx] =
                   gdata.mu_softmax_applied_unnormalized_attn_score
                       [edge_id * num_heads + feat_idx] /
-                  gdata.edge_softmax_sum[Idx(dst_vid * num_heads) + feat_idx];
+                  gdata.edgesoftmax_sum_per_node[Idx(dst_vid * num_heads) +
+                                                 feat_idx];
             } else {
               DType mu;
               if constexpr (RelationalFlag) {
@@ -595,7 +602,8 @@ __device__ __forceinline__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
               }
               gdata.normalized_attn_score[edge_id * num_heads + feat_idx] =
                   gdata.unnormalized_attn_score[feat_off_src] * mu /
-                  gdata.edge_softmax_sum[Idx(dst_vid * num_heads) + feat_idx];
+                  gdata.edgesoftmax_sum_per_node[Idx(dst_vid * num_heads) +
+                                                 feat_idx];
             }
           }
         }
