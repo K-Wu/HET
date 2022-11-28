@@ -18,12 +18,13 @@ namespace HGT {
 namespace FwProp {
 namespace IntegratedCSR {
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
-void _full_graph_message_mean_aggregation(
-    at::Tensor& incsr_rowptr, at::Tensor& incsr_col_idx,
-    at::Tensor& incsr_reltypes, at::Tensor& incsr_eids,
-    at::Tensor& edge_messages, at::Tensor& edge_attn_score, at::Tensor& mu,
-    at::Tensor& ret, at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices) {
+void _full_graph_message_mean_aggregation(at::Tensor& incsr_rowptr,
+                                          at::Tensor& incsr_col_idx,
+                                          at::Tensor& incsr_reltypes,
+                                          at::Tensor& incsr_eids,
+                                          at::Tensor& edge_messages,
+                                          at::Tensor& edge_attn_score,
+                                          at::Tensor& mu, at::Tensor& ret) {
   // using _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum based on
   // _gatSumProdZipDivKernel whose driver code is
   // HET::TorchExport::RGCN::FwProp::IntegratedCSR::_FusedKernelImpl in
@@ -92,20 +93,20 @@ void _full_graph_message_mean_aggregation(
       <<<nthrs, nblks, 0, stream>>>(
           gdata, incsr_rowptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
           incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
-          unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
-          unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
+          nullptr /*no need when !CompactAsOfNodeFlag*/,
+          nullptr /*no need when !CompactAsOfNodeFlag*/, num_relations);
 }
 
-void full_graph_message_mean_aggregation(
-    at::Tensor& incsr_rowptr, at::Tensor& incsr_col_idx,
-    at::Tensor& incsr_reltypes, at::Tensor& incsr_eids,
-    at::Tensor& edge_messages, at::Tensor& edge_attn_score, at::Tensor& mu,
-    at::Tensor& ret, at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices) {
+void full_graph_message_mean_aggregation(at::Tensor& incsr_rowptr,
+                                         at::Tensor& incsr_col_idx,
+                                         at::Tensor& incsr_reltypes,
+                                         at::Tensor& incsr_eids,
+                                         at::Tensor& edge_messages,
+                                         at::Tensor& edge_attn_score,
+                                         at::Tensor& mu, at::Tensor& ret) {
   _full_graph_message_mean_aggregation<int64_t, float, 1>(
       incsr_rowptr, incsr_col_idx, incsr_reltypes, incsr_eids, edge_messages,
-      edge_attn_score, mu, ret, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_indices);
+      edge_attn_score, mu, ret);
 }
 
 void full_graph_hetero_attention_ops(at::Tensor& row_ptr, at::Tensor& col_idx,
@@ -129,9 +130,7 @@ void _full_graph_edge_softmax_ops(
     at::Tensor& incsr_reltypes, at::Tensor& unnormalized_attn_score,
     at::Tensor& mu, at::Tensor& edgesoftmax_sum_per_node,
     at::Tensor& mu_softmax_applied_unnormalized_attn_score,
-    at::Tensor& normalized_attn_score, at::Tensor& ret,
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices) {
+    at::Tensor& normalized_attn_score) {
   // using _hgtEdgeSoftmaxAccumStageOnlyKernel based on
   // _gatExpLeakyReluSumKernel in
   // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]].
@@ -188,8 +187,8 @@ void _full_graph_edge_softmax_ops(
       <<<nblks, nthrs, 0, stream>>>(
           gdata, incsr_rowptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
           incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
-          unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
-          unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
+          /*no need when !CompactAsOfNode*/ nullptr,
+          /*no need when !CompactAsOfNode*/ nullptr, num_relations);
 }
 
 void full_graph_edge_softmax_ops(
@@ -197,16 +196,13 @@ void full_graph_edge_softmax_ops(
     at::Tensor& reltypes, at::Tensor& unnormalized_attn_score, at::Tensor& mu,
     at::Tensor& edgesoftmax_sum_per_node,
     at::Tensor& mu_softmax_applied_unnormalized_attn_score,
-    at::Tensor& normalized_attn_score, at::Tensor& ret,
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices) {
+    at::Tensor& normalized_attn_score) {
   // calling the partial specialized version of _full_graph_edge_softmax_ops
   // that does both stages, i.e., MuAppliedAttnScoreSwitch == 2
   _full_graph_edge_softmax_ops<int64_t, float, 3>(
       row_ptr, col_idx, eids, reltypes, unnormalized_attn_score, mu,
       edgesoftmax_sum_per_node, mu_softmax_applied_unnormalized_attn_score,
-      normalized_attn_score, ret, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_indices);
+      normalized_attn_score);
 }
 
 // this function only calculates edge softmax sum at each destination node.
@@ -214,9 +210,7 @@ void full_graph_edge_softmax_only_accumu_stage_ops(
     at::Tensor& incsr_rowptr, at::Tensor& incsr_col_idx, at::Tensor& incsr_eids,
     at::Tensor& incsr_reltypes, at::Tensor& unnormalized_attn_score,
     at::Tensor& mu, at::Tensor& edgesoftmax_sum_per_node,
-    at::Tensor& mu_softmax_applied_unnormalized_attn_score, at::Tensor& ret,
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices) {
+    at::Tensor& mu_softmax_applied_unnormalized_attn_score, at::Tensor& ret) {
   // using _hgtEdgeSoftmaxAccumStageOnlyKernel based on
   // _gatExpLeakyReluSumKernel whose driver code is
   // HET::TorchExport::RGCN::FwProp::IntegratedCSR::_FusedKernelImpl in
@@ -227,8 +221,7 @@ void full_graph_edge_softmax_only_accumu_stage_ops(
   _full_graph_edge_softmax_ops<int64_t, float, 1>(
       incsr_rowptr, incsr_col_idx, incsr_eids, incsr_reltypes,
       unnormalized_attn_score, mu, edgesoftmax_sum_per_node,
-      mu_softmax_applied_unnormalized_attn_score, dummy_tensor, ret,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices);
+      mu_softmax_applied_unnormalized_attn_score, dummy_tensor, ret);
 }
 
 }  // namespace IntegratedCSR
@@ -341,7 +334,7 @@ void _full_graph_message_mean_aggregation(
     at::Tensor& edgesoftmax_sum_per_node, at::Tensor& unnormalized_attn_score,
     at::Tensor& mu, at::Tensor& mu_softmax_applied_unnormalized_attn_score,
     at::Tensor& normalized_attn_score, at::Tensor& gradout,
-    at::Tensor& grad_message, at::Tensor& grad_attn_score) {
+    at::Tensor& grad_message) {
   // using _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel
   // that based on _fusedGatBackwardGradFeatSrc whose driver code is
   // HET::TorchExport::RGCN::BckProp::IntegratedCSR::_FusedKernelImpl in
@@ -353,7 +346,8 @@ void _full_graph_message_mean_aggregation(
 
   // preparing gdata
   BackwardHGTMessageData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata;
-  Idx num_heads = grad_attn_score.size(grad_attn_score.ndimension() - 1);
+  Idx num_heads =
+      normalized_attn_score.size(normalized_attn_score.ndimension() - 1);
   Idx num_relations = mu.numel() / num_heads;
   if (num_heads <= 1) {
     std::cout << "Warning: num_heads <= 1 in "
@@ -413,13 +407,12 @@ void full_graph_message_mean_aggregation(
     at::Tensor& outcsr_rowptr, at::Tensor& outcsr_col_idx,
     at::Tensor& outcsr_reltypes, at::Tensor& outcsr_eids,
     at::Tensor& edgesoftmax_sum_per_node, at::Tensor& normalized_attn_score,
-    at::Tensor& gradout, at::Tensor& grad_message,
-    at::Tensor& grad_attn_score) {
+    at::Tensor& gradout, at::Tensor& grad_message) {
   at::Tensor dummy_tensor;
   _full_graph_message_mean_aggregation<int64_t, float, 2>(
       outcsr_rowptr, outcsr_col_idx, outcsr_reltypes, outcsr_eids,
       edgesoftmax_sum_per_node, dummy_tensor, dummy_tensor, dummy_tensor,
-      normalized_attn_score, gradout, grad_message, grad_attn_score);
+      normalized_attn_score, gradout, grad_message);
 }
 
 void full_graph_hetero_attention_ops(at::Tensor& row_ptr, at::Tensor& col_idx,

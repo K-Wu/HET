@@ -86,79 +86,85 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
         # fmt: on
 
 
-class HGTFullGraphMessageMeanAggregationCSR(th.autograd.Function):
-    @staticmethod
-    def forward(
-        ctx,
-        row_ptr,
-        col_idx,
-        eids,
-        reltypes,
-        transposed_row_ptr,
-        transposed_col_idx,
-        transposed_eids,
-        transposed_reltypes,
-        message_per_edge,
-        attn_score,
-        ret,
-    ):
+# FIXME: use outcsr, incsr instead of transposed and original
+# class HGTFullGraphMessageMeanAggregationCSR(th.autograd.Function):
+#     @staticmethod
+#     def forward(
+#         ctx,
+#         row_ptr,
+#         col_idx,
+#         eids,
+#         reltypes,
+#         transposed_row_ptr,
+#         transposed_col_idx,
+#         transposed_eids,
+#         transposed_reltypes,
+#         message_per_edge,
+#         attn_score,
+#         ret,
+#     ):
 
-        ctx.save_for_backward(
-            row_ptr,
-            col_idx,
-            eids,
-            reltypes,
-            transposed_row_ptr,
-            transposed_col_idx,
-            transposed_eids,
-            transposed_reltypes,
-            message_per_edge,
-            attn_score,
-        )
-        K.hgt_full_graph_message_mean_aggregation_csr(
-            row_ptr,
-            col_idx,
-            eids,
-            reltypes,
-            message_per_edge,
-            attn_score,
-            ret,
-        )
-        return ret
+#         ctx.save_for_backward(
+#             row_ptr,
+#             col_idx,
+#             eids,
+#             reltypes,
+#             transposed_row_ptr,
+#             transposed_col_idx,
+#             transposed_eids,
+#             transposed_reltypes,
+#             message_per_edge,
+#             attn_score,
+#         )
+#         K.hgt_full_graph_message_mean_aggregation_csr(
+#             incsr_row_ptr,
+#             incsr_col_idx,
+#             incsr_eids,
+#             incsr_reltypes,
+#             message_per_edge,
+#             normalized_attn_score,
+#             ret,
+#             unique_srcs_and_dests_rel_ptr,
+#             unique_srcs_and_dests_node_indices
+#         )
+#         return ret
 
-    @staticmethod
-    def backward(ctx, gradout):
-        (
-            row_ptr,
-            col_idx,
-            eids,
-            reltypes,
-            transposed_row_ptr,
-            transposed_col_idx,
-            transposed_eids,
-            transposed_reltypes,
-            message_per_edge,
-            attn_score,
-        ) = ctx.saved_tensors
-        grad_message = th.zeros_like(message_per_edge)
-        grad_attn_score = th.zeros_like(attn_score)
-        K.hgt_full_graph_message_mean_aggregation_backward_csr(
-            transposed_row_ptr,
-            transposed_col_idx,
-            transposed_eids,
-            transposed_reltypes,
-            gradout,
-            grad_message,
-            grad_attn_score,
-        )
-        # fmt: off
-        return None, None, None, None, None, None, None, None, grad_message, grad_attn_score, None
-        # fmt: on
+#     @staticmethod
+#     def backward(ctx, gradout):
+#         (
+#             row_ptr,
+#             col_idx,
+#             eids,
+#             reltypes,
+#             transposed_row_ptr,
+#             transposed_col_idx,
+#             transposed_eids,
+#             transposed_reltypes,
+#             message_per_edge,
+#             attn_score,
+#         ) = ctx.saved_tensors
+#         grad_message = th.zeros_like(message_per_edge)
+#         grad_attn_score = th.zeros_like(attn_score)
+#         K.hgt_full_graph_message_mean_aggregation_backward_csr(
+#             outcsr_row_ptr,
+#             outcsr_col_idx,
+#             outcsr_eids,
+#             outcsr_reltypes,
+#             edgesoftmax_sum_per_node,
+#             normalized_atrtn_score,
+#             gradout,
+#             grad_message,
+#             grad_attn_score,
+#         )
+#         # fmt: off
+#         return None, None, None, None, None, None, None, None, grad_message, grad_attn_score, None
+#         # fmt: on
 
 
 def hgt_full_graph_hetero_attention_ops_csr(
     graph, weight, applied_klinear_node_features, applied_qlinear_node_features
 ):
+    raise NotImplementedError("C++ kernel not done yet")
     row_ptr = graph["original"]["row_ptr"]
     col_idx = graph["original"]["col_idx"]
     eids = graph["original"]["eids"]
@@ -192,16 +198,184 @@ def hgt_full_graph_hetero_attention_ops_csr(
     )
 
 
-def hgt_full_graph_message_mean_aggregation_csr(graph, message_per_edge, attn_score):
-    row_ptr = graph["original"]["row_ptr"]
-    col_idx = graph["original"]["col_idx"]
-    eids = graph["original"]["eids"]
-    reltypes = graph["original"]["rel_types"]
-    transposed_row_ptr = graph["transposed"]["row_ptr"]
-    transposed_col_idx = graph["transposed"]["col_idx"]
-    transposed_eids = graph["transposed"]["eids"]
-    transposed_reltypes = graph["transposed"]["rel_types"]
-    ret = th.zeros(
+# def hgt_full_graph_message_mean_aggregation_csr(graph, message_per_edge, attn_score):
+#     outcsr_row_ptr = graph["original"]["row_ptr"]
+#     outcsr_col_idx = graph["original"]["col_idx"]
+#     outcsr_eids = graph["original"]["eids"]
+#     outcsr_reltypes = graph["original"]["rel_types"]
+#     incsr_row_ptr = graph["transposed"]["row_ptr"]
+#     incsr_col_idx = graph["transposed"]["col_idx"]
+#     incsr_eids = graph["transposed"]["eids"]
+#     incsr_reltypes = graph["transposed"]["rel_types"]
+#     ret = th.zeros(
+#         graph["original"]["num_nodes"],
+#         message_per_edge.size(1),
+#         message_per_edge.size(2),
+#         dtype=message_per_edge.dtype,
+#         device=message_per_edge.device,
+#         requires_grad=True,
+#     )
+#     return HGTFullGraphMessageMeanAggregationCSR.apply(
+#         row_ptr,
+#         col_idx,
+#         eids,
+#         reltypes,
+#         transposed_row_ptr,
+#         transposed_col_idx,
+#         transposed_eids,
+#         transposed_reltypes,
+#         message_per_edge,
+#         attn_score,
+#         ret,
+#     )
+
+
+class HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR(th.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        incsr_row_ptr,
+        incsr_col_idx,
+        incsr_eids,
+        incsr_reltypes,
+        outcsr_row_ptr,
+        outcsr_col_idx,
+        outcsr_eids,
+        outcsr_reltypes,
+        unnormalized_attn_score,
+        mu,
+        edgesoftmax_sum_per_node,
+        mu_softmax_applied_unnormalized_attn_score,
+        normalized_attn_score,
+        message_per_edge,
+        new_h,
+    ):
+
+        K.hgt_full_graph_edge_softmax_ops_csr(
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            unnormalized_attn_score,
+            mu,
+            edgesoftmax_sum_per_node,
+            mu_softmax_applied_unnormalized_attn_score,
+            normalized_attn_score,
+        )
+
+        K.hgt_full_graph_message_mean_aggregation_csr(
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            message_per_edge,
+            normalized_attn_score,
+            new_h,
+        )
+
+        ctx.save_for_backward(
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            outcsr_row_ptr,
+            outcsr_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            unnormalized_attn_score,
+            mu,
+            edgesoftmax_sum_per_node,
+            mu_softmax_applied_unnormalized_attn_score,
+            normalized_attn_score,
+            message_per_edge,
+            new_h,
+        )
+
+        return new_h
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            outcsr_row_ptr,
+            outcsr_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            unnormalized_attn_score,
+            mu,
+            edgesoftmax_sum_per_node,
+            mu_softmax_applied_unnormalized_attn_score,
+            normalized_attn_score,
+            message_per_edge,
+            new_h,
+        ) = ctx.saved_tensors
+
+        grad_message = th.zeros_like(message_per_edge)
+
+        # FIXME: unique_srcs_and_dests_rel_ptr and unique_srcs_and_dests_node_indices are not used in the backward pass but used in forward pass, check if there is similar issue in the original routine
+        K.hgt_full_graph_message_mean_aggregation_backward_csr(
+            outcsr_row_ptr,
+            outcsr_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            edgesoftmax_sum_per_node,
+            normalized_attn_score,
+            gradout,
+            grad_message,
+        )
+
+        grad_attn_score = th.zeros_like(unnormalized_attn_score)
+        grad_mu = th.zeros_like(mu)
+        K.hgt_full_graph_edge_softmax_ops_backward_csr(
+            outcsr_row_ptr,
+            outcsr_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            message_per_edge,
+            unnormalized_attn_score,
+            normalized_attn_score,
+            new_h,
+            gradout,
+            mu,
+            grad_attn_score,
+            grad_mu,
+        )
+        # fmt: off
+        return None, None, None, None, None, None, None, None, grad_attn_score, grad_mu, None, None, None, grad_message, None, None, None
+        # fmt: on
+
+
+def hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
+    graph,
+    message_per_edge,
+    unnormalized_attn_score,
+    mu,
+    # edgesoftmax_sum_per_node,
+    # mu_softmax_applied_unnormalized_attn_score,
+    # normalized_attn_score,
+    # unique_srcs_and_dests_rel_ptr,
+    # unique_srcs_and_dests_node_indices,
+):
+    outcsr_row_ptr = graph["original"]["row_ptr"]
+    outcsr_col_idx = graph["original"]["col_idx"]
+    outcsr_eids = graph["original"]["eids"]
+    outcsr_reltypes = graph["original"]["rel_types"]
+    incsr_row_ptr = graph["transposed"]["row_ptr"]
+    incsr_col_idx = graph["transposed"]["col_idx"]
+    incsr_eids = graph["transposed"]["eids"]
+    incsr_reltypes = graph["transposed"]["rel_types"]
+    mu_softmax_applied_unnormalized_attn_score = th.zeros_like(unnormalized_attn_score)
+    normalized_attn_score = th.zeros_like(unnormalized_attn_score)
+    edgesoftmax_sum_per_node = th.zeros(
+        graph["original"]["num_nodes"],
+        mu.size(1),
+        dtype=message_per_edge.dtype,
+        device=message_per_edge.device,
+    )
+    new_h = th.zeros(
         graph["original"]["num_nodes"],
         message_per_edge.size(1),
         message_per_edge.size(2),
@@ -209,112 +383,24 @@ def hgt_full_graph_message_mean_aggregation_csr(graph, message_per_edge, attn_sc
         device=message_per_edge.device,
         requires_grad=True,
     )
-    return HGTFullGraphMessageMeanAggregationCSR.apply(
-        row_ptr,
-        col_idx,
-        eids,
-        reltypes,
-        transposed_row_ptr,
-        transposed_col_idx,
-        transposed_eids,
-        transposed_reltypes,
-        message_per_edge,
-        attn_score,
-        ret,
-    )
 
-
-class HGTFullGraphEdgeSoftmaxOpsCSR(th.autograd.Function):
-    @staticmethod
-    def forward(
-        ctx,
-        row_ptr,
-        col_idx,
-        eids,
-        reltypes,
-        transposed_row_ptr,
-        transposed_col_idx,
-        transposed_eids,
-        transposed_reltypes,
-        attn_score,
-        mu,
-        ret,
-    ):
-
-        ctx.save_for_backward(
-            row_ptr,
-            col_idx,
-            eids,
-            reltypes,
-            transposed_row_ptr,
-            transposed_col_idx,
-            transposed_eids,
-            transposed_reltypes,
-            attn_score,
-            mu,
-        )
-        K.hgt_full_graph_edge_softmax_ops_csr(
-            row_ptr,
-            col_idx,
-            eids,
-            reltypes,
-            attn_score,
-            mu,
-            ret,
-        )
-        return ret
-
-    @staticmethod
-    def backward(ctx, gradout):
-        (
-            row_ptr,
-            col_idx,
-            eids,
-            reltypes,
-            transposed_row_ptr,
-            transposed_col_idx,
-            transposed_eids,
-            transposed_reltypes,
-            attn_score,
-            mu,
-        ) = ctx.saved_tensors
-        grad_attn_score = th.zeros_like(attn_score)
-        grad_mu = th.zeros_like(mu)
-        K.hgt_full_graph_edge_softmax_ops_backward_csr(
-            transposed_row_ptr,
-            transposed_col_idx,
-            transposed_eids,
-            transposed_reltypes,
-            gradout,
-            grad_attn_score,
-            grad_mu,
-        )
-        # fmt: off
-        return None, None, None, None, None, None, None, None, grad_attn_score, grad_mu, None
-        # fmt: on
-
-
-def hgt_full_graph_edge_softmax_ops_csr(graph, attn_score, mu):
-    row_ptr = graph["original"]["row_ptr"]
-    col_idx = graph["original"]["col_idx"]
-    eids = graph["original"]["eids"]
-    reltypes = graph["original"]["rel_types"]
-    transposed_row_ptr = graph["transposed"]["row_ptr"]
-    transposed_col_idx = graph["transposed"]["col_idx"]
-    transposed_eids = graph["transposed"]["eids"]
-    transposed_reltypes = graph["transposed"]["rel_types"]
-    ret = th.zeros_like(attn_score)
     # scale_factor, i.e., sqrt_dk equals math.sqrt(out_dim // n_heads)
-    return HGTFullGraphEdgeSoftmaxOpsCSR.apply(
-        row_ptr,
-        col_idx,
-        eids,
-        reltypes,
-        transposed_row_ptr,
-        transposed_col_idx,
-        transposed_eids,
-        transposed_reltypes,
-        attn_score,
+    return HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR.apply(
+        incsr_row_ptr,
+        incsr_col_idx,
+        incsr_eids,
+        incsr_reltypes,
+        outcsr_row_ptr,
+        outcsr_col_idx,
+        outcsr_eids,
+        outcsr_reltypes,
+        unnormalized_attn_score,
         mu,
-        ret,
+        edgesoftmax_sum_per_node,
+        mu_softmax_applied_unnormalized_attn_score,
+        normalized_attn_score,
+        message_per_edge,
+        # unique_srcs_and_dests_rel_ptr,
+        # unique_srcs_and_dests_node_indices,
+        new_h,
     )

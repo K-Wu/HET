@@ -329,11 +329,11 @@ __global__ void _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
               // the node dimension may not be worth it.
               CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
                   FullCartesianFlag, "should be non-reachable not implemented");
-            } else {
-              sum_idx = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_node_indices,
-                  unique_srcs_and_dests_rel_ptr);
-            }
+            }  // else {
+            //   sum_idx = find_relational_compact_as_of_node_index(
+            //       etype, dst_vid, unique_srcs_and_dests_node_indices,
+            //       unique_srcs_and_dests_rel_ptr);
+            // }
             // NB: e_xlen is the number of heads, feat_src_xlen is
             // message_out_dim, hidden_xlen is message_out_dim//num_heads
 
@@ -344,13 +344,13 @@ __global__ void _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
                        gdata.unnormalized_attn_score[edge_id * num_heads +
                                                      head_idx]) /
                   gdata
-                      .edgesoftmax_sum_per_node[sum_idx * num_heads + head_idx];
+                      .edgesoftmax_sum_per_node[dst_vid * num_heads + head_idx];
             } else if constexpr (UseMuAppliedAttnScoreSwitch == 1) {
               normalized_attn_score =
                   gdata.mu_softmax_applied_unnormalized_attn_score
                       [edge_id * num_heads + head_idx] /
                   gdata
-                      .edgesoftmax_sum_per_node[sum_idx * num_heads + head_idx];
+                      .edgesoftmax_sum_per_node[dst_vid * num_heads + head_idx];
             } else if constexpr (UseMuAppliedAttnScoreSwitch == 2) {
               normalized_attn_score =
                   gdata.normalized_attn_score[edge_id * num_heads + head_idx];
@@ -557,8 +557,8 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
           // !CompactAsOfNodeFlag && RelationalFlag
           // TODO: fix this and align dst_vid_relational definition with
           // _fusedGatBackwardGradElErFeatSrcFused
-          atomicAdd(&gdata.edgesoftmax_sum_per_node
-                         [Idx(dst_vid_relational * num_heads) + feat_idx],
+          atomicAdd(&gdata.edgesoftmax_sum_per_node[Idx(dst_vid * num_heads) +
+                                                    feat_idx],
                     tmp);
         }
         if constexpr (OutputMuAppliedAttnScoreSwitch == 1 ||

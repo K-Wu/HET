@@ -180,13 +180,18 @@ class HET_HGTLayerHetero(nn.Module):
                     k,
                 )
 
-        attn_score = B.hgt_full_graph_edge_softmax_ops_csr(
-            G, attn_score, mu=(self.relation_pri / self.sqrt_dk)
-        )
+        # attn_score = B.hgt_full_graph_edge_softmax_ops_csr(
+        #    G, attn_score, mu=(self.relation_pri / self.sqrt_dk)
+        # )
         # NB: the scaling is: attn_score = relation_pri / self.sqrt_dk * attn_score
 
-        new_h = B.hgt_full_graph_message_mean_aggregation_csr(
-            G, message_per_edge, attn_score
+        new_h = B.hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
+            G,
+            message_per_edge,
+            attn_score,
+            (self.relation_pri / self.sqrt_dk),
+            # g["separate"]["unique_node_idx"]["rel_ptr"],
+            # g["separate"]["unique_node_idx"]["node_idx"],
         )  # shape (num_nodes, n_heads, d_k)
 
         new_h_normed = torch.zeros((G.number_of_nodes(), self.out_dim), device=h.device)
