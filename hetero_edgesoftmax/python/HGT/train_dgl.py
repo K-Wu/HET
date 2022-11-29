@@ -12,9 +12,9 @@ from .models_dgl import *
 def HGT_parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="HGT")
     add_generic_RGNN_args(parser)
-    parser.add_argument(
-        "--n_hidden", type=int, default=64, help="number of hidden units"
-    )
+    # parser.add_argument(
+    #    "--n_hidden", type=int, default=64, help="number of hidden units"
+    # )
     args = parser.parse_args()
     return args
 
@@ -31,7 +31,7 @@ def HGT_get_model(g: dgl.DGLGraph, num_classes, hypermeters):
         node_dict,
         edge_dict,
         hypermeters["n_infeat"],
-        hypermeters["n_hidden"],
+        # hypermeters["n_hidden"],
         num_classes,
         n_heads=hypermeters["n_head"],
         dropout=hypermeters["dropout"],
@@ -53,7 +53,7 @@ def HGT_get_our_model(
     model = HET_HGT_DGLHetero(
         g,
         args.n_infeat,
-        args.n_hidden,
+        # args.n_hidden,
         num_classes,
         n_heads=args.n_head,
         dropout=args.dropout,

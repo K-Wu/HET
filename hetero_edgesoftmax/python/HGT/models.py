@@ -232,20 +232,21 @@ class HET_HGTLayerHetero(nn.Module):
 
 class HET_HGT_DGLHetero(nn.Module):
     @utils.warn_default_arguments
-    def __init__(self, mydglgraph, in_dim, h_dim, out_dim, n_heads=1, dropout=0.2):
+    def __init__(self, mydglgraph, in_dim, out_dim, n_heads=1, dropout=0.2):  # ,h_dim
         super(HET_HGT_DGLHetero, self).__init__()
         self.mydglgraph = mydglgraph
         self.gcs = nn.ModuleList()
         self.in_dim = in_dim
-        self.h_dim = h_dim
+        # self.h_dim = h_dim
         self.out_dim = out_dim
         self.layer0 = HET_HGTLayerHetero(
-            in_dim, h_dim, mydglgraph, n_heads=n_heads, dropout=dropout
+            in_dim, out_dim, mydglgraph, n_heads=n_heads, dropout=dropout
         )
-        self.layer1 = HET_HGTLayerHetero(
-            h_dim, out_dim, mydglgraph, n_heads=n_heads, dropout=dropout
-        )
+        # self.layer1 = HET_HGTLayerHetero(
+        #    h_dim, out_dim, mydglgraph, n_heads=n_heads, dropout=dropout
+        # )
 
     def forward(self, G, h):
         h = self.layer0(G, h)
-        h = self.layer1(G, h)
+        # h = self.layer1(G, h)
+        return h

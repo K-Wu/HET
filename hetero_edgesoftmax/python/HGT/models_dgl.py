@@ -134,22 +134,23 @@ class HGTLayerHetero(nn.Module):
 class HGT_DGLHetero(nn.Module):
     @utils.warn_default_arguments
     def __init__(
-        self, node_dict, edge_dict, in_dim, h_dim, out_dim, n_heads=1, dropout=0.2
-    ):
+        self, node_dict, edge_dict, in_dim, out_dim, n_heads=1, dropout=0.2
+    ):  # , h_dim
         super(HGT_DGLHetero, self).__init__()
         self.node_dict = node_dict
         self.edge_dict = edge_dict
         self.gcs = nn.ModuleList()
         self.in_dim = in_dim
-        self.h_dim = h_dim
+        # self.h_dim = h_dim
         self.out_dim = out_dim
         self.layer0 = HGTLayerHetero(
-            in_dim, h_dim, node_dict, edge_dict, n_heads=n_heads, dropout=dropout
+            in_dim, out_dim, node_dict, edge_dict, n_heads=n_heads, dropout=dropout
         )
-        self.layer1 = HGTLayerHetero(
-            h_dim, out_dim, node_dict, edge_dict, n_heads=n_heads, dropout=dropout
-        )
+        # self.layer1 = HGTLayerHetero(
+        #    h_dim, out_dim, node_dict, edge_dict, n_heads=n_heads, dropout=dropout
+        # )
 
     def forward(self, G, h):
         h = self.layer0(G, h)
-        h = self.layer1(G, h)
+        # h = self.layer1(G, h)
+        return h
