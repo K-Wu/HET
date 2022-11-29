@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # from https://pytorch.org/tutorials/beginner/examples_autograd/two_layer_net_custom_function.html
 
 import torch

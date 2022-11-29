@@ -1,10 +1,10 @@
+#!/usr/bin/env python3
 from . import (
     HET_EGLRGCNSingleLayerModel,
     RGCN_main_procedure,
     create_RGCN_parser,
 )
 from .. import utils
-import argparse
 import torch as th
 import torch.nn.functional as F
 

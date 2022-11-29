@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import inspect
 from functools import wraps
 import traceback

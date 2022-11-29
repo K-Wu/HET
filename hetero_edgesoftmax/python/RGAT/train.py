@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from .train_dgl import RGAT_main_procedure, RGAT_parse_args
 
 if __name__ == "__main__":

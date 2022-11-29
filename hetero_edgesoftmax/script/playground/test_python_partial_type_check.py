@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 def func1(a, b: bool = True):
     print(a, b)
 

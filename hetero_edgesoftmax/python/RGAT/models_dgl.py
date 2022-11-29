@@ -19,72 +19,6 @@ from .. import utils
 # involve code heavily from dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
 
 
-class RelGraphEmbed(nn.Module):
-    r"""Embedding layer for featureless heterograph.
-
-    Parameters
-    ----------RelGraphEmbed
-    g : DGLGraph
-        Input graph.
-    embed_size : int
-        The length of each embedding vector
-    exclude : list[str]
-        The list of node-types to exclude (e.g., because they have natural features)
-    """
-
-    def __init__(self, g, embed_size, exclude=list()):
-
-        super(RelGraphEmbed, self).__init__()
-        self.g = g
-        self.embed_size = embed_size
-
-        # create learnable embeddings for all nodes, except those with a node-type in the "exclude" list
-        self.embeds = nn.ParameterDict()
-        for ntype in g.ntypes:
-            if ntype in exclude:
-                continue
-            embed = nn.Parameter(th.Tensor(g.number_of_nodes(ntype), self.embed_size))
-            self.embeds[ntype] = embed
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        for emb in self.embeds.values():
-            nn.init.xavier_uniform_(emb)
-
-    def forward(self, block: Union[None, DGLBlock] = None):
-        return self.embeds
-
-
-class HET_RelGraphEmbed(nn.Module):
-    r"""Embedding layer for featureless heterograph.
-
-    Parameters
-    ----------RelGraphEmbed
-    g : DGLGraph
-        Input graph.
-    embed_size : int
-        The length of each embedding vector
-    exclude : list[str]
-        The list of node-types to exclude (e.g., because they have natural features)
-    """
-
-    def __init__(self, g: utils.MyDGLGraph, embed_size, exclude=list()):
-
-        super(HET_RelGraphEmbed, self).__init__()
-        self.embed_size = embed_size
-
-        # create learnable embeddings for all nodes, except those with a node-type in the "exclude" list
-
-        self.embeds = nn.Parameter(th.Tensor(g.get_num_nodes(), self.embed_size))
-
-    def reset_parameters(self):
-        nn.init.xavier_uniform_(self.embeds)
-
-    def forward(self, block: Union[None, DGLBlock] = None):
-        return self.embeds
-
-
 class RelationalAttLayer(nn.Module):
     # corresponding to RelGraphConvLayer in dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
     r"""Relational graph attention layer.
@@ -112,6 +46,7 @@ class RelationalAttLayer(nn.Module):
         Dropout rate. Default: 0.0
     """
 
+    @utils.warn_default_arguments
     def __init__(
         self,
         in_feat,
@@ -239,6 +174,7 @@ class RelationalGATEncoder(nn.Module):
         Whether add activation at the last layer
     """
 
+    @utils.warn_default_arguments
     def __init__(
         self,
         g,

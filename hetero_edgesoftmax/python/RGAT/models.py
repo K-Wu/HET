@@ -38,6 +38,7 @@ class HET_RelationalAttLayer(nn.Module):
         Dropout rate. Default: 0.0
     """
 
+    @utils.warn_default_arguments
     def __init__(
         self,
         in_feat,
@@ -269,6 +270,7 @@ class HET_RelationalGATEncoder(nn.Module):
         Whether add activation at the last layer
     """
 
+    @utils.warn_default_arguments
     def __init__(
         self,
         num_etypes,

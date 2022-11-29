@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # from https://stackoverflow.com/a/64427884/5555077 and https://stackoverflow.com/a/58166804/5555077 and https://stackoverflow.com/a/48653175/5555077
 import inspect
 from functools import wraps

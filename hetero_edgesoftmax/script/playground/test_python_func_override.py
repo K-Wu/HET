@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 def func1(a, b, c):
     print(a, b, c)
     return a + b + c
