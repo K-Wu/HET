@@ -110,8 +110,7 @@ get_schedule_by_relation_kernel_launch_metadata(
             num_blocks_along_dimx_for_this_and_prev_relation);
         num_blocks_along_dimx_for_same_relation_vect.push_back(
             num_blocks_along_dimx_for_this_and_prev_relation -
-            num_blocks_along_dimx_for_all_prev_relation_vect
-                [num_blocks_along_dimx_for_all_prev_relation_vect.size() - 2]);
+            num_blocks_along_dimx_for_all_prev_relation_vect.back());
 
         curr_iter++;
       }
@@ -120,10 +119,11 @@ get_schedule_by_relation_kernel_launch_metadata(
         num_blocks_along_dimx) {
       printf(
           "WARNING: we have corrected the number of blocks from %d to %d in "
-          "order to make sure each relation get at least 1 blocks in "
+          "order to make sure each relation (%d) get at least 1 blocks in "
           "get_schedule_by_relation_kernel_launch_metadata()",
           num_blocks_along_dimx,
-          num_blocks_along_dimx_for_all_prev_relation_vect.back());
+          num_blocks_along_dimx_for_all_prev_relation_vect.back(),
+          num_relations);
     }
   }
 

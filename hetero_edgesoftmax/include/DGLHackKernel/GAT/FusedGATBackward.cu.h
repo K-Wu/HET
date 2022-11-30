@@ -101,7 +101,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
           DType grad_exp =
               gdata.grad_out[dst_out_offset] *
               (gdata.feat_src[feat_src_offset] - gdata.ret[dst_out_offset]) /
-              gdata.sum[er_idx];
+              gdata.sum[dst_out_offset];
           DType tmp_sum = gdata.el[el_idx] + gdata.er[er_idx];
           DType tmp2 = grad_exp * gdata.exp[edge_offset] *
                        gradLeaky(tmp_sum, gdata.leaky_relu_slope);

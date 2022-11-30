@@ -25,7 +25,7 @@ void _LayerImpl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
   auto ids_data = csr_col_idx.data_ptr<Idx>();
   auto eids_data = csr_eids.data_ptr<Idx>();
   auto typeids_data = csr_reltypes.data_ptr<Idx>();
-  auto hidden_data = hidden.data_ptr<DType>();
+  DType* hidden_data = hidden.numel() == 0 ? nullptr : hidden.data_ptr<DType>();
   auto weight_data = weight.data_ptr<DType>();
   auto norm_data = norm.data_ptr<DType>();
   auto ret_data = ret.data_ptr<DType>();
@@ -145,13 +145,15 @@ void _LayerImpl(
   auto ids_data = transposed_csr_col_idx.data_ptr<Idx>();
   auto eids_data = transposed_csr_eids.data_ptr<Idx>();
   auto typeids_data = transposed_csr_reltypes.data_ptr<Idx>();
-  auto hidden_data = hidden.data_ptr<DType>();
-  auto weight_data = weight.data_ptr<DType>();
+  DType* hidden_data = hidden.numel() == 0 ? nullptr : hidden.data_ptr<DType>();
+  DType* weight_data = weight.numel() == 0 ? nullptr : weight.data_ptr<DType>();
   auto norm_data = norm.data_ptr<DType>();
   auto grad_out_data = grad_out.data_ptr<DType>();
-  auto grad_hidden_data = grad_hidden.data_ptr<DType>();
-  auto grad_weight_data = grad_weight.data_ptr<DType>();
-  auto ret_data = ret.data_ptr<DType>();
+  DType* grad_hidden_data =
+      grad_hidden.numel() == 0 ? nullptr : grad_hidden.data_ptr<DType>();
+  DType* grad_weight_data =
+      grad_weight.numel() == 0 ? nullptr : grad_weight.data_ptr<DType>();
+  DType* ret_data = ret.numel() == 0 ? nullptr : ret.data_ptr<DType>();
   // print_dims(hidden);
   // print_dims(weight);
   // print_dims(norm);

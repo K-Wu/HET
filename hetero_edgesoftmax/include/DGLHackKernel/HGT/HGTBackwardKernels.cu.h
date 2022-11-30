@@ -301,9 +301,9 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
           } else if constexpr (UseMuAppliedAttnScoreSwitch == 0) {
             DType mu;
             if constexpr (RelationalFlag) {
-              mu = gdata.mu[etype];
+              mu = gdata.mu[etype * num_heads + head_idx];
             } else {
-              mu = gdata.mu[0];
+              mu = gdata.mu[head_idx];
             }
             normalized_attn_score =
                 gdata.unnormalized_attn_score[eid * num_heads + head_idx] * mu /
@@ -467,9 +467,9 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
 
           DType mu;
           if constexpr (RelationalFlag) {
-            mu = gdata.mu[etype];
+            mu = gdata.mu[etype * num_heads + head_idx];
           } else {
-            mu = gdata.mu[0];
+            mu = gdata.mu[head_idx];
           }
 
           DType normalized_attn_score;
@@ -508,7 +508,7 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
                       grad_for_this_feat_idx * mu);
           }
 
-          atomicAdd(gdata.grad_mu + etype,
+          atomicAdd(gdata.grad_mu + etype * num_heads + head_idx,
                     grad_for_this_feat_idx *
                         gdata.unnormalized_attn_score[edge_offset]);
         }

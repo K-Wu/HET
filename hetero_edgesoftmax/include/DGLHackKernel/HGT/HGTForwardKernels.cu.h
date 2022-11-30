@@ -340,7 +340,7 @@ __global__ void _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
             DType normalized_attn_score;
             if constexpr (UseMuAppliedAttnScoreSwitch == 0) {
               normalized_attn_score =
-                  expf(gdata.mu[etype] *
+                  expf(gdata.mu[etype * num_heads + head_idx] *
                        gdata.unnormalized_attn_score[edge_id * num_heads +
                                                      head_idx]) /
                   gdata
@@ -377,7 +377,7 @@ __global__ void _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
             // ouptut softmaxed attn score
             if constexpr (UseMuAppliedAttnScoreSwitch == 0) {
               normalized_attn_score =
-                  (*gdata.mu) *
+                  gdata.mu[head_idx] *
                   gdata
                       .unnormalized_attn_score[edge_id * num_heads + head_idx] /
                   gdata
@@ -542,9 +542,9 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
           feat_off_src = edge_id * num_heads + feat_idx;
         }
         if constexpr (RelationalFlag) {
-          mu = gdata.mu[etype];
+          mu = gdata.mu[etype * num_heads + feat_idx];
         } else {
-          mu = gdata.mu[0];
+          mu = gdata.mu[feat_idx];
         }
         // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] +
         // er[threadIdx.x], gdata.leaky_relu_slope);
@@ -596,9 +596,9 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
                 } else {
                   etype = etypes[eidx];
                 }
-                mu = gdata.mu[etype];
+                mu = gdata.mu[etype * num_heads + feat_idx];
               } else {
-                mu = gdata.mu[0];
+                mu = gdata.mu[feat_idx];
               }
               gdata.normalized_attn_score[edge_id * num_heads + feat_idx] =
                   gdata.unnormalized_attn_score[feat_off_src] * mu /

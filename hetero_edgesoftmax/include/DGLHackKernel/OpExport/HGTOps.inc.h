@@ -42,7 +42,7 @@ void _full_graph_message_mean_aggregation(at::Tensor& incsr_rowptr,
   // configure parameter struct
   HgtDstOutData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata;
   Idx num_heads = edge_attn_score.size(edge_attn_score.ndimension() - 1);
-  Idx num_relations = unique_srcs_and_dests_rel_ptr.numel() - 1;
+  Idx num_relations = mu.numel() / num_heads;
   gdata.num_heads = num_heads;
 
   assert(gdata.num_heads ==
@@ -151,7 +151,7 @@ void _full_graph_edge_softmax_ops(
                  "edge_softmax_ops"
               << std::endl;
   }
-  Idx num_relations = unique_srcs_and_dests_rel_ptr.numel() - 1;
+  Idx num_relations = mu.numel() / num_heads;
 
   gdata.num_heads = num_heads;
   gdata.eids = incsr_eids.data_ptr<Idx>();
@@ -210,7 +210,7 @@ void full_graph_edge_softmax_only_accumu_stage_ops(
     at::Tensor& incsr_rowptr, at::Tensor& incsr_col_idx, at::Tensor& incsr_eids,
     at::Tensor& incsr_reltypes, at::Tensor& unnormalized_attn_score,
     at::Tensor& mu, at::Tensor& edgesoftmax_sum_per_node,
-    at::Tensor& mu_softmax_applied_unnormalized_attn_score, at::Tensor& ret) {
+    at::Tensor& mu_softmax_applied_unnormalized_attn_score) {
   // using _hgtEdgeSoftmaxAccumStageOnlyKernel based on
   // _gatExpLeakyReluSumKernel whose driver code is
   // HET::TorchExport::RGCN::FwProp::IntegratedCSR::_FusedKernelImpl in
@@ -221,7 +221,7 @@ void full_graph_edge_softmax_only_accumu_stage_ops(
   _full_graph_edge_softmax_ops<int64_t, float, 1>(
       incsr_rowptr, incsr_col_idx, incsr_eids, incsr_reltypes,
       unnormalized_attn_score, mu, edgesoftmax_sum_per_node,
-      mu_softmax_applied_unnormalized_attn_score, dummy_tensor, ret);
+      mu_softmax_applied_unnormalized_attn_score, dummy_tensor);
 }
 
 }  // namespace IntegratedCSR

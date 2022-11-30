@@ -30,4 +30,4 @@ def rgcn_layer1_coo(*args):
 
 
 def rgcn_layer1_backward_coo(*args):
-    return torch.ops.torch_hetero_edgesoftmax.rgcn_layer1_backward_csr(*args)
+    return torch.ops.torch_hetero_edgesoftmax.rgcn_layer1_backward_coo(*args)

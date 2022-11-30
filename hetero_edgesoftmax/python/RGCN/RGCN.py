@@ -332,7 +332,8 @@ def RGCN_main_procedure(args, g, model, feats):
         tb = time.time()
         train_logits = logits[train_idx]
         ta = time.time()
-        loss = F.cross_entropy(train_logits, train_labels)
+        # loss = F.cross_entropy(train_logits, train_labels)
+        loss = F.cross_entropy(logits, labels)
         torch.cuda.synchronize()
         t1 = time.time()
         loss.backward()
@@ -340,7 +341,7 @@ def RGCN_main_procedure(args, g, model, feats):
         torch.cuda.synchronize()
         t2 = time.time()
         if epoch >= 3:
-            forward_time.append(t1 - t0)
+            forward_time.append(tb - t0)
             backward_time.append(t2 - t1)
             if args.verbose:
                 print(

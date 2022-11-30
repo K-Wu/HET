@@ -37,7 +37,7 @@ void _RelationalMatMul_separatecoo(
   if constexpr (CompactAsOfNodeFlag && !SingleSidedCompactAsOfNodeFlag) {
     num_edges = unique_srcs_and_dests_node_indices.numel();
   } else {
-    num_edges = separate_coo_node_indices.numel();
+    num_edges = separate_coo_eids.numel();
   }
   int grid_dim_y = std::min(
       ceil_div<>(num_edges, (int64_t)BLOCK_SIZE),
@@ -107,7 +107,7 @@ void _RelationalMatMul_separatecoo(
               unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
               unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
               separate_coo_relptrs.data_ptr<int64_t>(),
-              separate_coo_node_indices.data_ptr<int64_t>(), num_input_dim,
+              separate_coo_eids.data_ptr<int64_t>(), num_input_dim,
               num_output_per_head_dim, num_heads,
               thrust::raw_pointer_cast(
                   dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
@@ -181,7 +181,9 @@ void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
     at::Tensor& unique_srcs_and_dests_rel_ptr,
     at::Tensor& unique_srcs_and_dests_node_idx,
     at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_node_indices,
-    at::Tensor& weight, at::Tensor& node_feat, at::Tensor& ret) {}
+    at::Tensor& weight, at::Tensor& node_feat, at::Tensor& ret) {
+  assert(0 && "Not implemented yet");
+}
 
 void inner_product_node_compact_and_node_separatecoo(
     at::Tensor& unique_srcs_and_dests_rel_ptr,
@@ -194,6 +196,7 @@ void inner_product_node_compact_and_node_separatecoo(
   // in hetero_edgesoftmax/include/EdgeSoftmax_4/EdgeSoftmaxMultiCOOs_4.h and
   // (node parallel version) _gatExpLeakyReluSumKernel in
   // hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h
+  assert(0 && "Not implemented yet");
 }
 
 void inner_product_edge_and_node_separatecoo(
@@ -205,6 +208,7 @@ void inner_product_edge_and_node_separatecoo(
   // in hetero_edgesoftmax/include/EdgeSoftmax_4/EdgeSoftmaxMultiCOOs_4.h and
   // (node parallel version) _gatExpLeakyReluSumKernel in
   // hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h
+  assert(0 && "Not implemented yet");
 }
 
 }  // namespace FwProp
@@ -239,13 +243,13 @@ void _BackwardRelationalMatMul_separatecoo(
   if constexpr (CompactAsOfNodeFlag && !SingleSidedCompactAsOfNodeFlag) {
     num_edges = unique_srcs_and_dests_node_indices.numel();
   } else {
-    num_edges = separate_coo_node_indices.numel();
+    num_edges = separate_coo_eids.numel();
   }
   int grid_dim_y = std::min(
       ceil_div<>(num_edges, (int64_t)BLOCK_SIZE),
-      (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
-                        // case the total number of blocks is slightly larger
-                        // due to relationship with very few workloads
+      (int64_t)4096);  // using 32768 instead of 65535 to leave some space in
+                       // case the total number of blocks is slightly larger
+                       // due to relationship with very few workloads
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
       num_blocks_assignment_for_all_prev_relation_vect;
   if constexpr (CompactAsOfNodeFlag && !SingleSidedCompactAsOfNodeFlag) {
@@ -294,7 +298,8 @@ void _BackwardRelationalMatMul_separatecoo(
                      grid_dim_y, num_heads);
     const dim3 nblks_outer_product(
         ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
-        ceil_div<>(num_input_dim, (long)BLOCK_SIZE), num_heads * 128);
+        ceil_div<>(num_input_dim, (long)BLOCK_SIZE), num_heads * grid_dim_y);
+    assert(num_head * grid_dim_y < 65535 && "num_head*grid_dim_y>=65535");
 
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     if constexpr (!SingleSidedCompactAsOfNodeFlag) {
@@ -327,7 +332,7 @@ void _BackwardRelationalMatMul_separatecoo(
               unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
               unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
               separate_coo_relptrs.data_ptr<int64_t>(),
-              separate_coo_node_indices.data_ptr<int64_t>(), num_edges,
+              separate_coo_eids.data_ptr<int64_t>(), num_edges,
               num_output_per_head_dim, num_input_dim, num_heads,
               thrust::raw_pointer_cast(
                   dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
@@ -339,7 +344,7 @@ void _BackwardRelationalMatMul_separatecoo(
               unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
               unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
               separate_coo_relptrs.data_ptr<int64_t>(),
-              separate_coo_node_indices.data_ptr<int64_t>(), num_edges,
+              separate_coo_eids.data_ptr<int64_t>(), num_edges,
               num_output_per_head_dim, num_input_dim, num_heads,
               thrust::raw_pointer_cast(
                   dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
@@ -350,7 +355,8 @@ void _BackwardRelationalMatMul_separatecoo(
                      grid_dim_y, num_heads);
     const dim3 nblks_outer_product(
         ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
-        ceil_div<>(num_input_dim, (long)BLOCK_SIZE), num_heads * 128);
+        ceil_div<>(num_input_dim, (long)BLOCK_SIZE), num_heads * grid_dim_y);
+    assert(num_head * grid_dim_y < 65535 && "num_head*grid_dim_y>=65535");
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     if constexpr (ACGatherScatterListIdenticalFlag) {
       RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical<
@@ -447,7 +453,9 @@ void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
     at::Tensor& unique_srcs_and_dests_node_idx,
     at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_node_indices,
     at::Tensor& weight_transposed, at::Tensor& node_feat, at::Tensor& ret,
-    at::Tensor& gradout, at::Tensor& grad_weight, at::Tensor& grad_node_feat) {}
+    at::Tensor& gradout, at::Tensor& grad_weight, at::Tensor& grad_node_feat) {
+  assert(0 && "Not implemented yet");
+}
 
 void inner_product_node_compact_and_node_separatecoo(
     at::Tensor& unique_srcs_and_dests_rel_ptr,
@@ -459,13 +467,16 @@ void inner_product_node_compact_and_node_separatecoo(
     at::Tensor& grad_right_node_vectors) {
   // We may rely on HGTCompactAsOfNodesEdgeAttentionSecondStage in
   // [[hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTForwardKernels.cu.h]]
+  assert(0 && "Not implemented yet");
 }
 
 void inner_product_edge_and_node_separatecoo(
     at::Tensor& separate_coo_eids, at::Tensor& separate_coo_node_indices,
     at::Tensor& left_edge_data, at::Tensor& right_node_vectors, at::Tensor& ret,
     at::Tensor& gradout, at::Tensor& grad_left_edge_data,
-    at::Tensor& grad_right_node_vectors) {}
+    at::Tensor& grad_right_node_vectors) {
+  assert(0 && "Not implemented yet");
+}
 
 }  // namespace BckProp
 }  // namespace RGNN
