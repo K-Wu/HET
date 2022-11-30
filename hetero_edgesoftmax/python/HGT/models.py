@@ -26,8 +26,8 @@ class HET_HGTLayerHetero(nn.Module):
 
         self.in_dim = in_dim
         self.out_dim = out_dim
-        self.node_dict = mydglgraph["legacy_metadata_from_dgl"]["node_dict"]
-        self.edge_dict = mydglgraph["legacy_metadata_from_dgl"]["edge_dict"]
+        self.node_dict = mydglgraph.get_ntype_dict()
+        self.edge_dict = mydglgraph.get_etype_dict()
         self.num_types = len(self.node_dict)
         self.num_relations = len(self.edge_dict)
         self.total_rel = self.num_types * self.num_relations * self.num_types

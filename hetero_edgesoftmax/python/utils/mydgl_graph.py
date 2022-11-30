@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-
 # NB: this class stores type in list and assumes the type order in this class and dglgraph are preserved across run. Therefore one should use the CPython implementation to ensure that.
 from ..kernels import K
 from .. import utils
@@ -269,6 +268,27 @@ class MyDGLGraph:
         ] = separate_csr_eids
 
     @torch.no_grad()
+    def get_ntype_dict(self):
+        if (
+            "legacy_metadata_from_dgl" in self.graph_data
+            and "node_dict" in self.graph_data["legacy_metadata_from_dgl"]
+        ):
+            return self.graph_data["legacy_metadata_from_dgl"]["node_dict"]
+        else:
+            return {0: 0}
+
+    @torch.no_grad()
+    def get_etype_dict(self):
+        if (
+            "legacy_metadata_from_dgl" in self.graph_data
+            and "edge_dict" in self.graph_data["legacy_metadata_from_dgl"]
+        ):
+            return self.graph_data["legacy_metadata_from_dgl"]["edge_dict"]
+        else:
+            num_rels = self.get_num_rels()
+            return {i: i for i in range(num_rels)}
+
+    @torch.no_grad()
     def generate_separate_coo_adj_for_each_etype(
         self, transposed_flag, rel_eid_sorted_flag=True
     ):
@@ -474,16 +494,19 @@ class MyDGLGraph:
         sub_dict_name = "transposed" if transposed_flag else "original"
 
         data_dict = dict()
-        print(self.get_num_rels())
-        print(self["legacy_metadata_from_dgl"]["canonical_etypes"])
+        print("num relations in get_dgl_graph():", self.get_num_rels())
+        if (
+            "legacy_metadata_from_dgl" not in self.graph_data
+            or "canonical_etypes" not in self.graph_data["legacy_metadata_from_dgl"]
+        ):
+            print(
+                "WARNING: legacy_metadata_from_dgl not found, assuming only one node type in get_dgl_graph()"
+            )
         for etype_idx in range(self.get_num_rels()):
             if (
                 "legacy_metadata_from_dgl" not in self.graph_data
                 or "canonical_etypes" not in self.graph_data["legacy_metadata_from_dgl"]
             ):
-                print(
-                    "WARNING: legacy_metadata_from_dgl not found, assuming only one node type in get_dgl_graph()"
-                )
                 curr_etype_canonical_name = (0, etype_idx, 0)
             else:
                 curr_etype_canonical_name = self["legacy_metadata_from_dgl"][

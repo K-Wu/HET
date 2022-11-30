@@ -2,7 +2,7 @@
 # adapted from graphiler/python/graphiler/utils/setup.py
 import numpy as np
 from pathlib import Path
-from . import loaders_from_npy
+from . import mydglgraph_converters
 import torch
 
 from ogb.nodeproppred import DglNodePropPredDataset
@@ -25,10 +25,22 @@ GRAPHILER_HOMO_DATASET = {
     "proteins": -1,
 }
 
-GRAPHILER_HETERO_DATASET = ["aifb", "mutag", "bgs", "biokg", "am", "mag", "wikikg2"]
+GRAPHILER_HETERO_DATASET = [
+    "aifb",
+    "mutag",
+    "bgs",
+    "biokg",
+    "am",
+    "mag",
+    "wikikg2",
+    "mag",
+    "fb15k",
+]
+
+GRAPHILER_DATASET = GRAPHILER_HOMO_DATASET.keys() | set(GRAPHILER_HETERO_DATASET)
 
 
-def graphiler_load_data(name, feat_dim=GRAPHILER_DEFAULT_DIM, to_homo: bool = True):
+def graphiler_load_data(name, to_homo: bool = True):  # feat_dim=GRAPHILER_DEFAULT_DIM,
     if name == "arxiv":
         dataset = DglNodePropPredDataset(name="ogbn-arxiv")
         g = dataset[0][0]
@@ -79,6 +91,12 @@ def graphiler_load_data(name, feat_dim=GRAPHILER_DEFAULT_DIM, to_homo: bool = Tr
                 torch.flatten(dst[type_index]),
             )
         g = dgl.heterograph(hetero_dict)
+    elif name == "fb15k":
+        # TODO: this is a homogeneous graph without type info
+        from dgl.data import FB15k237Dataset
+
+        dataset = FB15k237Dataset()
+        g = dataset[0]
     elif name == "biokg":
         dataset = DglLinkPropPredDataset(name="ogbl-biokg")
         g = dataset[0]
@@ -96,23 +114,34 @@ def graphiler_load_data(name, feat_dim=GRAPHILER_DEFAULT_DIM, to_homo: bool = Tr
     else:
         raise Exception("Unknown Dataset")
 
-    node_feats = torch.rand([g.number_of_nodes(), feat_dim])
-
+    # node_feats = torch.rand([g.number_of_nodes(), feat_dim])
+    # node_feats = torch.rand([sum(g.number_of_nodes(ntype) for ntype in g), feat_dim])
     if name in GRAPHILER_HETERO_DATASET:
         if to_homo:
-            g = dgl.to_homogeneous(g)
-    print(len(g.etypes))
+            if name == "fb15k":
+                # g is already dgl homograph class type
+                g.edata["_TYPE"] = g.edata["etype"]
+                g.ndata["_TYPE"] = g.ndata["ntype"]
+            else:
+                g = dgl.to_homogeneous(g)
+            # g, ntype_count, etype_count = dgl.to_homogeneous(g, return_count = True)
+            # print(name, ntype_count, etype_count)
+    # print(len(g.etypes))
     return (
         g,
-        node_feats,
-        g.etypes,
+        # node_feats,
+        # g.etypes,
     )  # returning etype for [HeteroGraphConv](https://docs.dgl.ai/en/0.8.x/generated/dgl.nn.pytorch.HeteroGraphConv.html) use.
 
 
-def graphiler_load_data_as_mydgl_graph(name, feat_dim, to_homo):
-    g, node_feats, g_etypes = graphiler_load_data(name, feat_dim, to_homo)
-    my_g = loaders_from_npy.create_mydgl_graph_coo_from_dgl_graph(g)
-    return my_g, node_feats, g.etypes
+def graphiler_load_data_as_mydgl_graph(name, process_dgl_homo_graph=True):
+    if process_dgl_homo_graph:
+        g = graphiler_load_data(name, to_homo=False)
+        my_g = mydglgraph_converters.create_mydgl_graph_coo_from_homo_dgl_graph(g)
+    else:
+        g = graphiler_load_data(name, to_homo=True)  # feat_dim,
+        my_g = mydglgraph_converters.create_mydgl_graph_coo_from_hetero_dgl_graph(g)
+    return my_g
 
 
 def graphiler_setup_device(device="cuda:0"):
