@@ -305,7 +305,7 @@ __global__ void _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
           Idx feat_src_entry_id = -1;
           Idx edge_id = gdata.eids[eidx];
           if constexpr (RelationalFlag) {
-            Idx sum_idx = -1;
+            // Idx sum_idx = -1;
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, eidx);
@@ -530,10 +530,10 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
                   CompactAsOfNodeFlag && RelationalFlag && FullCartesianFlag,
                   "should be non-reachable not implemented");
             }
-            Idx src_vid_temp = find_relational_compact_as_of_node_index(
+            Idx src_vid_relational = find_relational_compact_as_of_node_index(
                 etype, src_id, unique_srcs_and_dests_node_indices,
                 unique_srcs_and_dests_rel_ptr);
-            feat_off_src = src_vid_temp * num_heads + feat_idx;
+            feat_off_src = src_vid_relational * num_heads + feat_idx;
           } else {
             feat_off_src = src_id * num_heads + feat_idx;
           }

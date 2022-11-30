@@ -29,7 +29,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
         Idx feat_src_entry_id = -1;
         Idx edge_id = gdata.eids[eidx];
         if constexpr (RelationalFlag) {
-          Idx sum_idx = -1;
+          // Idx sum_idx = -1;
           Idx etype = -1;
           if constexpr (ETypeRelPtrFlag) {
             etype = binary_search(num_relations, etypes, eidx);
@@ -38,9 +38,9 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
           }
           if constexpr (CompactAsOfNodeFlag) {
             feat_src_entry_id = src_vid;
-            sum_idx = find_relational_compact_as_of_node_index(
-                etype, dst_vid, unique_srcs_and_dests_node_indices,
-                unique_srcs_and_dests_rel_ptr);
+            // sum_idx = find_relational_compact_as_of_node_index(
+            //     etype, dst_vid, unique_srcs_and_dests_node_indices,
+            //     unique_srcs_and_dests_rel_ptr);
             if constexpr (FullCartesianFlag) {
               // NB: This is the case where we have the data stored in
               // (relation, node) but do not compress the (relation, node)
@@ -52,18 +52,18 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
             }
           } else {
             feat_src_entry_id = edge_id;
-            sum_idx = find_relational_compact_as_of_node_index(
-                etype, dst_vid, unique_srcs_and_dests_node_indices,
-                unique_srcs_and_dests_rel_ptr);
+            // sum_idx = find_relational_compact_as_of_node_index(
+            //     etype, dst_vid, unique_srcs_and_dests_node_indices,
+            //     unique_srcs_and_dests_rel_ptr);
           }
           s += (gdata.exp[edge_id * e_xlen + head_idx] /
-                gdata.sum[sum_idx * e_xlen + head_idx] *
+                gdata.sum[dst_vid * e_xlen + head_idx] *
                 gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                head_idx * hidden_xlen + feat_idx]);
           atomicAdd(&gdata.ret[dst_vid * gdata.feat_src_xlen +
                                head_idx * hidden_xlen + feat_idx],
                     gdata.exp[edge_id * e_xlen + head_idx] /
-                        gdata.sum[sum_idx * e_xlen + head_idx] *
+                        gdata.sum[dst_vid * e_xlen + head_idx] *
                         gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                        head_idx * hidden_xlen + feat_idx]);
         } else {  // !RelationalFlag
@@ -148,13 +148,13 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
           } else {
             etype = etypes[eidx];
           }
-          Idx src_vid_temp = find_relational_compact_as_of_node_index(
+          Idx src_vid_relational = find_relational_compact_as_of_node_index(
               etype, src_id, unique_srcs_and_dests_node_indices,
               unique_srcs_and_dests_rel_ptr);
           dst_vid_relational = find_relational_compact_as_of_node_index(
               etype, dst_vid, unique_srcs_and_dests_node_indices,
               unique_srcs_and_dests_rel_ptr);
-          feat_off_src = src_vid_temp * e_xlen + feat_idx;
+          feat_off_src = src_vid_relational * e_xlen + feat_idx;
           feat_off_dst = dst_vid_relational * e_xlen + feat_idx;
           if constexpr (FullCartesianFlag) {
             // NB: This is the case where we have the data stored in
@@ -179,7 +179,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
                           gdata.leaky_relu_slope);
       gdata.exp[Idx(edge_id * e_xlen) + feat_idx] = tmp;
       if constexpr (RelationalFlag) {
-        atomicAdd(&gdata.sum[Idx(dst_vid_relational * e_xlen) + feat_idx], tmp);
+        atomicAdd(&gdata.sum[Idx(dst_vid * e_xlen) + feat_idx], tmp);
       }
       sum += tmp;
       //}

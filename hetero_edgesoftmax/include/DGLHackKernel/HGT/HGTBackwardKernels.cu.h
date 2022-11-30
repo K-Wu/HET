@@ -283,10 +283,10 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
 
           // TODO: maybe it's better to cache exp/sum to reduce mem traffic as
           // well as redundant computation?
-          Idx sum_vid = dst_vid;
-          if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
-            sum_vid = dst_vid_relational;
-          }
+          // Idx sum_vid = dst_vid;
+          // if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
+          //   sum_vid = dst_vid_relational;
+          // }
 
           DType normalized_attn_score;
           if constexpr (UseMuAppliedAttnScoreSwitch == 1) {
@@ -294,7 +294,7 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
                 gdata.mu_softmax_applied_unnormalized_attn_score[eid *
                                                                      num_heads +
                                                                  head_idx] /
-                gdata.edgesoftmax_sum_per_node[sum_vid * num_heads + head_idx];
+                gdata.edgesoftmax_sum_per_node[dst_vid * num_heads + head_idx];
           } else if constexpr (UseMuAppliedAttnScoreSwitch == 2) {
             normalized_attn_score =
                 gdata.normalized_attn_score[eid * num_heads + head_idx];
@@ -307,7 +307,7 @@ _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
             }
             normalized_attn_score =
                 gdata.unnormalized_attn_score[eid * num_heads + head_idx] * mu /
-                gdata.edgesoftmax_sum_per_node[sum_vid * num_heads + head_idx];
+                gdata.edgesoftmax_sum_per_node[dst_vid * num_heads + head_idx];
           }
 
           if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
@@ -425,12 +425,14 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
           Idx dst_vid_relational = -1;
           Idx etype = -1;
           if constexpr (!CompactAsOfNodeFlag) {
-            // in this case, message_src_offset, edgesoftmax_sum_per_node_idx
+            // in this case, message_src_offset
             // and message_src_idx are related to edge id, regardless of the
             // type of the edge
+            // edgesoftmax_sum_per_node_idx is still one (num_heads,) vector per
+            // destination node
             message_src_offset = eid * gdata.message_src_xlen +
                                  head_idx * hidden_xlen + feat_idx;
-            edgesoftmax_sum_per_node_idx = eid * num_heads + head_idx;
+            edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
             message_src_idx =
                 (eid * num_heads + head_idx) * hidden_xlen + feat_idx;
           } else {  // CompactAsOfNodeFlag
@@ -450,8 +452,9 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
               dst_vid_relational = find_relational_compact_as_of_node_index(
                   etype, dst_vid, unique_srcs_and_dests_rel_ptr,
                   unique_srcs_and_dests_node_indices);
-              edgesoftmax_sum_per_node_idx =
-                  dst_vid_relational * num_heads + head_idx;
+              // edgesoftmax_sum_per_node_idx =
+              //     dst_vid_relational * num_heads + head_idx;
+              edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
                   etype, src_vid, unique_srcs_and_dests_rel_ptr,
                   unique_srcs_and_dests_node_indices);

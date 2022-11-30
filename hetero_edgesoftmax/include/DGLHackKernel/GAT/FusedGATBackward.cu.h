@@ -101,26 +101,26 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
           DType grad_exp =
               gdata.grad_out[dst_out_offset] *
               (gdata.feat_src[feat_src_offset] - gdata.ret[dst_out_offset]) /
-              gdata.sum[dst_out_offset];
+              gdata.sum[dst_vid * e_xlen + head_idx];
           DType tmp_sum = gdata.el[el_idx] + gdata.er[er_idx];
           DType tmp2 = grad_exp * gdata.exp[edge_offset] *
                        gradLeaky(tmp_sum, gdata.leaky_relu_slope);
 
           atomicAdd(gdata.grad_er + er_idx, tmp2);
-          Idx sum_vid = dst_vid;
-          if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
-            sum_vid = dst_vid_relational;
-          }
+          // Idx sum_vid = dst_vid;
+          // if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
+          //   sum_vid = dst_vid_relational;
+          // }
           if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
             atomicAdd(gdata.grad_el + el_idx, tmp2);
             atomicAdd(gdata.grad_feat_src + feat_src_offset,
                       gdata.exp[eid * e_xlen + head_idx] /
-                          gdata.sum[sum_vid * e_xlen + head_idx] *
+                          gdata.sum[dst_vid * e_xlen + head_idx] *
                           gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                          head_idx * hidden_xlen + feat_idx]);
           } else {
             sfeatsrc += gdata.exp[eid * e_xlen + head_idx] /
-                        gdata.sum[sum_vid * e_xlen + head_idx] *
+                        gdata.sum[dst_vid * e_xlen + head_idx] *
                         gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                        head_idx * hidden_xlen + feat_idx];
             s += tmp2;
@@ -212,19 +212,19 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
           }
           // TODO: maybe it's better to cache exp/sum to reduce mem traffic as
           // well as redundant computation?
-          Idx sum_vid = dst_vid;
-          if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
-            sum_vid = dst_vid_relational;
-          }
+          // Idx sum_vid = dst_vid;
+          // if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
+          //   sum_vid = dst_vid_relational;
+          // }
           if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
             atomicAdd(gdata.grad_feat_src + feat_src_offset,
                       gdata.exp[eid * e_xlen + head_idx] /
-                          gdata.sum[sum_vid * e_xlen + head_idx] *
+                          gdata.sum[dst_vid * e_xlen + head_idx] *
                           gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                          head_idx * hidden_xlen + feat_idx]);
           } else {  // CompactAsOfNodeFlag && !RelationalFlag
             s += gdata.exp[eid * e_xlen + head_idx] /
-                 gdata.sum[sum_vid * e_xlen + head_idx] *
+                 gdata.sum[dst_vid * e_xlen + head_idx] *
                  gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx];
           }
@@ -348,7 +348,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
           DType grad_exp =
               gdata.grad_out[dst_out_offset] *
               (gdata.feat_src[feat_src_offset] - gdata.ret[dst_out_offset]) /
-              gdata.sum[er_idx];
+              gdata.sum[dst_vid * e_xlen + head_idx];
           DType tmp_sum = gdata.el[el_idx] + gdata.er[er_idx];
           DType tmp2 = grad_exp * gdata.exp[edge_offset] *
                        gradLeaky(tmp_sum, gdata.leaky_relu_slope);
