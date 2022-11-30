@@ -1,4 +1,4 @@
-from .. import kernels as K
+from ..kernels import K
 from .. import utils
 import networkx as nx
 import torch

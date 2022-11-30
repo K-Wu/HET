@@ -2,7 +2,7 @@
 
 
 # NB: this class stores type in list and assumes the type order in this class and dglgraph are preserved across run. Therefore one should use the CPython implementation to ensure that.
-from .. import kernels as K
+from ..kernels import K
 from .. import utils
 import functools
 

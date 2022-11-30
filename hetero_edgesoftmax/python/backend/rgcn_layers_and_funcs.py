@@ -4,7 +4,7 @@
 import scipy  # Weird bug in new pytorch when import scipy after import torch
 import torch as th
 
-from .. import kernels as K
+from ..kernels import K
 
 
 class RgcnFirstLayerCSR(th.autograd.Function):
