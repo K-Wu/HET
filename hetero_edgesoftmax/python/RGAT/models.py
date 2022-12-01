@@ -282,6 +282,7 @@ class HET_RelationalGATEncoder(nn.Module):
         use_self_loop: bool = True,
         last_layer_act: bool = False,
         compact_as_of_node_flag: bool = False,
+        multiply_among_weights_first_flag: bool = False,
     ):
         super(HET_RelationalGATEncoder, self).__init__()
         self.n_heads = n_heads
@@ -294,6 +295,7 @@ class HET_RelationalGATEncoder(nn.Module):
         self.use_self_loop = use_self_loop
         self.last_layer_act = last_layer_act
         self.compact_as_of_node_flag = compact_as_of_node_flag
+        self.multiply_among_weights_first_flag = multiply_among_weights_first_flag
         self.init_encoder()
 
     def init_encoder(self):
@@ -311,6 +313,7 @@ class HET_RelationalGATEncoder(nn.Module):
                     self_loop=self.use_self_loop,
                     dropout=self.dropout,
                     compact_as_of_node_flag=self.compact_as_of_node_flag,
+                    multiply_among_weights_first_flag=self.multiply_among_weights_first_flag,
                 )
             )
         # h2o
@@ -322,6 +325,8 @@ class HET_RelationalGATEncoder(nn.Module):
                 1,  # overwrting the n_head setting as the classification should be output in this stage
                 activation=F.relu if self.last_layer_act else None,
                 self_loop=self.use_self_loop,
+                compact_as_of_node_flag=self.compact_as_of_node_flag,
+                multiply_among_weights_first_flag=self.multiply_among_weights_first_flag,
             )
         )
 

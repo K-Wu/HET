@@ -6,6 +6,7 @@ from torch import nn
 from .. import utils
 
 from dgl.heterograph import DGLBlock
+import argparse
 
 
 class RelGraphEmbed(nn.Module):
@@ -86,7 +87,7 @@ def extract_embed(node_embed, input_nodes):
 
 
 def HET_RGNN_train_with_sampler(
-    g, model, node_embed, optimizer, train_loader, labels, device, hypermeters
+    g, model, node_embed, optimizer, train_loader, labels, device, args
 ):
     raise NotImplementedError("HET_RGNN_train_with_sampler not implemented yet")
 
@@ -98,11 +99,11 @@ def HET_RGNN_train_full_graph(
     optimizer,
     labels: th.Tensor,
     device,
-    hypermeters: dict,
+    args: argparse.Namespace,
 ):
     # training loop
     print("start training...")
-    for epoch in range(hypermeters["n_epochs"]):
+    for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
         model.train()
@@ -144,7 +145,7 @@ def HET_RGNN_train_full_graph(
         th.cuda.synchronize()
 
         # FIXME: should be # edges when training full graph
-        total_loss += loss.item() * hypermeters["batch_size"]
+        total_loss += loss.item() * args.batch_size
 
         # result = test(g, model, node_embed, labels, device, split_idx, args)
         # logger.add_result(run, result)
@@ -166,11 +167,13 @@ def HET_RGNN_train_full_graph(
 
 
 # * g(dglgraph) is already set as a member of model
-def RGNN_train_full_graph(model, node_embed, optimizer, labels, hypermeters: dict):
+def RGNN_train_full_graph(
+    model, node_embed, optimizer, labels, args: argparse.Namespace
+):
     # training loop
     print("start training...")
     category = "paper"
-    for epoch in range(hypermeters["n_epochs"]):
+    for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
         model.train()
@@ -217,7 +220,7 @@ def RGNN_train_full_graph(model, node_embed, optimizer, labels, hypermeters: dic
         th.cuda.synchronize()
 
         # FIXME: should be # edges when training full graph
-        total_loss += loss.item() * hypermeters["batch_size"]
+        total_loss += loss.item() * args.batch_size
 
         # result = test(g, model, node_embed, labels, device, split_idx, args)
         # logger.add_result(run, result)
@@ -240,12 +243,12 @@ def RGNN_train_full_graph(model, node_embed, optimizer, labels, hypermeters: dic
 
 # * g(dglgraph) is already set as a member of model
 def RGNN_train_with_sampler(
-    model, node_embed, optimizer, train_loader, labels, device, hypermeters: dict
+    model, node_embed, optimizer, train_loader, labels, device, args: argparse.Namespace
 ):
     # training loop
     print("start training...")
 
-    for epoch in range(hypermeters["n_epochs"]):
+    for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
         model.train()
@@ -295,7 +298,7 @@ def RGNN_train_with_sampler(
             loss.backward()
             optimizer.step()
 
-            total_loss += loss.item() * hypermeters["batch_size"]
+            total_loss += loss.item() * args.batch_size
             # pbar.update(batch_size)
 
         # result = test(g, model, node_embed, labels, device, split_idx, args)
@@ -312,41 +315,70 @@ def RGNN_train_with_sampler(
 
 
 # TODO: Use conditional arguments to get a clearer structure of arguments as explained in https://stackoverflow.com/questions/9505898/conditional-command-line-arguments-in-python-using-argparse
-def add_generic_RGNN_args(parser):
+def add_generic_RGNN_args(parser, filtered_args={}):
+    if len(filtered_args) > 0:
+        print(
+            "WARNING: add_generic_RGNN_args is called with these following removed arguments: ",
+            filtered_args,
+        )
     # DGL
-    parser.add_argument("-d", "--dataset", type=str, default="ogbn-mag", help="dataset")
-    parser.add_argument(
-        "--n_infeat",
-        type=int,
-        default=64,
-        help="number of feature inputted into RGAT layer, which will be the output size of embedding layer when the latter is used",
-    )
-    parser.add_argument(
-        "--sparse_format", type=str, default="csr", help="sparse format to use"
-    )
-    parser.add_argument("--sort_by_src", action="store_true", help="sort by src")
-    parser.add_argument("--sort_by_etype", action="store_true", help="sort by etype")
-    parser.add_argument(
-        "--reindex_eid",
-        action="store_true",
-        help="use new eid after sorting rather than load referential eids",
-    )
-    parser.add_argument("--num_classes", type=int, default=8, help="number of classes")
-    parser.add_argument(
-        "--use_real_labels_and_features", action="store_true", help="use real labels"
-    )
-    parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
-    parser.add_argument("--n_head", type=int, default=2, help="number of heads")
-    parser.add_argument(
-        "-e", "--n_epochs", type=int, default=3, help="number of training epochs"
-    )
-    parser.add_argument("--fanout", type=int, nargs="+", default=[25, 20])
-    parser.add_argument("--batch_size", type=int, default=1024)
-    parser.add_argument("--full_graph_training", action="store_true")
-    parser.add_argument("--num_layers", type=int, default=1)
-    parser.add_argument("--compact_as_of_node_flag", action="store_true")
+    if not "dataset" in filtered_args:
+        parser.add_argument("-d", "--dataset", type=str, default="mag", help="dataset")
+    if not "n_infeat" in filtered_args:
+        parser.add_argument(
+            "--n_infeat",
+            type=int,
+            default=64,
+            help="number of feature inputted into RGAT layer, which will be the output size of embedding layer when the latter is used",
+        )
+    if not "sparse_format" in filtered_args:
+        parser.add_argument(
+            "--sparse_format", type=str, default="csr", help="sparse format to use"
+        )
+    if not "sort_by_src" in filtered_args:
+        parser.add_argument("--sort_by_src", action="store_true", help="sort by src")
+    if not "sort_by_etype" in filtered_args:
+        parser.add_argument(
+            "--sort_by_etype", action="store_true", help="sort by etype"
+        )
+    if not "reindex_eid" in filtered_args:
+        parser.add_argument(
+            "--reindex_eid",
+            action="store_true",
+            help="use new eid after sorting rather than load referential eids",
+        )
+    if not "num_classes" in filtered_args:
+        parser.add_argument(
+            "--num_classes", type=int, default=8, help="number of classes"
+        )
+    if not "use_real_labels_and_features" in filtered_args:
+        parser.add_argument(
+            "--use_real_labels_and_features",
+            action="store_true",
+            help="use real labels",
+        )
+    if not "lr" in filtered_args:
+        parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
+    if not "n_head" in filtered_args:
+        parser.add_argument("--n_head", type=int, default=2, help="number of heads")
+    if not "n_epochs" in filtered_args:
+        parser.add_argument(
+            "-e", "--n_epochs", type=int, default=3, help="number of training epochs"
+        )
+    if not "fanout" in filtered_args:
+        parser.add_argument("--fanout", type=int, nargs="+", default=[25, 20])
+    if not "batch_size" in filtered_args:
+        parser.add_argument("--batch_size", type=int, default=1024)
+    if not "full_graph_training" in filtered_args:
+        parser.add_argument("--full_graph_training", action="store_true")
+    if not "num_layers" in filtered_args:
+        parser.add_argument("--num_layers", type=int, default=1)
+    if not "compact_as_of_node_flag" in filtered_args:
+        parser.add_argument("--compact_as_of_node_flag", action="store_true")
     # OGB
-    parser.add_argument("--runs", type=int, default=10)
-    parser.add_argument(
-        "--dropout", type=float, default=0.5, help="dropout probability"
-    )
+    if not "runs" in filtered_args:
+        parser.add_argument("--runs", type=int, default=10)
+    if not "dropout" in filtered_args:
+        parser.add_argument(
+            "--dropout", type=float, default=0.5, help="dropout probability"
+        )

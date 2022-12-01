@@ -1,4 +1,4 @@
-# HET
+# HET [![CodeFactor](https://www.codefactor.io/repository/github/k-wu/hetero_edgesoftmax/badge?s=34a94a8b3a8b3d83b6582edc6e24b1e5d0a207b9)](https://www.codefactor.io/repository/github/k-wu/hetero_edgesoftmax) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9c41863c914e4153883f24eeff256280)](https://www.codacy.com?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=K-Wu/hetero_edgesoftmax&amp;utm_campaign=Badge_Grade)
 
 The HET Hetero-GNN Kernel Optimization and Code Generation project.
 
@@ -10,11 +10,6 @@ The following repos, as submodules in `third_party/`, are required. Please recur
 [sputnik](https://github.com/google-research/sputnik)
 
 Besides, as we register our kernels in PyTorch (optional cmake build component), pytorch-dev and libtorch are also required.
-
-## Code Quality
-[![CodeFactor](https://www.codefactor.io/repository/github/k-wu/hetero_edgesoftmax/badge?s=34a94a8b3a8b3d83b6582edc6e24b1e5d0a207b9)](https://www.codefactor.io/repository/github/k-wu/hetero_edgesoftmax)
-
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/9c41863c914e4153883f24eeff256280)](https://www.codacy.com?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=K-Wu/hetero_edgesoftmax&amp;utm_campaign=Badge_Grade)
 
 ## Warning on Infidel Sort by Src Out Degree and by Etype
 This repo contains data sorted in infidel manner (in [[hetero_edgesoftmax/data]]) with ".infidel_sorted" mark and utility to do such sort (in [[hetero_edgesoftmax/python/utils/coo_sorters.py]]). This is a sort mechanism solely for load balance in RGCN and is not a general purpose sort. The sorted elements, i.e., source node index or etype, are reindexed while other elements, i.e., one of source node index or etype, and eids and destination node index, are not. Also "transposed.<dataset_name>.coo.infidel_sorted.by_srcs_outgoing_freq.<element_name>.npy" are sorted after transposed so using the same eid should refer to the same edge in the original data.
@@ -47,3 +42,6 @@ Try the following command to push in a submodule:
 ```
 git push origin HEAD:master
 ```
+
+## Contact
+Kun Wu kunwu2<at>illinois<dot>edu  [![wakatime](https://wakatime.com/badge/github/K-Wu/hetero_edgesoftmax.svg)](https://wakatime.com/badge/github/K-Wu/hetero_edgesoftmax)

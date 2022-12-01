@@ -11,10 +11,12 @@ from .models_dgl import *
 
 def HGT_parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="HGT")
-    add_generic_RGNN_args(parser)
+    add_generic_RGNN_args(parser, {})
     # parser.add_argument(
     #    "--n_hidden", type=int, default=64, help="number of hidden units"
     # )
+    parser.add_argument("--hgt_fused_attn_score_flag", action="store_true")
+
     args = parser.parse_args()
     return args
 
@@ -57,6 +59,8 @@ def HGT_get_our_model(
         num_classes,
         n_heads=args.n_head,
         dropout=args.dropout,
+        hgt_fused_attn_score_flag=args.hgt_fused_attn_score_flag,
+        compact_as_of_node_flag=args.compact_as_of_node_flag,
     )
     print(embed_layer)
     print(
@@ -68,7 +72,10 @@ def HGT_get_our_model(
 
 
 def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
-    pass
+
+    raise NotImplementedError(
+        "Not implemented loading real labels and features in utils.RGNN_get_mydgl_graph"
+    )
 
 
 if __name__ == "__main__":

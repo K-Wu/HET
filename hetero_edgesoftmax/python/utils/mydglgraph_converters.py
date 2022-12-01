@@ -39,6 +39,7 @@ def RGNN_get_mydgl_graph(
             transposed=True,
             infidel_sort_flag=False,
         )
+        ntype_offsets = [0, 14541]
         # dglgraph = fetch_fb15k237_dglgraph()
     elif dataset == "wikikg2":
         print("WARNING - loading wikikg2. Currently we only support a few dataset.")
@@ -61,29 +62,33 @@ def RGNN_get_mydgl_graph(
             transposed=True,
             infidel_sort_flag=False,
         )
+        ntype_offsets = [0, 2500604]  # there is only one node type
         # graph_dict = fetch_wikikg2_graph_dict()
-    elif dataset == "ogbn-mag":
-        print("WARNING - loading mag. Currently we only support a few dataset.")
-        (edge_srcs, edge_dsts, edge_etypes, edge_referential_eids,) = get_ogbnmag(
-            dataset_sort_flag,
-            sort_by_src_flag,
-            transposed=False,
-            infidel_sort_flag=False,
+    # elif dataset == "mag":
+    #     print("WARNING - loading mag. Currently we only support a few dataset.")
+    #     (edge_srcs, edge_dsts, edge_etypes, edge_referential_eids,) = get_ogbnmag(
+    #         dataset_sort_flag,
+    #         sort_by_src_flag,
+    #         transposed=False,
+    #         infidel_sort_flag=False,
+    #     )
+    #     (
+    #         transposed_edge_srcs,
+    #         transposed_edge_dsts,
+    #         transposed_edge_etypes,
+    #         transposed_edge_referential_eids,
+    #     ) = get_ogbnmag(
+    #         dataset_sort_flag,
+    #         sort_by_src_flag,
+    #         transposed=True,
+    #         infidel_sort_flag=False,
+    #     )
+    #     # graph_dict = fetch_ogbnmag_graph_dict()
+    elif dataset in graphiler_datasets.GRAPHILER_DATASET:
+        print("RGNN_get_mydgl_graph lopading graphiler dataset")
+        g, ntype_offsets = graphiler_datasets.graphiler_load_data_as_mydgl_graph(
+            dataset, True
         )
-        (
-            transposed_edge_srcs,
-            transposed_edge_dsts,
-            transposed_edge_etypes,
-            transposed_edge_referential_eids,
-        ) = get_ogbnmag(
-            dataset_sort_flag,
-            sort_by_src_flag,
-            transposed=True,
-            infidel_sort_flag=False,
-        )
-        # graph_dict = fetch_ogbnmag_graph_dict()
-    elif dataset in graphiler_datasets.GRAPHILER_DATASETS:
-        g = graphiler_datasets.graphiler_load_data_as_mydgl_graph(dataset, True)
         edge_srcs, edge_dsts, edge_etypes, edge_referential_eids = (
             g["original"]["row_idx"],
             g["original"]["col_idx"],
@@ -91,6 +96,49 @@ def RGNN_get_mydgl_graph(
             g["original"]["eids"],
         )
 
+        if len(ntype_offsets) > 2 and sort_by_src_flag:
+            print(
+                "WARNING! >1 ntypes while sort_by_src_flag is set True. Experiemental sort within each node type interval is called"
+            )
+
+        (
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        ) = (edge_srcs, edge_dsts, edge_etypes, edge_referential_eids)
+
+        (
+            edge_srcs,
+            edge_dsts,
+            edge_etypes,
+            edge_referential_eids,
+        ) = sort_coo_according_to_flags(
+            edge_srcs,
+            edge_dsts,
+            edge_etypes,
+            edge_referential_eids,
+            ntype_offsets,
+            dataset_sort_flag,
+            sort_by_src_flag,
+            torch_flag=True,
+        )
+
+        (
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+        ) = sort_coo_according_to_flags(
+            transposed_edge_srcs,
+            transposed_edge_dsts,
+            transposed_edge_etypes,
+            transposed_edge_referential_eids,
+            ntype_offsets,
+            dataset_sort_flag,
+            sort_by_src_flag,
+            torch_flag=True,
+        )
     else:
         print(
             "ERROR! now only support fb15k, wikikg2 and those in graphiler datasets. Loading it now"
@@ -159,6 +207,7 @@ def RGNN_get_mydgl_graph(
     else:
         raise NotImplementedError("sparse format not supported")
     # g.import_metadata_from_dgl_heterograph(dglgraph)
+    g["original"]["node_type_offsets"] = th.LongTensor(ntype_offsets)
     return g
 
 

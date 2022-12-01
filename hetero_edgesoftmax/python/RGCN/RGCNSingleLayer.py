@@ -14,7 +14,7 @@ def get_single_layer_model(args, mydglgraph):
     num_edges = mydglgraph["original"]["rel_types"].numel()
     num_classes = args.num_classes
     model = HET_EGLRGCNSingleLayerModel(
-        args.input_dim,
+        args.n_infeat,
         num_classes,
         num_rels,
         num_edges,
@@ -41,7 +41,7 @@ def main(args):
         assert args.sparse_format == "csr"
         num_nodes = g["original"]["row_ptr"].numel() - 1
     num_nodes = g.get_num_nodes()
-    feats = th.randn(num_nodes, args.input_dim, requires_grad=True)
+    feats = th.randn(num_nodes, args.n_infeat, requires_grad=True)
     RGCN_main_procedure(args, g, model, feats)
 
 
@@ -49,5 +49,5 @@ if __name__ == "__main__":
     parser = create_RGCN_parser(RGCN_single_layer_flag=True)
     args = parser.parse_args()
     print(args)
-    args.bfs_level = 1 + 1  # n_layers + 1 pruning used nodes for memory
+    args.bfs_level = 1 + 1  # num_layers + 1 pruning used nodes for memory
     main(args)

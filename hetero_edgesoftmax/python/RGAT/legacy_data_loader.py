@@ -5,7 +5,7 @@ import torch as th
 import dgl
 
 # This is the data preparation logic from the original RGAT script. Keeping this function for compatibility.
-def prepare_data(args: argparse.Namespace):
+def _legacy_RGAT_prepare_mag_data(args: argparse.Namespace):
     dataset = DglNodePropPredDataset(name="ogbn-mag")
     split_idx = dataset.get_idx_split()
     g, labels = dataset[

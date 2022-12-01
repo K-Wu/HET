@@ -12,7 +12,7 @@ DGL_DATASETS = ["reddit", "ppi", "cora", "pubmed", "aifb", "mutag", "bgs", "am"]
 # Datasets that keep absolute node index: None if ignoring graph with only one edge type/ node type
 def test_load_dataset(name):
     print(name)
-    dataset = graphiler_datasets.graphiler_load_data_as_mydgl_graph(name)
+    dataset, _ = graphiler_datasets.graphiler_load_data_as_mydgl_graph(name)
 
 
 def test_load_all_and_print_num_etypes():

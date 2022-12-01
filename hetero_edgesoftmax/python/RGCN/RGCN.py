@@ -21,6 +21,7 @@ import torch.nn.functional as F
 # from dgl.contrib.data import load_data
 from .. import backend as B
 from .. import utils
+from ..RGNNUtils import *
 
 # from functools import partial
 
@@ -32,6 +33,7 @@ from torch import nn
 
 
 class HET_EglRelGraphConv(nn.Module):
+    @utils.warn_default_arguments
     def __init__(
         self,
         in_feat,
@@ -162,9 +164,10 @@ class HET_EglRelGraphConv(nn.Module):
 
 
 class HET_EGLRGCNSingleLayerModel(nn.Module):
+    @utils.warn_default_arguments
     def __init__(
         self,
-        input_dim,
+        n_infeat,
         out_dim,
         num_rels,
         num_edges,
@@ -175,7 +178,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
     ):
         super(HET_EGLRGCNSingleLayerModel, self).__init__()
         self.layer2 = HET_EglRelGraphConv(
-            input_dim,
+            n_infeat,
             out_dim,
             num_rels,
             num_edges,
@@ -192,6 +195,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
 
 
 class HET_EGLRGCNModel(nn.Module):
+    @utils.warn_default_arguments
     def __init__(
         self,
         num_nodes,
@@ -323,7 +327,7 @@ def RGCN_main_procedure(args, g, model, feats):
     model.train()
     train_labels = labels[train_idx]
     train_idx = list(train_idx)
-    for epoch in range(args.num_epochs):
+    for epoch in range(args.n_epochs):
         optimizer.zero_grad()
         torch.cuda.synchronize()
         t0 = time.time()
@@ -394,12 +398,12 @@ def RGCN_main_procedure(args, g, model, feats):
     print("^^^{:6f}^^^{:6f}".format(Used_memory, avg_run_time))
 
 
-def create_RGCN_parser(RGCN_single_layer_flag: bool):
+def _deprecated_create_RGCN_parser(RGCN_single_layer_flag: bool):
     parser = argparse.ArgumentParser(description="RGCN")
     parser.add_argument("--dropout", type=float, default=0, help="dropout probability")
     if RGCN_single_layer_flag:
         parser.add_argument(
-            "--input_dim", type=int, default=16, help="number of hidden units"
+            "--n_infeat", type=int, default=16, help="number of hidden units"
         )
     else:
         parser.add_argument(
@@ -415,10 +419,10 @@ def create_RGCN_parser(RGCN_single_layer_flag: bool):
     )
     if not RGCN_single_layer_flag:
         parser.add_argument(
-            "--n-layers", type=int, default=2, help="number of propagation rounds"
+            "--num_layers", type=int, default=2, help="number of propagation rounds"
         )
     parser.add_argument(
-        "-e", "--num_epochs", type=int, default=50, help="number of training epochs"
+        "-e", "--n_epochs", type=int, default=50, help="number of training epochs"
     )
     parser.add_argument(
         "--sparse_format",
@@ -466,9 +470,73 @@ def create_RGCN_parser(RGCN_single_layer_flag: bool):
     return parser
 
 
+def create_RGCN_parser(RGCN_single_layer_flag):
+    parser = argparse.ArgumentParser(description="RGCN")
+    if RGCN_single_layer_flag:
+        add_generic_RGNN_args(
+            parser, {"use-self-loop", "runs", "dropout", "use_real_labels_and_features"}
+        )
+    else:
+        add_generic_RGNN_args(
+            parser,
+            {
+                "use-self-loop",
+                "runs",
+                "dropout",
+                "use_real_labels_and_features",
+                "n_infeat",
+            },
+        )
+        parser.add_argument(
+            "--hidden_size", type=int, default=16, help="number of hidden units"
+        )
+    print(
+        "WARNING: RGCN currently does not support the following batch_size, !full_graph_training, n_head"
+    )
+    parser.add_argument("--gpu", type=int, default=0, help="gpu")
+    parser.add_argument(
+        "--num_bases",
+        type=int,
+        default=-1,
+        help="number of filter weight matrices, default: -1 [use all]",
+    )
+    parser.add_argument("--l2norm", type=float, default=0, help="l2 norm coef")
+    parser.add_argument(
+        "--relabel",
+        default=False,
+        action="store_true",
+        help="remove untouched nodes and relabel",
+    )
+    parser.add_argument(
+        "--use-self-loop",
+        default=False,
+        action="store_true",
+        help="include self feature as a special relation",
+    )
+    parser.add_argument(
+        "--verbose",
+        default=False,
+        action="store_true",
+        help="print out training information",
+    )
+    parser.add_argument(
+        "--reindex_eid",
+        action="store_true",
+        help="use new eid after sorting rather than load referential eids",
+    )
+    parser.add_argument("--train_size", type=int, default=256)
+    parser.add_argument("--test_size", type=int, default=64)
+    parser.add_argument("--num_classes", type=int, default=4)
+    fp = parser.add_mutually_exclusive_group(required=False)
+    fp.add_argument("--validation", dest="validation", action="store_true")
+    fp.add_argument("--testing", dest="validation", action="store_false")
+    parser.set_defaults(validation=True)
+    return parser
+
+
 if __name__ == "__main__":
     parser = create_RGCN_parser(RGCN_single_layer_flag=False)
     args = parser.parse_args()
     print(args)
-    args.bfs_level = args.n_layers + 1  # pruning used nodes for memory
+    args.bfs_level = args.num_layers + 1  # pruning used nodes for memory
     main(args)

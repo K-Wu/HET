@@ -21,8 +21,12 @@ class HET_HGTLayerHetero(nn.Module):
         n_heads=1,
         dropout=0.2,
         use_norm=False,
+        hgt_fused_attn_score_flag=False,
+        compact_as_of_node_flag=False,
     ):
         super(HET_HGTLayerHetero, self).__init__()
+        self.hgt_fused_attn_score_flag = hgt_fused_attn_score_flag
+        self.compact_as_of_node_flag = compact_as_of_node_flag
 
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -232,7 +236,16 @@ class HET_HGTLayerHetero(nn.Module):
 
 class HET_HGT_DGLHetero(nn.Module):
     @utils.warn_default_arguments
-    def __init__(self, mydglgraph, in_dim, out_dim, n_heads=1, dropout=0.2):  # ,h_dim
+    def __init__(
+        self,
+        mydglgraph,
+        in_dim,
+        out_dim,
+        n_heads=1,
+        dropout=0.2,
+        hgt_fused_attn_score_flag=False,
+        compact_as_of_node_flag=False,
+    ):  # ,h_dim
         super(HET_HGT_DGLHetero, self).__init__()
         self.mydglgraph = mydglgraph
         self.gcs = nn.ModuleList()
@@ -240,7 +253,13 @@ class HET_HGT_DGLHetero(nn.Module):
         # self.h_dim = h_dim
         self.out_dim = out_dim
         self.layer0 = HET_HGTLayerHetero(
-            in_dim, out_dim, mydglgraph, n_heads=n_heads, dropout=dropout
+            in_dim,
+            out_dim,
+            mydglgraph,
+            n_heads=n_heads,
+            dropout=dropout,
+            hgt_fused_attn_score_flag=hgt_fused_attn_score_flag,
+            compact_as_of_node_flag=compact_as_of_node_flag,
         )
         # self.layer1 = HET_HGTLayerHetero(
         #    h_dim, out_dim, mydglgraph, n_heads=n_heads, dropout=dropout

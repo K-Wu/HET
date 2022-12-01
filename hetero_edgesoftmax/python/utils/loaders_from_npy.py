@@ -120,24 +120,24 @@ def fetch_ogbnmag_raw_data():
 
 
 def load_fb15k237(
-    dataset_path_prefix, sorted, sorted_by_srcs, transposed, infidel_sort_flag=True
+    dataset_path_prefix, sorted_flag, sorted_by_srcs, transposed, infidel_sort_flag=True
 ):
-    if sorted_by_srcs and (not sorted):
-        raise ValueError("sorted_by_srcs is only valid when sorted is True")
+    if sorted_by_srcs and (not sorted_flag):
+        raise ValueError("sorted_by_srcs is only valid when sorted_flag is True")
     transposed_prefix = "transposed." if transposed else ""
     if infidel_sort_flag:
         print("Warning: you are loading infidel sort data, see readme.md for details")
-        sorted_suffix = ".infidel_sorted" if sorted else ""
+        sorted_suffix = ".infidel_sorted" if sorted_flag else ""
     else:
-        sorted_suffix = ".sorted" if sorted else ""
-    if sorted and sorted_by_srcs:
+        sorted_suffix = ".sorted_flag" if sorted_flag else ""
+    if sorted_flag and sorted_by_srcs:
         sorted_suffix += ".by_srcs_outgoing_freq"
-    elif sorted:
+    elif sorted_flag:
         sorted_suffix += ".by_etype_freq"
 
-    if not sorted:
+    if not sorted_flag:
         return fetch_fb15k237_raw_data()
-    else:  # sorted
+    else:  # sorted_flag
         return generic_load_data(
             os.path.join(
                 dataset_path_prefix,
@@ -147,19 +147,23 @@ def load_fb15k237(
 
 
 def load_wikikg2(
-    dataset_path_prefix, sorted, sorted_by_srcs, transposed, infidel_sort_flag=False
+    dataset_path_prefix,
+    sorted_flag,
+    sorted_by_srcs,
+    transposed,
+    infidel_sort_flag=False,
 ):
-    if sorted_by_srcs and (not sorted):
-        raise ValueError("sorted_by_srcs is only valid when sorted is True")
+    if sorted_by_srcs and (not sorted_flag):
+        raise ValueError("sorted_by_srcs is only valid when sorted_flag is True")
     transposed_prefix = "transposed." if transposed else ""
     if infidel_sort_flag:
         print("Warning: you are loading infidel sort data, see readme.md for details")
-        sorted_suffix = ".infidel_sorted" if sorted else ""
+        sorted_suffix = ".infidel_sorted" if sorted_flag else ""
     else:
-        sorted_suffix = ".sorted" if sorted else ""
-    if sorted and sorted_by_srcs:
+        sorted_suffix = ".sorted_flag" if sorted_flag else ""
+    if sorted_flag and sorted_by_srcs:
         sorted_suffix += ".by_srcs_outgoing_freq"
-    if not sorted:
+    if not sorted_flag:
         return fetch_wikikg2_raw_data()
     else:
         return generic_load_data(
@@ -170,16 +174,17 @@ def load_wikikg2(
         )
 
 
-def get_ogbnmag(sorted, sorted_by_srcs, transposed, infidel_sort_flag: bool = False):
-    if sorted_by_srcs and (not sorted):
-        raise ValueError("sorted_by_srcs is only valid when sorted is True")
-    if infidel_sort_flag:
-        print("Warning: you are loading infidel sort data, see readme.md for details")
-
-    edge_srcs, edge_dsts, edge_etypes, edge_referential_eids = fetch_ogbnmag_raw_data()
-    if transposed:
-        edge_srcs, edge_dsts = edge_dsts, edge_srcs
-    if sorted:
+def sort_coo_according_to_flags(
+    edge_srcs,
+    edge_dsts,
+    edge_etypes,
+    edge_referential_eids,
+    ntype_offsets,
+    sorted_flag,
+    sorted_by_srcs,
+    torch_flag,
+):
+    if sorted_flag:
         if sorted_by_srcs:
             (
                 edge_srcs,
@@ -191,7 +196,8 @@ def get_ogbnmag(sorted, sorted_by_srcs, transposed, infidel_sort_flag: bool = Fa
                 edge_dsts,
                 edge_etypes,
                 edge_referential_eids,
-                torch_flag=False,
+                ntype_offsets,
+                torch_flag=torch_flag,
                 infidel_sort_flag=infidel_sort_flag,
             )
         else:
@@ -205,7 +211,39 @@ def get_ogbnmag(sorted, sorted_by_srcs, transposed, infidel_sort_flag: bool = Fa
                 edge_dsts,
                 edge_etypes,
                 edge_referential_eids,
-                torch_flag=False,
+                torch_flag=torch_flag,
                 infidel_sort_flag=infidel_sort_flag,
             )
+    return edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
+
+
+def get_ogbnmag(
+    sorted_flag, sorted_by_srcs, transposed, infidel_sort_flag: bool = False
+):
+    if sorted_by_srcs and (not sorted_flag):
+        raise ValueError("sorted_by_srcs is only valid when sorted_flag is True")
+    if infidel_sort_flag:
+        print("Warning: you are loading infidel sort data, see readme.md for details")
+
+    edge_srcs, edge_dsts, edge_etypes, edge_referential_eids = fetch_ogbnmag_raw_data()
+    if transposed:
+        edge_srcs, edge_dsts = edge_dsts, edge_srcs
+    # the preprocessed data node are indiced from the smalledst to the largest: author, paper, institution, field_of_study
+    # number of nodes {'author': 1134649, 'field_of_study': 59965, 'institution': 8740, 'paper': 736389}
+    ntype_offsets = [0, 1134649, 1871038, 1879778, 1939743]
+    (
+        edge_srcs,
+        edge_dsts,
+        edge_etypes,
+        edge_referential_eids,
+    ) = sort_coo_according_to_flags(
+        edge_srcs,
+        edge_dsts,
+        edge_etypes,
+        edge_referential_eids,
+        ntype_offsets,
+        sorted_flag,
+        sorted_by_srcs,
+        torch_flag=False,
+    )
     return edge_srcs, edge_dsts, edge_etypes, edge_referential_eids

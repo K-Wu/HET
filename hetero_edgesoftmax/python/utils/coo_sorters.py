@@ -53,7 +53,7 @@ def remap_etype_according_to_number_of_edges(etypes, torch_flag: bool):
 
 @th.no_grad()
 def get_node_index_remap_dict_according_to_number_of_edges(
-    srcs, number_of_nodes, torch_flag: bool
+    srcs, number_of_nodes, ntype_offsets, torch_flag: bool
 ):
     if torch_flag:
         np_or_th = th
@@ -67,10 +67,19 @@ def get_node_index_remap_dict_according_to_number_of_edges(
         srcs_frequency = array_concatenate_func(
             [srcs_frequency, np_or_th.zeros(number_of_nodes - srcs_frequency.shape[0])]
         )
+
+    sorted_src_list = []
+    # resort only within each node type
+    for ntype in range(len(ntype_offsets) - 1):
+        start = ntype_offsets[ntype]
+        end = ntype_offsets[ntype + 1]
+        sorted_src_list += (
+            array_flip_func(np_or_th.argsort(srcs_frequency[start:end])) + start
+        ).tolist()
     # TODO: check if there is data loss in this np.argsort invocation, i.e., implicit conversion from int64 to int32
     original_src_to_new_src_map = dict(
         zip(
-            array_flip_func(np_or_th.argsort(srcs_frequency)).tolist(),
+            sorted_src_list,
             range(number_of_nodes),
         )
     )
@@ -78,7 +87,9 @@ def get_node_index_remap_dict_according_to_number_of_edges(
 
 
 @th.no_grad()
-def remap_node_indices_according_to_number_of_edges(srcs, dests, torch_flag: bool):
+def remap_node_indices_according_to_number_of_edges(
+    srcs, dests, ntype_offsets, torch_flag: bool
+):
     # if torch_flag:
     #     np_or_th = th
     # else:
@@ -87,7 +98,7 @@ def remap_node_indices_according_to_number_of_edges(srcs, dests, torch_flag: boo
     array_creation_func = get_array_creation_func(torch_flag)
     original_src_to_new_src_map = (
         get_node_index_remap_dict_according_to_number_of_edges(
-            srcs, max(srcs.max(), dests.max()) + 1, torch_flag
+            srcs, max(srcs.max(), dests.max()) + 1, ntype_offsets, torch_flag
         )
     )
     remapped_src = array_creation_func(
@@ -145,7 +156,7 @@ def sort_coo_by_etype_eids_torch_tensors(rel_ptr, srcs, dsts, eids):
 
 @th.no_grad()
 def sort_coo_by_src_outgoing_edges(
-    srcs, dsts, etypes, eids, torch_flag=False, infidel_flag=False
+    srcs, dsts, etypes, eids, ntype_offsets, torch_flag=False, infidel_flag=False
 ):
     print(
         "WARNING: you are using infidel sort utility. See readme.md for more details."
@@ -155,7 +166,9 @@ def sort_coo_by_src_outgoing_edges(
     else:
         np_or_th = np
     array_creation_func = get_array_creation_func(torch_flag)
-    srcs, _ = remap_node_indices_according_to_number_of_edges(srcs, torch_flag)
+    srcs, _ = remap_node_indices_according_to_number_of_edges(
+        srcs, ntype_offsets, torch_flag
+    )
     if not infidel_flag:
         dsts = _
     # now sort the (src, dst) pair according to their src idx
