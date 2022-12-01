@@ -48,8 +48,15 @@ class HET_EglRelGraphConv(nn.Module):
         self_loop=False,
         dropout=0.0,
         layer_type=0,
+        hybrid_assign_flag=False,
+        num_blocks_on_node_forward=-1,
+        num_blocks_on_node_backward=-1,
     ):
         super(HET_EglRelGraphConv, self).__init__()
+        self.hybrid_assign_flag = hybrid_assign_flag
+        self.num_blocks_on_node_forward = num_blocks_on_node_forward
+        self.num_blocks_on_node_backward = num_blocks_on_node_backward
+
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.num_rels = num_rels
@@ -130,13 +137,21 @@ class HET_EglRelGraphConv(nn.Module):
 
         if self.sparse_format == "csr":
             if self.layer_type == 0:
+                if self.hybrid_assign_flag:
+                    raise NotImplementedError
                 node_repr = B.rgcn_layer0_csr(
                     g, weight, norm
                 )  # NB: this line uses my own rgcn_layer0
                 # print('output of layer 0', node_repr)
             else:
                 node_repr = B.rgcn_layer1_csr(
-                    g, x, weight, norm
+                    g,
+                    x,
+                    weight,
+                    norm,
+                    self.hybrid_assign_flag,
+                    self.num_blocks_on_node_forward,
+                    self.num_blocks_on_node_backward,
                 )  # NB: this line uses my own rgcn_layer1
         else:
             assert self.sparse_format == "coo"
@@ -145,6 +160,8 @@ class HET_EglRelGraphConv(nn.Module):
                 node_repr = B.rgcn_layer0_coo(g, weight, norm)
                 # print('output of layer 0', node_repr)
             else:
+                if self.hybrid_assign_flag:
+                    raise NotImplementedError
                 node_repr = B.rgcn_layer1_coo(g, x, weight, norm)
         # torch.cuda.synchronize()
         # t3 = time.time()
@@ -175,6 +192,9 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
         num_bases,
         dropout,
         activation,
+        hybrid_assign_flag,
+        num_blocks_on_node_forward,
+        num_blocks_on_node_backward,
     ):
         super(HET_EGLRGCNSingleLayerModel, self).__init__()
         self.layer2 = HET_EglRelGraphConv(
@@ -517,6 +537,16 @@ def create_RGCN_parser(RGCN_single_layer_flag):
         default=False,
         action="store_true",
         help="print out training information",
+    )
+
+    parser.add_argument("--hybrid_assign_flag", action="store_true")
+    parser.add_argument(
+        "--num_blocks_on_node_forward",
+        type=int,
+    )
+    parser.add_argument(
+        "--num_blocks_on_node_backward",
+        type=int,
     )
     parser.add_argument("--train_size", type=int, default=256)
     parser.add_argument("--test_size", type=int, default=64)

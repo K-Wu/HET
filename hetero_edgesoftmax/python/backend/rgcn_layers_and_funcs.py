@@ -174,7 +174,95 @@ class RgcnSecondLayerCSR(th.autograd.Function):
         return None, None, None, None, None, None, None, None, grad_x, None, None, None
 
 
-def rgcn_layer1_csr(graph, x, weight, norm):
+class RgcnSecondLayerCSRHybridAssign(th.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        incsr_row_ptr,
+        incsr_col_idx,
+        incsr_eids,
+        incsr_reltypes,
+        outcsr_row_ptr,
+        outcsr_col_idx,
+        outcsr_eids,
+        outcsr_reltypes,
+        x,
+        weight,
+        norm,
+        ret,
+        num_blocks_on_node_forward,
+        num_blocks_on_node_backward,
+    ):
+        ctx.save_for_backward(
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            outcsr_row_ptr,
+            outcsr_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            weight,
+            norm,
+            x,
+        )
+        ctx.num_blocks_on_node_backward = num_blocks_on_node_backward
+        K.rgcn_layer1_csr_hybrid_assign(
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            x,
+            weight,
+            norm,
+            ret,
+            num_blocks_on_node_forward,
+        )
+        return ret
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            outcsr_row_ptr,
+            outcsr_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            weight,
+            norm,
+            x,
+        ) = ctx.saved_tensors
+        num_blocks_on_node_backward = ctx.num_blocks_on_node_backward
+        grad_x = th.zeros_like(x)
+        grad_weight = th.zeros_like(weight)
+        K.rgcn_layer1_backward_csr_hybrid_assign(
+            outcsr_row_ptr,
+            outcsr_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            x,
+            weight,
+            norm,
+            gradout,
+            grad_x,
+            grad_weight,
+            num_blocks_on_node_backward,
+        )
+        return None, None, None, None, None, None, None, None, grad_x, None, None, None
+
+
+def rgcn_layer1_csr(
+    graph,
+    x,
+    weight,
+    norm,
+    hybrid_assign_flag=False,
+    num_blocks_on_node_forward=None,
+    num_blocks_on_node_backward=None,
+):
     incsr_row_ptr = graph["transposed"]["row_ptr"]
     incsr_col_idx = graph["transposed"]["col_idx"]
     incsr_eids = graph["transposed"]["eids"]
@@ -189,17 +277,36 @@ def rgcn_layer1_csr(graph, x, weight, norm):
         device=weight.device,
         requires_grad=True,
     )
-    return RgcnSecondLayerCSR.apply(
-        incsr_row_ptr,
-        incsr_col_idx,
-        incsr_eids,
-        incsr_reltypes,
-        outcsr_row_ptr,
-        transposed_col_idx,
-        outcsr_eids,
-        outcsr_reltypes,
-        x,
-        weight,
-        norm,
-        ret,
-    )
+    if hybrid_assign_flag:
+        return RgcnSecondLayerCSRHybridAssign.apply(
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            outcsr_row_ptr,
+            transposed_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            x,
+            weight,
+            norm,
+            ret,
+            num_blocks_on_node_forward,
+            num_blocks_on_node_backward,
+        )
+
+    else:
+        return RgcnSecondLayerCSR.apply(
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            outcsr_row_ptr,
+            transposed_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            x,
+            weight,
+            norm,
+            ret,
+        )

@@ -13,6 +13,10 @@ def get_single_layer_model(args, mydglgraph):
     num_rels = int(mydglgraph["original"]["rel_types"].max().item()) + 1
     num_edges = mydglgraph["original"]["rel_types"].numel()
     num_classes = args.num_classes
+    print("num_nodes", mydglgraph.get_num_nodes())
+    print("num_edges ", num_edges)
+    print("num_classes ", num_classes)
+    print("num_rels ", num_rels)
     model = HET_EGLRGCNSingleLayerModel(
         args.n_infeat,
         num_classes,
@@ -22,6 +26,9 @@ def get_single_layer_model(args, mydglgraph):
         num_bases=args.num_bases,
         activation=F.relu,
         dropout=args.dropout,
+        hybrid_assign_flag=args.hybrid_assign_flag,
+        num_blocks_on_node_forward=args.num_blocks_on_node_forward,
+        num_blocks_on_node_backward=args.num_blocks_on_node_backward,
     )
     return model
 
