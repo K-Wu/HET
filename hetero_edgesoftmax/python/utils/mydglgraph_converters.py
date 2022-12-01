@@ -122,6 +122,7 @@ def RGNN_get_mydgl_graph(
             dataset_sort_flag,
             sort_by_src_flag,
             torch_flag=True,
+            infidel_sort_flag=False,
         )
 
         (
@@ -138,6 +139,7 @@ def RGNN_get_mydgl_graph(
             dataset_sort_flag,
             sort_by_src_flag,
             torch_flag=True,
+            infidel_sort_flag=False,
         )
     else:
         print(
@@ -162,7 +164,7 @@ def RGNN_get_mydgl_graph(
         transposed_edge_referential_eids = transposed_edge_new_eids
 
     if sparse_format == "coo":
-        g = create_mydgl_graph_coo_with_transpose_numpy(
+        g = create_mydgl_graph_coo_with_transpose(
             edge_srcs,
             edge_dsts,
             edge_etypes,
@@ -180,7 +182,11 @@ def RGNN_get_mydgl_graph(
             data_reltypes,
             data_eids,
         ) = sparse_matrix_converters.coo2csr(
-            edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
+            edge_srcs,
+            edge_dsts,
+            edge_etypes,
+            edge_referential_eids,
+            torch_flag=th.is_tensor(edge_srcs),
         )
         (
             transposed_data_rowptr,
@@ -192,9 +198,10 @@ def RGNN_get_mydgl_graph(
             transposed_edge_dsts,
             transposed_edge_etypes,
             transposed_edge_referential_eids,
+            torch_flag=th.is_tensor(edge_srcs),
         )
         # create graph
-        g = create_mydgl_graph_csr_with_transpose_numpy(
+        g = create_mydgl_graph_csr_with_transpose(
             data_rowptr,
             data_colidx,
             data_reltypes,
@@ -355,6 +362,74 @@ def create_mydgl_graph_csr_with_transpose_numpy(
         transposed_rel_types,
         transposed_eids,
     )
+
+
+def create_mydgl_graph_csr_with_transpose(
+    row_ptr,
+    col_idx,
+    rel_types,
+    eids,
+    transposed_row_ptr,
+    transposed_col_idx,
+    transposed_rel_types,
+    transposed_eids,
+):
+    if th.is_tensor(row_ptr):
+        return create_mydgl_graph_csr_with_transpose_torch(
+            row_ptr,
+            col_idx,
+            rel_types,
+            eids,
+            transposed_row_ptr,
+            transposed_col_idx,
+            transposed_rel_types,
+            transposed_eids,
+        )
+    else:
+        return create_mydgl_graph_csr_with_transpose_numpy(
+            row_ptr,
+            col_idx,
+            rel_types,
+            eids,
+            transposed_row_ptr,
+            transposed_col_idx,
+            transposed_rel_types,
+            transposed_eids,
+        )
+
+
+def create_mydgl_graph_coo_with_transpose(
+    row_ptr,
+    col_idx,
+    rel_types,
+    eids,
+    transposed_row_ptr,
+    transposed_col_idx,
+    transposed_rel_types,
+    transposed_eids,
+):
+    if th.is_tensor(row_ptr):
+        return create_mydgl_graph_coo_with_transpose_torch(
+            row_ptr,
+            col_idx,
+            rel_types,
+            eids,
+            transposed_row_ptr,
+            transposed_col_idx,
+            transposed_rel_types,
+            transposed_eids,
+        )
+    else:
+        return create_mydgl_graph_coo_with_transpose_numpy(
+            row_ptr,
+            col_idx,
+            rel_types,
+            eids,
+            transposed_row_ptr,
+            transposed_col_idx,
+            transposed_rel_types,
+            transposed_eids,
+        )
 
 
 def create_mydgl_graph_csr_numpy(row_ptr, col_idx, rel_types, eids):

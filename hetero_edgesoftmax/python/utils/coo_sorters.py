@@ -76,6 +76,7 @@ def get_node_index_remap_dict_according_to_number_of_edges(
         sorted_src_list += (
             array_flip_func(np_or_th.argsort(srcs_frequency[start:end])) + start
         ).tolist()
+        pass
     # TODO: check if there is data loss in this np.argsort invocation, i.e., implicit conversion from int64 to int32
     original_src_to_new_src_map = dict(
         zip(
@@ -102,10 +103,11 @@ def remap_node_indices_according_to_number_of_edges(
         )
     )
     remapped_src = array_creation_func(
-        [original_src_to_new_src_map[src] for src in srcs], dtype=srcs.dtype
+        [original_src_to_new_src_map[src] for src in srcs.tolist()], dtype=srcs.dtype
     )
     remapped_dest = array_creation_func(
-        [original_src_to_new_src_map[dest] for dest in dests], dtype=dests.dtype
+        [original_src_to_new_src_map[dest] for dest in dests.tolist()],
+        dtype=dests.dtype,
     )
     return remapped_src, remapped_dest
 
@@ -114,9 +116,10 @@ def remap_node_indices_according_to_number_of_edges(
 def sort_coo_by_etype(
     srcs, dsts, etypes, eids, torch_flag: bool = False, infidel_flag: bool = False
 ):
-    print(
-        "WARNING: you are using infidel sort utility. See readme.md for more details."
-    )
+    if infidel_flag:
+        print(
+            "WARNING: you are using infidel sort utility. See readme.md for more details."
+        )
     if torch_flag:
         np_or_th = th
     else:
@@ -158,16 +161,17 @@ def sort_coo_by_etype_eids_torch_tensors(rel_ptr, srcs, dsts, eids):
 def sort_coo_by_src_outgoing_edges(
     srcs, dsts, etypes, eids, ntype_offsets, torch_flag=False, infidel_flag=False
 ):
-    print(
-        "WARNING: you are using infidel sort utility. See readme.md for more details."
-    )
+    if infidel_flag:
+        print(
+            "WARNING: you are using infidel sort utility. See readme.md for more details."
+        )
     if torch_flag:
         np_or_th = th
     else:
         np_or_th = np
     array_creation_func = get_array_creation_func(torch_flag)
     srcs, _ = remap_node_indices_according_to_number_of_edges(
-        srcs, ntype_offsets, torch_flag
+        srcs, dsts, ntype_offsets, torch_flag
     )
     if not infidel_flag:
         dsts = _

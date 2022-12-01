@@ -154,12 +154,12 @@ def graphiler_load_data(name, to_homo: bool = True):  # feat_dim=GRAPHILER_DEFAU
 
 def graphiler_load_data_as_mydgl_graph(name, process_dgl_homo_graph=True):
     if process_dgl_homo_graph:
-        g, ntype_offsets = graphiler_load_data(name, to_homo=False)
+        g, ntype_offsets = graphiler_load_data(name, to_homo=True)
         my_g = mydglgraph_converters.create_mydgl_graph_coo_from_homo_dgl_graph(g)
     else:
-        g, ntype_offsets = graphiler_load_data(name, to_homo=True)  # feat_dim,
+        g, ntype_offsets = graphiler_load_data(name, to_homo=False)  # feat_dim,
         my_g = mydglgraph_converters.create_mydgl_graph_coo_from_hetero_dgl_graph(g)
-    return my_g
+    return my_g, ntype_offsets
 
 
 def graphiler_setup_device(device="cuda:0"):

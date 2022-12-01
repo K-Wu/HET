@@ -474,7 +474,7 @@ def create_RGCN_parser(RGCN_single_layer_flag):
     parser = argparse.ArgumentParser(description="RGCN")
     if RGCN_single_layer_flag:
         add_generic_RGNN_args(
-            parser, {"use-self-loop", "runs", "dropout", "use_real_labels_and_features"}
+            parser, {"use-self-loop", "runs", "use_real_labels_and_features"}
         )
     else:
         add_generic_RGNN_args(
@@ -482,7 +482,6 @@ def create_RGCN_parser(RGCN_single_layer_flag):
             {
                 "use-self-loop",
                 "runs",
-                "dropout",
                 "use_real_labels_and_features",
                 "n_infeat",
             },
@@ -519,14 +518,8 @@ def create_RGCN_parser(RGCN_single_layer_flag):
         action="store_true",
         help="print out training information",
     )
-    parser.add_argument(
-        "--reindex_eid",
-        action="store_true",
-        help="use new eid after sorting rather than load referential eids",
-    )
     parser.add_argument("--train_size", type=int, default=256)
     parser.add_argument("--test_size", type=int, default=64)
-    parser.add_argument("--num_classes", type=int, default=4)
     fp = parser.add_mutually_exclusive_group(required=False)
     fp.add_argument("--validation", dest="validation", action="store_true")
     fp.add_argument("--testing", dest="validation", action="store_false")

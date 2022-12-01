@@ -183,6 +183,7 @@ def sort_coo_according_to_flags(
     sorted_flag,
     sorted_by_srcs,
     torch_flag,
+    infidel_sort_flag,
 ):
     if sorted_flag:
         if sorted_by_srcs:
@@ -198,7 +199,7 @@ def sort_coo_according_to_flags(
                 edge_referential_eids,
                 ntype_offsets,
                 torch_flag=torch_flag,
-                infidel_sort_flag=infidel_sort_flag,
+                infidel_flag=infidel_sort_flag,
             )
         else:
             (
@@ -212,7 +213,7 @@ def sort_coo_according_to_flags(
                 edge_etypes,
                 edge_referential_eids,
                 torch_flag=torch_flag,
-                infidel_sort_flag=infidel_sort_flag,
+                infidel_flag=infidel_sort_flag,
             )
     return edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
 
@@ -245,5 +246,6 @@ def get_ogbnmag(
         sorted_flag,
         sorted_by_srcs,
         torch_flag=False,
+        infidel_sort_flag=infidel_sort_flag,
     )
     return edge_srcs, edge_dsts, edge_etypes, edge_referential_eids

@@ -21,7 +21,9 @@ def coo2csr(
     # compress rows
     row_offsets = curr_namespace.zeros(edge_srcs.max() + 2, dtype=curr_namespace.int64)
     row_offsets[1:] = curr_namespace.bincount(edge_srcs)
-    row_offsets = curr_namespace.cumsum(row_offsets)
+    row_offsets = curr_namespace.cumsum(
+        row_offsets, 0
+    )  # the second argument is named axis in numpy and dim in torch
 
     return (
         row_offsets,
