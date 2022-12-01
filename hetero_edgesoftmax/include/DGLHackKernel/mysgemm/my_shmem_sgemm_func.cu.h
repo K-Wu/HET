@@ -37,12 +37,19 @@ __device__ __forceinline__ float& GetRowMajorElement(
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx idx_relation, Idx idx_row,
     Idx idx_head, Idx idx_feat, Idx num_heads, Idx feat_dim_per_head) {
-  if constexpr (GatherScatterFlag && AdvancedGatherScatterFlag) {
+  if constexpr (AdvancedGatherScatterFlag) {
     Idx idx_node = gather_scatter_list[idx_row];
-    return GetRowMajorElementAdvanced<Idx, IdxPtr>(
-        matrix_data, unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices, idx_relation, idx_node, idx_head,
-        idx_feat, num_heads, feat_dim_per_head);
+    if constexpr (GatherScatterFlag) {
+      return GetRowMajorElementAdvanced<Idx, IdxPtr>(
+          matrix_data, unique_srcs_and_dests_rel_ptr,
+          unique_srcs_and_dests_node_indices, idx_relation, idx_node, idx_head,
+          idx_feat, num_heads, feat_dim_per_head);
+    } else {
+      return GetRowMajorElementBasic<false, Idx, IdxPtr>(
+          matrix_data, nullptr, num_heads, feat_dim_per_head, idx_node,
+          idx_head, idx_feat);
+    }
+
   } else {
     return GetRowMajorElementBasic<GatherScatterFlag, Idx, IdxPtr>(
         matrix_data, gather_scatter_list, num_heads, feat_dim_per_head, idx_row,
@@ -562,7 +569,7 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, false, true, true, false, false, true, false,
+  _basic_MatMulKernel<BLOCK_SIZE, false, false, true, false, false, true, false,
                       true, Idx, IdxPtr>(
       delta_feat_compact,
       &weight_transpose[idx_relation * delta_output_per_head_dim *
@@ -593,7 +600,7 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWPropSingleSided(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, false, true, true, false, false, false, false,
+  _basic_MatMulKernel<BLOCK_SIZE, false, false, true, false, false, true, false,
                       true, Idx, IdxPtr>(
       delta_feat_compact,
       &weight_transpose[idx_relation * delta_output_per_head_dim *
