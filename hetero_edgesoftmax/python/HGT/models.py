@@ -143,6 +143,7 @@ class HET_HGTLayerHetero(nn.Module):
             G["separate"]["coo"]["original"]["eids"],
             self.relation_msg,
             v,
+            False,
         )  # shape (num_edges, n_heads, d_k)
 
         if self.hgt_fused_attn_score_flag:
@@ -160,6 +161,7 @@ class HET_HGTLayerHetero(nn.Module):
                         G["separate"]["coo"]["original"]["col_idx"],
                         self.relation_att,
                         q,
+                        False,
                     )
                 )
                 attn_score = B.rgnn_inner_product_node_compact_and_node(
@@ -178,6 +180,7 @@ class HET_HGTLayerHetero(nn.Module):
                     G["separate"]["coo"]["original"]["eids"],
                     self.relation_att,
                     q,
+                    False,
                 )
                 attn_score = B.rgnn_inner_product_edge_and_node(
                     G["separate"]["coo"]["original"]["eids"],

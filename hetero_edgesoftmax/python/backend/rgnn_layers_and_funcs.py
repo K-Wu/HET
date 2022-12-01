@@ -14,6 +14,7 @@ class RgnnRelationalMatmulACScatterGatherListIdentical(th.autograd.Function):
         weights,
         inputs,
         ret,
+        input_num_head_one_flag,
     ):
         ctx.save_for_backward(
             separate_coo_relptrs,
@@ -21,12 +22,14 @@ class RgnnRelationalMatmulACScatterGatherListIdentical(th.autograd.Function):
             weights,
             inputs,
         )
+        ctx.input_num_head_one_flag = input_num_head_one_flag
         K.rgnn_relational_matmul_ac_gather_scatter_list_identical(
             separate_coo_relptrs,
             separate_coo_eids,
             weights,
             inputs,
             ret,
+            input_num_head_one_flag,
         )
         return ret
 
@@ -38,6 +41,7 @@ class RgnnRelationalMatmulACScatterGatherListIdentical(th.autograd.Function):
             weights,
             inputs,
         ) = ctx.saved_tensors
+        input_num_head_one_flag = ctx.input_num_head_one_flag
         grad_weight = th.zeros_like(weights)
         grad_input = th.zeros_like(inputs)
         K.rgnn_relational_matmul_backward_ac_gather_scatter_list_identical(
@@ -48,9 +52,10 @@ class RgnnRelationalMatmulACScatterGatherListIdentical(th.autograd.Function):
             gradout,
             grad_input,
             grad_weight,
+            input_num_head_one_flag,
         )
         # fmt: off
-        return None, None, grad_weight, grad_input, None
+        return None, None, grad_weight, grad_input, None, None
         # fmt: on
 
 
@@ -64,6 +69,7 @@ class RgnnRelationalMatmul(th.autograd.Function):
         weights,
         inputs,
         ret,
+        input_num_head_one_flag,
     ):
         ctx.save_for_backward(
             separate_coo_relptrs,
@@ -72,6 +78,7 @@ class RgnnRelationalMatmul(th.autograd.Function):
             weights,
             inputs,
         )
+        ctx.input_num_head_one_flag = input_num_head_one_flag
         K.rgnn_relational_matmul(
             separate_coo_relptrs,
             separate_coo_node_indices,
@@ -79,6 +86,7 @@ class RgnnRelationalMatmul(th.autograd.Function):
             weights,
             inputs,
             ret,
+            input_num_head_one_flag,
         )
         return ret
 
@@ -91,6 +99,7 @@ class RgnnRelationalMatmul(th.autograd.Function):
             weights,
             inputs,
         ) = ctx.saved_tensors
+        input_num_head_one_flag = ctx.input_num_head_one_flag
         grad_weight = th.zeros_like(weights)
         grad_input = th.zeros_like(inputs)
         # FIXME: seems there is a deadlock here
@@ -103,9 +112,10 @@ class RgnnRelationalMatmul(th.autograd.Function):
             gradout,
             grad_input,
             grad_weight,
+            input_num_head_one_flag,
         )
         # fmt: off
-        return None, None, None, grad_weight, grad_input, None
+        return None, None, None, grad_weight, grad_input, None, None
         # fmt: on
 
 
@@ -117,6 +127,7 @@ def rgnn_relational_matmul(
     # unique_srcs_and_dests_node_indices,
     weights,
     inputs,
+    input_num_head_one_flag,
 ):
     ret = th.zeros(
         (
@@ -135,6 +146,7 @@ def rgnn_relational_matmul(
             weights,
             inputs,
             ret,
+            input_num_head_one_flag,
         )
     else:
         return RgnnRelationalMatmul.apply(
@@ -146,6 +158,7 @@ def rgnn_relational_matmul(
             weights,
             inputs,
             ret,
+            input_num_head_one_flag,
         )
 
 
@@ -158,6 +171,7 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
         weight,
         node_feat,
         ret,
+        input_num_head_one_flag,
     ):
         ctx.save_for_backward(
             unique_srcs_and_dests_rel_ptr,
@@ -166,12 +180,14 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
             node_feat,
             ret,
         )
+        ctx.input_num_head_one_flag = input_num_head_one_flag
         K.rgnn_relational_matmul_compact_as_of_node(
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
             weight,
             node_feat,
             ret,
+            input_num_head_one_flag,
         )
         return ret
 
@@ -184,6 +200,7 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
             node_feat,
             ret,
         ) = ctx.saved_tensors
+        input_num_head_one_flag = ctx.input_num_head_one_flag
         grad_weight = th.zeros_like(weight)
         grad_node_feat: Tensor = th.zeros_like(node_feat)
         K.backward_rgnn_relational_matmul_compact_as_of_node(
@@ -194,9 +211,10 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
             gradout,
             grad_weight,
             grad_node_feat,
+            input_num_head_one_flag,
         )
         # fmt: off
-        return None, None, grad_weight, grad_node_feat, None
+        return None, None, grad_weight, grad_node_feat, None, None
         # fmt: on
 
 
@@ -205,6 +223,7 @@ def rgnn_relational_matmul_compact_as_of_node(
     unique_srcs_and_dests_node_indices,
     weight,
     node_feat,
+    input_num_head_one_flag,
 ):
     ret = th.zeros(
         [unique_srcs_and_dests_rel_ptr[-1], weight.size(1), weight.size(3)],
@@ -218,6 +237,7 @@ def rgnn_relational_matmul_compact_as_of_node(
         weight,
         node_feat,
         ret,
+        input_num_head_one_flag,
     )
 
 
@@ -232,6 +252,7 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
         weight,
         node_feat,
         ret,
+        input_num_head_one_flag,
     ):
         ctx.save_for_backward(
             unique_srcs_and_dests_rel_ptr,
@@ -242,6 +263,7 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
             node_feat,
             ret,
         )
+        ctx.input_num_head_one_flag = input_num_head_one_flag
         K.rgnn_relational_matmul_compact_as_of_node_single_ended(
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
@@ -250,6 +272,7 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
             weight,
             node_feat,
             ret,
+            input_num_head_one_flag,
         )
         return ret
 
@@ -264,6 +287,7 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
             node_feat,
             ret,
         ) = ctx.saved_tensors
+        input_num_head_one_flag = ctx.input_num_head_one_flag
         grad_weight = th.zeros_like(weight)
         grad_node_feat = th.zeros_like(node_feat)
         K.backward_rgnn_relational_matmul_compact_as_of_node_single_ended(
@@ -277,9 +301,10 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
             gradout,
             grad_weight,
             grad_node_feat,
+            input_num_head_one_flag,
         )
         # fmt: off
-        return None, None, None, None, grad_weight, grad_node_feat, None
+        return None, None, None, None, grad_weight, grad_node_feat, None, None
         # fmt: on
 
 
@@ -290,6 +315,7 @@ def rgnn_relational_matmul_compact_as_of_node_single_ended(
     separate_coo_node_indices,
     weight,
     node_feat,
+    input_num_head_one_flag,
 ):
     ret = th.zeros(
         [separate_coo_rel_ptr[-1], weight.size(1), weight.size(3)],
@@ -305,6 +331,7 @@ def rgnn_relational_matmul_compact_as_of_node_single_ended(
         weight,
         node_feat,
         ret,
+        input_num_head_one_flag,
     )
 
 
@@ -320,6 +347,7 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
         left_node_compact_data,
         right_node_vectors,
         ret,
+        input_num_head_one_flag,
     ):
         ctx.save_for_backward(
             unique_srcs_and_dests_rel_ptr,
@@ -331,6 +359,7 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
             right_node_vectors,
             ret,
         )
+        ctx.input_num_head_one_flag = input_num_head_one_flag
         K.rgnn_inner_product_node_compact_and_node(
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
@@ -340,6 +369,7 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
             left_node_compact_data,
             right_node_vectors,
             ret,
+            input_num_head_one_flag,
         )
         return ret
 
@@ -355,6 +385,7 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
             right_node_vectors,
             ret,
         ) = ctx.saved_tensors
+        input_num_head_one_flag = ctx.input_num_head_one_flag
         grad_left_node_compact_data = th.zeros_like(left_node_compact_data)
         grad_right_node_vectors = th.zeros_like(right_node_vectors)
         K.backward_rgnn_inner_product_node_compact_and_node(
@@ -369,6 +400,7 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
             gradout,
             grad_left_node_compact_data,
             grad_right_node_vectors,
+            input_num_head_one_flag,
         )
         # fmt: off
         return None, None, None, None, None, grad_left_node_compact_data, grad_right_node_vectors, None
