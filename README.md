@@ -44,4 +44,4 @@ git push origin HEAD:master
 ```
 
 ## Contact
-Kun Wu kunwu2<at>illinois<dot>edu  [![wakatime](https://wakatime.com/badge/github/K-Wu/hetero_edgesoftmax.svg)](https://wakatime.com/badge/github/K-Wu/hetero_edgesoftmax)
+Kun Wu kunwu2 (at) illinois (dot) edu  [![wakatime](https://wakatime.com/badge/github/K-Wu/hetero_edgesoftmax.svg)](https://wakatime.com/badge/github/K-Wu/hetero_edgesoftmax)

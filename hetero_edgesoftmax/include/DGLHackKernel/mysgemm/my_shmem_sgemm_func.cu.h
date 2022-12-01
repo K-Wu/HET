@@ -562,13 +562,13 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, false, true, true, false, false, false, false,
+  _basic_MatMulKernel<BLOCK_SIZE, false, true, true, false, false, true, false,
                       true, Idx, IdxPtr>(
       delta_feat_compact,
       &weight_transpose[idx_relation * delta_output_per_head_dim *
                         delta_input_dim],
       delta_node_feat_input, unique_srcs_and_dests_node_indices, nullptr,
-      nullptr, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices, idx_relation,
       unique_srcs_and_dests_rel_ptr[idx_relation + 1] -
           unique_srcs_and_dests_rel_ptr[idx_relation],
@@ -598,9 +598,9 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWPropSingleSided(
       delta_feat_compact,
       &weight_transpose[idx_relation * delta_output_per_head_dim *
                         delta_input_dim],
-      delta_node_feat_input, separate_coo_node_indices, nullptr, nullptr,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-      idx_relation,
+      delta_node_feat_input, separate_coo_node_indices, nullptr,
+      separate_coo_node_indices, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_indices, idx_relation,
       separate_coo_relptrs[idx_relation + 1] -
           separate_coo_relptrs[idx_relation],
       accum_num_blocks_per_relation[idx_relation],

@@ -20,7 +20,10 @@ void _RelationalMatMul_separatecoo(
     at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& weights,
     at::Tensor& input, at::Tensor& ret) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  const int64_t num_relations = separate_coo_relptrs.numel() - 1;
+  const int64_t num_relations =
+      separate_coo_relptrs.numel() == 0
+          ? (unique_srcs_and_dests_rel_ptr.numel() - 1)
+          : (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = weights.size(1);
   const int64_t num_input_dim = weights.size(2);
   const int64_t num_output_per_head_dim =
@@ -224,14 +227,16 @@ void _BackwardRelationalMatMul_separatecoo(
     at::Tensor& weights_transposed, at::Tensor& input, at::Tensor& gradout,
     at::Tensor& grad_input, at::Tensor& grad_weights) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  const int64_t num_relations = separate_coo_relptrs.numel() - 1;
+  const int64_t num_relations =
+      separate_coo_relptrs.numel() == 0
+          ? (unique_srcs_and_dests_rel_ptr.numel() - 1)
+          : (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = weights_transposed.size(1);
   const int64_t num_input_dim = weights_transposed.size(3);
   const int64_t num_output_per_head_dim =
       weights_transposed.size(2);  // weight shape (num_relations, n_heads,
                                    // in_feat, out_feat // n_heads)
-  at::Tensor separate_coo_relptrs_cpu_contiguous =
-      separate_coo_relptrs.cpu().contiguous();
+
   int64_t num_edges;
 
   if constexpr (SingleSidedCompactAsOfNodeFlag) {
@@ -295,7 +300,7 @@ void _BackwardRelationalMatMul_separatecoo(
           "CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag");
     }
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
-                     grid_dim_y, num_heads);
+                     grid_dim_y, num_heads);  // NB: #head of input is 1
     const dim3 nblks_outer_product(
         ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
         ceil_div<>(num_input_dim, (long)BLOCK_SIZE), num_heads * grid_dim_y);
@@ -352,7 +357,7 @@ void _BackwardRelationalMatMul_separatecoo(
     }
   } else {
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
-                     grid_dim_y, num_heads);
+                     grid_dim_y, 1);  // NB: #head of input is 1
     const dim3 nblks_outer_product(
         ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
         ceil_div<>(num_input_dim, (long)BLOCK_SIZE), num_heads * grid_dim_y);

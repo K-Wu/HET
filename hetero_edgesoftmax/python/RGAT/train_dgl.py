@@ -10,7 +10,7 @@ from .models_dgl import (
     # RelGraphEmbed,
     # HET_RelGraphEmbed,
 )
-import legacy_data_loader
+from . import legacy_data_loader
 import dgl
 
 # import itertools
@@ -167,7 +167,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         g, model, embed_layer, labels, args, dgl_model_flag: bool
     ):
         device = f"cuda:0" if th.cuda.is_available() else "cpu"
-        if dgl_model_flag:
+        if not dgl_model_flag:
             g = g.to(device)
         embed_layer = embed_layer.to(device)
         model = model.to(device)

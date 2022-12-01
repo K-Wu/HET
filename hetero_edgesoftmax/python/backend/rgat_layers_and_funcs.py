@@ -259,9 +259,9 @@ def relational_fused_gat_compact_as_of_node(
     exp = el_compact.new_empty(
         [g["transposed"]["col_idx"].numel()] + list(el_compact.size()[1:])
     )
-    s = el_compact.new_empty([g.get_num_of_nodes()] + list(el_compact.size()[1:]))
+    s = el_compact.new_empty([g.get_num_nodes()] + list(el_compact.size()[1:]))
     ret = th.empty(
-        [g.get_num_of_nodes()] + list(feat_compact.size()[1:]),
+        [g.get_num_nodes()] + list(feat_compact.size()[1:]),
         dtype=feat_compact.dtype,
         device=feat_compact.device,
     )

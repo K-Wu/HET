@@ -146,18 +146,43 @@ class HET_RelationalAttLayer(nn.Module):
             #     g["separate"]["unique_node_idx"]["rel_ptr"],g["separate"]["unique_node_idx"]["node_idx"], self.conv_weight, inputs
             # )
             if self.multiply_among_weights_first_flag:
-                raise NotImplementedError(
-                    "multiply_among_weights_first_flag is not supported when compact_as_of_node_flag==True yet"
+                product_of_conv_weights_attn_r = (
+                    self.conv_weights * self.attn_r.unsqueeze(2)
                 )
-            # TODO: separate feat_compact_src and feat_compact_dst
-            feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                g["separate"]["unique_node_idx"]["rel_ptr"],
-                g["separate"]["unique_node_idx"]["node_idx"],
-                self.conv_weight,
-                inputs,
-            )
-            el_compact = (feat_compact * self.attn_l).sum(dim=-1).unsqueeze(-1)
-            er_compact = (feat_compact * self.attn_r).sum(dim=-1).unsqueeze(-1)
+                product_of_conv_weights_attn_l = (
+                    self.conv_weights * self.attn_l.unsqueeze(2)
+                )
+                feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
+                    g["separate"]["unique_node_idx"]["rel_ptr"],
+                    g["separate"]["unique_node_idx"]["node_idx"],
+                    self.conv_weights,
+                    inputs,
+                )
+                el_compact = B.rgnn_relational_matmul_compact_as_of_node(
+                    g["separate"]["unique_node_idx"]["rel_ptr"],
+                    g["separate"]["unique_node_idx"]["node_idx"],
+                    product_of_conv_weights_attn_l,
+                    inputs,
+                )
+                er_compact = B.rgnn_relational_matmul_compact_as_of_node(
+                    g["separate"]["unique_node_idx"]["rel_ptr"],
+                    g["separate"]["unique_node_idx"]["node_idx"],
+                    product_of_conv_weights_attn_r,
+                    inputs,
+                )
+                el_compact = el_compact.sum(dim=-1)
+                er_compact = er_compact.sum(dim=-1)
+            else:
+                # TODO: separate feat_compact_src and feat_compact_dst
+                feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
+                    g["separate"]["unique_node_idx"]["rel_ptr"],
+                    g["separate"]["unique_node_idx"]["node_idx"],
+                    self.conv_weights,
+                    inputs,
+                )
+                # FIXME: the following two lines should be implemented with relational_inner_product_compact_and_weight
+                el_compact = (feat_compact * self.attn_l).sum(dim=-1).unsqueeze(-1)
+                er_compact = (feat_compact * self.attn_r).sum(dim=-1).unsqueeze(-1)
             h = B.relational_fused_gat_compact_as_of_node(
                 g, feat_compact, el_compact, er_compact, self.leaky_relu_slope
             )
@@ -184,19 +209,22 @@ class HET_RelationalAttLayer(nn.Module):
             # el = (feat_src_per_edge * self.attn_l).sum(dim=-1).unsqueeze(-1)
 
             if self.multiply_among_weights_first_flag:
-                attn_r_reshaped = th.reshape(
-                    self.attn_r, (-1, self.n_heads, self.out_feat // self.n_heads, 1)
-                )
-                conv_weights_reshaped = th.reshape(
-                    self.conv_weights,
-                    (-1, self.n_heads, self.in_feat, self.out_feat // self.n_heads),
-                )
-
-                product_of_conv_weights_attn_r = th.bmm(
-                    conv_weights_reshaped, attn_r_reshaped
-                )
-                product_of_conv_weights_attn_r = th.reshape(
-                    product_of_conv_weights_attn_r, (-1, self.n_heads, self.in_feat)
+                # attn_r_reshaped = th.reshape(
+                #    self.attn_r, (-1, self.n_heads, self.out_feat // self.n_heads, 1)
+                # )
+                # conv_weights_reshaped = th.reshape(
+                #    self.conv_weights,
+                #    (-1, self.n_heads, self.in_feat, self.out_feat // self.n_heads),
+                # )
+                #
+                # product_of_conv_weights_attn_r = th.bmm(
+                #    conv_weights_reshaped, attn_r_reshaped
+                # )
+                # product_of_conv_weights_attn_r = th.reshape(
+                #    product_of_conv_weights_attn_r, (-1, self.n_heads, self.in_feat)
+                # )
+                product_of_conv_weights_attn_r = (
+                    self.conv_weights * self.attn_r.unsqueeze(2)
                 )
                 er = B.rgnn_relational_matmul(
                     g["separate"]["coo"]["original"]["rel_ptr"],

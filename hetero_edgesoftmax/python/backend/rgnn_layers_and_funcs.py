@@ -185,13 +185,12 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
             ret,
         ) = ctx.saved_tensors
         grad_weight = th.zeros_like(weight)
-        grad_node_feat = th.zeros_like(node_feat)
+        grad_node_feat: Tensor = th.zeros_like(node_feat)
         K.backward_rgnn_relational_matmul_compact_as_of_node(
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
             th.transpose(weight, 2, 3),
             node_feat,
-            ret,
             gradout,
             grad_weight,
             grad_node_feat,
