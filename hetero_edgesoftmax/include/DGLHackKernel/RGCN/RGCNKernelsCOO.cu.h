@@ -41,7 +41,9 @@ __global__ void RgcnLayer1COOKernelImpl(
     const DType* hidden, const DType* weight, const DType* norm, DType* ret,
     Idx num_edges, Idx feat_len_y, Idx feat_len_x, Idx ntypes) {
   Idx warp_idx = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
-  if (warp_idx < num_edges) {
+  Idx warp_num = (blockDim.x * gridDim.x) / 32;
+  for (Idx edge_idx = warp_idx; edge_idx < num_edges; edge_idx += warp_num) {
+    // if (warp_idx < num_edges) {
     RgcnLayer1COOKernelEdgePerWarp(
         dst_ids, src_ids, eids, types, hidden, weight, norm, ret, num_edges,
         feat_len_y, feat_len_x, ntypes, /*node_idx = */ warp_idx);

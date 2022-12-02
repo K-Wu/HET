@@ -300,7 +300,7 @@ def RGCN_main_procedure(args, g, model, feats):
     # bgs len(labels) == 333845, num_nodes == 333845, num_relations == 207, num_edges == 2166243, len(train_idx) == 117, len(test_idx) == 29, num_classes = 2
     # num_nodes = g["original"]["row_ptr"].numel() - 1
     if args.sparse_format == "coo":
-        num_nodes = int(th.max(g["original"]["row_idx"]))
+        num_nodes = g.get_num_nodes()
     else:
         assert args.sparse_format == "csr"
         num_nodes = g["original"]["row_ptr"].numel() - 1

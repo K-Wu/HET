@@ -7,6 +7,7 @@ from .. import utils
 
 from dgl.heterograph import DGLBlock
 import argparse
+import numpy as np
 
 
 class RelGraphEmbed(nn.Module):
@@ -102,6 +103,8 @@ def HET_RGNN_train_full_graph(
     args: argparse.Namespace,
 ):
     # training loop
+    forward_time = []
+    backward_time = []
     print("start training...")
     for epoch in range(args.n_epochs):
 
@@ -159,10 +162,22 @@ def HET_RGNN_train_full_graph(
         print(
             f"Backward prop time: {backward_prop_start.elapsed_time(backward_prop_end)} ms"
         )
+        if epoch >= 3:
+            forward_time.append(forward_prop_start.elapsed_time(forward_prop_end))
+            backward_time.append(backward_prop_start.elapsed_time(backward_prop_end))
     #              f'Train: {100 * train_acc:.2f}%, '
     #              f'Valid: {100 * valid_acc:.2f}%, '
     #              f'Test: {100 * test_acc:.2f}%')
-
+    print(
+        "Mean forward time: {:4f}".format(
+            np.mean(forward_time[len(forward_time) // 4 :])
+        )
+    )
+    print(
+        "Mean backward time: {:4f}".format(
+            np.mean(backward_time[len(backward_time) // 4 :])
+        )
+    )
     return  # logger
 
 
@@ -234,6 +249,7 @@ def RGNN_train_full_graph(
         print(
             f"Backward prop time: {backward_prop_start.elapsed_time(backward_prop_end)} ms"
         )
+
     #              f'Train: {100 * train_acc:.2f}%, '
     #              f'Valid: {100 * valid_acc:.2f}%, '
     #              f'Test: {100 * test_acc:.2f}%')
@@ -360,10 +376,10 @@ def add_generic_RGNN_args(parser, filtered_args={}):
     if not "lr" in filtered_args:
         parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
     if not "n_head" in filtered_args:
-        parser.add_argument("--n_head", type=int, default=2, help="number of heads")
+        parser.add_argument("--n_head", type=int, default=1, help="number of heads")
     if not "n_epochs" in filtered_args:
         parser.add_argument(
-            "-e", "--n_epochs", type=int, default=3, help="number of training epochs"
+            "-e", "--n_epochs", type=int, default=10, help="number of training epochs"
         )
     if not "fanout" in filtered_args:
         parser.add_argument("--fanout", type=int, nargs="+", default=[25, 20])
@@ -377,7 +393,7 @@ def add_generic_RGNN_args(parser, filtered_args={}):
         parser.add_argument("--compact_as_of_node_flag", action="store_true")
     # OGB
     if not "runs" in filtered_args:
-        parser.add_argument("--runs", type=int, default=10)
+        parser.add_argument("--runs", type=int, default=1)
     if not "dropout" in filtered_args:
         parser.add_argument(
             "--dropout", type=float, default=0.5, help="dropout probability"

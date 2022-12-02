@@ -91,7 +91,7 @@ def rgcn_layer1_coo(graph, x, weight, norm):
     transposed_eids = graph["original"]["eids"]
     transposed_reltypes = graph["original"]["rel_types"]
     ret = th.zeros(
-        (row_idx.numel() - 1, weight.size(2)),
+        (graph.get_num_nodes(), weight.size(2)),
         dtype=weight.dtype,
         device=weight.device,
         requires_grad=True,

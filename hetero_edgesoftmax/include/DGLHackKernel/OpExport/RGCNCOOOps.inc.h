@@ -29,7 +29,7 @@ void _LayerImpl(at::Tensor& coo_row_idx, at::Tensor& coo_col_idx,
     int nthrs = feat_len_y * feat_len_x;
     assert(nthrs % 32 == 0);
     int nblks =
-        (num_edges + nthrs / 32 - 1) / (nthrs / 32);  // 32 is the warp size
+        ceil_div<>(num_edges, (int64_t)nthrs / 32);  // 32 is the warp size
     RgcnLayer1COOKernelImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
         row_idx_data, ids_data, eids_data, typeids_data, hidden_data,
         weight_data, norm_data, ret_data, num_edges, feat_len_y, feat_len_x,
@@ -89,7 +89,7 @@ void _LayerBackwardImpl(
   auto grad_out_data = grad_out.data_ptr<DType>();
   auto grad_hidden_data = grad_hidden.data_ptr<DType>();
   auto grad_weight_data = grad_weight.data_ptr<DType>();
-  auto ret_data = ret.data_ptr<DType>();
+  DType* ret_data = ret.numel() == 0 ? nullptr : ret.data_ptr<DType>();
   // print_dims(hidden);
   // print_dims(weight);
   // print_dims(norm);
@@ -112,7 +112,7 @@ void _LayerBackwardImpl(
     int nthrs = feat_len_y * feat_len_x;
     assert(nthrs % 32 == 0);
     int nblks =
-        (num_edges + nthrs / 32 - 1) / (nthrs / 32);  // 32 is the warp size
+        ceil_div<>(num_edges, (int64_t)nthrs / 32);  // 32 is the warp size
     RgcnLayer1BackwardCOOKernelImpl<<<nblks, nthrs, 0, stream>>>(
         row_idx_data, ids_data, eids_data, typeids_data, hidden_data,
         weight_data, norm_data, grad_out_data, grad_hidden_data,
