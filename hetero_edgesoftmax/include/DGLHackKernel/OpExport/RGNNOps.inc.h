@@ -330,6 +330,7 @@ void _BackwardRelationalMatMul_separatecoo(
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     // NB: #head of input is 1 when InputNumHeadOneFlag is true
     if constexpr (!SingleSidedCompactAsOfNodeFlag) {
+      // cuda_err_chk(cudaGetLastError());
       RGNNDeltaNodeFeatInputCompactBWProp<BLOCK_SIZE, int64_t, int64_t*,
                                           InputNumHeadOneFlag>
           <<<nblks, nthrs, 0, stream>>>(
@@ -341,6 +342,7 @@ void _BackwardRelationalMatMul_separatecoo(
               thrust::raw_pointer_cast(
                   dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
               num_relations);
+      // cuda_err_chk(cudaGetLastError());
       RGNNDeltaWeightCompactBWProp<BLOCK_SIZE, int64_t, int64_t*,
                                    InputNumHeadOneFlag>
           <<<nblks_outer_product, nthrs, 0, stream>>>(
@@ -352,6 +354,7 @@ void _BackwardRelationalMatMul_separatecoo(
               thrust::raw_pointer_cast(
                   dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
               num_relations);
+      // cuda_err_chk(cudaGetLastError());
     } else {
       RGNNDeltaNodeFeatInputCompactBWPropSingleSided<
           BLOCK_SIZE, int64_t, int64_t*, InputNumHeadOneFlag>

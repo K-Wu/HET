@@ -79,9 +79,9 @@ __device__ __forceinline__ void _basic_MatMulKernel(
     Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
     Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, Idx num_heads) {
   // num_B_cols is output_dim//num_heads as forward propagation weight,
-  // output_dim//num_heads as backward propagation weight, and feat_dim as
-  // features or delta features num_A_cols is input_dim as forward propagation
-  // input feature, input_dim as delta output feature
+  // output_dim//num_heads as backward propagation weight, and in_feat_dim as
+  // features or delta features. num_A_cols is input_dim as forward propagation
+  // input feature, output_dim//num_heads as delta input feature
   constexpr bool BWeightInsteadOfFeatureFlag = !OuterProductFlag;
 
   // NB: when OuterProductFlag is true, num_heads of the input features is
@@ -166,26 +166,26 @@ __device__ __forceinline__ void _basic_MatMulKernel(
         // Get sub-matrix Asub of A
         // Asub = &A[m * BLOCK_SIZE * num_A_cols + blockRow * BLOCK_SIZE];
         As[thIdxFeat][thIdxRow] =
-            (thIdxRow + (m + blockRowJobEntryBeg) * BLOCK_SIZE < numARows &&
+            (thIdxRow + (m)*BLOCK_SIZE + blockRowJobEntryBeg < numARows &&
              blockRow * BLOCK_SIZE + thIdxFeat < num_A_cols)
                 ? GetRowMajorElement<Idx, IdxPtr, GatherAFlag,
                                      AdvancedGatherAFlag>(
                       A, A_gather_list, unique_srcs_and_dests_rel_ptr,
                       unique_srcs_and_dests_node_indices, idx_relation,
-                      thIdxRow + (m + blockRowJobEntryBeg) * BLOCK_SIZE,
+                      thIdxRow + (m)*BLOCK_SIZE + blockRowJobEntryBeg,
                       /*idx_head*/ 0, thIdxFeat + blockRow * BLOCK_SIZE,
                       /*num_heads*/ 1, num_A_cols)
                 : 0.0f;
 
         Bs[thIdxRow][thIdxFeat] =
-            ((m + blockRowJobEntryBeg) * BLOCK_SIZE + thIdxRow < numARows &&
+            ((m)*BLOCK_SIZE + thIdxRow + blockRowJobEntryBeg < numARows &&
              blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols &&
              idx_head < num_heads)
                 ? GetRowMajorElement<Idx, IdxPtr, GatherBFlag,
                                      AdvancedGatherBFlag>(
                       B, B_gather_list, unique_srcs_and_dests_rel_ptr,
                       unique_srcs_and_dests_node_indices, idx_relation,
-                      (m + blockRowJobEntryBeg) * BLOCK_SIZE + thIdxRow,
+                      (m)*BLOCK_SIZE + blockRowJobEntryBeg + thIdxRow,
                       B_num_head_one_flag ? 0 : idx_head,
                       blockFeat * BLOCK_SIZE + thIdxFeat,
                       B_num_head_one_flag ? 1 : num_heads, num_B_cols)
@@ -214,6 +214,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
           // input_dim (num_A_cols), output_dim//num_heads (num_B_cols)] in
           // forward propagation or [num_heads, output_dim//num_heads
           // (num_A_cols), input_dim (num_B_cols)] in backward propagation
+          // FIXME: incorporate num_head_one_flag
           Bs[thIdxRow][thIdxFeat] =
               (m * BLOCK_SIZE + thIdxRow < num_A_cols &&
                blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols &&
@@ -293,12 +294,14 @@ __device__ __forceinline__ void _basic_MatMulKernel(
             OuterProductFlag && AtomicUpdateFlag,
             "OuterproductFlag==true case must use atomic update");
       }
-      if (WriteCInRangeFlag)
+      if (WriteCInRangeFlag) {
+        // FIXME: offset dependent on whether one-side num_head is 1
         atomicAdd(&C[idx_head * num_A_cols /*A is transposed in the fly*/ *
                          num_B_cols +
                      (blockRow * BLOCK_SIZE + thIdxRow) * num_B_cols +
                      blockFeat * BLOCK_SIZE + thIdxFeat],
                   Cvalue);
+      }
     } else {  //  !OuterProductFlag
 
       bool WriteCInRangeFlag = thIdxRow + blockRow * BLOCK_SIZE < numARows &&
@@ -322,6 +325,20 @@ __device__ __forceinline__ void _basic_MatMulKernel(
       // }
       if (WriteCInRangeFlag) {
         if constexpr (AtomicUpdateFlag) {
+          // print GetRowMajorElement arguments
+          // if constexpr (!OuterProductFlag && !GatherAFlag &&
+          // !AdvancedGatherAFlag && !GatherBFlag && !AdvancedGatherBFlag &&
+          // ScatterCFlag && !AdvancedScatterCFlag && AtomicUpdateFlag)
+          // if (ScatterCFlag && !AdvancedScatterCFlag)
+          // printf("C %p C_scatter_list %p unique_srcs_and_dests_rel_ptr %p "
+          //        "unique_srcs_and_dests_node_indices %p idx_relation %ld "
+          //        "idxRow %ld scatter_list[idxRow] %ld idxFeat %ld idx_head
+          //        %ld num_heads %ld " "num_B_cols %ld, numARows %ld\n", C,
+          //        C_scatter_list, unique_srcs_and_dests_rel_ptr,
+          //        unique_srcs_and_dests_node_indices, idx_relation,
+          //        thIdxRow + blockRow * BLOCK_SIZE, C_scatter_list[thIdxRow +
+          //        blockRow * BLOCK_SIZE], blockFeat * BLOCK_SIZE + thIdxFeat,
+          //        idx_head, num_heads, num_B_cols, numARows);
           atomicAdd(&GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
                                         AdvancedScatterCFlag>(
                         C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
@@ -386,7 +403,9 @@ __global__ void RGNNFeatPerEdgeFWProp(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
                       false, Idx, IdxPtr, A_num_head_one_flag, false, false>(
-      node_feat_input, &weight[idx_relation * input_dim * output_per_head_dim],
+      node_feat_input,
+      &weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) * input_dim *
+              output_per_head_dim],
       node_feat_per_edge, A_col_row_idx_gather_list, nullptr,
       C_eid_scatter_list, nullptr, nullptr, idx_relation,
       A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
@@ -409,7 +428,9 @@ __global__ void RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
                       false, Idx, IdxPtr, A_num_head_one_flag, false, false>(
-      node_feat_input, &weight[idx_relation * input_dim * output_per_head_dim],
+      node_feat_input,
+      &weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) * input_dim *
+              output_per_head_dim],
       node_feat_per_edge, AC_eid_gather_scatter_list, nullptr,
       AC_eid_gather_scatter_list, nullptr, nullptr, idx_relation,
       A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
@@ -435,7 +456,9 @@ __global__ void RGNNFeatCompactFWProp(float* node_feat_input, float* weight,
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, true,
                       false, Idx, IdxPtr, A_num_head_one_flag, false, false>(
-      node_feat_input, &weight[idx_relation * input_dim * output_per_head_dim],
+      node_feat_input,
+      &weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) * input_dim *
+              output_per_head_dim],
       node_feat_per_edge, unique_srcs_and_dests_node_indices, nullptr,
       unique_srcs_and_dests_node_indices, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices, idx_relation,
@@ -463,8 +486,8 @@ __global__ void RGNNDeltaNodeFeatInputBWProp(
   _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
                       true, Idx, IdxPtr, false, false, C_num_head_one_flag>(
       delta_feat_per_edge,
-      &weight_transposed[idx_relation * delta_input_dim *
-                         delta_output_per_head_dim],
+      &weight_transposed[idx_relation * (C_num_head_one_flag ? num_heads : 1) *
+                         delta_input_dim * delta_output_per_head_dim],
       delta_node_input, A_eid_gather_list, nullptr, C_col_row_idx_scatter_list,
       nullptr, nullptr, idx_relation,
       A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
@@ -490,8 +513,8 @@ __global__ void RGNNDeltaWeightBWProp(
   _basic_MatMulKernel<BLOCK_SIZE, true, true, false, true, false, false, false,
                       true, Idx, IdxPtr, A_num_head_one_flag, false, false>(
       node_feat_input, delta_feat_per_edge,
-      &delta_weight[idx_relation * B_delta_output_per_head_dim *
-                    A_delta_input_dim],
+      &delta_weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) *
+                    B_delta_output_per_head_dim * A_delta_input_dim],
       A_col_row_idx_gather_list, B_eid_gather_list, nullptr, nullptr, nullptr,
       idx_relation, A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
       accum_num_blocks_per_relation[idx_relation],
@@ -515,8 +538,8 @@ __global__ void RGNNDeltaWeightBWPropACGatherScatterListIdentical(
   _basic_MatMulKernel<BLOCK_SIZE, true, true, false, true, false, false, false,
                       true, Idx, IdxPtr, A_num_head_one_flag, false, false>(
       node_feat_input, delta_feat_per_edge,
-      &delta_weight[idx_relation * B_delta_output_per_head_dim *
-                    A_delta_input_dim],
+      &delta_weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) *
+                    B_delta_output_per_head_dim * A_delta_input_dim],
       AB_eid_gather_list, AB_eid_gather_list, nullptr, nullptr, nullptr,
       idx_relation, A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
       accum_num_blocks_per_relation[idx_relation],
@@ -542,8 +565,8 @@ __global__ void RGNNDeltaWeightCompactBWProp(
   _basic_MatMulKernel<BLOCK_SIZE, true, true, false, false, false, false, false,
                       true, Idx, IdxPtr, false, B_num_head_one_flag, false>(
       feat_input, delta_feat_compact,
-      &delta_weight[idx_relation * B_delta_output_per_head_dim *
-                    A_delta_input_dim],
+      &delta_weight[idx_relation * (B_num_head_one_flag ? num_heads : 1) *
+                    B_delta_output_per_head_dim * A_delta_input_dim],
       unique_srcs_and_dests_node_indices, unique_srcs_and_dests_node_indices,
       nullptr, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices, idx_relation,
@@ -570,8 +593,8 @@ __global__ void RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical(
   _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
                       true, Idx, IdxPtr, false, false, C_num_head_one_flag>(
       delta_feat_per_edge,
-      &weight_transposed[idx_relation * delta_input_dim *
-                         delta_output_per_head_dim],
+      &weight_transposed[idx_relation * (C_num_head_one_flag ? num_heads : 1) *
+                         delta_input_dim * delta_output_per_head_dim],
       delta_node_input, A_C_eid_gather_scatter_list, nullptr,
       A_C_eid_gather_scatter_list, nullptr, nullptr, idx_relation,
       A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
@@ -599,8 +622,8 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWProp(
                       false, true, Idx, IdxPtr, false, false,
                       C_num_head_one_flag>(
       delta_feat_compact,
-      &weight_transpose[idx_relation * delta_output_per_head_dim *
-                        delta_input_dim],
+      &weight_transpose[idx_relation * (C_num_head_one_flag ? num_heads : 1) *
+                        delta_output_per_head_dim * delta_input_dim],
       delta_node_feat_input, unique_srcs_and_dests_node_indices, nullptr,
       unique_srcs_and_dests_node_indices, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices, idx_relation,
@@ -633,8 +656,8 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWPropSingleSided(
                       false, true, Idx, IdxPtr, false, false,
                       C_num_head_one_flag>(
       delta_feat_compact,
-      &weight_transpose[idx_relation * delta_output_per_head_dim *
-                        delta_input_dim],
+      &weight_transpose[idx_relation * (C_num_head_one_flag ? num_heads : 1) *
+                        delta_output_per_head_dim * delta_input_dim],
       delta_node_feat_input, separate_coo_node_indices, nullptr,
       separate_coo_node_indices, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices, idx_relation,
@@ -661,7 +684,9 @@ __global__ void RGNNFeatCompactFWPropSingleSided(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, true,
                       false, Idx, IdxPtr, A_num_head_one_flag, false, false>(
-      node_feat_input, &weight[idx_relation * input_dim * output_per_head_dim],
+      node_feat_input,
+      &weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) * input_dim *
+              output_per_head_dim],
       node_feat_per_edge, separate_coo_node_indices, nullptr,
       separate_coo_node_indices, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices, idx_relation,
@@ -690,8 +715,8 @@ __global__ void RGNNDeltaWeightCompactBWPropSingleSided(
   _basic_MatMulKernel<BLOCK_SIZE, true, true, false, false, false, false, false,
                       true, Idx, IdxPtr, false, B_num_head_one_flag, false>(
       feat_input, delta_feat_compact,
-      &delta_weight[idx_relation * B_delta_output_per_head_dim *
-                    A_delta_input_dim],
+      &delta_weight[idx_relation * (B_num_head_one_flag ? num_heads : 1) *
+                    B_delta_output_per_head_dim * A_delta_input_dim],
       separate_coo_node_indices, separate_coo_node_indices, nullptr,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       idx_relation,

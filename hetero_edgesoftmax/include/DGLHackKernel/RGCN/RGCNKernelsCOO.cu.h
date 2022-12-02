@@ -42,10 +42,23 @@ __global__ void RgcnLayer1COOKernelImpl(
     Idx num_edges, Idx feat_len_y, Idx feat_len_x, Idx ntypes) {
   Idx warp_idx = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
   Idx warp_num = (blockDim.x * gridDim.x) / 32;
-  for (Idx edge_idx = warp_idx; edge_idx < num_edges; edge_idx += warp_num) {
+  // each warp is assigned consecutive edges
+  Idx edge_per_warp = num_edges / warp_num;
+  Idx num_warps_with_one_more_edge_assigned = num_edges % warp_num;
+  Idx edge_beg;
+  if (warp_idx < num_warps_with_one_more_edge_assigned) {
+    edge_beg = warp_idx * (edge_per_warp + 1);
+  } else {
+    edge_beg = warp_idx * edge_per_warp + num_warps_with_one_more_edge_assigned;
+  }
+  Idx edge_end = edge_beg + edge_per_warp;
+  if (warp_idx < num_warps_with_one_more_edge_assigned) {
+    edge_end += 1;
+  }
+  for (Idx edge_idx = edge_beg; edge_idx < edge_end; edge_idx++) {
     // if (warp_idx < num_edges) {
     RgcnLayer1COOKernelEdgePerWarp(
         dst_ids, src_ids, eids, types, hidden, weight, norm, ret, num_edges,
-        feat_len_y, feat_len_x, ntypes, /*node_idx = */ warp_idx);
+        feat_len_y, feat_len_x, ntypes, /*node_idx = */ edge_idx);
   }
 }

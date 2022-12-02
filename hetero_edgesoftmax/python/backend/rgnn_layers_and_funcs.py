@@ -209,8 +209,8 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
             th.transpose(weight, 2, 3),
             node_feat,
             gradout,
-            grad_weight,
             grad_node_feat,
+            grad_weight,
             input_num_head_one_flag,
         )
         # fmt: off
