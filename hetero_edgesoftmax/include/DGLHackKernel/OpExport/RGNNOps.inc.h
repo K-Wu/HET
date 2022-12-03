@@ -259,11 +259,11 @@ void _BackwardRelationalMatMul_separatecoo(
                                    // in_feat, out_feat // n_heads)
 
   int64_t num_edges;
-  assert(weights_transposed.contiguous());
-  assert(input.contiguous());
-  assert(gradout.contiguous());
-  assert(grad_input.contiguous());
-  assert(grad_weights.contiguous());
+  assert(weights_transposed.is_contiguous());
+  assert(input.is_contiguous());
+  assert(gradout.is_contiguous());
+  assert(grad_input.is_contiguous());
+  assert(grad_weights.is_contiguous());
   if constexpr (SingleSidedCompactAsOfNodeFlag) {
     CONSTEXPR_TRUE_CLAUSE_STATIC_ASSERT(
         SingleSidedCompactAsOfNodeFlag, CompactAsOfNodeFlag,

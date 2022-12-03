@@ -25,6 +25,7 @@ __device__ __forceinline__ DType gradLeaky(DType val, DType slope) {
   return val > 0 ? 1 : slope;
 }
 
+// TODO: check if outcsr + incsr is correctly applied to each kernel
 // TODO: test correctness of the fused kernel
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag>
@@ -91,6 +92,11 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
 
               feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;
+              printf(
+                  "src_vid %ld dst_vid %ld etype %ld src_vid_relational %ld "
+                  "dst_vid_relational %ld \n",
+                  src_vid, dst_vid, etype, src_vid_relational,
+                  dst_vid_relational);
             }
           }
 
@@ -381,10 +387,10 @@ __global__ void fusedGatBackwardGradElEr(
 
 template <typename Idx, typename DType>
 constexpr auto relational_fusedGatBackwardGradElEr_per_edge =
-    fusedGatBackwardGradElEr<Idx, DType, false, false>;
+    fusedGatBackwardGradElEr<Idx, DType, false, true>;
 template <typename Idx, typename DType>
 constexpr auto relational_fusedGatBackwardGradFeatSrc_per_edge =
-    fusedGatBackwardGradFeatSrc<Idx, DType, false, false>;
+    fusedGatBackwardGradFeatSrc<Idx, DType, false, true>;
 template <typename Idx, typename DType>
 constexpr auto relational_fusedGatBackwardGradElErFeatSrcFused_per_edge =
-    fusedGatBackwardGradElErFeatSrcFused<Idx, DType, false, false>;
+    fusedGatBackwardGradElErFeatSrcFused<Idx, DType, false, true>;

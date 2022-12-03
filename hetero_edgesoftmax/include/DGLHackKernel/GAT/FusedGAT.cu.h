@@ -142,7 +142,12 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
     Idx start_off = *(row_offsets + dst_vid);
     Idx end_off = *(row_offsets + dst_vid + 1);
 
-    for (Idx feat_idx = tx; feat_idx < e_xlen;
+    for (Idx feat_idx = tx;
+         feat_idx <
+         e_xlen;  // NB: elen is set as num_head.
+                  // NB: this is calculating attention and sum of attention thus
+                  // no need for the gdata.feat_src_xlen, i.e.,
+                  // num_feat_per_head, for-loop level
          feat_idx += blockDim.x * gridDim.x) {
       // 1. Load dstnation vertex into shared memory
       Idx feat_off_dst = -1;
