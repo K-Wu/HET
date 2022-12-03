@@ -42,8 +42,8 @@ class RgnnRelationalMatmulACScatterGatherListIdentical(th.autograd.Function):
             inputs,
         ) = ctx.saved_tensors
         input_num_head_one_flag = ctx.input_num_head_one_flag
-        grad_weight = th.zeros_like(weights)
-        grad_input = th.zeros_like(inputs)
+        grad_weight = th.zeros_like(weights, memory_format=th.contiguous_format)
+        grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
         K.rgnn_relational_matmul_backward_ac_gather_scatter_list_identical(
             separate_coo_relptrs,
             separate_coo_eids,
@@ -100,8 +100,8 @@ class RgnnRelationalMatmul(th.autograd.Function):
             inputs,
         ) = ctx.saved_tensors
         input_num_head_one_flag = ctx.input_num_head_one_flag
-        grad_weight = th.zeros_like(weights)
-        grad_input = th.zeros_like(inputs)
+        grad_weight = th.zeros_like(weights, memory_format=th.contiguous_format)
+        grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
         # FIXME: seems there is a deadlock here
         K.rgnn_relational_matmul_backward(
             separate_coo_relptrs,
@@ -201,8 +201,10 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
             ret,
         ) = ctx.saved_tensors
         input_num_head_one_flag = ctx.input_num_head_one_flag
-        grad_weight = th.zeros_like(weight)
-        grad_node_feat: Tensor = th.zeros_like(node_feat)
+        grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
+        grad_node_feat = th.zeros_like(node_feat, memory_format=th.contiguous_format)
+        # FIXME: illegal reading A data when BGS compactAsOfNode is true perhaps bug in schedule_by_relation
+        # FIXME: seems there is a bug in gradout when bgs compactAsOfNode is true perhaps the scheming scheme to grad_feat_src is faulty
         K.backward_rgnn_relational_matmul_compact_as_of_node(
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
@@ -288,8 +290,8 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
             ret,
         ) = ctx.saved_tensors
         input_num_head_one_flag = ctx.input_num_head_one_flag
-        grad_weight = th.zeros_like(weight)
-        grad_node_feat = th.zeros_like(node_feat)
+        grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
+        grad_node_feat = th.zeros_like(node_feat, memory_format=th.contiguous_format)
         K.backward_rgnn_relational_matmul_compact_as_of_node_single_ended(
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
@@ -386,8 +388,12 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
             ret,
         ) = ctx.saved_tensors
         input_num_head_one_flag = ctx.input_num_head_one_flag
-        grad_left_node_compact_data = th.zeros_like(left_node_compact_data)
-        grad_right_node_vectors = th.zeros_like(right_node_vectors)
+        grad_left_node_compact_data = th.zeros_like(
+            left_node_compact_data, memory_format=th.contiguous_format
+        )
+        grad_right_node_vectors = th.zeros_like(
+            right_node_vectors, memory_format=th.contiguous_format
+        )
         K.backward_rgnn_inner_product_node_compact_and_node(
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
@@ -474,8 +480,12 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
             right_node_vectors,
             ret,
         ) = ctx.saved_tensors
-        grad_left_edge_data = th.zeros_like(left_edge_data)
-        grad_right_node_vectors = th.zeros_like(right_node_vectors)
+        grad_left_edge_data = th.zeros_like(
+            left_edge_data, memory_format=th.contiguous_format
+        )
+        grad_right_node_vectors = th.zeros_like(
+            right_node_vectors, memory_format=th.contiguous_format
+        )
         K.backward_rgnn_inner_product_edge_and_node(
             separate_coo_eids,
             separate_coo_node_indices,

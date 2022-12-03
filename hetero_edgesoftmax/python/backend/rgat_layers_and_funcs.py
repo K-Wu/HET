@@ -84,9 +84,9 @@ class RelationalFusedGatCSR(th.autograd.Function):
             ret,
         ) = ctx.saved_tensors
         slope = ctx.slope
-        grad_el = th.zeros_like(el)
-        grad_er = th.zeros_like(er)
-        grad_feat_src = th.zeros_like(feat_src)
+        grad_el = th.zeros_like(el, memory_format=th.contiguous_format)
+        grad_er = th.zeros_like(er, memory_format=th.contiguous_format)
+        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
 
         K.backward_relational_fused_gat_csr(
             outcsr_row_ptr,
@@ -225,9 +225,11 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
             ret,
         ) = ctx.saved_tensors
         slope = ctx.slope
-        grad_el_compact = th.zeros_like(el_compact)
-        grad_er_compact = th.zeros_like(er_compact)
-        grad_feat_compact = th.zeros_like(feat_compact)
+        grad_el_compact = th.zeros_like(el_compact, memory_format=th.contiguous_format)
+        grad_er_compact = th.zeros_like(er_compact, memory_format=th.contiguous_format)
+        grad_feat_compact = th.zeros_like(
+            feat_compact, memory_format=th.contiguous_format
+        )
 
         K.backward_rgat_relational_fused_gat_compact_as_of_node_csr(
             outcsr_row_ptr,
@@ -264,6 +266,7 @@ def relational_fused_gat_compact_as_of_node(
         [g.get_num_nodes()] + list(feat_compact.size()[1:]),
         dtype=feat_compact.dtype,
         device=feat_compact.device,
+        memory_format=th.contiguous_format,
     )
     return RgatRelationalFusedGATCompactAsOfNodeCSR.apply(
         g["separate"]["unique_node_idx"]["rel_ptr"],

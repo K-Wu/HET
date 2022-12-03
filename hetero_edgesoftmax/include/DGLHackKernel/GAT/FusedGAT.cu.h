@@ -1,6 +1,7 @@
 #pragma once
 #include "DGLHackKernel/DGLHackKernel.h"
 
+// FIXME: check if RGAT needs different a vector for different etypes
 template <typename Idx, typename DType>
 struct GatFusedData {
   // feat_size size along feature dimension

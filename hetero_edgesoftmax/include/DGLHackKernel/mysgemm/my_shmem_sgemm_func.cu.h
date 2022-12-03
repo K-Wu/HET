@@ -92,7 +92,6 @@ __device__ __forceinline__ void _basic_MatMulKernel(
   // Block row and column
   Idx idx_head = blockIdx.z % num_heads;
 
-  assert(NumInnerProductionPartitions > 0);
   if constexpr (OuterProductFlag) {
     CONSTEXPR_TRUE_CLAUSE_STATIC_ASSERT(OuterProductFlag, AtomicUpdateFlag, "");
   } else {

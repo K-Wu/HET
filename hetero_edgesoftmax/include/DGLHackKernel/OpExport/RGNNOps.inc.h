@@ -259,7 +259,11 @@ void _BackwardRelationalMatMul_separatecoo(
                                    // in_feat, out_feat // n_heads)
 
   int64_t num_edges;
-
+  assert(weights_transposed.contiguous());
+  assert(input.contiguous());
+  assert(gradout.contiguous());
+  assert(grad_input.contiguous());
+  assert(grad_weights.contiguous());
   if constexpr (SingleSidedCompactAsOfNodeFlag) {
     CONSTEXPR_TRUE_CLAUSE_STATIC_ASSERT(
         SingleSidedCompactAsOfNodeFlag, CompactAsOfNodeFlag,
@@ -288,6 +292,7 @@ void _BackwardRelationalMatMul_separatecoo(
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>(),
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>() +
                 num_relations);
+
   } else {
     at::Tensor separate_coo_relptrs_cpu_contiguous =
         separate_coo_relptrs.cpu().contiguous();
@@ -299,6 +304,11 @@ void _BackwardRelationalMatMul_separatecoo(
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
                 num_relations);
   }
+  // print all elements of num_blocks_assignment_for_all_prev_relation_vect
+  // for (int i = 0; i < num_relations; i++) {
+  //   std::cout << num_blocks_assignment_for_all_prev_relation_vect[i] << ' ';
+  // }
+  // std::cout << std::endl;
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
   // print num_blocks_assignment_for_all_prev_relation_vect
   // std::cout << "num_blocks_assignment_for_all_prev_relation_vect: [";
@@ -325,12 +335,13 @@ void _BackwardRelationalMatMul_separatecoo(
     const dim3 nblks_outer_product(
         ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
         ceil_div<>(num_input_dim, (long)BLOCK_SIZE), num_heads * grid_dim_y);
-    assert(num_head * grid_dim_y < 65535 && "num_head*grid_dim_y>=65535");
+    assert(num_heads * grid_dim_y < 65535 && "num_head*grid_dim_y>=65535");
 
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     // NB: #head of input is 1 when InputNumHeadOneFlag is true
     if constexpr (!SingleSidedCompactAsOfNodeFlag) {
       // cuda_err_chk(cudaGetLastError());
+      std::cout << gradout.numel() << std::endl;
       RGNNDeltaNodeFeatInputCompactBWProp<BLOCK_SIZE, int64_t, int64_t*,
                                           InputNumHeadOneFlag>
           <<<nblks, nthrs, 0, stream>>>(
@@ -350,7 +361,7 @@ void _BackwardRelationalMatMul_separatecoo(
               grad_weights.data_ptr<float>(),
               unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
               unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_edges,
-              num_output_per_head_dim, num_input_dim, num_heads,
+              num_input_dim, num_output_per_head_dim, num_heads,
               thrust::raw_pointer_cast(
                   dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
               num_relations);
@@ -377,8 +388,8 @@ void _BackwardRelationalMatMul_separatecoo(
               unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
               unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
               separate_coo_relptrs.data_ptr<int64_t>(),
-              separate_coo_eids.data_ptr<int64_t>(), num_edges,
-              num_output_per_head_dim, num_input_dim, num_heads,
+              separate_coo_eids.data_ptr<int64_t>(), num_edges, num_input_dim,
+              num_output_per_head_dim, num_heads,
               thrust::raw_pointer_cast(
                   dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
               num_relations);
@@ -389,7 +400,7 @@ void _BackwardRelationalMatMul_separatecoo(
     const dim3 nblks_outer_product(
         ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
         ceil_div<>(num_input_dim, (long)BLOCK_SIZE), num_heads * grid_dim_y);
-    assert(num_head * grid_dim_y < 65535 && "num_head*grid_dim_y>=65535");
+    assert(num_heads * grid_dim_y < 65535 && "num_head*grid_dim_y>=65535");
     const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
     // NB: #head of input is 1 when InputNumHeadOneFlag is true
     if constexpr (ACGatherScatterListIdenticalFlag) {

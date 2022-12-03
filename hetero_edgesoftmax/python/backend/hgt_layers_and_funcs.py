@@ -64,9 +64,13 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             applied_qlinear_node_features,
         ) = ctx.saved_tensors
         print(weight.numel())
-        grad_weight = th.zeros_like(weight)
-        grad_k = th.zeros_like(applied_klinear_node_features)
-        grad_q = th.zeros_like(applied_qlinear_node_features)
+        grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
+        grad_k = th.zeros_like(
+            applied_klinear_node_features, memory_format=th.contiguous_format
+        )
+        grad_q = th.zeros_like(
+            applied_qlinear_node_features, memory_format=th.contiguous_format
+        )
         K.hgt_full_graph_hetero_attention_ops_backward_csr(
             transposed_row_ptr,
             transposed_col_idx,
@@ -313,7 +317,9 @@ class HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR(th.autograd.Functio
             new_h,
         ) = ctx.saved_tensors
 
-        grad_message = th.zeros_like(message_per_edge)
+        grad_message = th.zeros_like(
+            message_per_edge, memory_format=th.contiguous_format
+        )
 
         # FIXME: unique_srcs_and_dests_rel_ptr and unique_srcs_and_dests_node_indices are not used in the backward pass but used in forward pass, check if there is similar issue in the original routine
         K.hgt_full_graph_message_mean_aggregation_backward_csr(
@@ -327,8 +333,10 @@ class HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR(th.autograd.Functio
             grad_message,
         )
 
-        grad_attn_score = th.zeros_like(unnormalized_attn_score)
-        grad_mu = th.zeros_like(mu)
+        grad_attn_score = th.zeros_like(
+            unnormalized_attn_score, memory_format=th.contiguous_format
+        )
+        grad_mu = th.zeros_like(mu, memory_format=th.contiguous_format)
         K.hgt_full_graph_edge_softmax_ops_backward_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
@@ -367,8 +375,12 @@ def hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
     incsr_col_idx = graph["transposed"]["col_idx"]
     incsr_eids = graph["transposed"]["eids"]
     incsr_reltypes = graph["transposed"]["rel_types"]
-    mu_softmax_applied_unnormalized_attn_score = th.zeros_like(unnormalized_attn_score)
-    normalized_attn_score = th.zeros_like(unnormalized_attn_score)
+    mu_softmax_applied_unnormalized_attn_score = th.zeros_like(
+        unnormalized_attn_score, memory_format=th.contiguous_format
+    )
+    normalized_attn_score = th.zeros_like(
+        unnormalized_attn_score, memory_format=th.contiguous_format
+    )
     edgesoftmax_sum_per_node = th.zeros(
         graph["original"]["num_nodes"],
         mu.size(1),
