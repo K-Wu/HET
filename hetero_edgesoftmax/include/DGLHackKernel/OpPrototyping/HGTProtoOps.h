@@ -5,7 +5,7 @@
 #include "DGLHackKernel/HGT/HGTForwardKernels.cu.h"
 #include "DGLHackKernel/HGT/HGTPreprocessing.h"
 #include "DGLHackKernel/OpPrototyping/HGTIntermediateData.h"
-#include "DGLHackKernel/mysgemm/mysgemm_KernelsBlockConfigurations.h"
+#include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
 #include "EdgeAttention_4/EdgeAttentionCOO.h"
 
 namespace HET {

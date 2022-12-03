@@ -4,7 +4,7 @@
 #include <c10/cuda/CUDAStream.h>
 #include <torch/extension.h>
 #include <torch/library.h>
-#include "DGLHackKernel/mysgemm/mysgemm_KernelsBlockConfigurations.h"
+#include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
 
 void try_get_schedule_by_relations(int64_t num_relations, int64_t num_blocks) {
   std::vector<int64_t> mock_job_entries_per_relation_vec(num_relations, 1000);

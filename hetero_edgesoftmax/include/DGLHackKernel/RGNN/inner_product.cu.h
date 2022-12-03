@@ -1,0 +1,226 @@
+#pragma once
+#include "DGLHackKernel/DGLHackKernel.h"
+
+template <typename Idx, typename DType>
+struct InnerProductData {
+  // feat_size size along feature dimension
+  Idx feat_src_xlen{0};
+  Idx e_xlen{0};
+  // num nodes
+  // Idx n{0};
+  Idx* eids;
+  // Inputs
+  DType *feat_src{nullptr}, *feat_dst{nullptr};
+  // Output
+  DType* edge_inner_product{nullptr};
+};
+
+template <typename Idx, typename DType>
+struct BackwardInnerProductData {
+  // feat_size size along feature dimension
+  Idx feat_src_xlen{0};
+  Idx e_xlen{0};
+  // num nodes
+  // Idx n{0};
+  Idx* eids;
+  // Inputs
+  DType *feat_src{nullptr}, *feat_dst{nullptr};
+  DType* grad_inner_product{nullptr};
+  // Output
+  DType *grad_feat_dst{nullptr}, *grad_feat_src{nullptr};
+};
+
+// adapted from _gatSumProdZipDivKernel in
+// [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
+__global__ void inner_product_fw_kernel(
+    InnerProductData<Idx, DType> gdata, const Idx* row_offsets,
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+  Idx e_xlen = gdata.e_xlen;
+  Idx hidden_xlen = gdata.feat_src_xlen / e_xlen;
+  for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
+    Idx start_off = *(row_offsets + dst_vid);
+    Idx end_off = *(row_offsets + dst_vid + 1);
+    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
+         head_idx < e_xlen; head_idx += blockDim.x * gridDim.x) {
+      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
+           feat_idx += blockDim.y) {
+        DType s = 0.;
+        for (Idx eidx = start_off; eidx < end_off; eidx++) {
+          Idx src_vid = column_indices[eidx];
+          Idx feat_src_entry_id = -1;
+          Idx edge_id = gdata.eids[eidx];
+          if constexpr (RelationalFlag) {
+            // Idx sum_idx = -1;
+            Idx etype = -1;
+            if constexpr (ETypeRelPtrFlag) {
+              etype = binary_search(num_relations, etypes, eidx);
+            } else {
+              etype = etypes[eidx];
+            }
+            if constexpr (CompactAsOfNodeFlag) {
+              feat_src_entry_id = find_relational_compact_as_of_node_index(
+                  etype, src_vid, unique_srcs_and_dests_node_indices,
+                  unique_srcs_and_dests_rel_ptr);
+
+            } else {
+              // NB: we need to use edge_id instead of eidx here
+              feat_src_entry_id = edge_id;
+            }
+            // TODO: actually full cartesian can be applied both to
+            // feat_src_entry_id and sum_idx, in future we may need to add an
+            // additional FullCartesianFlag to cover all cases
+            if constexpr (FullCartesianFlag) {
+              // NB: This is the case where we have the data stored in
+              // (relation, node) but do not compress the (relation, node)
+              // matrix. It could be a case in subgraph where compressing along
+              // the node dimension may not be worth it.
+              CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                  FullCartesianFlag, "should be non-reachable not implemented");
+            }  // else {
+               // sum_idx = find_relational_compact_as_of_node_index(
+               //     etype, dst_vid, unique_srcs_and_dests_node_indices,
+               //     unique_srcs_and_dests_rel_ptr);
+            //}
+
+            s += gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
+                                head_idx * hidden_xlen + feat_idx] *
+                 gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
+                                head_idx * hidden_xlen + feat_idx];
+          } else {  // !RelationalFlag
+            // NB: feat_src_entry_id varies between edge_id and src_vid
+            // depending on compactasofnodeflag
+            if constexpr (CompactAsOfNodeFlag) {
+              feat_src_entry_id = src_vid;
+            } else {
+              feat_src_entry_id = edge_id;
+            }
+            s += gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
+                                head_idx * hidden_xlen + feat_idx] *
+                 gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
+                                head_idx * hidden_xlen + feat_idx];
+          }
+          atomicAdd(&gdata.edge_inner_product[edge_id * e_xlen + head_idx], s);
+        }
+      }
+    }
+  }
+}
+
+// adapted from _fusedGatBackwardGradElErFeatSrcFused in
+// [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag, bool ETypeRelPtrFlag>
+__global__ void inner_product_bck_kernel(
+    BackwardInnerProductData<Idx, DType> gdata, const Idx* row_offsets,
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+  Idx e_xlen = gdata.e_xlen;
+  Idx hidden_xlen = gdata.feat_src_xlen / e_xlen;
+  for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
+    Idx start_off = row_offsets[src_vid];
+    Idx end_off = row_offsets[src_vid + 1];
+    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
+         head_idx < e_xlen; head_idx += blockDim.x * gridDim.x) {
+      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
+           feat_idx += blockDim.y) {
+        // DType s = 0.;
+        DType sfeatsrc = 0.;
+        Idx feat_src_offset = -1;
+        // Idx el_idx = -1;
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          // in this case, feat_src_offset is the same regardless of which
+          // outgoing edge we deal with
+          feat_src_offset =
+              src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
+          el_idx = src_vid * e_xlen + head_idx;
+        }
+        for (Idx e = start_off; e < end_off; ++e) {
+          Idx eid = gdata.eids[e];
+          Idx dst_vid = column_indices[e];
+          // Idx er_idx = -1;
+          Idx dst_vid_relational = -1;
+          if constexpr (!CompactAsOfNodeFlag) {
+            // in this case, feat_src_offset, er_idx and el_idx are related to
+            // edge id, regardless of the type of the edge
+            feat_src_offset =
+                eid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
+            // er_idx = eid * e_xlen + head_idx;
+            // el_idx = eid * e_xlen + head_idx;
+          } else {  // CompactAsOfNodeFlag
+            if constexpr (!RelationalFlag) {
+              er_idx = dst_vid * e_xlen + head_idx;
+            } else {  // RelationalFlag
+              // in this case, er_idx (sum's index) is related to (relation,
+              // unique node index) el_idx is related to (relation, unique node
+              // index) feat_src_offset is related to (relation, unique node
+              // index)
+              // Idx etype = etypes[e];
+              Idx etype = -1;
+              if constexpr (ETypeRelPtrFlag) {
+                etype = binary_search(num_relations, etypes, e);
+              } else {
+                etype = etypes[e];
+              }
+              dst_vid_relational = find_relational_compact_as_of_node_index(
+                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              // er_idx = dst_vid_relational * e_xlen + head_idx;
+              Idx src_vid_relational = find_relational_compact_as_of_node_index(
+                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              // el_idx = src_vid_relational * e_xlen + head_idx;
+
+              feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
+                                head_idx * hidden_xlen + feat_idx;
+              // printf(
+              //     "src_vid %ld dst_vid %ld etype %ld src_vid_relational %ld "
+              //     "dst_vid_relational %ld \n",
+              //     src_vid, dst_vid, etype, src_vid_relational,
+              //     dst_vid_relational);
+            }
+          }
+
+          Idx edge_offset = eid * e_xlen + head_idx;
+
+          Idx dst_out_offset =
+              dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
+          // DType grad_exp =
+          //     gdata.grad_out[dst_out_offset] *
+          //     (gdata.feat_src[feat_src_offset] - gdata.ret[dst_out_offset]) /
+          //     gdata.sum[dst_vid * e_xlen + head_idx];
+          // DType tmp_sum = gdata.el[el_idx] + gdata.er[er_idx];
+          // DType tmp2 = grad_exp * gdata.exp[edge_offset] *
+          //              gradLeaky(tmp_sum, gdata.leaky_relu_slope);
+
+          // Idx sum_vid = dst_vid;
+          // if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
+          //   sum_vid = dst_vid_relational;
+          // }
+          gdata.grad_feat_dst + (dst_vid * gdata.feat_src_xlen +
+                                 head_idx * hidden_xlen + feat_idx) =
+              gdata.grad_inner_product[eid * e_xlen + head_idx] *
+              gdata.feat_src[feat_src_offset];
+          if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
+            gdata.grad_feat_src + feat_src_offset =
+                gdata.grad_inner_product[eid * e_xlen + head_idx] *
+                gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
+                               head_idx * hidden_xlen + feat_idx];
+          } else {
+            sfeatsrc += gdata.grad_inner_product[eid * e_xlen + head_idx] *
+                        gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
+                                       head_idx * hidden_xlen + feat_idx];
+
+          }  // if constexpr (!CompactAsOfNodeFlag)
+        }    // for Idx e
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          gdata.grad_feat_src[feat_src_offset] = sfeatsrc;
+        }
+      }  // while feat_idx
+    }    // while head_idx
+  }      // while src_vid
+}

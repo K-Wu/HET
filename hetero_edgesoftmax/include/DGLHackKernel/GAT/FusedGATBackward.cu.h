@@ -92,11 +92,11 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
 
               feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;
-              printf(
-                  "src_vid %ld dst_vid %ld etype %ld src_vid_relational %ld "
-                  "dst_vid_relational %ld \n",
-                  src_vid, dst_vid, etype, src_vid_relational,
-                  dst_vid_relational);
+              // printf(
+              //     "src_vid %ld dst_vid %ld etype %ld src_vid_relational %ld "
+              //     "dst_vid_relational %ld \n",
+              //     src_vid, dst_vid, etype, src_vid_relational,
+              //     dst_vid_relational);
             }
           }
 
