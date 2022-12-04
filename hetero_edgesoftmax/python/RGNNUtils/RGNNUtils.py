@@ -115,9 +115,6 @@ def HET_RGNN_train_full_graph(
         node_embed_layer.requires_grad_(True)
 
         total_loss = 0
-        print(
-            "WARNING: ignoring the hard-coded paper features in the original dataset in the original RGAT training script. This script is solely for performance R&D purposes."
-        )
 
         # emb = extract_embed(node_embed, input_nodes)
         # emb = node_embed
@@ -187,16 +184,13 @@ def RGNN_train_full_graph(
 ):
     # training loop
     print("start training...")
-    category = "paper"
+    # category = "paper"
     for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
         model.train()
 
         total_loss = 0
-        print(
-            "WARNING: ignoring the hard-coded paper features in the original dataset. This script is solely for performance R&D purposes."
-        )
 
         # emb = extract_embed(node_embed, input_nodes)
         emb = node_embed
@@ -270,9 +264,7 @@ def RGNN_train_with_sampler(
         model.train()
 
         total_loss = 0
-        print(
-            "WARNING: ignoring the hard-coded paper features in the original dataset. This script is solely for performance R&D purposes."
-        )
+
         for input_nodes, seeds, blocks in train_loader:
             blocks = [blk.to(device) for blk in blocks]
             # seeds = seeds[category]  # we only predict the nodes with type "category"

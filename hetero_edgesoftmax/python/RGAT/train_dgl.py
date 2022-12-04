@@ -226,4 +226,8 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
 if __name__ == "__main__":
     args: argparse.Namespace = RGAT_parse_args()
     print(args)
+
+    print(
+        "WARNING: ignoring the hard-coded paper features in the original dataset in the original RGAT training script. This script is solely for performance R&D purposes."
+    )
     RGAT_main_procedure(args, dgl_model_flag=True)

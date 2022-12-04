@@ -257,6 +257,7 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
         ret,
         input_num_head_one_flag,
     ):
+        node_feat = node_feat.contiguous()
         ctx.save_for_backward(
             unique_srcs_and_dests_rel_ptr,
             unique_srcs_and_dests_node_idx,
@@ -325,11 +326,12 @@ def rgnn_relational_matmul_compact_as_of_node_single_ended(
     node_feat,
     input_num_head_one_flag,
 ):
-    ret = th.zeros(
+    ret = th.empty(
         [separate_coo_rel_ptr[-1], weight.size(1), weight.size(3)],
         dtype=weight.dtype,
         device=weight.device,
         requires_grad=True,
+        memory_format=th.contiguous_format,
     )
     return RgnnRelationalMatmulCompactAsOfNodeSingleEnded.apply(
         unique_srcs_and_dests_rel_ptr,
