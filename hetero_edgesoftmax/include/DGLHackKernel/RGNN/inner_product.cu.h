@@ -5,7 +5,7 @@ template <typename Idx, typename DType>
 struct InnerProductData {
   // feat_size size along feature dimension
   Idx feat_src_xlen{0};
-  Idx e_xlen{0};
+  Idx num_heads{0};
   // num nodes
   // Idx n{0};
   Idx* eids;
@@ -19,7 +19,7 @@ template <typename Idx, typename DType>
 struct BackwardInnerProductData {
   // feat_size size along feature dimension
   Idx feat_src_xlen{0};
-  Idx e_xlen{0};
+  Idx num_heads{0};
   // num nodes
   // Idx n{0};
   Idx* eids;
@@ -39,17 +39,17 @@ __global__ void inner_product_fw_kernel(
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  Idx e_xlen = gdata.e_xlen;
-  Idx hidden_xlen = gdata.feat_src_xlen / e_xlen;
+  Idx num_heads = gdata.num_heads;
+  Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
     Idx start_off = *(row_offsets + dst_vid);
     Idx end_off = *(row_offsets + dst_vid + 1);
     for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-         head_idx < e_xlen; head_idx += blockDim.x * gridDim.x) {
+         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
       for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
            feat_idx += blockDim.y) {
-        DType s = 0.;
         for (Idx eidx = start_off; eidx < end_off; eidx++) {
+          DType s = 0.;
           Idx src_vid = column_indices[eidx];
           Idx feat_src_entry_id = -1;
           Idx edge_id = gdata.eids[eidx];
@@ -103,7 +103,8 @@ __global__ void inner_product_fw_kernel(
                  gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx];
           }
-          atomicAdd(&gdata.edge_inner_product[edge_id * e_xlen + head_idx], s);
+          atomicAdd(&gdata.edge_inner_product[edge_id * num_heads + head_idx],
+                    s);
         }
       }
     }
@@ -119,13 +120,13 @@ __global__ void inner_product_bck_kernel(
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  Idx e_xlen = gdata.e_xlen;
-  Idx hidden_xlen = gdata.feat_src_xlen / e_xlen;
+  Idx num_heads = gdata.num_heads;
+  Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
     Idx start_off = row_offsets[src_vid];
     Idx end_off = row_offsets[src_vid + 1];
     for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-         head_idx < e_xlen; head_idx += blockDim.x * gridDim.x) {
+         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
       for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
            feat_idx += blockDim.y) {
         // DType s = 0.;
@@ -137,7 +138,7 @@ __global__ void inner_product_bck_kernel(
           // outgoing edge we deal with
           feat_src_offset =
               src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
-          el_idx = src_vid * e_xlen + head_idx;
+          // el_idx = src_vid * num_heads + head_idx;
         }
         for (Idx e = start_off; e < end_off; ++e) {
           Idx eid = gdata.eids[e];
@@ -149,12 +150,13 @@ __global__ void inner_product_bck_kernel(
             // edge id, regardless of the type of the edge
             feat_src_offset =
                 eid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
-            // er_idx = eid * e_xlen + head_idx;
-            // el_idx = eid * e_xlen + head_idx;
+            // er_idx = eid * num_heads + head_idx;
+            // el_idx = eid * num_heads + head_idx;
           } else {  // CompactAsOfNodeFlag
-            if constexpr (!RelationalFlag) {
-              er_idx = dst_vid * e_xlen + head_idx;
-            } else {  // RelationalFlag
+            // if constexpr (!RelationalFlag) {
+            //   er_idx = dst_vid * num_heads + head_idx;
+            // } else {  // RelationalFlag
+            if constexpr (RelationalFlag) {
               // in this case, er_idx (sum's index) is related to (relation,
               // unique node index) el_idx is related to (relation, unique node
               // index) feat_src_offset is related to (relation, unique node
@@ -169,11 +171,11 @@ __global__ void inner_product_bck_kernel(
               dst_vid_relational = find_relational_compact_as_of_node_index(
                   etype, dst_vid, unique_srcs_and_dests_rel_ptr,
                   unique_srcs_and_dests_node_indices);
-              // er_idx = dst_vid_relational * e_xlen + head_idx;
+              // er_idx = dst_vid_relational * num_heads + head_idx;
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
                   etype, src_vid, unique_srcs_and_dests_rel_ptr,
                   unique_srcs_and_dests_node_indices);
-              // el_idx = src_vid_relational * e_xlen + head_idx;
+              // el_idx = src_vid_relational * num_heads + head_idx;
 
               feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;
@@ -185,14 +187,14 @@ __global__ void inner_product_bck_kernel(
             }
           }
 
-          Idx edge_offset = eid * e_xlen + head_idx;
+          Idx edge_offset = eid * num_heads + head_idx;
 
           Idx dst_out_offset =
               dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
           // DType grad_exp =
           //     gdata.grad_out[dst_out_offset] *
           //     (gdata.feat_src[feat_src_offset] - gdata.ret[dst_out_offset]) /
-          //     gdata.sum[dst_vid * e_xlen + head_idx];
+          //     gdata.sum[dst_vid * num_heads + head_idx];
           // DType tmp_sum = gdata.el[el_idx] + gdata.er[er_idx];
           // DType tmp2 = grad_exp * gdata.exp[edge_offset] *
           //              gradLeaky(tmp_sum, gdata.leaky_relu_slope);
@@ -203,15 +205,15 @@ __global__ void inner_product_bck_kernel(
           // }
           gdata.grad_feat_dst + (dst_vid * gdata.feat_src_xlen +
                                  head_idx * hidden_xlen + feat_idx) =
-              gdata.grad_inner_product[eid * e_xlen + head_idx] *
+              gdata.grad_inner_product[eid * num_heads + head_idx] *
               gdata.feat_src[feat_src_offset];
           if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
             gdata.grad_feat_src + feat_src_offset =
-                gdata.grad_inner_product[eid * e_xlen + head_idx] *
+                gdata.grad_inner_product[eid * num_heads + head_idx] *
                 gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
                                head_idx * hidden_xlen + feat_idx];
           } else {
-            sfeatsrc += gdata.grad_inner_product[eid * e_xlen + head_idx] *
+            sfeatsrc += gdata.grad_inner_product[eid * num_heads + head_idx] *
                         gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
                                        head_idx * hidden_xlen + feat_idx];
 

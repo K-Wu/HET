@@ -5,6 +5,7 @@
 #include <torch/library.h>
 #include "DGLHackKernel/DGLHackUtils.h"
 #include "DGLHackKernel/RGNN/inner_product.cu.h"
+#include "DGLHackKernel/RGNN/inner_product_edge_parallel.cu.h"
 #include "DGLHackKernel/RGNN/my_shmem_sgemm_func.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
 
@@ -250,7 +251,7 @@ void inner_product_various_left_and_node_right(
   gdata.feat_dst = feat_dst.data_ptr<DType>();
   gdata.edge_inner_product = edge_inner_product.data_ptr<DType>();
   // gdata.n = el.numel() / el_xlen;
-  gdata.e_xlen = el_xlen;
+  gdata.num_heads = el_xlen;
   gdata.feat_src_xlen = feat_src_xlen;
 
   if constexpr (IntegratedFormatRatherThanSeparateFlag &&
@@ -266,27 +267,21 @@ void inner_product_various_left_and_node_right(
     const dim3 nblks(nblks_x, nblks_y);
     const dim3 nthrs(nthrs_x, nthrs_y);
 
-    inner_product_fw_kernel<Idx, DType, CompactAsOfNodeFlag, true>
-        <<<nblks, nthrs, 0, stream>>>(
-            gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
-            incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
-            unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
-            unique_srcs_and_dests_node_indices.data_ptr<Idx>());
-
     nthrs_x = SeastarFindNumThreads(el_xlen, 64);
-    nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.e_xlen,
+    nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
                                     MAX_NTHRS / nthrs_x);
     nblks_x = 1;
     nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
     const dim3 nthrs2(nthrs_x, nthrs_y);
     const dim3 nblks2(nblks_x, nblks_y);
 
-    inner_product_fw_kernel<Idx, DType, CompactAsOfNodeFlag, true>
+    inner_product_fw_kernel<Idx, DType, CompactAsOfNodeFlag, true, false, false>
         <<<nblks2, nthrs2, 0, stream>>>(
             gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
             incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
             unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
             unique_srcs_and_dests_node_indices.data_ptr<Idx>());
+
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
     assert(0 && "Not implemented yet");
@@ -294,37 +289,22 @@ void inner_product_various_left_and_node_right(
     gdata.eids = separate_coo_eids.data_ptr<Idx>();
     int64_t num_edges = separate_coo_row_indices.numel();
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
-    int nthrs_x = 32;
-    int nthrs_y = 1;
-    int nblks_x = (el_xlen + nthrs_x - 1) / (nthrs_x);
+
+    int nthrs_x = SeastarFindNumThreads(el_xlen, 64);
+    int nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
+                                        MAX_NTHRS / nthrs_x);
+    int nblks_x = 1;
     int nblks_y = std::min(num_edges, MAX_NBLKS);
-    const dim3 nblks(nblks_x, nblks_y);
     const dim3 nthrs(nthrs_x, nthrs_y);
-
-    // inner_product_fw_kernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag>
-    //     <<<nblks, nthrs, 0, stream>>>(
-    //         gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
-    //         separate_coo_row_indices.data_ptr<Idx>(),
-    //         separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-    //         unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
-    //         unique_srcs_and_dests_node_indices.data_ptr<Idx>(),
-    //         num_relations);
-
-    nthrs_x = SeastarFindNumThreads(el_xlen, 64);
-    nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.e_xlen,
-                                    MAX_NTHRS / nthrs_x);
-    nblks_x = 1;
-    nblks_y = std::min(num_edges, MAX_NBLKS);
-    const dim3 nthrs2(nthrs_x, nthrs_y);
-    const dim3 nblks2(nblks_x, nblks_y);
-    // inner_product_fw_kernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag>
-    //     <<<nblks2, nthrs2, 0, stream>>>(
-    //         gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
-    //         separate_coo_row_indices.data_ptr<Idx>(),
-    //         separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-    //         unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
-    //         unique_srcs_and_dests_node_indices.data_ptr<Idx>(),
-    //         num_relations);
+    const dim3 nblks(nblks_x, nblks_y);
+    inner_product_fw_kernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag, true,
+                                          true, false>
+        <<<nblks, nthrs, 0, stream>>>(
+            gdata, separate_coo_row_indices.data_ptr<Idx>(),
+            separate_coo_col_indices.data_ptr<Idx>(),
+            separate_coo_rel_ptrs.data_ptr<Idx>(), num_edges,
+            unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
 
   } else {
     assert(0 && "Not implemented");
@@ -335,22 +315,36 @@ void inner_product_node_compact_and_node_separatecoo(
     at::Tensor& unique_srcs_and_dests_rel_ptr,
     at::Tensor& unique_srcs_and_dests_node_idx,
     at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_eids,
-    at::Tensor& separate_coo_node_indices, at::Tensor& left_node_compact_data,
-    at::Tensor& right_node_vectors, at::Tensor& edge_inner_product) {
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
+    at::Tensor& left_node_compact_data, at::Tensor& right_node_vectors,
+    at::Tensor& edge_inner_product) {
   cudaMemsetAsync(edge_inner_product.data_ptr<float>(), 0,
                   edge_inner_product.numel() * sizeof(float),
                   c10::cuda::getCurrentCUDAStream());
-  assert(0 && "Not implemented yet");
+  at::Tensor dummy_tensor;
+  inner_product_various_left_and_node_right<int64_t, float, true, false, false>(
+      separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
+      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+      dummy_tensor, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_idx, left_node_compact_data,
+      right_node_vectors, edge_inner_product);
 }
 
 void inner_product_edge_and_node_separatecoo(
-    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_node_indices,
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptr,
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
     at::Tensor& left_edge_data, at::Tensor& right_node_vectors,
     at::Tensor& edge_inner_product) {
   cudaMemsetAsync(edge_inner_product.data_ptr<float>(), 0,
                   edge_inner_product.numel() * sizeof(float),
                   c10::cuda::getCurrentCUDAStream());
-  assert(0 && "Not implemented yet");
+  at::Tensor dummy_tensor;
+  inner_product_various_left_and_node_right<int64_t, float, false, false,
+                                            false>(
+      separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
+      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+      dummy_tensor, dummy_tensor, dummy_tensor, left_edge_data,
+      right_node_vectors, edge_inner_product);
 }
 
 }  // namespace FwProp
@@ -684,15 +678,15 @@ void inner_product_various_left_and_node_right(
   gdata.grad_feat_src = grad_feat_src.data_ptr<DType>();
   gdata.grad_feat_dst = grad_feat_dst.data_ptr<DType>();
 
-  gdata.e_xlen = SeastarComputeXLength<>(grad_inner_product);  // num_heads
+  gdata.num_heads = SeastarComputeXLength<>(grad_inner_product);  // num_heads
   gdata.feat_src_xlen = feat_src_xlen;
 
   if constexpr (IntegratedFormatRatherThanSeparateFlag &&
                 CSRRatherThanCOOFlag) {
     // Integrated CSR
     gdata.eids = outcsr_eids.data_ptr<Idx>();
-    int nthrs_x = SeastarFindNumThreads(gdata.e_xlen, 64);
-    int nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.e_xlen,
+    int nthrs_x = SeastarFindNumThreads(gdata.num_heads, 64);
+    int nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
                                         MAX_NTHRS / nthrs_x);
     int nblks_x = 1;
     int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
@@ -700,7 +694,7 @@ void inner_product_various_left_and_node_right(
     const dim3 nthrs(nthrs_x, nthrs_y);
     const dim3 nblks(nblks_x, nblks_y);
 
-    inner_product_bck_kernel<Idx, DType, CompactAsOfNodeFlag, true>
+    inner_product_bck_kernel<Idx, DType, CompactAsOfNodeFlag, true, false>
         <<<nblks, nthrs, 0, stream>>>(
             gdata, outcsr_row_ptr.data_ptr<Idx>(),
             outcsr_col_idx.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
@@ -715,8 +709,8 @@ void inner_product_various_left_and_node_right(
     gdata.eids = separate_coo_eids.data_ptr<Idx>();
     int64_t num_edges = separate_coo_row_indices.numel();
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
-    int nthrs_x = SeastarFindNumThreads(el_xlen, 64);
-    int nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.e_xlen,
+    int nthrs_x = SeastarFindNumThreads(gdata.num_heads, 64);
+    int nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
                                         MAX_NTHRS / nthrs_x);
     int nblks_x = 1;
     int nblks_y = std::min(num_edges, MAX_NBLKS);
@@ -724,14 +718,14 @@ void inner_product_various_left_and_node_right(
     const dim3 nthrs(nthrs_x, nthrs_y);
     const dim3 nblks(nblks_x, nblks_y);
 
-    // inner_product_bck_kernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag>
-    //     <<<nblks, nthrs, 0, stream>>>(
-    //         gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
-    //         separate_coo_row_indices.data_ptr<Idx>(),
-    //         separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-    //         unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
-    //         unique_srcs_and_dests_node_indices.data_ptr<Idx>(),
-    //         num_relations);
+    inner_product_bck_kernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag,
+                                           true, true>
+        <<<nblks, nthrs, 0, stream>>>(
+            gdata, separate_coo_row_indices.data_ptr<Idx>(),
+            separate_coo_col_indices.data_ptr<Idx>(),
+            separate_coo_rel_ptrs.data_ptr<Idx>(), num_edges,
+            unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
 
   } else {
     assert(0 && "Not implemented");
@@ -742,14 +736,16 @@ void inner_product_node_compact_and_node_separatecoo(
     at::Tensor& unique_srcs_and_dests_rel_ptr,
     at::Tensor& unique_srcs_and_dests_node_idx,
     at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_eids,
-    at::Tensor& separate_coo_node_indices, at::Tensor& left_node_compact_data,
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
+    at::Tensor& left_node_compact_data,
     at::Tensor& right_node_vectors,  // at::Tensor& ret,
     at::Tensor& grad_inner_product, at::Tensor& grad_left_node_compact_data,
     at::Tensor& grad_right_node_vectors) {
   at::Tensor dummy_tensor;
   inner_product_various_left_and_node_right<int64_t, float, true, false, false>(
-      separate_coo_eids, separate_coo_rel_ptr, separate_coo_node_indices,
-      /*separate_coo_col_indices*/ dummy_tensor, unique_srcs_and_dests_rel_ptr,
+      separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
+      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+      dummy_tensor, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_idx, left_node_compact_data,
       right_node_vectors, grad_inner_product, grad_left_node_compact_data,
       grad_right_node_vectors);
@@ -759,15 +755,18 @@ void inner_product_node_compact_and_node_separatecoo(
 void inner_product_edge_and_node_separatecoo(
     at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptr,
     at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
-    at::Tensor& left_edge_data, at::Tensor& right_node_vectors,
+    at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_idx, at::Tensor& left_edge_data,
+    at::Tensor& right_node_vectors,
     at::Tensor& grad_inner_product,  // at::Tensor& gradout,
     at::Tensor& grad_left_edge_data, at::Tensor& grad_right_node_vectors) {
   at::Tensor dummy_tensor;
   inner_product_various_left_and_node_right<int64_t, float, true, false, false>(
       separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
-      separate_coo_col_indices, dummy_tensor, dummy_tensor, left_edge_data,
-      right_node_vectors, grad_inner_product, grad_left_edge_data,
-      grad_right_node_vectors);
+      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+      dummy_tensor, unique_srcs_and_dests_rel_ptr,
+      unique_srcs_and_dests_node_idx, left_edge_data, right_node_vectors,
+      grad_inner_product, grad_left_edge_data, grad_right_node_vectors);
   assert(0 && "Not implemented yet");
 }
 

@@ -12,15 +12,15 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
   constexpr bool ETypeRelPtrFlag = true;
-  Idx e_xlen = gdata.e_xlen;
-  Idx hidden_xlen = gdata.feat_src_xlen / e_xlen;
+  Idx num_heads = gdata.num_heads;
+  Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx eidx = blockIdx.y; eidx < num_edges; eidx += gridDim.y) {
     Idx dst_vid = col_indices[eidx];
     // for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y)
     // { Idx start_off = *(row_offsets + dst_vid); Idx end_off = *(row_offsets +
     // dst_vid + 1);
     for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-         head_idx < e_xlen; head_idx += blockDim.x * gridDim.x) {
+         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
       for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
            feat_idx += blockDim.y) {
         DType s = 0.;
@@ -56,27 +56,27 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
             //     etype, dst_vid, unique_srcs_and_dests_node_indices,
             //     unique_srcs_and_dests_rel_ptr);
           }
-          s += (gdata.exp[edge_id * e_xlen + head_idx] /
-                gdata.sum[dst_vid * e_xlen + head_idx] *
+          s += (gdata.exp[edge_id * num_heads + head_idx] /
+                gdata.sum[dst_vid * num_heads + head_idx] *
                 gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                head_idx * hidden_xlen + feat_idx]);
           atomicAdd(&gdata.ret[dst_vid * gdata.feat_src_xlen +
                                head_idx * hidden_xlen + feat_idx],
-                    gdata.exp[edge_id * e_xlen + head_idx] /
-                        gdata.sum[dst_vid * e_xlen + head_idx] *
+                    gdata.exp[edge_id * num_heads + head_idx] /
+                        gdata.sum[dst_vid * num_heads + head_idx] *
                         gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                        head_idx * hidden_xlen + feat_idx]);
         } else {  // !RelationalFlag
           feat_src_entry_id = edge_id;
-          s += gdata.exp[edge_id * e_xlen + head_idx] /
-               gdata.sum[dst_vid * e_xlen + head_idx] *
+          s += gdata.exp[edge_id * num_heads + head_idx] /
+               gdata.sum[dst_vid * num_heads + head_idx] *
                gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx];
 
           atomicAdd(&gdata.ret[dst_vid * gdata.feat_src_xlen +
                                head_idx * hidden_xlen + feat_idx],
-                    gdata.exp[edge_id * e_xlen + head_idx] /
-                        gdata.sum[dst_vid * e_xlen + head_idx] *
+                    gdata.exp[edge_id * num_heads + head_idx] /
+                        gdata.sum[dst_vid * num_heads + head_idx] *
                         gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                        head_idx * hidden_xlen + feat_idx]);
         }
@@ -115,7 +115,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
 
-  Idx e_xlen = gdata.e_xlen;
+  Idx num_heads = gdata.num_heads;
   for (Idx eidx = ty; eidx < num_edges; eidx += blockDim.y * gridDim.y) {
     Idx dst_vid = col_indices[eidx];
     // for (Idx dst_vid = ty; dst_vid < num_rows;
@@ -123,12 +123,12 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
     // Idx start_off = *(row_offsets + dst_vid);
     // Idx end_off = *(row_offsets + dst_vid + 1);
 
-    for (Idx feat_idx = tx; feat_idx < e_xlen;
+    for (Idx feat_idx = tx; feat_idx < num_heads;
          feat_idx += blockDim.x * gridDim.x) {
       // 1. Load dstnation vertex into shared memory
       Idx feat_off_dst = -1;
       if constexpr (CompactAsOfNodeFlag) {
-        feat_off_dst = dst_vid * e_xlen + feat_idx;
+        feat_off_dst = dst_vid * num_heads + feat_idx;
       }
       // er[threadIdx.x] = gdata.er[feat_off_dst];
       //__syncthreads();
@@ -154,8 +154,8 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
           dst_vid_relational = find_relational_compact_as_of_node_index(
               etype, dst_vid, unique_srcs_and_dests_node_indices,
               unique_srcs_and_dests_rel_ptr);
-          feat_off_src = src_vid_relational * e_xlen + feat_idx;
-          feat_off_dst = dst_vid_relational * e_xlen + feat_idx;
+          feat_off_src = src_vid_relational * num_heads + feat_idx;
+          feat_off_dst = dst_vid_relational * num_heads + feat_idx;
           if constexpr (FullCartesianFlag) {
             // NB: This is the case where we have the data stored in
             // (relation, node) but do not compress the (relation, node)
@@ -166,26 +166,26 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
                 "should be non-reachable not implemented");
           }
         } else {
-          feat_off_src = src_id * e_xlen + feat_idx;
+          feat_off_src = src_id * num_heads + feat_idx;
         }
       } else {
-        feat_off_src = edge_id * e_xlen + feat_idx;
-        feat_off_dst = edge_id * e_xlen + feat_idx;
+        feat_off_src = edge_id * num_heads + feat_idx;
+        feat_off_dst = edge_id * num_heads + feat_idx;
       }
       // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] + er[threadIdx.x],
       // gdata.leaky_relu_slope);
       DType tmp =
           gatLeakyReluExp(gdata.el[feat_off_src] + gdata.er[feat_off_dst],
                           gdata.leaky_relu_slope);
-      gdata.exp[Idx(edge_id * e_xlen) + feat_idx] = tmp;
+      gdata.exp[Idx(edge_id * num_heads) + feat_idx] = tmp;
       if constexpr (RelationalFlag) {
-        atomicAdd(&gdata.sum[Idx(dst_vid * e_xlen) + feat_idx], tmp);
+        atomicAdd(&gdata.sum[Idx(dst_vid * num_heads) + feat_idx], tmp);
       }
       sum += tmp;
       //}
       if constexpr (!RelationalFlag) {
-        // gdata.sum[Idx(dst_vid * e_xlen) + feat_idx] = sum;
-        atomicAdd(&gdata.sum[Idx(dst_vid * e_xlen) + feat_idx], sum);
+        // gdata.sum[Idx(dst_vid * num_heads) + feat_idx] = sum;
+        atomicAdd(&gdata.sum[Idx(dst_vid * num_heads) + feat_idx], sum);
       }
     }
   }

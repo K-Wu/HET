@@ -46,10 +46,10 @@ void FusedGatKernelImpl(
   gdata.leaky_relu_slope = slope;
   // gdata.n = el.data.size() / el_xlen;
   int64_t num_rows = el.data.size() / el_xlen;
-  gdata.e_xlen = el_xlen;
+  gdata.num_heads = el_xlen;
   gdata.feat_src_xlen = feat_src_xlen;
-  gdata.feat_src_hidden = feat_src_xlen / el_xlen;
-  gdata.ret_xlen = ret_len;
+  // gdata.feat_src_hidden = feat_src_xlen / el_xlen;
+  // gdata.ret_xlen = ret_len;
   // std::vector<IdArray> incsr_elements = graph->GetAdj(0,true, "csr");
   // printf("!!!!!%d, %d, %d\n",graph->NumVertices(0), graph->NumVertexTypes(),
   // graph->NumEdgeTypes()); aten::CSRMatrix incsr(graph->NumVertices(0),
@@ -72,6 +72,8 @@ void FusedGatKernelImpl(
 
   // Configure kernel launch parameters.
   // auto* thr_entry = runtime::CUDAThreadEntry::ThreadLocal();
+  // TODO: we can safely reshape (nthrs_x, nthrs_y) to assign more y dimension
+  // to rows as usually n_head is smaller than 32
   int nthrs_x = 32;
   int nthrs_y = 1;
   int nblks_x = (el_xlen + nthrs_x - 1) / (nthrs_x);
@@ -96,7 +98,7 @@ void FusedGatKernelImpl(
       static_cast<Idx*>(thrust::raw_pointer_cast(incsr.col_idx.data())),
       nullptr, incsr.num_rows, nullptr, nullptr);
   nthrs_x = SeastarFindNumThreads(el_xlen, 64);
-  nthrs_y = SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
+  nthrs_y = SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
   nblks_x = 1;
   nblks_y = std::min(num_rows, (int64_t)MAX_NBLKS);
   const dim3 nthrs2(nthrs_x, nthrs_y);
@@ -119,8 +121,8 @@ void FusedGatKernelImpl(
   // LOG(INFO) << "kernel2 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:"
   // <<nthrs_x << "*" << nthrs_y;
   //    printf("n_rows: %d\n", incsr.num_rows);
-  //    printf("e_xlen: %d\n", gdata.e_xlen);
-  //    printf("hidden_xlen: %d\n", gdata.feat_src_xlen/gdata.e_xlen);
+  //    printf("num_heads: %d\n", gdata.num_heads);
+  //    printf("hidden_xlen: %d\n", gdata.feat_src_xlen/gdata.num_heads);
   //    printf("stride_head: %d\n", nblks_x * nthrs_x);
   //    printf("stride_vid: %d\n", nblks_y);
   //    printf("dst_vid: %d\n", nthrs_y);
@@ -171,9 +173,9 @@ void BackwardFusedGatKernelImpl(
   // gdata.n = el.GetSize()/sizeof(DType)/el_xlen;
   // gdata.n = el.data.size() / el_xlen;
   int num_rows = el.data.size() / el_xlen;
-  gdata.e_xlen = el_xlen;
+  gdata.num_heads = el_xlen;
   gdata.feat_src_xlen = feat_src_xlen;
-  gdata.feat_src_hidden = feat_src_xlen / el_xlen;
+  // gdata.feat_src_hidden = feat_src_xlen / el_xlen;
   // auto outcsr = graph.GetOutCSRMatrix();
   // minigun::Csr<Idx> ocsr = utils::CreateCsr<Idx>(outcsr.indptr,
   // outcsr.indices); gdata.eids =
@@ -194,7 +196,7 @@ void BackwardFusedGatKernelImpl(
   // auto* thr_entry = runtime::CUDAThreadEntry::ThreadLocal();
   int nthrs_x = SeastarFindNumThreads(el_xlen, 64);
   int nthrs_y =
-      SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
+      SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
   int nblks_x = 1;
 
   int nblks_y = std::min(num_rows, MAX_NBLKS);

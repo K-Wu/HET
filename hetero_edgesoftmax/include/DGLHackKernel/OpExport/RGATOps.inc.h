@@ -45,16 +45,18 @@ void _RelationalFusedGATKernel(
   gdata.ret = ret.data_ptr<DType>();
   gdata.leaky_relu_slope = slope;
   // gdata.n = el.numel() / el_xlen;
-  gdata.e_xlen = el_xlen;
+  gdata.num_heads = el_xlen;
   gdata.feat_src_xlen = feat_src_xlen;
-  gdata.feat_src_hidden = feat_src_xlen / el_xlen;
-  gdata.ret_xlen = ret_len;
+  // gdata.feat_src_hidden = feat_src_xlen / el_xlen;
+  // gdata.ret_xlen = ret_len;
 
   if constexpr (IntegratedFormatRatherThanSeparateFlag &&
                 CSRRatherThanCOOFlag) {
     // Integrated CSR
     gdata.eids = incsr_eids.data_ptr<Idx>();
     // Configure kernel launch parameters.
+    // TODO: we can safely reshape (nthrs_x, nthrs_y) to assign more y dimension
+    // to rows as usually n_head is smaller than 32
     int nthrs_x = 32;
     int nthrs_y = 1;
     int nblks_x = (el_xlen + nthrs_x - 1) / (nthrs_x);
@@ -71,7 +73,8 @@ void _RelationalFusedGATKernel(
             unique_srcs_and_dests_node_indices.data_ptr<Idx>());
 
     nthrs_x = SeastarFindNumThreads(el_xlen, 64);
-    nthrs_y = SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
+    nthrs_y =
+        SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
     nblks_x = 1;
     nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
     const dim3 nthrs2(nthrs_x, nthrs_y);
@@ -89,6 +92,8 @@ void _RelationalFusedGATKernel(
     gdata.eids = separate_coo_eids.data_ptr<Idx>();
     int64_t num_edges = separate_coo_row_indices.numel();
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
+    // TODO: we can safely reshape (nthrs_x, nthrs_y) to assign more y dimension
+    // to edges as usually n_head is smaller than 32
     int nthrs_x = 32;
     int nthrs_y = 1;
     int nblks_x = (el_xlen + nthrs_x - 1) / (nthrs_x);
@@ -106,7 +111,8 @@ void _RelationalFusedGATKernel(
             unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
 
     nthrs_x = SeastarFindNumThreads(el_xlen, 64);
-    nthrs_y = SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
+    nthrs_y =
+        SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
     nblks_x = 1;
     nblks_y = std::min(num_edges, MAX_NBLKS);
     const dim3 nthrs2(nthrs_x, nthrs_y);
@@ -219,9 +225,9 @@ void _RelationalFusedGATKernel(
   gdata.grad_er = grad_er.data_ptr<DType>();
   gdata.leaky_relu_slope = slope;
   // gdata.n = el.numel() / el_xlen;
-  gdata.e_xlen = el_xlen;
+  gdata.num_heads = el_xlen;
   gdata.feat_src_xlen = feat_src_xlen;
-  gdata.feat_src_hidden = feat_src_xlen / el_xlen;
+  // gdata.feat_src_hidden = feat_src_xlen / el_xlen;
 
   if constexpr (IntegratedFormatRatherThanSeparateFlag &&
                 CSRRatherThanCOOFlag) {
@@ -229,7 +235,7 @@ void _RelationalFusedGATKernel(
     gdata.eids = outcsr_eids.data_ptr<Idx>();
     int nthrs_x = SeastarFindNumThreads(el_xlen, 64);
     int nthrs_y =
-        SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
+        SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
     int nblks_x = 1;
     int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
     int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
@@ -264,7 +270,7 @@ void _RelationalFusedGATKernel(
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
     int nthrs_x = SeastarFindNumThreads(el_xlen, 64);
     int nthrs_y =
-        SeastarFindNumThreads(gdata.feat_src_hidden, MAX_NTHRS / nthrs_x);
+        SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
     int nblks_x = 1;
     int nblks_y = std::min(num_edges, MAX_NBLKS);
     int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
