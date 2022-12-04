@@ -331,17 +331,16 @@ void inner_product_node_compact_and_node_separatecoo(
 }
 
 void inner_product_edge_and_node_separatecoo(
-    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptr,
-    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
-    at::Tensor& left_edge_data, at::Tensor& right_node_vectors,
-    at::Tensor& edge_inner_product) {
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_row_indices,
+    at::Tensor& separate_coo_col_indices, at::Tensor& left_edge_data,
+    at::Tensor& right_node_vectors, at::Tensor& edge_inner_product) {
   cudaMemsetAsync(edge_inner_product.data_ptr<float>(), 0,
                   edge_inner_product.numel() * sizeof(float),
                   c10::cuda::getCurrentCUDAStream());
   at::Tensor dummy_tensor;
   inner_product_various_left_and_node_right<int64_t, float, false, false,
                                             false>(
-      separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
+      separate_coo_eids, dummy_tensor, separate_coo_row_indices,
       separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
       dummy_tensor, dummy_tensor, dummy_tensor, left_edge_data,
       right_node_vectors, edge_inner_product);
@@ -753,20 +752,18 @@ void inner_product_node_compact_and_node_separatecoo(
 }
 
 void inner_product_edge_and_node_separatecoo(
-    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptr,
-    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_idx, at::Tensor& left_edge_data,
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_row_indices,
+    at::Tensor& separate_coo_col_indices, at::Tensor& left_edge_data,
     at::Tensor& right_node_vectors,
     at::Tensor& grad_inner_product,  // at::Tensor& gradout,
     at::Tensor& grad_left_edge_data, at::Tensor& grad_right_node_vectors) {
   at::Tensor dummy_tensor;
   inner_product_various_left_and_node_right<int64_t, float, true, false, false>(
-      separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
+      separate_coo_eids, dummy_tensor, separate_coo_row_indices,
       separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
-      dummy_tensor, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_idx, left_edge_data, right_node_vectors,
-      grad_inner_product, grad_left_edge_data, grad_right_node_vectors);
+      dummy_tensor, dummy_tensor, dummy_tensor, left_edge_data,
+      right_node_vectors, grad_inner_product, grad_left_edge_data,
+      grad_right_node_vectors);
   assert(0 && "Not implemented yet");
 }
 

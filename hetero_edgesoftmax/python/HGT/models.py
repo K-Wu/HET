@@ -169,6 +169,7 @@ class HET_HGTLayerHetero(nn.Module):
                     G["separate"]["unique_node_idx"]["node_idx"],
                     G["separate"]["coo"]["original"]["rel_ptr"],
                     G["separate"]["coo"]["original"]["eids"],
+                    G["separate"]["coo"]["original"]["row_idx"],
                     G["separate"]["coo"]["original"]["col_idx"],
                     attn_weight_dst_product_compact,
                     k,
@@ -184,6 +185,7 @@ class HET_HGTLayerHetero(nn.Module):
                 )
                 attn_score = B.rgnn_inner_product_edge_and_node(
                     G["separate"]["coo"]["original"]["eids"],
+                    G["separate"]["coo"]["original"]["row_idx"],
                     G["separate"]["coo"]["original"]["col_idx"],
                     attn_weight_dst_product_per_edge,
                     k,

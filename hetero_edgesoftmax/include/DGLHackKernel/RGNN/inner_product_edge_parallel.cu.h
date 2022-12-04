@@ -28,13 +28,14 @@ __global__ void inner_product_fw_kernel_edge_parallel(
         Idx edge_id = gdata.eids[eidx];
         if constexpr (RelationalFlag) {
           // Idx sum_idx = -1;
-          Idx etype = -1;
-          if constexpr (ETypeRelPtrFlag) {
-            etype = binary_search(num_relations, etypes, eidx);
-          } else {
-            etype = etypes[eidx];
-          }
           if constexpr (CompactAsOfNodeFlag) {
+            Idx etype = -1;
+            if constexpr (ETypeRelPtrFlag) {
+              etype = binary_search(num_relations, etypes, eidx);
+            } else {
+              etype = etypes[eidx];
+            }
+
             feat_src_entry_id = find_relational_compact_as_of_node_index(
                 etype, src_vid, unique_srcs_and_dests_node_indices,
                 unique_srcs_and_dests_rel_ptr);
@@ -117,7 +118,7 @@ __global__ void inner_product_bck_kernel_edge_parallel(
         Idx eid = gdata.eids[e];
         Idx dst_vid = column_indices[e];
         // Idx er_idx = -1;
-        Idx dst_vid_relational = -1;
+        // Idx dst_vid_relational = -1;
         if constexpr (!CompactAsOfNodeFlag) {
           // in this case, feat_src_offset, er_idx and el_idx are related to
           // edge id, regardless of the type of the edge
@@ -141,9 +142,9 @@ __global__ void inner_product_bck_kernel_edge_parallel(
             } else {
               etype = etypes[e];
             }
-            dst_vid_relational = find_relational_compact_as_of_node_index(
-                etype, dst_vid, unique_srcs_and_dests_rel_ptr,
-                unique_srcs_and_dests_node_indices);
+            // dst_vid_relational = find_relational_compact_as_of_node_index(
+            //     etype, dst_vid, unique_srcs_and_dests_rel_ptr,
+            //     unique_srcs_and_dests_node_indices);
             // er_idx = dst_vid_relational * num_heads + head_idx;
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
                 etype, src_vid, unique_srcs_and_dests_rel_ptr,
