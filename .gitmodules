@@ -12,7 +12,7 @@
 	url = https://tony_wukun_worker:PxXRTULrXSd7w4vAXygq@bitbucket.org/tonywuk/myhyb_dataset.git
 [submodule "third_party/sputnik"]
 	path = third_party/sputnik
-	url = git@github.com:K-Wu/sputnik_experimental.git
+	url = https://K-Wu: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@github.com/K-Wu/sputnik_experimental
 [submodule "third_party/cutlass"]
 	path = third_party/cutlass
 	url = https://github.com/NVIDIA/cutlass
