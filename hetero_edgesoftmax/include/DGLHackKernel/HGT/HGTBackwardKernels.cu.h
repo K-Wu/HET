@@ -422,7 +422,7 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
           Idx eid = gdata.eids[e];
           Idx dst_vid = column_indices[e];
           Idx edgesoftmax_sum_per_node_idx = -1;
-          Idx dst_vid_relational = -1;
+          // Idx dst_vid_relational = -1;
           Idx etype = -1;
           if constexpr (!CompactAsOfNodeFlag) {
             // in this case, message_src_offset
@@ -449,9 +449,9 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
               } else {
                 etype = etypes[e];
               }
-              dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+              // dst_vid_relational = find_relational_compact_as_of_node_index(
+              //    etype, dst_vid, unique_srcs_and_dests_rel_ptr,
+              //    unique_srcs_and_dests_node_indices);
               // edgesoftmax_sum_per_node_idx =
               //     dst_vid_relational * num_heads + head_idx;
               edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;

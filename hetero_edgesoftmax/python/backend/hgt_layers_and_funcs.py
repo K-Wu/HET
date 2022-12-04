@@ -270,10 +270,11 @@ class HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR(th.autograd.Functio
         K.hgt_full_graph_message_mean_aggregation_csr(
             incsr_row_ptr,
             incsr_col_idx,
-            incsr_eids,
             incsr_reltypes,
+            incsr_eids,
             message_per_edge,
             normalized_attn_score,
+            mu,
             new_h,
         )
 
@@ -382,13 +383,13 @@ def hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
         unnormalized_attn_score, memory_format=th.contiguous_format
     )
     edgesoftmax_sum_per_node = th.zeros(
-        graph["original"]["num_nodes"],
+        graph.get_num_nodes(),
         mu.size(1),
         dtype=message_per_edge.dtype,
         device=message_per_edge.device,
     )
     new_h = th.zeros(
-        graph["original"]["num_nodes"],
+        graph.get_num_nodes(),
         message_per_edge.size(1),
         message_per_edge.size(2),
         dtype=message_per_edge.dtype,

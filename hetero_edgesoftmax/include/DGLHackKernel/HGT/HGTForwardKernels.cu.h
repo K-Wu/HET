@@ -505,7 +505,7 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
         Idx src_id = *(column_indices + eidx);
         Idx feat_off_src = -1;
         Idx edge_id = gdata.eids[eidx];
-        Idx dst_vid_relational = -1;
+        // Idx dst_vid_relational = -1;
         Idx etype = -1;
         DType mu;
         if constexpr (RelationalFlag) {
@@ -514,9 +514,9 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
           } else {
             etype = etypes[eidx];
           }
-          dst_vid_relational = find_relational_compact_as_of_node_index(
-              etype, dst_vid, unique_srcs_and_dests_node_indices,
-              unique_srcs_and_dests_rel_ptr);
+          // dst_vid_relational = find_relational_compact_as_of_node_index(
+          //    etype, dst_vid, unique_srcs_and_dests_node_indices,
+          //    unique_srcs_and_dests_rel_ptr);
         }
         if constexpr (CompactAsOfNodeFlag) {
           if constexpr (RelationalFlag) {

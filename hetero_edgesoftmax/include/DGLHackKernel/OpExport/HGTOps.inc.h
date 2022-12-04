@@ -147,7 +147,7 @@ void _full_graph_edge_softmax_ops(
       unnormalized_attn_score.size(unnormalized_attn_score.ndimension() - 1);
   if (num_heads <= 1) {
     std::cout << "Warning: num_heads <= 1 in "
-                 "HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_"
+                 "HET::TorchExport::HGT::FwProp::IntegratedCSR::_full_graph_"
                  "edge_softmax_ops"
               << std::endl;
   }
@@ -352,7 +352,7 @@ void _full_graph_message_mean_aggregation(
   if (num_heads <= 1) {
     std::cout << "Warning: num_heads <= 1 in "
                  "HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_"
-                 "edge_softmax_ops"
+                 "message_mean_aggregation"
               << std::endl;
   }
 
@@ -451,7 +451,7 @@ void _full_graph_edge_softmax_ops(
   }
   Idx num_relations = mu.numel() / num_heads;
   gdata.num_heads = num_heads;
-  assert(gdata.num_heads == message.size(grad_mu.ndimension() - 2) &&
+  assert(gdata.num_heads == message.size(message.ndimension() - 2) &&
          "expecting message.size[-2] to be num_heads but turned out not");
   gdata.message_src_xlen =
       message.size(grad_mu.ndimension() - 1) * gdata.num_heads;

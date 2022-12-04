@@ -163,64 +163,64 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
             )
 
     # training
-    def RGAT_main_train_procedure(
-        g, model, embed_layer, labels, args, dgl_model_flag: bool
-    ):
-        device = f"cuda:0" if th.cuda.is_available() else "cpu"
-        if not dgl_model_flag:
-            g = g.to(device)
-        embed_layer = embed_layer.to(device)
-        model = model.to(device)
-        labels = labels.to(device)
-        for run in range(args.runs):
-            embed_layer.reset_parameters()
-            model.reset_parameters()
+    # def RGAT_main_train_procedure(
+    #     g, model, embed_layer, labels, args, dgl_model_flag: bool
+    # ):
+    device = f"cuda:0" if th.cuda.is_available() else "cpu"
+    if not dgl_model_flag:
+        g = g.to(device)
+    embed_layer = embed_layer.to(device)
+    model = model.to(device)
+    labels = labels.to(device)
+    for run in range(args.runs):
+        embed_layer.reset_parameters()
+        model.reset_parameters()
 
-            # optimizer
-            all_params = [*model.parameters()] + [
-                *embed_layer.parameters()
-            ]  # itertools.chain(model.parameters(), embed_layer.parameters())
-            optimizer = th.optim.Adam(all_params, lr=args.lr)
-            print(f"Run: {run + 1:02d}, ")
-            if dgl_model_flag:
-                if args.full_graph_training:
-                    RGNN_train_full_graph(
-                        model,
-                        embed_layer,
-                        labels,
-                        # device,
-                        optimizer,
-                        args,
-                    )
-                else:
-                    RGNN_train_with_sampler(
-                        model,
-                        embed_layer(),
-                        optimizer,
-                        train_loader,
-                        labels,
-                        device,
-                        args,
-                    )
-            else:
-                if not args.full_graph_training:
-                    raise NotImplementedError(
-                        "Not implemented full_graph_training in RGAT_main_procedure(dgl_model_flag == False)"
-                    )
-                HET_RGNN_train_full_graph(
-                    g,
+        # optimizer
+        all_params = [*model.parameters()] + [
+            *embed_layer.parameters()
+        ]  # itertools.chain(model.parameters(), embed_layer.parameters())
+        optimizer = th.optim.Adam(all_params, lr=args.lr)
+        print(f"Run: {run + 1:02d}, ")
+        if dgl_model_flag:
+            if args.full_graph_training:
+                RGNN_train_full_graph(
                     model,
                     embed_layer,
+                    labels,
+                    # device,
                     optimizer,
+                    args,
+                )
+            else:
+                RGNN_train_with_sampler(
+                    model,
+                    embed_layer(),
+                    optimizer,
+                    train_loader,
                     labels,
                     device,
                     args,
                 )
-            # logger.print_statistics(run)
-            # print("Final performance: ")
-            # logger.print_statistics()
+        else:
+            if not args.full_graph_training:
+                raise NotImplementedError(
+                    "Not implemented full_graph_training in RGAT_main_procedure(dgl_model_flag == False)"
+                )
+            HET_RGNN_train_full_graph(
+                g,
+                model,
+                embed_layer,
+                optimizer,
+                labels,
+                device,
+                args,
+            )
+        # logger.print_statistics(run)
+        # print("Final performance: ")
+        # logger.print_statistics()
 
-    RGAT_main_train_procedure(g, model, embed_layer, labels, args, dgl_model_flag)
+    # RGAT_main_train_procedure(g, model, embed_layer, labels, args, dgl_model_flag)
 
 
 if __name__ == "__main__":

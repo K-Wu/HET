@@ -30,11 +30,11 @@ class HET_HGTLayerHetero(nn.Module):
 
         self.in_dim = in_dim
         self.out_dim = out_dim
-        self.node_dict = mydglgraph.get_ntype_dict()
-        self.edge_dict = mydglgraph.get_etype_dict()
-        self.num_types = len(self.node_dict)
-        self.num_relations = len(self.edge_dict)
-        self.total_rel = self.num_types * self.num_relations * self.num_types
+        # self.node_dict = mydglgraph.get_ntype_dict()
+        # self.edge_dict = mydglgraph.get_etype_dict()
+        self.num_ntypes = mydglgraph.get_num_ntypes()  # len(self.node_dict)
+        self.num_relations = mydglgraph.get_num_rels()  # len(self.edge_dict)
+
         self.n_heads = n_heads
         self.d_k = out_dim // n_heads
         self.sqrt_dk = math.sqrt(self.d_k)
@@ -47,7 +47,7 @@ class HET_HGTLayerHetero(nn.Module):
         self.norms = nn.ModuleList()
         self.use_norm = use_norm
 
-        for t in range(self.num_types):
+        for t in range(self.num_ntypes):
             self.k_linears.append(nn.Linear(in_dim, out_dim))
             self.q_linears.append(nn.Linear(in_dim, out_dim))
             self.v_linears.append(nn.Linear(in_dim, out_dim))
@@ -62,38 +62,62 @@ class HET_HGTLayerHetero(nn.Module):
         self.relation_msg = nn.Parameter(
             torch.Tensor(self.num_relations, n_heads, self.d_k, self.d_k)
         )
-        self.skip = nn.Parameter(torch.ones(self.num_types))
+        self.skip = nn.Parameter(torch.ones(self.num_ntypes))
         self.drop = nn.Dropout(dropout)
 
+    def reset_parameters(self):
         nn.init.xavier_uniform_(self.relation_att)
         nn.init.xavier_uniform_(self.relation_msg)
+        for module in self.k_linears:
+            module.reset_parameters()
+        for module in self.q_linears:
+            module.reset_parameters()
+        for module in self.v_linears:
+            module.reset_parameters()
+        for module in self.a_linears:
+            module.reset_parameters()
 
     def forward(self, G, h):
         # G is MyDGLGraph, h is node features with shape (num_nodes, in_dim).
         # We assume h is made up of one continuous memory region, where each node type occupies one continuous subregion.
         # TODO: add node type offset to G.
 
-        node_dict, edge_dict = self.node_dict, self.edge_dict
+        # node_dict, edge_dict = self.node_dict, self.edge_dict
 
-        src_nodetypes = set()
-        dest_nodetypes = set()
-        for srctype, etype, dsttype in G.canonical_etypes:
-            assert (
-                srctype in G.ntypes
-            ), "srctype not in G.ntypes. Maybe ambiguity in node types?"
-            assert (
-                dsttype in G.ntypes
-            ), "dsttype not in G.ntypes. Maybe ambiguity in node types?"
-            src_nodetypes.add(srctype)
-            dest_nodetypes.add(dsttype)
+        # src_nodetypes = set()
+        # dest_nodetypes = set()
+        # for srctype, etype, dsttype in G.canonical_etypes:
+        #     assert (
+        #         srctype in G.ntypes
+        #     ), "srctype not in G.ntypes. Maybe ambiguity in node types?"
+        #     assert (
+        #         dsttype in G.ntypes
+        #     ), "dsttype not in G.ntypes. Maybe ambiguity in node types?"
+        #     src_nodetypes.add(srctype)
+        #     dest_nodetypes.add(dsttype)
 
-        k = torch.zeros((G.number_of_nodes(), self.n_heads, self.d_k), device=h.device)
-        q = torch.zeros((G.number_of_nodes(), self.n_heads, self.d_k), device=h.device)
-        v = torch.zeros((G.number_of_nodes(), self.n_heads, self.d_k), device=h.device)
+        src_nodetypes = list(range(G.get_num_ntypes()))
+        dest_nodetypes = list(range(G.get_num_ntypes()))
+
+        k = torch.empty(
+            (G.get_num_nodes(), self.n_heads, self.d_k),
+            device=h.device,
+            memory_format=torch.contiguous_format,
+        )
+        q = torch.empty(
+            (G.get_num_nodes(), self.n_heads, self.d_k),
+            device=h.device,
+            memory_format=torch.contiguous_format,
+        )
+        v = torch.empty(
+            (G.get_num_nodes(), self.n_heads, self.d_k),
+            device=h.device,
+            memory_format=torch.contiguous_format,
+        )
 
         for srctype in src_nodetypes:
-            k_linear = self.k_linears[node_dict[srctype]]
-            v_linear = self.v_linears[node_dict[srctype]]
+            k_linear = self.k_linears[srctype]  # [node_dict[srctype]]
+            v_linear = self.v_linears[srctype]  # [node_dict[srctype]]
             k[
                 G["original"]["node_type_offsets"][srctype] : G["original"][
                     "node_type_offsets"
@@ -122,7 +146,7 @@ class HET_HGTLayerHetero(nn.Module):
             )
 
         for dsttype in dest_nodetypes:
-            q_linear = self.q_linears[node_dict[dsttype]]
+            q_linear = self.q_linears[dsttype]  # [node_dict[dsttype]]
             q[
                 G["original"]["node_type_offsets"][dsttype] : G["original"][
                     "node_type_offsets"
@@ -159,6 +183,7 @@ class HET_HGTLayerHetero(nn.Module):
                         G["separate"]["unique_node_idx"]["node_idx"],
                         G["separate"]["coo"]["original"]["rel_ptr"],
                         G["separate"]["coo"]["original"]["col_idx"],
+                        G["separate"]["coo"]["original"]["eids"],
                         self.relation_att,
                         q,
                         False,
@@ -205,13 +230,13 @@ class HET_HGTLayerHetero(nn.Module):
             # g["separate"]["unique_node_idx"]["node_idx"],
         )  # shape (num_nodes, n_heads, d_k)
 
-        new_h_normed = torch.zeros((G.number_of_nodes(), self.out_dim), device=h.device)
+        new_h_normed = torch.zeros((G.get_num_nodes(), self.out_dim), device=h.device)
         for dsttype in dest_nodetypes:
             """
             Step 3: Target-specific Aggregation
             x = norm( W[node_type] * gelu( Agg(x) ) + x )
             """
-            n_id = node_dict[dsttype]
+            n_id = dsttype
             alpha = torch.sigmoid(self.skip[n_id])
 
             trans_out = self.drop(
@@ -223,7 +248,9 @@ class HET_HGTLayerHetero(nn.Module):
                     ]
                 )
             )
-            trans_out = trans_out * alpha  # + h[ntype] * (1-alpha) ?
+            trans_out = (trans_out * alpha).reshape(
+                -1, self.out_dim
+            )  # + h[ntype] * (1-alpha) ?
             if self.use_norm:
                 new_h_normed[
                     G["original"]["node_type_offsets"][dsttype] : G["original"][
@@ -269,6 +296,10 @@ class HET_HGT_DGLHetero(nn.Module):
         # self.layer1 = HET_HGTLayerHetero(
         #    h_dim, out_dim, mydglgraph, n_heads=n_heads, dropout=dropout
         # )
+
+    def reset_parameters(self):
+        self.layer0.reset_parameters()
+        # self.layer1.reset_parameters()
 
     def forward(self, G, h):
         h = self.layer0(G, h)

@@ -207,16 +207,18 @@ void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
     at::Tensor& unique_srcs_and_dests_rel_ptr,
     at::Tensor& unique_srcs_and_dests_node_indices,
     at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_node_indices,
-    at::Tensor& weight, at::Tensor& node_feat, at::Tensor& ret,
-    bool InputNumHeadOneFlag) {
+    at::Tensor& separate_coo_eids, at::Tensor& weight, at::Tensor& node_feat,
+    at::Tensor& ret, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
     _RelationalMatMul_separatecoo<16, true, true, false, true>(
-        dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices, weight, node_feat, ret);
+        separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
+        unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+        weight, node_feat, ret);
   } else {
     _RelationalMatMul_separatecoo<16, true, true, false, true>(
-        dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
+        unique_srcs_and_dests_rel_ptr, separate_coo_node_indices,
+        separate_coo_eids, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weight, node_feat, ret);
   }
 }
@@ -284,7 +286,6 @@ void inner_product_various_left_and_node_right(
 
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
-    assert(0 && "Not implemented yet");
     // separate coo
     gdata.eids = separate_coo_eids.data_ptr<Idx>();
     int64_t num_edges = separate_coo_row_indices.numel();
@@ -632,20 +633,21 @@ void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
     at::Tensor& unique_srcs_and_dests_rel_ptr,
     at::Tensor& unique_srcs_and_dests_node_indices,
     at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_node_indices,
-    at::Tensor& weight_transposed, at::Tensor& node_feat, at::Tensor& ret,
-    at::Tensor& gradout, at::Tensor& grad_weights, at::Tensor& grad_node_feat,
+    at::Tensor& separate_coo_eids, at::Tensor& weight_transposed,
+    at::Tensor& node_feat, at::Tensor& ret, at::Tensor& gradout,
+    at::Tensor& grad_weights, at::Tensor& grad_node_feat,
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
     _BackwardRelationalMatMul_separatecoo<16, true, true, false, true>(
-        dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices, weight_transposed, node_feat,
-        gradout, grad_node_feat, grad_weights);
+        separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
+        unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+        weight_transposed, node_feat, gradout, grad_node_feat, grad_weights);
   } else {
     _BackwardRelationalMatMul_separatecoo<16, true, true, false, false>(
-        dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices, weight_transposed, node_feat,
-        gradout, grad_node_feat, grad_weights);
+        separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
+        unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+        weight_transposed, node_feat, gradout, grad_node_feat, grad_weights);
   }
 }
 
@@ -703,7 +705,6 @@ void inner_product_various_left_and_node_right(
 
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
-    assert(0 && "Not implemented yet");
     // separate coo
     gdata.eids = separate_coo_eids.data_ptr<Idx>();
     int64_t num_edges = separate_coo_row_indices.numel();
@@ -748,7 +749,6 @@ void inner_product_node_compact_and_node_separatecoo(
       unique_srcs_and_dests_node_idx, left_node_compact_data,
       right_node_vectors, grad_inner_product, grad_left_node_compact_data,
       grad_right_node_vectors);
-  assert(0 && "Not implemented yet");
 }
 
 void inner_product_edge_and_node_separatecoo(
@@ -764,7 +764,6 @@ void inner_product_edge_and_node_separatecoo(
       dummy_tensor, dummy_tensor, dummy_tensor, left_edge_data,
       right_node_vectors, grad_inner_product, grad_left_edge_data,
       grad_right_node_vectors);
-  assert(0 && "Not implemented yet");
 }
 
 }  // namespace BckProp

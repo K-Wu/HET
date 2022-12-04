@@ -251,6 +251,7 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
         unique_srcs_and_dests_node_idx,
         separate_coo_rel_ptr,
         separate_coo_node_indices,
+        separate_coo_eids,
         weight,
         node_feat,
         ret,
@@ -261,6 +262,7 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
             unique_srcs_and_dests_node_idx,
             separate_coo_rel_ptr,
             separate_coo_node_indices,
+            separate_coo_eids,
             weight,
             node_feat,
             ret,
@@ -271,6 +273,7 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
             unique_srcs_and_dests_node_idx,
             separate_coo_rel_ptr,
             separate_coo_node_indices,
+            separate_coo_eids,
             weight,
             node_feat,
             ret,
@@ -285,6 +288,7 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
             unique_srcs_and_dests_node_idx,
             separate_coo_rel_ptr,
             separate_coo_node_indices,
+            separate_coo_eids,
             weight,
             node_feat,
             ret,
@@ -297,6 +301,7 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
             unique_srcs_and_dests_node_idx,
             separate_coo_rel_ptr,
             separate_coo_node_indices,
+            separate_coo_eids,
             th.transpose(weight, 2, 3).contiguous(),
             node_feat,
             ret,
@@ -306,7 +311,7 @@ class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
             input_num_head_one_flag,
         )
         # fmt: off
-        return None, None, None, None, grad_weight, grad_node_feat, None, None
+        return None, None, None, None, None,  grad_weight, grad_node_feat, None, None
         # fmt: on
 
 
@@ -315,6 +320,7 @@ def rgnn_relational_matmul_compact_as_of_node_single_ended(
     unique_srcs_and_dests_node_indices,
     separate_coo_rel_ptr,
     separate_coo_node_indices,
+    separate_coo_eids,
     weight,
     node_feat,
     input_num_head_one_flag,
@@ -330,6 +336,7 @@ def rgnn_relational_matmul_compact_as_of_node_single_ended(
         unique_srcs_and_dests_node_indices,
         separate_coo_rel_ptr,
         separate_coo_node_indices,
+        separate_coo_eids,
         weight,
         node_feat,
         ret,
@@ -403,13 +410,12 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
             separate_coo_col_indices,
             left_node_compact_data,
             right_node_vectors,
-            ret,
             gradout.contiguous(),
             grad_left_node_compact_data,
             grad_right_node_vectors,
         )
         # fmt: off
-        return None, None, None, None, None, grad_left_node_compact_data, grad_right_node_vectors, None
+        return None, None, None, None, None,  None, grad_left_node_compact_data, grad_right_node_vectors, None
         # fmt: on
 
 
@@ -425,11 +431,7 @@ def rgnn_inner_product_node_compact_and_node(
 ):
     # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
     ret = th.zeros(
-        [
-            separate_coo_rel_ptr[-1],
-            right_node_vectors.size(1),
-            right_node_vectors.size(2),
-        ],
+        [separate_coo_rel_ptr[-1], right_node_vectors.size(1)],
         dtype=right_node_vectors.dtype,
         device=right_node_vectors.device,
         requires_grad=True,
@@ -517,11 +519,7 @@ def rgnn_inner_product_edge_and_node(
 ):
     # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
     ret = th.zeros(
-        [
-            separate_coo_eids.numel(),
-            right_node_vectors.size(1),
-            right_node_vectors.size(2),
-        ],
+        [separate_coo_eids.numel(), right_node_vectors.size(1)],
         dtype=right_node_vectors.dtype,
         device=right_node_vectors.device,
         requires_grad=True,
