@@ -3,8 +3,9 @@
 #include <c10/cuda/CUDAStream.h>
 #include <torch/extension.h>
 #include <torch/library.h>
+#include "DGLHackKernel/HGT/HGTBackwardExperimental.cu.h"
 #include "DGLHackKernel/HGT/HGTBackwardKernels.cu.h"
-#include "DGLHackKernel/HGT/HGTExperimental.cu.h"
+#include "DGLHackKernel/HGT/HGTForwardExperimental.cu.h"
 #include "DGLHackKernel/HGT/HGTForwardKernels.cu.h"
 #include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.h"
 #include "EdgeSoftmax_1/EdgeSoftmaxCSR.h"
@@ -87,7 +88,8 @@ void _full_graph_message_mean_aggregation(at::Tensor& incsr_rowptr,
   int nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
   const dim3 nthrs(nthrs_x, nthrs_y);
   const dim3 nblks(nblks_x, nblks_y);
-
+  printf("nblks_x=%d, nblks_y=%d, nthrs_x=%d, nthrs_y=%d\n", nblks_x, nblks_y,
+         nthrs_x, nthrs_y);
   _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum<
       Idx, DType, false, true, false, false, UseMuAppliedAttnScoreSwitch>
       <<<nthrs, nblks, 0, stream>>>(
@@ -232,7 +234,7 @@ namespace IntegratedCSR {
 // from HGTBackPropGradientSMAFusion in
 // [[hetero_edgesoftmax/include/DGLHackKernel/OpPrototyping/HGTProtoOps.h]]
 template </*int XPU, */ typename Idx, typename DType>
-void HGTBackPropGradientSMAFusion(
+void HGTBackPropGradientSMAFusionExperimental(
     // GraphRef graph,
     at::Tensor& csr_rowptr, at::Tensor& csr_col_idx, at::Tensor& csr_eids,
     at::Tensor& csr_reltypes, at::Tensor& grad_sm_first_stage,

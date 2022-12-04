@@ -400,13 +400,13 @@ def RGCN_main_procedure(args, g, model, feats):
     print()
 
     print(
-        "Mean forward time: {:4f}".format(
-            np.mean(forward_time[len(forward_time) // 4 :])
+        "Mean forward time: {:4f} ms".format(
+            np.mean(forward_time[len(forward_time) // 4 :]) * 1000
         )
     )
     print(
-        "Mean backward time: {:4f}".format(
-            np.mean(backward_time[len(backward_time) // 4 :])
+        "Mean backward time: {:4f} ms".format(
+            np.mean(backward_time[len(backward_time) // 4 :]) * 1000
         )
     )
 
