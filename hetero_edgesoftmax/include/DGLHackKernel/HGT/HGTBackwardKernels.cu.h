@@ -343,3 +343,158 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
     }
   }
 }
+
+// fusing kernel
+// _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel and
+// _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel Corresponding python autograd
+// function HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR in
+// [[hetero_edgesoftmax/python/backend/hgt_layers_and_funcs.py]]
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag, bool ETypeRelPtrFlag,
+          int FwdOutputMuAppliedAttnScoreSwitch>
+__global__ void _hgtAttnAndMessageSrcFusedBckKernel(
+    BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreSwitch>
+        gdata,
+    DType* grad_message_src, const Idx* row_offsets, const Idx* column_indices,
+    const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+  if constexpr (CompactAsOfNodeFlag) {
+    CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(CompactAsOfNodeFlag,
+                                      "not implemented yet");
+  }
+  Idx num_heads = gdata.num_heads;  // originally e_xlen
+  Idx hidden_xlen = gdata.message_src_xlen / num_heads;
+  for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
+    Idx start_off = row_offsets[src_vid];
+    Idx end_off = row_offsets[src_vid + 1];
+    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
+         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
+      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
+           feat_idx += blockDim.y) {
+        DType s = 0.;
+        DType s_message_src = 0.;
+        Idx message_src_offset = -1;
+        Idx message_src_idx = -1;
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          // in this case, message_src_offset is the same regardless of which
+          // outgoing edge we deal with
+          message_src_offset = src_vid * gdata.message_src_xlen +
+                               head_idx * hidden_xlen + feat_idx;
+          message_src_idx =
+              (src_vid * num_heads + head_idx) * hidden_xlen + feat_idx;
+        }
+        for (Idx e = start_off; e < end_off; ++e) {
+          Idx edge_offset = gdata.eids[e] * num_heads + head_idx;
+          Idx eid = gdata.eids[e];
+          Idx dst_vid = column_indices[e];
+          Idx edgesoftmax_sum_per_node_idx = -1;
+          Idx dst_vid_relational = -1;
+          Idx etype = -1;
+          if constexpr (!CompactAsOfNodeFlag) {
+            // in this case, message_src_offset
+            // and message_src_idx are related to edge id, regardless of the
+            // type of the edge
+            // edgesoftmax_sum_per_node_idx is still one (num_heads,) vector per
+            // destination node
+            message_src_offset = eid * gdata.message_src_xlen +
+                                 head_idx * hidden_xlen + feat_idx;
+            edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
+            message_src_idx =
+                (eid * num_heads + head_idx) * hidden_xlen + feat_idx;
+          } else {  // CompactAsOfNodeFlag
+            if constexpr (!RelationalFlag) {
+              edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
+            } else {
+              // in this case, edgesoftmax_sum_per_node_idx (sum's index) is
+              // related to (relation, unique node index) message_src_idx is
+              // related to (relation, unique node index) message_src_offset is
+              // related to (relation, unique node index) Idx etype = etypes[e];
+
+              if constexpr (ETypeRelPtrFlag) {
+                etype = binary_search(num_relations, etypes, e);
+              } else {
+                etype = etypes[e];
+              }
+              dst_vid_relational = find_relational_compact_as_of_node_index(
+                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              // edgesoftmax_sum_per_node_idx =
+              //     dst_vid_relational * num_heads + head_idx;
+              edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
+              Idx src_vid_relational = find_relational_compact_as_of_node_index(
+                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              message_src_idx =
+                  (src_vid_relational * num_heads + head_idx) * hidden_xlen +
+                  feat_idx;
+              message_src_offset = src_vid_relational * gdata.message_src_xlen +
+                                   head_idx * hidden_xlen + feat_idx;
+            }
+          }
+          Idx dst_out_offset = dst_vid * gdata.message_src_xlen +
+                               head_idx * hidden_xlen + feat_idx;
+
+          DType mu;
+          if constexpr (RelationalFlag) {
+            mu = gdata.mu[etype * num_heads + head_idx];
+          } else {
+            mu = gdata.mu[head_idx];
+          }
+
+          DType normalized_attn_score;
+          if constexpr (FwdOutputMuAppliedAttnScoreSwitch == 1) {
+            normalized_attn_score =
+                gdata.mu_softmax_applied_unnormalized_attn_score[edge_offset] /
+                gdata.edgesoftmax_sum_per_node[edgesoftmax_sum_per_node_idx];
+          } else if constexpr (FwdOutputMuAppliedAttnScoreSwitch == 0) {
+            normalized_attn_score =
+                expf(gdata.unnormalized_attn_score[edge_offset] * mu) /
+                gdata.edgesoftmax_sum_per_node[edgesoftmax_sum_per_node_idx];
+          } else if constexpr (FwdOutputMuAppliedAttnScoreSwitch == 2) {
+            normalized_attn_score = gdata.normalized_attn_score[edge_offset];
+          } else {
+            CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                FwdOutputMuAppliedAttnScoreSwitch != 0 &&
+                    FwdOutputMuAppliedAttnScoreSwitch != 1 &&
+                    FwdOutputMuAppliedAttnScoreSwitch != 2,
+                "FwdOutputMuAppliedAttnScoreSwitch must be 0, 1 or 2");
+          }
+          DType grad_for_this_feat_idx =
+              gdata.grad_out[dst_out_offset] *
+              (gdata.message_src[message_src_offset] -
+               gdata.out[dst_out_offset]) *
+              normalized_attn_score;
+          // el idx scheme could be used for message (only item idx, not the
+          // feature idx scheme) exp idx scheme could be used for attn_score
+          // if (RelationalFlag){
+          //   atomicAdd(gdata.grad_mu + etype,
+          //   grad_for_this_feat_idx*gdata.unnormalized_attn_score[edge_offset]);
+          // }
+
+          s += grad_for_this_feat_idx * mu;
+          if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
+            atomicAdd(gdata.grad_attn_score + edge_offset,
+                      grad_for_this_feat_idx * mu);
+            atomicAdd(grad_message_src + message_src_offset,
+                      normalized_attn_score *
+                          gdata.grad_out[dst_vid * gdata.message_src_xlen +
+                                         head_idx * hidden_xlen + feat_idx]);
+          } else {
+            s_message_src += normalized_attn_score *
+                             gdata.grad_out[dst_vid * gdata.message_src_xlen +
+                                            head_idx * hidden_xlen + feat_idx];
+          }
+
+          atomicAdd(gdata.grad_mu + etype * num_heads + head_idx,
+                    grad_for_this_feat_idx *
+                        gdata.unnormalized_attn_score[edge_offset]);
+        }
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          atomicAdd(gdata.grad_attn_score + message_src_idx, s);
+          grad_message_src[message_src_offset] = s_message_src;
+        }
+      }
+    }
+  }
+}

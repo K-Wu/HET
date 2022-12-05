@@ -329,6 +329,94 @@ void HGTBackPropGradientSMAFusionExperimental(
   //           << " ms" << std::endl;
 }
 
+template <typename Idx, typename DType,
+          int AttnScoreUseMuAppliedAttnScoreSwitch>
+void _full_graph_message_mean_aggregation_and_edge_softmax(
+    at::Tensor& outcsr_rowptr, at::Tensor& outcsr_col_idx,
+    at::Tensor& outcsr_reltypes, at::Tensor& outcsr_eids, at::Tensor& message,
+    at::Tensor& edgesoftmax_sum_per_node, at::Tensor& unnormalized_attn_score,
+    at::Tensor& mu, at::Tensor& mu_softmax_applied_unnormalized_attn_score,
+    at::Tensor& normalized_attn_score, at::Tensor& out, at::Tensor& gradout,
+    at::Tensor& grad_message, at::Tensor& grad_mu) {
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
+  const Idx MAX_NBLKS = 65535;
+  const Idx MAX_NTHRS = 1024;
+  // preparing gdata_attn
+  BackwardHGTAttnScoreData<Idx, DType, AttnScoreUseMuAppliedAttnScoreSwitch>
+      gdata_attn;
+  Idx num_heads = grad_attn_score.size(grad_attn_score.ndimension() - 1);
+  if (num_heads <= 1) {
+    std::cout << "Warning: num_heads <= 1 in "
+                 "HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_"
+                 "edge_softmax_ops"
+              << std::endl;
+  }
+  Idx num_relations = mu.numel() / num_heads;
+  // FIXME: remove repeated struct members
+  gdata_attn.num_heads = num_heads;
+  assert(gdata_attn.num_heads == message.size(message.ndimension() - 2) &&
+         "expecting message.size[-2] to be num_heads but turned out not");
+  gdata_attn.message_src_xlen =
+      message.size(grad_mu.ndimension() - 1) * gdata_attn.num_heads;
+  gdata_attn.message_src = message.data_ptr<DType>();
+  gdata_attn.eids = outcsr_eids.data_ptr<Idx>();
+  gdata_attn.grad_attn_score = grad_attn_score.data_ptr<DType>();
+  gdata_attn.unnormalized_attn_score =
+      unnormalized_attn_score.data_ptr<DType>();
+
+  gdata_attn.out = out.data_ptr<DType>();
+  gdata_attn.grad_out = gradout.data_ptr<DType>();
+  gdata_attn.mu = mu.data_ptr<DType>();
+  gdata_attn.grad_mu = grad_mu.data_ptr<DType>();
+  if constexpr (AttnScoreUseMuAppliedAttnScoreSwitch == 0) {
+    gdata_attn.edgesoftmax_sum_per_node =
+        edgesoftmax_sum_per_node.data_ptr<DType>();
+  } else if constexpr (AttnScoreUseMuAppliedAttnScoreSwitch == 1) {
+    gdata_attn.edgesoftmax_sum_per_node =
+        edgesoftmax_sum_per_node.data_ptr<DType>();
+    gdata_attn.mu_softmax_applied_unnormalized_attn_score =
+        edgesoftmax_sum_per_node.data_ptr<DType>();
+  } else if constexpr (AttnScoreUseMuAppliedAttnScoreSwitch == 2) {
+    gdata_attn.normalized_attn_score = normalized_attn_score.data_ptr<DType>();
+  } else {
+    assert(false && "AttnScoreUseMuAppliedAttnScoreSwitch must be 0, 1 or 2");
+  }
+
+  // preparing gdata_msg
+  // BackwardHGTMessageData<Idx, DType, MessageUseMuAppliedAttnScoreSwitch>
+  // gdata_msg; there are only one additional field to attn_score's struct
+  // needed, i.e., gdata_msg.grad_message_src = grad_message.data_ptr<DType>();
+  // Meanwhile, gdata_msg.grad_out is the gradient of output node feature and
+  // thus identical with gdata_attn.gradout if constexpr
+  // (MessageUseMuAppliedAttnScoreSwitch < 0 ||
+  //               MessageUseMuAppliedAttnScoreSwitch > 2) {
+  //   assert(false && "MessageUseMuAppliedAttnScoreSwitch must be 0, 1 or 2");
+  // }
+
+  // preparing kernel launch configuration
+  int nthrs_x = SeastarFindNumThreads(num_heads, 64);
+  int nthrs_y = SeastarFindNumThreads(
+      gdata.message_src_xlen,
+      MAX_NTHRS / nthrs_x);  // NB: message_src_xlen is the total dimension
+                             // whereas each head gets message_src_xlen //
+                             // num_heads number of elements
+  int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
+  int nblks_x = 1;
+  int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
+  const dim3 nthrs(nthrs_x, nthrs_y);
+  const dim3 nblks(nblks_x, nblks_y);
+
+  // gdata_msg.grad_message_src = grad_message.data_ptr<DType>();
+  _hgtAttnAndMessageSrcFusedBckKernel<Idx, DType, false, true, false,
+                                      AttnScoreUseMuAppliedAttnScoreSwitch>
+      <<<nblks, nthrs, 0, stream>>>(
+          gdata, grad_message.data_ptr<DType>(), outcsr_row_ptr.data_ptr<Idx>(),
+          outcsr_col_idx.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
+          outcsr_num_rows,
+          /*no need when !CompactAsOfNodeFlag*/ nullptr,
+          /*no need when !CompactAsOfNodeFlag*/ nullptr, num_relations);
+}
+
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
 void _full_graph_message_mean_aggregation(
     at::Tensor& outcsr_rowptr, at::Tensor& outcsr_col_idx,
