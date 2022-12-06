@@ -31,7 +31,6 @@ GRAPHILER_HETERO_DATASET = [
     "bgs",
     "biokg",
     "am",
-    "mag",
     "wikikg2",
     "mag",
     "fb15k",

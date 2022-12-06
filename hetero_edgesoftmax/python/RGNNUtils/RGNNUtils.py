@@ -3,6 +3,8 @@ from typing import Union
 import torch as th
 import torch.nn.functional as F
 from torch import nn
+
+# import torch.jit
 from .. import utils
 
 from dgl.heterograph import DGLBlock
@@ -106,11 +108,15 @@ def HET_RGNN_train_full_graph(
     forward_time = []
     backward_time = []
     print("start training...")
+    # node_embed = node_embed_layer()
+    # model = torch.jit.trace(model, (g, node_embed))
     for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
+        # model.eval()
         model.train()
         model.requires_grad_(True)
+        # node_embed_layer.eval()
         node_embed_layer.train()
         node_embed_layer.requires_grad_(True)
 
@@ -124,16 +130,17 @@ def HET_RGNN_train_full_graph(
         node_embed = node_embed_layer()
 
         optimizer.zero_grad()
+        th.cuda.synchronize()
         forward_prop_start = th.cuda.Event(enable_timing=True)
         forward_prop_end = th.cuda.Event(enable_timing=True)
         forward_prop_start.record()
         logits = model(g, node_embed)
         # logits = model(emb, blocks)
+        forward_prop_end.record()
+        th.cuda.synchronize()
 
         y_hat = logits.log_softmax(dim=-1)
         loss = F.nll_loss(y_hat, labels)
-        forward_prop_end.record()
-        th.cuda.synchronize()
 
         backward_prop_start = th.cuda.Event(enable_timing=True)
         backward_prop_end = th.cuda.Event(enable_timing=True)
@@ -209,6 +216,8 @@ def RGNN_train_full_graph(
         forward_prop_end = th.cuda.Event(enable_timing=True)
         forward_prop_start.record()
         logits = model(emb)
+        forward_prop_end.record()
+        th.cuda.synchronize()
         # logits = model(emb, blocks)
         loss = None
         for category in logits:
@@ -217,8 +226,6 @@ def RGNN_train_full_graph(
                 loss = F.nll_loss(y_hat, lbl)
             else:
                 loss += F.nll_loss(y_hat, lbl)
-        forward_prop_end.record()
-        th.cuda.synchronize()
 
         backward_prop_start = th.cuda.Event(enable_timing=True)
         backward_prop_end = th.cuda.Event(enable_timing=True)

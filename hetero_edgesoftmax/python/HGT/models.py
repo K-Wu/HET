@@ -4,6 +4,7 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.jit
 
 # import dgl.function as fn
 # from dgl.nn.functional import edge_softmax
@@ -77,7 +78,8 @@ class HET_HGTLayerHetero(nn.Module):
         for module in self.a_linears:
             module.reset_parameters()
 
-    def forward(self, G, h):
+    # @torch.jit.script_method
+    def forward(self, G: utils.MyDGLGraph, h):
         # G is MyDGLGraph, h is node features with shape (num_nodes, in_dim).
         # We assume h is made up of one continuous memory region, where each node type occupies one continuous subregion.
         # TODO: add node type offset to G.
@@ -230,7 +232,7 @@ class HET_HGTLayerHetero(nn.Module):
             # g["separate"]["unique_node_idx"]["node_idx"],
         )  # shape (num_nodes, n_heads, d_k)
 
-        new_h_normed = torch.zeros((G.get_num_nodes(), self.out_dim), device=h.device)
+        new_h_normed = torch.empty((G.get_num_nodes(), self.out_dim), device=h.device)
         for dsttype in dest_nodetypes:
             """
             Step 3: Target-specific Aggregation

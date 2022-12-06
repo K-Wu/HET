@@ -45,21 +45,7 @@ class MyDGLGraph:
         self.graph_data = dict()
 
     @functools.cache
-    def get_num_nodes(self):
-        if "row_ptr" in self.graph_data["original"]:
-            return max(
-                self.graph_data["original"]["row_ptr"].numel() - 1,
-                int(self.graph_data["original"]["col_idx"].max()) + 1,
-            )
-        else:
-            assert "row_idx" in self.graph_data["original"], "row_idx not exists"
-            assert "col_idx" in self.graph_data["original"], "col_idx not exists"
-            return max(
-                int(self.graph_data["original"]["row_idx"].max()) + 1,
-                int(self.graph_data["original"]["col_idx"].max()) + 1,
-            )
-
-    @functools.cache
+    @torch.no_grad()
     def get_num_nodes(self):
         assert "original" in self.graph_data
         if "node_type_offsets" in self.graph_data["original"]:
@@ -85,6 +71,7 @@ class MyDGLGraph:
             return 1
 
     @functools.cache
+    @torch.no_grad()
     def get_num_rels(self):
         result = int(self.graph_data["original"]["rel_types"].max().item()) + 1
         if result <= 1:

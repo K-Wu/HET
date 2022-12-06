@@ -502,13 +502,12 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
             separate_coo_col_indices,
             left_edge_data,
             right_node_vectors,
-            ret,
             gradout.contiguous(),
             grad_left_edge_data,
             grad_right_node_vectors,
         )
         # fmt: off
-        return None, None, grad_left_edge_data, grad_right_node_vectors, None
+        return None, None, None, grad_left_edge_data, grad_right_node_vectors, None
         # fmt: on
 
 

@@ -277,12 +277,27 @@ void inner_product_various_left_and_node_right(
     const dim3 nthrs2(nthrs_x, nthrs_y);
     const dim3 nblks2(nblks_x, nblks_y);
 
+    Idx* incsr_row_ptr_data_ptr =
+        incsr_row_ptr.numel() > 0 ? incsr_row_ptr.data_ptr<Idx>() : nullptr;
+    Idx* incsr_col_idx_data_ptr =
+        incsr_col_idx.numel() > 0 ? incsr_col_idx.data_ptr<Idx>() : nullptr;
+    Idx* incsr_reltypes_data_ptr =
+        incsr_reltypes.numel() > 0 ? incsr_reltypes.data_ptr<Idx>() : nullptr;
+    Idx* unique_srcs_and_dests_rel_ptr_data_ptr =
+        unique_srcs_and_dests_rel_ptr.numel() > 0
+            ? unique_srcs_and_dests_rel_ptr.data_ptr<Idx>()
+            : nullptr;
+    Idx* unique_srcs_and_dests_node_indices_data_ptr =
+        unique_srcs_and_dests_node_indices.numel() > 0
+            ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
+            : nullptr;
+
     inner_product_fw_kernel<Idx, DType, CompactAsOfNodeFlag, true, false, false>
         <<<nblks2, nthrs2, 0, stream>>>(
-            gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
-            incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
-            unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
-            unique_srcs_and_dests_node_indices.data_ptr<Idx>());
+            gdata, incsr_row_ptr_data_ptr, incsr_col_idx_data_ptr,
+            incsr_reltypes_data_ptr, incsr_num_rows,
+            unique_srcs_and_dests_rel_ptr_data_ptr,
+            unique_srcs_and_dests_node_indices_data_ptr);
 
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
@@ -298,14 +313,33 @@ void inner_product_various_left_and_node_right(
     int nblks_y = std::min(num_edges, MAX_NBLKS);
     const dim3 nthrs(nthrs_x, nthrs_y);
     const dim3 nblks(nblks_x, nblks_y);
+    Idx* separate_coo_row_indices_data_ptr =
+        separate_coo_row_indices.numel() > 0
+            ? separate_coo_row_indices.data_ptr<Idx>()
+            : nullptr;
+    Idx* separate_coo_col_indices_data_ptr =
+        separate_coo_col_indices.numel() > 0
+            ? separate_coo_col_indices.data_ptr<Idx>()
+            : nullptr;
+    Idx* separate_coo_rel_ptrs_data_ptr =
+        separate_coo_rel_ptrs.numel() > 0
+            ? separate_coo_rel_ptrs.data_ptr<Idx>()
+            : nullptr;
+    Idx* unique_srcs_and_dests_rel_ptr_data_ptr =
+        unique_srcs_and_dests_rel_ptr.numel() > 0
+            ? unique_srcs_and_dests_rel_ptr.data_ptr<Idx>()
+            : nullptr;
+    Idx* unique_srcs_and_dests_node_indices_data_ptr =
+        unique_srcs_and_dests_node_indices.numel() > 0
+            ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
+            : nullptr;
     inner_product_fw_kernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag, true,
                                           true, false>
         <<<nblks, nthrs, 0, stream>>>(
-            gdata, separate_coo_row_indices.data_ptr<Idx>(),
-            separate_coo_col_indices.data_ptr<Idx>(),
-            separate_coo_rel_ptrs.data_ptr<Idx>(), num_edges,
-            unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
-            unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
+            gdata, separate_coo_row_indices_data_ptr,
+            separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
+            num_edges, unique_srcs_and_dests_rel_ptr_data_ptr,
+            unique_srcs_and_dests_node_indices_data_ptr, num_relations);
 
   } else {
     assert(0 && "Not implemented");
@@ -717,15 +751,34 @@ void inner_product_various_left_and_node_right(
     int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
     const dim3 nthrs(nthrs_x, nthrs_y);
     const dim3 nblks(nblks_x, nblks_y);
+    Idx* separate_coo_row_indices_data_ptr =
+        separate_coo_row_indices.numel() > 0
+            ? separate_coo_row_indices.data_ptr<Idx>()
+            : nullptr;
+    Idx* separate_coo_col_indices_data_ptr =
+        separate_coo_col_indices.numel() > 0
+            ? separate_coo_col_indices.data_ptr<Idx>()
+            : nullptr;
+    Idx* separate_coo_rel_ptrs_data_ptr =
+        separate_coo_rel_ptrs.numel() > 0
+            ? separate_coo_rel_ptrs.data_ptr<Idx>()
+            : nullptr;
+    Idx* unique_srcs_and_dests_rel_ptr_data_ptr =
+        unique_srcs_and_dests_rel_ptr.numel() > 0
+            ? unique_srcs_and_dests_rel_ptr.data_ptr<Idx>()
+            : nullptr;
+    Idx* unique_srcs_and_dests_node_indices_data_ptr =
+        unique_srcs_and_dests_node_indices.numel() > 0
+            ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
+            : nullptr;
 
     inner_product_bck_kernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag,
                                            true, true>
         <<<nblks, nthrs, 0, stream>>>(
-            gdata, separate_coo_row_indices.data_ptr<Idx>(),
-            separate_coo_col_indices.data_ptr<Idx>(),
-            separate_coo_rel_ptrs.data_ptr<Idx>(), num_edges,
-            unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
-            unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
+            gdata, separate_coo_row_indices_data_ptr,
+            separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
+            num_edges, unique_srcs_and_dests_rel_ptr_data_ptr,
+            unique_srcs_and_dests_node_indices_data_ptr, num_relations);
 
   } else {
     assert(0 && "Not implemented");
@@ -758,7 +811,8 @@ void inner_product_edge_and_node_separatecoo(
     at::Tensor& grad_inner_product,  // at::Tensor& gradout,
     at::Tensor& grad_left_edge_data, at::Tensor& grad_right_node_vectors) {
   at::Tensor dummy_tensor;
-  inner_product_various_left_and_node_right<int64_t, float, true, false, false>(
+  inner_product_various_left_and_node_right<int64_t, float, false, false,
+                                            false>(
       separate_coo_eids, dummy_tensor, separate_coo_row_indices,
       separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
       dummy_tensor, dummy_tensor, dummy_tensor, left_edge_data,

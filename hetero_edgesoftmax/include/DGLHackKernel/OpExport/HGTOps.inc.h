@@ -70,12 +70,12 @@ void _full_graph_message_mean_aggregation(at::Tensor& incsr_rowptr,
   }
 
   Idx incsr_num_rows = incsr_rowptr.numel() - 1;
-  if (num_heads <= 1) {
-    std::cout << "Warning: num_heads <= 1 in "
-                 "HET::TorchExport::HGT::FwProp::IntegratedCSR::_full_graph_"
-                 "message_mean_aggregation"
-              << std::endl;
-  }
+  // if (num_heads <= 1) {
+  //   std::cout << "Warning: num_heads <= 1 in "
+  //                "HET::TorchExport::HGT::FwProp::IntegratedCSR::_full_graph_"
+  //                "message_mean_aggregation"
+  //             << std::endl;
+  // }
 
   // Configure kernel launch parameters.
   int nthrs_x = SeastarFindNumThreads(num_heads, 64);
@@ -147,12 +147,12 @@ void _full_graph_edge_softmax_ops(
   HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata;
   Idx num_heads =
       unnormalized_attn_score.size(unnormalized_attn_score.ndimension() - 1);
-  if (num_heads <= 1) {
-    std::cout << "Warning: num_heads <= 1 in "
-                 "HET::TorchExport::HGT::FwProp::IntegratedCSR::_full_graph_"
-                 "edge_softmax_ops"
-              << std::endl;
-  }
+  // if (num_heads <= 1) {
+  //   std::cout << "Warning: num_heads <= 1 in "
+  //                "HET::TorchExport::HGT::FwProp::IntegratedCSR::_full_graph_"
+  //                "edge_softmax_ops"
+  //             << std::endl;
+  // }
   Idx num_relations = mu.numel() / num_heads;
 
   gdata.num_heads = num_heads;
@@ -337,7 +337,8 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
     at::Tensor& edgesoftmax_sum_per_node, at::Tensor& unnormalized_attn_score,
     at::Tensor& mu, at::Tensor& mu_softmax_applied_unnormalized_attn_score,
     at::Tensor& normalized_attn_score, at::Tensor& out, at::Tensor& gradout,
-    at::Tensor& grad_message, at::Tensor& grad_mu) {
+    at::Tensor& grad_attn_score, at::Tensor& grad_message,
+    at::Tensor& grad_mu) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   const Idx MAX_NBLKS = 65535;
   const Idx MAX_NTHRS = 1024;
@@ -345,12 +346,12 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
   BackwardHGTAttnScoreData<Idx, DType, AttnScoreUseMuAppliedAttnScoreSwitch>
       gdata_attn;
   Idx num_heads = grad_attn_score.size(grad_attn_score.ndimension() - 1);
-  if (num_heads <= 1) {
-    std::cout << "Warning: num_heads <= 1 in "
-                 "HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_"
-                 "edge_softmax_ops"
-              << std::endl;
-  }
+  // if (num_heads <= 1) {
+  //   std::cout << "Warning: num_heads <= 1 in "
+  //                "HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_"
+  //                "edge_softmax_ops"
+  //             << std::endl;
+  // }
   Idx num_relations = mu.numel() / num_heads;
   // FIXME: remove repeated struct members
   gdata_attn.num_heads = num_heads;
@@ -396,11 +397,11 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
   // preparing kernel launch configuration
   int nthrs_x = SeastarFindNumThreads(num_heads, 64);
   int nthrs_y = SeastarFindNumThreads(
-      gdata.message_src_xlen,
+      gdata_attn.message_src_xlen,
       MAX_NTHRS / nthrs_x);  // NB: message_src_xlen is the total dimension
                              // whereas each head gets message_src_xlen //
                              // num_heads number of elements
-  int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
+  int64_t outcsr_num_rows = outcsr_rowptr.numel() - 1;
   int nblks_x = 1;
   int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
   const dim3 nthrs(nthrs_x, nthrs_y);
@@ -410,9 +411,9 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
   _hgtAttnAndMessageSrcFusedBckKernel<Idx, DType, false, true, false,
                                       AttnScoreUseMuAppliedAttnScoreSwitch>
       <<<nblks, nthrs, 0, stream>>>(
-          gdata, grad_message.data_ptr<DType>(), outcsr_row_ptr.data_ptr<Idx>(),
-          outcsr_col_idx.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
-          outcsr_num_rows,
+          gdata_attn, grad_message.data_ptr<DType>(),
+          outcsr_rowptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
+          outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
           /*no need when !CompactAsOfNodeFlag*/ nullptr,
           /*no need when !CompactAsOfNodeFlag*/ nullptr, num_relations);
 }
@@ -439,12 +440,12 @@ void _full_graph_message_mean_aggregation(
   Idx num_heads =
       normalized_attn_score.size(normalized_attn_score.ndimension() - 1);
   Idx num_relations = mu.numel() / num_heads;
-  if (num_heads <= 1) {
-    std::cout << "Warning: num_heads <= 1 in "
-                 "HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_"
-                 "message_mean_aggregation"
-              << std::endl;
-  }
+  // if (num_heads <= 1) {
+  //   std::cout << "Warning: num_heads <= 1 in "
+  //                "HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_"
+  //                "message_mean_aggregation"
+  //             << std::endl;
+  // }
 
   gdata.num_heads = num_heads;
   assert(gdata.num_heads == grad_message.size(grad_message.ndimension() - 2) &&
@@ -533,12 +534,12 @@ void _full_graph_edge_softmax_ops(
   // preparing gdata
   BackwardHGTAttnScoreData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata;
   Idx num_heads = grad_attn_score.size(grad_attn_score.ndimension() - 1);
-  if (num_heads <= 1) {
-    std::cout << "Warning: num_heads <= 1 in "
-                 "HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_"
-                 "edge_softmax_ops"
-              << std::endl;
-  }
+  // if (num_heads <= 1) {
+  //   std::cout << "Warning: num_heads <= 1 in "
+  //                "HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_"
+  //                "edge_softmax_ops"
+  //             << std::endl;
+  // }
   Idx num_relations = mu.numel() / num_heads;
   gdata.num_heads = num_heads;
   assert(gdata.num_heads == message.size(message.ndimension() - 2) &&
