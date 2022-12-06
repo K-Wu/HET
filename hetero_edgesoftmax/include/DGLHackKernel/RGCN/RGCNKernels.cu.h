@@ -151,7 +151,8 @@ __device__ __forceinline__ void RgcnLayer1KernelNodePerBlock(
       agg_val += h * w * n;
     }
   }
-  atomicAdd(ret + node_idx * feat_len_x + th, agg_val);
+  ret[node_idx * feat_len_x + th] = agg_val;
+  // atomicAdd(ret + node_idx * feat_len_x + th, agg_val);
 }
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu

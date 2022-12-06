@@ -254,6 +254,117 @@ class RgcnSecondLayerCSRHybridAssign(th.autograd.Function):
         return None, None, None, None, None, None, None, None, grad_x, None, None, None
 
 
+class RgcnLayer1SeparateCoo(th.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        separate_coo_rel_ptr,
+        separate_coo_eids,
+        separate_coo_row_idx,
+        separate_coo_col_idx,
+        outcsr_row_ptr,
+        outcsr_col_idx,
+        outcsr_eids,
+        outcsr_reltypes,
+        x,
+        weight,
+        norm,
+        ret,
+    ):
+        ctx.save_for_backward(
+            separate_coo_rel_ptr,
+            separate_coo_eids,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            outcsr_row_ptr,
+            outcsr_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            weight,
+            norm,
+            x,
+        )
+        K.rgcn_layer1_separate_coo(
+            separate_coo_rel_ptr,
+            separate_coo_eids,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            x,
+            weight,
+            norm,
+            ret,
+        )
+        return ret
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            separate_coo_rel_ptr,
+            separate_coo_eids,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            outcsr_row_ptr,
+            outcsr_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            weight,
+            norm,
+            x,
+        ) = ctx.saved_tensors
+        grad_x = th.zeros_like(x)
+        grad_weight = th.zeros_like(weight)
+        K.rgcn_layer1_backward_csr(
+            outcsr_row_ptr,
+            outcsr_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            x,
+            weight,
+            norm,
+            gradout,
+            grad_x,
+            grad_weight,
+        )
+        return None, None, None, None, None, None, None, None, grad_x, None, None, None
+
+
+def rgcn_layer1_separate_coo(
+    separate_coo_rel_ptr,
+    separate_coo_eids,
+    separate_coo_row_idx,
+    separate_coo_col_idx,
+    graph,
+    x,
+    weight,
+    norm,
+):
+    incsr_row_ptr = graph["transposed"]["row_ptr"]
+    ret = th.zeros(
+        (incsr_row_ptr.numel() - 1, weight.size(2)),
+        dtype=weight.dtype,
+        device=weight.device,
+        requires_grad=True,
+    )
+    outcsr_row_ptr = graph["original"]["row_ptr"]
+    outcsr_col_idx = graph["original"]["col_idx"]
+    outcsr_eids = graph["original"]["eids"]
+    outcsr_reltypes = graph["original"]["rel_types"]
+    return RgcnLayer1SeparateCoo.apply(
+        separate_coo_rel_ptr,
+        separate_coo_eids,
+        separate_coo_row_idx,
+        separate_coo_col_idx,
+        outcsr_row_ptr,
+        outcsr_col_idx,
+        outcsr_eids,
+        outcsr_reltypes,
+        x,
+        weight,
+        norm,
+        ret,
+    )
+
+
 def rgcn_layer1_csr(
     graph,
     x,
@@ -268,7 +379,7 @@ def rgcn_layer1_csr(
     incsr_eids = graph["transposed"]["eids"]
     incsr_reltypes = graph["transposed"]["rel_types"]
     outcsr_row_ptr = graph["original"]["row_ptr"]
-    transposed_col_idx = graph["original"]["col_idx"]
+    outcsr_col_idx = graph["original"]["col_idx"]
     outcsr_eids = graph["original"]["eids"]
     outcsr_reltypes = graph["original"]["rel_types"]
     ret = th.zeros(
@@ -284,7 +395,7 @@ def rgcn_layer1_csr(
             incsr_eids,
             incsr_reltypes,
             outcsr_row_ptr,
-            transposed_col_idx,
+            outcsr_col_idx,
             outcsr_eids,
             outcsr_reltypes,
             x,

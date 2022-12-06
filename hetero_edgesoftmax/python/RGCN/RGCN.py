@@ -182,6 +182,134 @@ class HET_EglRelGraphConv(nn.Module):
         return node_repr
 
 
+class HET_EglRelGraphConv_SeparateCOO(nn.Module):
+    @utils.warn_default_arguments
+    def __init__(
+        self,
+        in_feat,
+        out_feat,
+        num_rels,
+        num_edges,
+        regularizer="basis",
+        num_bases=None,
+        bias=True,
+        activation=None,
+        self_loop=False,
+        dropout=0.0,
+        layer_type=0,
+    ):
+        super(HET_EglRelGraphConv_SeparateCOO, self).__init__()
+
+        self.in_feat = in_feat
+        self.out_feat = out_feat
+        self.num_rels = num_rels
+        self.regularizer = regularizer
+        self.num_bases = num_bases
+        if (
+            self.num_bases is None
+            or self.num_bases > self.num_rels
+            or self.num_bases <= 0
+        ):
+            self.num_bases = self.num_rels
+        self.bias = bias
+        self.activation = activation
+        self.layer_type = layer_type
+
+        if regularizer == "basis":
+            # add basis weights
+            self.weight = nn.Parameter(
+                th.Tensor(self.num_bases, self.in_feat, self.out_feat)
+            )
+            if self.num_bases < self.num_rels:
+                # linear combination coefficients
+                self.w_comp = nn.Parameter(th.Tensor(self.num_rels, self.num_bases))
+            nn.init.xavier_uniform_(self.weight, gain=nn.init.calculate_gain("relu"))
+            if self.num_bases < self.num_rels:
+                nn.init.xavier_uniform_(
+                    self.w_comp, gain=nn.init.calculate_gain("relu")
+                )
+        else:
+            raise ValueError("Regularizer must be either 'basis' or 'bdd'")
+
+        # bias
+        if self.bias:
+            self.h_bias = nn.Parameter(th.Tensor(out_feat))
+            nn.init.zeros_(self.h_bias)
+
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, g, x, norm=None):
+        """Forward computation
+
+        Parameters
+        ----------
+        g : HET_DGLGraph
+            The graph.
+        x : torch.Tensor
+            Input node features. Could be either
+                * :math:`(|V|, D)` dense tensor
+                * :math:`(|V|,)` int64 vector, representing the categorical values of each
+                  node. We then treat the input feature as an one-hot encoding feature.
+        etypes : torch.Tensor
+            Edge type tensor. Shape: :math:`(|E|,)`
+        norm : torch.Tensor
+            Optional edge normalizer tensor. Shape: :mathtorch.bmm(A.unsqueeze(0).expand_as(v), v):`(|E|, 1)`
+
+        Returns
+        -------
+        torch.Tensor
+            New node features.
+        """
+        # print('aaa',th.cuda.memory_allocated(),th.cuda.max_memory_allocated())
+        # torch.cuda.synchronize()
+        # t1 = time.time()
+        if self.num_bases < self.num_rels:
+            # generate all weights from bases
+            weight = self.weight.view(self.num_bases, self.in_feat * self.out_feat)
+            print(
+                "weight size:", self.weight.size(), "w_comp size:", self.w_comp.size()
+            )
+            weight = th.matmul(self.w_comp, weight).view(
+                self.num_rels, self.in_feat, self.out_feat
+            )
+            # print('new weight size:', weight.size())
+        else:
+            weight = self.weight
+        # torch.cuda.synchronize()
+        # print('bbb',th.cuda.memory_allocated(),th.cuda.max_memory_allocated())
+        # t2 = time.time()
+
+        if self.layer_type == 0:
+            raise NotImplementedError
+        else:
+            node_repr = B.rgcn_layer1_separate_coo(
+                g["separate"]["coo"]["original"]["rel_ptr"],
+                g["separate"]["coo"]["original"]["eids"],
+                g["separate"]["coo"]["original"]["row_idx"],
+                g["separate"]["coo"]["original"]["col_idx"],
+                g,
+                x,
+                weight,
+                norm,
+            )  # NB: this line uses my own rgcn_layer1
+
+        # torch.cuda.synchronize()
+        # t3 = time.time()
+        # print('output of layer 1', node_repr)
+        # print('ccc',th.cuda.memory_allocated(),th.cuda.max_memory_allocated())
+        if self.bias:
+            node_repr = node_repr + self.h_bias
+        if self.activation:
+            node_repr = self.activation(node_repr)
+        node_repr = self.dropout(node_repr)
+        # torch.cuda.synchronize()
+        # t4 = time.time()
+        # print('matmul takes:',t2-t1, 's', (t2-t1)/(t4-t1),'%')
+        # print('gcn takes:',t3-t2, 's', (t3-t2)/(t4-t1),'%')
+        # print('rest takes:',t4-t3, 's', (t4-t3)/(t4-t1),'%')
+        return node_repr
+
+
 class HET_EGLRGCNSingleLayerModel(nn.Module):
     @utils.warn_default_arguments
     def __init__(
@@ -199,17 +327,29 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
         num_blocks_on_node_backward,
     ):
         super(HET_EGLRGCNSingleLayerModel, self).__init__()
-        self.layer2 = HET_EglRelGraphConv(
-            n_infeat,
-            out_dim,
-            num_rels,
-            num_edges,
-            sparse_format,
-            num_bases=num_bases,
-            dropout=dropout,
-            activation=activation,
-            layer_type=1,
-        )
+        if sparse_format == "separate_coo":
+            self.layer2 = HET_EglRelGraphConv_SeparateCOO(
+                n_infeat,
+                out_dim,
+                num_rels,
+                num_edges,
+                num_bases=num_bases,
+                dropout=dropout,
+                activation=activation,
+                layer_type=1,
+            )
+        else:
+            self.layer2 = HET_EglRelGraphConv(
+                n_infeat,
+                out_dim,
+                num_rels,
+                num_edges,
+                sparse_format,
+                num_bases=num_bases,
+                dropout=dropout,
+                activation=activation,
+                layer_type=1,
+            )
 
     def forward(self, g, feats, edge_norm):
         h = self.layer2.forward(g, feats, edge_norm)

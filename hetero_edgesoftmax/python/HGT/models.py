@@ -44,6 +44,7 @@ class HET_HGTLayerHetero(nn.Module):
         # self.k_linears = nn.ModuleList()
         # self.q_linears = nn.ModuleList()
         # self.v_linears = nn.ModuleList()
+        # self.a_linears = nn.ModuleList()
         self.k_linears = nn.Parameter(torch.Tensor(self.num_ntypes, in_dim, out_dim))
         self.q_linears = nn.Parameter(torch.Tensor(self.num_ntypes, in_dim, out_dim))
         self.v_linears = nn.Parameter(torch.Tensor(self.num_ntypes, in_dim, out_dim))
@@ -66,7 +67,7 @@ class HET_HGTLayerHetero(nn.Module):
         self.relation_msg = nn.Parameter(
             torch.Tensor(self.num_relations, n_heads, self.d_k, self.d_k)
         )
-        self.skip = nn.Parameter(torch.ones(self.num_ntypes))
+        self.skip = nn.Parameter(torch.ones(self.num_ntypes, 1, 1))
         self.drop = nn.Dropout(dropout)
 
     def reset_parameters(self):
@@ -83,7 +84,7 @@ class HET_HGTLayerHetero(nn.Module):
         # for module in self.v_linears:
         #    module.reset_parameters()
         # for module in self.a_linears:
-        #    module.reset_parameters()
+        #     module.reset_parameters()
 
     # @torch.jit.script_method
     def forward(self, G: utils.MyDGLGraph, h):
@@ -265,48 +266,50 @@ class HET_HGTLayerHetero(nn.Module):
         )  # shape (num_nodes, n_heads, d_k)
 
         new_h = B.rgnn_relational_matmul_no_scatter_gather_list(
-            G["original"]["node_type_offsets"], self.a_linears, new_h
+            G["original"]["node_type_offsets"],
+            (torch.sigmoid(self.skip) * self.a_linears),
+            new_h,
         )
         new_h_normed = torch.empty((G.get_num_nodes(), self.out_dim), device=h.device)
+        if 0:
+            for dsttype in dest_nodetypes:
+                """
+                Step 3: Target-specific Aggregation
+                x = norm( W[node_type] * gelu( Agg(x) ) + x )
+                """
+                n_id = dsttype
+                alpha = torch.sigmoid(self.skip[n_id])
 
-        for dsttype in dest_nodetypes:
-            """
-            Step 3: Target-specific Aggregation
-            x = norm( W[node_type] * gelu( Agg(x) ) + x )
-            """
-            n_id = dsttype
-            alpha = torch.sigmoid(self.skip[n_id])
-
-            trans_out = self.drop(
-                new_h[
-                    G["original"]["node_type_offsets"][dsttype] : G["original"][
-                        "node_type_offsets"
-                    ][dsttype + 1]
-                ]
-            )
-            # self.a_linears[n_id](
-            #    new_h[
-            #        G["original"]["node_type_offsets"][dsttype] : G["original"][
-            #            "node_type_offsets"
-            #        ][dsttype + 1]
-            #    ]
-            # )
-            # )
-            trans_out = (trans_out * alpha).reshape(
-                -1, self.out_dim
-            )  # + h[ntype] * (1-alpha) ?
-            if self.use_norm:
-                new_h_normed[
-                    G["original"]["node_type_offsets"][dsttype] : G["original"][
-                        "node_type_offsets"
-                    ][dsttype + 1]
-                ] = self.norms[n_id](trans_out)
-            else:
-                new_h_normed[
-                    G["original"]["node_type_offsets"][dsttype] : G["original"][
-                        "node_type_offsets"
-                    ][dsttype + 1]
-                ] = trans_out
+                trans_out = self.drop(
+                    new_h[
+                        G["original"]["node_type_offsets"][dsttype] : G["original"][
+                            "node_type_offsets"
+                        ][dsttype + 1]
+                    ]
+                )
+                # trans_out = self.drop(self.a_linears[n_id](
+                #    new_h[
+                #        G["original"]["node_type_offsets"][dsttype] : G["original"][
+                #            "node_type_offsets"
+                #        ][dsttype + 1]
+                #    ]
+                # )
+                # )
+                trans_out = (trans_out * alpha).reshape(
+                    -1, self.out_dim
+                )  # + h[ntype] * (1-alpha) ?
+                if self.use_norm:
+                    new_h_normed[
+                        G["original"]["node_type_offsets"][dsttype] : G["original"][
+                            "node_type_offsets"
+                        ][dsttype + 1]
+                    ] = self.norms[n_id](trans_out)
+                else:
+                    new_h_normed[
+                        G["original"]["node_type_offsets"][dsttype] : G["original"][
+                            "node_type_offsets"
+                        ][dsttype + 1]
+                    ] = trans_out
         return new_h_normed
 
 
