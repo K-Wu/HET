@@ -44,7 +44,8 @@ void _LayerImpl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
     Idx ntypes = weight.size(0);
     Idx feat_len_y = weight.size(1);
     Idx feat_len_x = weight.size(2);
-    int nthrs = feat_len_y * feat_len_x;
+    // int nthrs = feat_len_y * feat_len_x;
+    int nthrs = feat_len_x < 512 ? 512 : feat_len_x;
     if constexpr (HybridAssignmentFlag) {
       RgcnLayer1KernelHybridAssignImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
           range_data, ids_data, eids_data, typeids_data, hidden_data,
@@ -174,7 +175,9 @@ void _LayerImpl(
     Idx ntypes = weight.size(0);
     Idx feat_len_y = weight.size(1);
     Idx feat_len_x = weight.size(2);
-    int nthrs = feat_len_y * feat_len_x;
+    // int nthrs = feat_len_y * feat_len_x;
+    int nthrs = feat_len_x < 256 ? 256 : feat_len_x;  // feat_len_y *
+                                                      // feat_len_x;
     if constexpr (HybridAssignmentFlag) {
       RgcnLayer1BackwardKernelHybridAssignImpl<<<nblks, nthrs, 0, stream>>>(
           range_data, ids_data, eids_data, typeids_data, hidden_data,

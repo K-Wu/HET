@@ -41,18 +41,21 @@ class HET_HGTLayerHetero(nn.Module):
         self.sqrt_dk = math.sqrt(self.d_k)
         self.att = None
 
-        self.k_linears = nn.ModuleList()
-        self.q_linears = nn.ModuleList()
-        self.v_linears = nn.ModuleList()
-        self.a_linears = nn.ModuleList()
+        # self.k_linears = nn.ModuleList()
+        # self.q_linears = nn.ModuleList()
+        # self.v_linears = nn.ModuleList()
+        self.k_linears = nn.Parameter(torch.Tensor(self.num_ntypes, in_dim, out_dim))
+        self.q_linears = nn.Parameter(torch.Tensor(self.num_ntypes, in_dim, out_dim))
+        self.v_linears = nn.Parameter(torch.Tensor(self.num_ntypes, in_dim, out_dim))
+        self.a_linears = nn.Parameter(torch.Tensor(self.num_ntypes, out_dim, out_dim))
         self.norms = nn.ModuleList()
         self.use_norm = use_norm
 
         for t in range(self.num_ntypes):
-            self.k_linears.append(nn.Linear(in_dim, out_dim))
-            self.q_linears.append(nn.Linear(in_dim, out_dim))
-            self.v_linears.append(nn.Linear(in_dim, out_dim))
-            self.a_linears.append(nn.Linear(out_dim, out_dim))
+            # self.k_linears.append(nn.Linear(in_dim, out_dim))
+            # self.q_linears.append(nn.Linear(in_dim, out_dim))
+            # self.v_linears.append(nn.Linear(in_dim, out_dim))
+            # self.a_linears.append(nn.Linear(out_dim, out_dim))
             if use_norm:
                 self.norms.append(nn.LayerNorm(out_dim))
 
@@ -69,14 +72,18 @@ class HET_HGTLayerHetero(nn.Module):
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.relation_att)
         nn.init.xavier_uniform_(self.relation_msg)
-        for module in self.k_linears:
-            module.reset_parameters()
-        for module in self.q_linears:
-            module.reset_parameters()
-        for module in self.v_linears:
-            module.reset_parameters()
-        for module in self.a_linears:
-            module.reset_parameters()
+        nn.init.xavier_uniform_(self.k_linears)
+        nn.init.xavier_uniform_(self.q_linears)
+        nn.init.xavier_uniform_(self.v_linears)
+        nn.init.xavier_uniform_(self.a_linears)
+        # for module in self.k_linears:
+        #    module.reset_parameters()
+        # for module in self.q_linears:
+        #    module.reset_parameters()
+        # for module in self.v_linears:
+        #    module.reset_parameters()
+        # for module in self.a_linears:
+        #    module.reset_parameters()
 
     # @torch.jit.script_method
     def forward(self, G: utils.MyDGLGraph, h):
@@ -101,67 +108,92 @@ class HET_HGTLayerHetero(nn.Module):
         src_nodetypes = list(range(G.get_num_ntypes()))
         dest_nodetypes = list(range(G.get_num_ntypes()))
 
-        k = torch.empty(
-            (G.get_num_nodes(), self.n_heads, self.d_k),
-            device=h.device,
-            memory_format=torch.contiguous_format,
-        )
-        q = torch.empty(
-            (G.get_num_nodes(), self.n_heads, self.d_k),
-            device=h.device,
-            memory_format=torch.contiguous_format,
-        )
-        v = torch.empty(
-            (G.get_num_nodes(), self.n_heads, self.d_k),
-            device=h.device,
-            memory_format=torch.contiguous_format,
-        )
+        # k = self.k_linears[0](
+        #         h
+        #     ).view(
+        #         -1, self.n_heads, self.d_k
+        #     )
+        # q = self.q_linears[0](
+        #         h
+        #     ).view(
+        #         -1, self.n_heads, self.d_k
+        #     )
+        # v = self.v_linears[0](
+        #         h
+        #     ).view(
+        #         -1, self.n_heads, self.d_k
+        #     )
 
-        for srctype in src_nodetypes:
-            k_linear = self.k_linears[srctype]  # [node_dict[srctype]]
-            v_linear = self.v_linears[srctype]  # [node_dict[srctype]]
-            k[
-                G["original"]["node_type_offsets"][srctype] : G["original"][
-                    "node_type_offsets"
-                ][srctype + 1]
-            ] = k_linear(
-                h[
-                    G["original"]["node_type_offsets"][srctype] : G["original"][
-                        "node_type_offsets"
-                    ][srctype + 1]
-                ]
-            ).view(
-                -1, self.n_heads, self.d_k
-            )
-            v[
-                G["original"]["node_type_offsets"][srctype] : G["original"][
-                    "node_type_offsets"
-                ][srctype + 1]
-            ] = v_linear(
-                h[
-                    G["original"]["node_type_offsets"][srctype] : G["original"][
-                        "node_type_offsets"
-                    ][srctype + 1]
-                ]
-            ).view(
-                -1, self.n_heads, self.d_k
-            )
+        k = B.rgnn_relational_matmul_no_scatter_gather_list(
+            G["original"]["node_type_offsets"], self.k_linears, h
+        ).view(-1, self.n_heads, self.d_k)
+        q = B.rgnn_relational_matmul_no_scatter_gather_list(
+            G["original"]["node_type_offsets"], self.q_linears, h
+        ).view(-1, self.n_heads, self.d_k)
+        v = B.rgnn_relational_matmul_no_scatter_gather_list(
+            G["original"]["node_type_offsets"], self.v_linears, h
+        ).view(-1, self.n_heads, self.d_k)
+        # k = torch.empty(
+        #     (G.get_num_nodes(), self.n_heads, self.d_k),
+        #     device=h.device,
+        #     memory_format=torch.contiguous_format,
+        # )
+        # q = torch.empty(
+        #     (G.get_num_nodes(), self.n_heads, self.d_k),
+        #     device=h.device,
+        #     memory_format=torch.contiguous_format,
+        # )
+        # v = torch.empty(
+        #     (G.get_num_nodes(), self.n_heads, self.d_k),
+        #     device=h.device,
+        #     memory_format=torch.contiguous_format,
+        # )
 
-        for dsttype in dest_nodetypes:
-            q_linear = self.q_linears[dsttype]  # [node_dict[dsttype]]
-            q[
-                G["original"]["node_type_offsets"][dsttype] : G["original"][
-                    "node_type_offsets"
-                ][dsttype + 1]
-            ] = q_linear(
-                h[
-                    G["original"]["node_type_offsets"][dsttype] : G["original"][
-                        "node_type_offsets"
-                    ][dsttype + 1]
-                ]
-            ).view(
-                -1, self.n_heads, self.d_k
-            )
+        # for srctype in src_nodetypes:
+        #     k_linear = self.k_linears[srctype]  # [node_dict[srctype]]
+        #     v_linear = self.v_linears[srctype]  # [node_dict[srctype]]
+        #     k[
+        #         G["original"]["node_type_offsets"][srctype] : G["original"][
+        #             "node_type_offsets"
+        #         ][srctype + 1]
+        #     ] = k_linear(
+        #         h[
+        #             G["original"]["node_type_offsets"][srctype] : G["original"][
+        #                 "node_type_offsets"
+        #             ][srctype + 1]
+        #         ]
+        #     ).view(
+        #         -1, self.n_heads, self.d_k
+        #     )
+        #     v[
+        #         G["original"]["node_type_offsets"][srctype] : G["original"][
+        #             "node_type_offsets"
+        #         ][srctype + 1]
+        #     ] = v_linear(
+        #         h[
+        #             G["original"]["node_type_offsets"][srctype] : G["original"][
+        #                 "node_type_offsets"
+        #             ][srctype + 1]
+        #         ]
+        #     ).view(
+        #         -1, self.n_heads, self.d_k
+        #     )
+
+        # for dsttype in dest_nodetypes:
+        #     q_linear = self.q_linears[dsttype]  # [node_dict[dsttype]]
+        #     q[
+        #         G["original"]["node_type_offsets"][dsttype] : G["original"][
+        #             "node_type_offsets"
+        #         ][dsttype + 1]
+        #     ] = q_linear(
+        #         h[
+        #             G["original"]["node_type_offsets"][dsttype] : G["original"][
+        #                 "node_type_offsets"
+        #             ][dsttype + 1]
+        #         ]
+        #     ).view(
+        #         -1, self.n_heads, self.d_k
+        #     )
 
         message_per_edge = B.rgnn_relational_matmul(
             G["separate"]["coo"]["original"]["rel_ptr"],
@@ -232,7 +264,11 @@ class HET_HGTLayerHetero(nn.Module):
             # g["separate"]["unique_node_idx"]["node_idx"],
         )  # shape (num_nodes, n_heads, d_k)
 
+        new_h = B.rgnn_relational_matmul_no_scatter_gather_list(
+            G["original"]["node_type_offsets"], self.a_linears, new_h
+        )
         new_h_normed = torch.empty((G.get_num_nodes(), self.out_dim), device=h.device)
+
         for dsttype in dest_nodetypes:
             """
             Step 3: Target-specific Aggregation
@@ -242,14 +278,20 @@ class HET_HGTLayerHetero(nn.Module):
             alpha = torch.sigmoid(self.skip[n_id])
 
             trans_out = self.drop(
-                self.a_linears[n_id](
-                    new_h[
-                        G["original"]["node_type_offsets"][dsttype] : G["original"][
-                            "node_type_offsets"
-                        ][dsttype + 1]
-                    ]
-                )
+                new_h[
+                    G["original"]["node_type_offsets"][dsttype] : G["original"][
+                        "node_type_offsets"
+                    ][dsttype + 1]
+                ]
             )
+            # self.a_linears[n_id](
+            #    new_h[
+            #        G["original"]["node_type_offsets"][dsttype] : G["original"][
+            #            "node_type_offsets"
+            #        ][dsttype + 1]
+            #    ]
+            # )
+            # )
             trans_out = (trans_out * alpha).reshape(
                 -1, self.out_dim
             )  # + h[ntype] * (1-alpha) ?

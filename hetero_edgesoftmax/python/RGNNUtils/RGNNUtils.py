@@ -146,8 +146,8 @@ def HET_RGNN_train_full_graph(
         backward_prop_end = th.cuda.Event(enable_timing=True)
         backward_prop_start.record()
 
-        loss.backward()
-        optimizer.step()
+        # loss.backward()
+        # optimizer.step()
         backward_prop_end.record()
         th.cuda.synchronize()
 

@@ -101,7 +101,7 @@ __device__ __forceinline__ void RgcnLayer1KernelNodePerWarp(
   Idx lane_idx = threadIdx.x % 32;
   for (int feat_idx = lane_idx; feat_idx < feat_len_x * feat_len_y;
        feat_idx += 32) {
-    Idx ty = feat_idx / feat_len_x;
+    // Idx ty = feat_idx / feat_len_x;
     Idx th = feat_idx % feat_len_x;
     DType agg_val = 0.;
     DType w = 0.;
@@ -113,9 +113,12 @@ __device__ __forceinline__ void RgcnLayer1KernelNodePerWarp(
       if (type_id != cur_type_id) {
         w = __ldg(weight + type_id * feat_len_y * feat_len_x + feat_idx);
       }
-      DType h = __ldg(hidden + src_id * feat_len_y + ty);
-      DType n = __ldg(norm + eid);
-      agg_val += h * w * n;
+      for (Idx ty = threadIdx.x / feat_len_x; ty < feat_len_y;
+           ty += blockDim.x / feat_len_x) {
+        DType h = __ldg(hidden + src_id * feat_len_y + ty);
+        DType n = __ldg(norm + eid);
+        agg_val += h * w * n;
+      }
     }
     atomicAdd(ret + node_idx * feat_len_x + th, agg_val);
   }
@@ -129,7 +132,7 @@ __device__ __forceinline__ void RgcnLayer1KernelNodePerBlock(
   Idx beg = __ldg(ranges + node_idx);
   Idx end = __ldg(ranges + node_idx + 1);
   Idx tx = threadIdx.x;
-  Idx ty = threadIdx.x / feat_len_x;
+  // Idx ty = threadIdx.x / feat_len_x;
   Idx th = threadIdx.x % feat_len_x;
   DType agg_val = 0.;
   DType w = 0.;
@@ -141,9 +144,12 @@ __device__ __forceinline__ void RgcnLayer1KernelNodePerBlock(
     if (type_id != cur_type_id) {
       w = __ldg(weight + type_id * feat_len_y * feat_len_x + tx);
     }
-    DType h = __ldg(hidden + src_id * feat_len_y + ty);
     DType n = __ldg(norm + eid);
-    agg_val += h * w * n;
+    for (Idx ty = threadIdx.x / feat_len_x; ty < feat_len_y;
+         ty += blockDim.x / feat_len_x) {
+      DType h = __ldg(hidden + src_id * feat_len_y + ty);
+      agg_val += h * w * n;
+    }
   }
   atomicAdd(ret + node_idx * feat_len_x + th, agg_val);
 }

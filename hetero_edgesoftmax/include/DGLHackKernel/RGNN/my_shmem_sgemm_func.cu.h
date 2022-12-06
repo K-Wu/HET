@@ -414,6 +414,45 @@ __global__ void RGNNFeatPerEdgeFWProp(
       A_rel_ptr[idx_relation], input_dim, output_per_head_dim, num_heads);
 }
 
+template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
+__global__ void RGNNMatmulNoScatterGatherListFwOrBwProp(
+    float* node_feat_input, float* weights, float* linear_projected_node_feat,
+    IdxPtr ntype_ptrs, int* accum_num_blocks_per_ntype, Idx num_ntypes,
+    Idx input_dim, Idx output_dim) {
+  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_ntype = binary_search<int, int*>(
+      num_ntypes, accum_num_blocks_per_ntype, idx_block_assignment);
+  _basic_MatMulKernel<BLOCK_SIZE, false, false, false, false, false, false,
+                      false, false, Idx, IdxPtr, true, false, true>(
+      node_feat_input, weights, linear_projected_node_feat, nullptr, nullptr,
+      nullptr, nullptr, nullptr, 0,
+      ntype_ptrs[idx_ntype + 1] - ntype_ptrs[idx_ntype],
+      accum_num_blocks_per_ntype[idx_ntype],
+      (accum_num_blocks_per_ntype[idx_ntype + 1] -
+       accum_num_blocks_per_ntype[idx_ntype]),
+      ntype_ptrs[idx_ntype], input_dim, output_dim, 1);
+}
+
+template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
+__global__ void RGNNDeltaWeightNoScatterGatherListBWProp(
+    float* node_feat_input, float* delta_feat, float* delta_weight,
+    IdxPtr ntype_ptrs, Idx A_delta_input_dim, Idx B_delta_output_dim,
+    int* accum_num_blocks_per_ntype, Idx num_ntypes) {
+  Idx idx_block_assignment = blockIdx.z;
+  Idx idx_ntype = binary_search<int, int*>(
+      num_ntypes, accum_num_blocks_per_ntype, idx_block_assignment);
+  _basic_MatMulKernel<BLOCK_SIZE, true, false, false, false, false, false,
+                      false, true, Idx, IdxPtr, true, true, true>(
+      node_feat_input, delta_feat,
+      &delta_weight[idx_ntype * A_delta_input_dim * B_delta_output_dim],
+      nullptr, nullptr, nullptr, nullptr, nullptr, idx_ntype,
+      ntype_ptrs[idx_ntype + 1] - ntype_ptrs[idx_ntype],
+      accum_num_blocks_per_ntype[idx_ntype],
+      (accum_num_blocks_per_ntype[idx_ntype + 1] -
+       accum_num_blocks_per_ntype[idx_ntype]),
+      ntype_ptrs[idx_ntype], A_delta_input_dim, B_delta_output_dim, 1);
+}
+
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>

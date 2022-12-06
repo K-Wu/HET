@@ -19,13 +19,11 @@ namespace HGT {
 namespace FwProp {
 namespace IntegratedCSR {
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
-void _full_graph_message_mean_aggregation(at::Tensor& incsr_rowptr,
-                                          at::Tensor& incsr_col_idx,
-                                          at::Tensor& incsr_reltypes,
-                                          at::Tensor& incsr_eids,
-                                          at::Tensor& edge_messages,
-                                          at::Tensor& edge_attn_score,
-                                          at::Tensor& mu, at::Tensor& ret) {
+void _full_graph_message_mean_aggregation(
+    at::Tensor& incsr_rowptr, at::Tensor& incsr_col_idx,
+    at::Tensor& incsr_reltypes, at::Tensor& incsr_eids,
+    at::Tensor& edge_messages, at::Tensor& edge_attn_score,
+    at::Tensor& edgesoftmax_sum_per_node, at::Tensor& mu, at::Tensor& ret) {
   // using _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum based on
   // _gatSumProdZipDivKernel whose driver code is
   // HET::TorchExport::RGCN::FwProp::IntegratedCSR::_FusedKernelImpl in
@@ -45,7 +43,7 @@ void _full_graph_message_mean_aggregation(at::Tensor& incsr_rowptr,
   Idx num_heads = edge_attn_score.size(edge_attn_score.ndimension() - 1);
   Idx num_relations = mu.numel() / num_heads;
   gdata.num_heads = num_heads;
-
+  gdata.edgesoftmax_sum_per_node = edgesoftmax_sum_per_node.data_ptr<DType>();
   assert(gdata.num_heads ==
              edge_messages.size(edge_messages.ndimension() - 2) &&
          "assuming edge_messages[-2] to be num_heads but failed");
@@ -92,23 +90,21 @@ void _full_graph_message_mean_aggregation(at::Tensor& incsr_rowptr,
          nthrs_x, nthrs_y);
   _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum<
       Idx, DType, false, true, false, false, UseMuAppliedAttnScoreSwitch>
-      <<<nthrs, nblks, 0, stream>>>(
+      <<<nblks, nthrs, 0, stream>>>(
           gdata, incsr_rowptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
           incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
           nullptr /*no need when !CompactAsOfNodeFlag*/,
           nullptr /*no need when !CompactAsOfNodeFlag*/, num_relations);
 }
 
-void full_graph_message_mean_aggregation(at::Tensor& incsr_rowptr,
-                                         at::Tensor& incsr_col_idx,
-                                         at::Tensor& incsr_reltypes,
-                                         at::Tensor& incsr_eids,
-                                         at::Tensor& edge_messages,
-                                         at::Tensor& edge_attn_score,
-                                         at::Tensor& mu, at::Tensor& ret) {
+void full_graph_message_mean_aggregation(
+    at::Tensor& incsr_rowptr, at::Tensor& incsr_col_idx,
+    at::Tensor& incsr_reltypes, at::Tensor& incsr_eids,
+    at::Tensor& edge_messages, at::Tensor& edge_attn_score,
+    at::Tensor& edgesoftmax_sum_per_node, at::Tensor& mu, at::Tensor& ret) {
   _full_graph_message_mean_aggregation<int64_t, float, 1>(
       incsr_rowptr, incsr_col_idx, incsr_reltypes, incsr_eids, edge_messages,
-      edge_attn_score, mu, ret);
+      edge_attn_score, edgesoftmax_sum_per_node, mu, ret);
 }
 
 void full_graph_hetero_attention_ops(at::Tensor& row_ptr, at::Tensor& col_idx,

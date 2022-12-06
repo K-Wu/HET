@@ -113,7 +113,10 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
       "backward_rgnn_relational_matmul_compact_as_of_node_single_ended",
       RGNN::BckProp::
           RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices);  // args: unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_idx, separate_coo_rel_ptr, separate_coo_node_indices, weight_transposed, node_feat, ret, gradout, grad_weight, grad_node_feat
-
+  m.def("rgnn_relational_matmul_no_scatter_gather_list",
+        RGNN::FwProp::RelationalMatmulNoScatterGatherList);
+  m.def("rgnn_relational_matmul_no_scatter_gather_list_backward",
+        RGNN::BckProp::RelationalMatmulNoScatterGatherList);
   // RGNN innerproduct
   m.def(
       "rgnn_inner_product_node_compact_and_node",

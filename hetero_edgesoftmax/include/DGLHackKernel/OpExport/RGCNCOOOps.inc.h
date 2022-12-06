@@ -26,7 +26,8 @@ void _LayerImpl(at::Tensor& coo_row_idx, at::Tensor& coo_col_idx,
     Idx ntypes = weight.size(0);
     Idx feat_len_y = weight.size(1);
     Idx feat_len_x = weight.size(2);
-    int nthrs = feat_len_y * feat_len_x;
+    // int nthrs = feat_len_y * feat_len_x;
+    int nthrs = feat_len_x < 256 ? 256 : feat_len_x;
     assert(nthrs % 32 == 0);
     int nblks =
         ceil_div<>(num_edges, (int64_t)nthrs / 32);  // 32 is the warp size
@@ -109,7 +110,8 @@ void _LayerBackwardImpl(
     Idx ntypes = weight.size(0);
     Idx feat_len_y = weight.size(1);
     Idx feat_len_x = weight.size(2);
-    int nthrs = feat_len_y * feat_len_x;
+    // int nthrs = feat_len_y * feat_len_x;
+    int nthrs = feat_len_x < 256 ? 256 : feat_len_x;
     assert(nthrs % 32 == 0);
     int nblks =
         ceil_div<>(num_edges, (int64_t)nthrs / 32);  // 32 is the warp size

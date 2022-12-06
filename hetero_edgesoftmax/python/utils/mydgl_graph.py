@@ -49,18 +49,22 @@ class MyDGLGraph:
     def get_num_nodes(self):
         assert "original" in self.graph_data
         if "node_type_offsets" in self.graph_data["original"]:
-            return self.graph_data["original"]["node_type_offsets"][-1]
+            return int(self.graph_data["original"]["node_type_offsets"][-1])
         if "row_ptr" in self.graph_data["original"]:
-            return max(
-                self.graph_data["original"]["row_ptr"].numel() - 1,
-                int(self.graph_data["original"]["col_idx"].max()) + 1,
+            return int(
+                max(
+                    self.graph_data["original"]["row_ptr"].numel() - 1,
+                    int(self.graph_data["original"]["col_idx"].max()) + 1,
+                )
             )
         else:
             assert "row_idx" in self.graph_data["original"], "row_idx not exists"
             assert "col_idx" in self.graph_data["original"], "col_idx not exists"
-            return max(
-                int(self.graph_data["original"]["row_idx"].max()) + 1,
-                int(self.graph_data["original"]["col_idx"].max()) + 1,
+            return int(
+                max(
+                    int(self.graph_data["original"]["row_idx"].max()) + 1,
+                    int(self.graph_data["original"]["col_idx"].max()) + 1,
+                )
             )
 
     def get_num_ntypes(self):

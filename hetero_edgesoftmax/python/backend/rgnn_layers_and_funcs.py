@@ -162,6 +162,71 @@ def rgnn_relational_matmul(
         )
 
 
+class RgnnRelationalMatmulNoScatterGatherList(th.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        ntype_offset_ptrs,
+        weights,
+        inputs,
+        ret,
+    ):
+
+        K.rgnn_relational_matmul_no_scatter_gather_list(
+            ntype_offset_ptrs,
+            weights,
+            inputs,
+            ret,
+        )
+        ctx.save_for_backward(ntype_offset_ptrs, weights, inputs, ret)
+        return ret
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            ntype_offset_ptrs,
+            weights,
+            inputs,
+            node_feat_output,
+        ) = ctx.saved_tensors
+        grad_weight = th.zeros_like(weights, memory_format=th.contiguous_format)
+        grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
+        # FIXME: seems there is a deadlock here
+        K.rgnn_relational_matmul_no_scatter_gather_list_backward(
+            ntype_offset_ptrs,
+            th.transpose(weights, 1, 2).contiguous(),
+            node_feat_output,
+            gradout.contiguous(),
+            grad_weight,
+            grad_input,
+        )
+        # fmt: off
+        return None,  grad_weight, grad_input, None
+        # fmt: on
+
+
+def rgnn_relational_matmul_no_scatter_gather_list(
+    ntype_offset_ptrs,
+    weights,
+    inputs,
+):
+    ret = th.zeros(
+        (
+            inputs.size(0),
+            weights.size(2),
+        ),  # [num_items, out_feats]
+        dtype=weights.dtype,
+        device=weights.device,
+        requires_grad=True,
+    )
+    return RgnnRelationalMatmulNoScatterGatherList.apply(
+        ntype_offset_ptrs,
+        weights,
+        inputs,
+        ret,
+    )
+
+
 class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
     @staticmethod
     def forward(

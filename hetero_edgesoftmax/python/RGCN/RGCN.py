@@ -124,7 +124,9 @@ class HET_EglRelGraphConv(nn.Module):
         if self.num_bases < self.num_rels:
             # generate all weights from bases
             weight = self.weight.view(self.num_bases, self.in_feat * self.out_feat)
-            # print('weight size:', self.weight.size(), 'w_comp size:', self.w_comp.size())
+            print(
+                "weight size:", self.weight.size(), "w_comp size:", self.w_comp.size()
+            )
             weight = th.matmul(self.w_comp, weight).view(
                 self.num_rels, self.in_feat, self.out_feat
             )
@@ -271,7 +273,7 @@ def get_model(args, mydglgraph):
         num_edges,
         args.sparse_format,
         num_bases=args.num_bases,
-        activation=F.relu,
+        activation=None,  # F.relu,
         dropout=args.dropout,
     )
     return model

@@ -274,6 +274,7 @@ class HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR(th.autograd.Functio
             incsr_eids,
             message_per_edge,
             normalized_attn_score,
+            edgesoftmax_sum_per_node,
             mu,
             new_h,
         )

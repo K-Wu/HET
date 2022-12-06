@@ -22,8 +22,9 @@ __device__ __forceinline__ void RgcnLayer1COOKernelEdgePerWarp(
     if (type_id != cur_type_id) {
       w = __ldg(weight + type_id * feat_len_y * feat_len_x + feat_idx);
     }
-    DType h = __ldg(hidden + src_id * feat_len_y + ty);
     DType n = __ldg(norm + eid);
+    DType h = __ldg(hidden + src_id * feat_len_y + ty);
+
     agg_val += h * w * n;
 
     atomicAdd(ret + dst_id * feat_len_x + th, agg_val);

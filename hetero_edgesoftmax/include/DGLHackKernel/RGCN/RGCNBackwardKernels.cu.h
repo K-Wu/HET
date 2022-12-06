@@ -91,22 +91,25 @@ __device__ __forceinline__ void RgcnLayer1BackwardKernelNodePerWarp(
   Idx end = __ldg(ranges + node_idx + 1);
   Idx tx = threadIdx.x % 32;
   for (; tx < feat_len_x * feat_len_y; tx += 32) {
-    Idx ty = tx / feat_len_x;
+    // Idx ty = tx / feat_len_x;
     Idx th = tx % feat_len_x;
-    DType h = __ldg(hidden + node_idx * feat_len_y + ty);
-    DType agg = 0.;
-    for (; beg < end; beg++) {
-      Idx dst_id = __ldg(dst_ids + beg);
-      Idx eid = __ldg(eids + beg);
-      Idx type_id = __ldg(types + beg);
-      DType g = __ldg(grad_out + dst_id * feat_len_x + th);
-      DType w = __ldg(weight + type_id * feat_len_y * feat_len_x + tx);
-      DType n = __ldg(norm + eid);
-      agg += g * w * n;
-      atomicAdd(grad_weight + type_id * feat_len_y * feat_len_x + tx,
-                g * h * n);
+    for (Idx ty = tx / feat_len_x; ty < feat_len_y;
+         ty += blockDim.x / feat_len_y) {
+      DType h = __ldg(hidden + node_idx * feat_len_y + ty);
+      DType agg = 0.;
+      for (; beg < end; beg++) {
+        Idx dst_id = __ldg(dst_ids + beg);
+        Idx eid = __ldg(eids + beg);
+        Idx type_id = __ldg(types + beg);
+        DType g = __ldg(grad_out + dst_id * feat_len_x + th);
+        DType w = __ldg(weight + type_id * feat_len_y * feat_len_x + tx);
+        DType n = __ldg(norm + eid);
+        agg += g * w * n;
+        atomicAdd(grad_weight + type_id * feat_len_y * feat_len_x + tx,
+                  g * h * n);
+      }
+      atomicAdd(grad_hidden + node_idx * feat_len_y + ty, agg);
     }
-    atomicAdd(grad_hidden + node_idx * feat_len_y + ty, agg);
   }
 }
 
@@ -120,22 +123,25 @@ __device__ __forceinline__ void RgcnLayer1BackwardKernelNodePerBlock(
   Idx end = __ldg(ranges + node_idx + 1);
   Idx tx = threadIdx.x;
   for (; tx < feat_len_x * feat_len_y; tx += blockDim.x) {
-    Idx ty = tx / feat_len_x;
+    // Idx ty = tx / feat_len_x;
     Idx th = tx % feat_len_x;
-    DType h = __ldg(hidden + node_idx * feat_len_y + ty);
-    DType agg = 0.;
-    for (; beg < end; beg++) {
-      Idx dst_id = __ldg(dst_ids + beg);
-      Idx eid = __ldg(eids + beg);
-      Idx type_id = __ldg(types + beg);
-      DType g = __ldg(grad_out + dst_id * feat_len_x + th);
-      DType w = __ldg(weight + type_id * feat_len_y * feat_len_x + tx);
-      DType n = __ldg(norm + eid);
-      agg += g * w * n;
-      atomicAdd(grad_weight + type_id * feat_len_y * feat_len_x + tx,
-                g * h * n);
+    for (Idx ty = tx / feat_len_x; ty < feat_len_y;
+         ty += blockDim.x / feat_len_x) {
+      DType h = __ldg(hidden + node_idx * feat_len_y + ty);
+      DType agg = 0.;
+      for (; beg < end; beg++) {
+        Idx dst_id = __ldg(dst_ids + beg);
+        Idx eid = __ldg(eids + beg);
+        Idx type_id = __ldg(types + beg);
+        DType g = __ldg(grad_out + dst_id * feat_len_x + th);
+        DType w = __ldg(weight + type_id * feat_len_y * feat_len_x + tx);
+        DType n = __ldg(norm + eid);
+        agg += g * w * n;
+        atomicAdd(grad_weight + type_id * feat_len_y * feat_len_x + tx,
+                  g * h * n);
+      }
+      atomicAdd(grad_hidden + node_idx * feat_len_y + ty, agg);
     }
-    atomicAdd(grad_hidden + node_idx * feat_len_y + ty, agg);
   }
 }
 
