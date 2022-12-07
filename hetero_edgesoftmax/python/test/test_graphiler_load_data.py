@@ -25,6 +25,7 @@ def test_load_dataset(name, dataset_originally_homo_flag):
     dataset, ntype_offsets = graphiler_datasets.graphiler_load_data_as_mydgl_graph(
         name, to_homo=True, dataset_originally_homo_flag=dataset_originally_homo_flag
     )
+    scripted_dataset = dataset.to_script_object()
     assert dataset.get_num_ntypes() == len(ntype_offsets) - 1
     print(
         dataset.get_num_ntypes(),
