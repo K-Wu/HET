@@ -715,8 +715,9 @@ __global__ void RGNNFeatCompactFWPropSingleSided(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, IdxPtr separate_coo_relptrs,
-    IdxPtr separate_coo_node_indices, Idx input_dim, Idx output_per_head_dim,
-    Idx num_heads, int* accum_num_blocks_per_relation, Idx num_relations) {
+    IdxPtr separate_coo_node_indices, IdxPtr separate_coo_eids, Idx input_dim,
+    Idx output_per_head_dim, Idx num_heads, int* accum_num_blocks_per_relation,
+    Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -725,9 +726,9 @@ __global__ void RGNNFeatCompactFWPropSingleSided(
       node_feat_input,
       &weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) * input_dim *
               output_per_head_dim],
-      node_feat_per_edge, separate_coo_node_indices, nullptr,
-      separate_coo_node_indices, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_indices, idx_relation,
+      node_feat_per_edge, separate_coo_node_indices, nullptr, separate_coo_eids,
+      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+      idx_relation,
       separate_coo_relptrs[idx_relation + 1] -
           separate_coo_relptrs[idx_relation],
       accum_num_blocks_per_relation[idx_relation],
@@ -750,7 +751,7 @@ __global__ void RGNNDeltaWeightCompactBWPropSingleSided(
   Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, true, true, false, false, false, false, false,
+  _basic_MatMulKernel<BLOCK_SIZE, true, true, false, true, true, false, false,
                       true, Idx, IdxPtr, false, B_num_head_one_flag, false>(
       feat_input, delta_feat_compact,
       &delta_weight[idx_relation * (B_num_head_one_flag ? num_heads : 1) *

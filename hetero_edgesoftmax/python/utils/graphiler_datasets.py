@@ -80,7 +80,7 @@ def graphiler_load_data(name, to_homo: bool = True):  # feat_dim=GRAPHILER_DEFAU
         dataset = DglLinkPropPredDataset(name="ogbl-wikikg2")
         g = dataset[0]
         src, dst = g.edges()
-        reltype = torch.flatten(g.edata["etype"]).cuda()
+        reltype = torch.flatten(g.edata["reltype"]).cuda()
         num_etypes = torch.max(reltype).item() + 1
         hetero_dict = {}
         for i in range(num_etypes):
@@ -97,7 +97,7 @@ def graphiler_load_data(name, to_homo: bool = True):  # feat_dim=GRAPHILER_DEFAU
         dataset = FB15k237Dataset()
         g = dataset[0]
         src, dst = g.edges()
-        reltype = torch.flatten(g.edata["reltype"]).cuda()
+        reltype = torch.flatten(g.edata["etype"]).cuda()
         num_etypes = torch.max(reltype).item() + 1
         hetero_dict = {}
         for i in range(num_etypes):
@@ -151,13 +151,21 @@ def graphiler_load_data(name, to_homo: bool = True):  # feat_dim=GRAPHILER_DEFAU
     )  # returning etype for [HeteroGraphConv](https://docs.dgl.ai/en/0.8.x/generated/dgl.nn.pytorch.HeteroGraphConv.html) use.
 
 
-def graphiler_load_data_as_mydgl_graph(name, process_dgl_homo_graph=True):
-    if process_dgl_homo_graph:
+def graphiler_load_data_as_mydgl_graph(
+    name, to_homo=True, dataset_originally_homo_flag=False
+):
+    if to_homo:
         g, ntype_offsets = graphiler_load_data(name, to_homo=True)
-        my_g = mydglgraph_converters.create_mydgl_graph_coo_from_homo_dgl_graph(g)
+        my_g = mydglgraph_converters.create_mydgl_graph_coo_from_homo_dgl_graph(
+            g, dataset_originally_homo_flag
+        )
+        my_g["original"]["node_type_offsets"] = torch.LongTensor(ntype_offsets)
     else:
         g, ntype_offsets = graphiler_load_data(name, to_homo=False)  # feat_dim,
-        my_g = mydglgraph_converters.create_mydgl_graph_coo_from_hetero_dgl_graph(g)
+        my_g = mydglgraph_converters.create_mydgl_graph_coo_from_hetero_dgl_graph(
+            g, dataset_originally_homo_flag
+        )
+        my_g["original"]["node_type_offsets"] = torch.LongTensor(ntype_offsets)
     return my_g, ntype_offsets
 
 

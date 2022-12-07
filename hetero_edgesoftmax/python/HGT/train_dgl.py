@@ -16,7 +16,9 @@ def HGT_parse_args() -> argparse.Namespace:
     #    "--n_hidden", type=int, default=64, help="number of hidden units"
     # )
     parser.add_argument("--hgt_fused_attn_score_flag", action="store_true")
-
+    parser.add_argument(
+        "--fused_message_mean_aggregation_flag", action="store_true", default=True
+    )
     args = parser.parse_args()
     return args
 
@@ -61,6 +63,7 @@ def HGT_get_our_model(
         dropout=args.dropout,
         hgt_fused_attn_score_flag=args.hgt_fused_attn_score_flag,
         compact_as_of_node_flag=args.compact_as_of_node_flag,
+        fused_message_mean_aggregation_flag=args.fused_message_mean_aggregation_flag,
     )
     print(embed_layer)
     print(

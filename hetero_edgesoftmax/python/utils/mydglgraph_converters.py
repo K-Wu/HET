@@ -499,12 +499,17 @@ def create_mydgl_graph_coo_from_hetero_dgl_graph(g):
 
 
 @th.no_grad()
-def create_mydgl_graph_coo_from_homo_dgl_graph(g):
+def create_mydgl_graph_coo_from_homo_dgl_graph(g, dataset_originally_homo_flag):
     total_edge_srcs, total_edge_dsts = g.edges()
+    if dataset_originally_homo_flag:
+        etypes = th.zeros(g.number_of_edges(), dtype=th.int64)
+    else:
+        assert "_TYPE" in g.edata, "Heterogeneous graph must have _TYPE edge data"
+        etypes = g.edata["_TYPE"]
     mydgl_graph = create_mydgl_graph_coo_torch(
         total_edge_srcs,
         total_edge_dsts,
-        g.edata["_TYPE"],
+        etypes,
         th.arange(g.number_of_edges(), dtype=th.int64),
     )
     return mydgl_graph

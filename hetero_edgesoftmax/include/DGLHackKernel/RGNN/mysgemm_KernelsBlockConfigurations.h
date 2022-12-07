@@ -46,8 +46,10 @@ template <bool EqualPartitionFlag, bool PartitionAccordingToBlockSizeFlag,
 std::pair<std::vector<int>, std::vector<int>>
 get_schedule_by_relation_kernel_launch_metadata(
     int num_blocks_along_dimx, int num_relations, int block_size,
-    IteratorType num_job_entries_per_relation_beg,
-    IteratorType num_job_entries_per_relation_end) {
+    IteratorType num_job_entries_for_all_prev_relation_beg,
+    IteratorType num_job_entries_for_all_prev_relation_end) {
+  // IteratorType num_job_entries_per_relation_beg,
+  // IteratorType num_job_entries_per_relation_end) {
   std::vector<int> num_blocks_along_dimx_for_same_relation_vect;
   std::vector<int> num_blocks_along_dimx_for_all_prev_relation_vect;
   num_blocks_along_dimx_for_all_prev_relation_vect.push_back(0);
@@ -67,34 +69,38 @@ get_schedule_by_relation_kernel_launch_metadata(
 
   } else {
     if constexpr (PartitionAccordingToBlockSizeFlag) {
-      IteratorType num_job_entries_iter = num_job_entries_per_relation_beg;
+      IteratorType num_job_entries_for_all_prev_iter =
+          num_job_entries_for_all_prev_relation_beg + 1;
+      int num_job_entries_for_all_prev = 0;
       for (int idx_relationship = 0; idx_relationship < num_relations;
            idx_relationship++) {
+        int num_job_entries =
+            (*num_job_entries_for_all_prev_iter) - num_job_entries_for_all_prev;
+        num_job_entries_for_all_prev = *num_job_entries_for_all_prev_iter;
+        num_job_entries_for_all_prev_iter++;
         int num_blocks_along_dimx_for_this_relation =
-            (*num_job_entries_iter + block_size - 1) / block_size;
+            (num_job_entries + block_size - 1) / block_size;
         num_blocks_along_dimx_for_same_relation_vect.push_back(
             num_blocks_along_dimx_for_this_relation +
             num_blocks_along_dimx_for_all_prev_relation_vect.back());
-        num_job_entries_iter++;
       }
     } else {
       // in this branch, let's allocate blocks according to the amount of
       // workload and the number of blocks.
       assert(num_blocks_along_dimx > 0);
 
-      int total_num_job_entries = 0;
-      for (IteratorType iter = num_job_entries_per_relation_beg;
-           iter != num_job_entries_per_relation_end; iter++) {
-        total_num_job_entries += *iter;
-      }
+      int total_num_job_entries =
+          *(num_job_entries_for_all_prev_relation_beg + num_relations);
+
       int num_job_entries_for_this_and_prev_relation = 0;
-      IteratorType curr_iter = num_job_entries_per_relation_beg;
+
+      IteratorType curr_iter = num_job_entries_for_all_prev_relation_beg + 1;
 
       for (int idx_relationship = 0; idx_relationship < num_relations;
            idx_relationship++) {
-        int num_job_entries_for_current_relation = *curr_iter;
-        num_job_entries_for_this_and_prev_relation +=
-            num_job_entries_for_current_relation;
+        int num_job_entries_for_current_relation =
+            *curr_iter - num_job_entries_for_this_and_prev_relation;
+        num_job_entries_for_this_and_prev_relation = *curr_iter;
 
         int num_blocks_along_dimx_for_this_and_prev_relation =
             (num_job_entries_for_this_and_prev_relation + 0.0) /

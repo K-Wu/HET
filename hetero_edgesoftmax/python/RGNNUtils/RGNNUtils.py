@@ -110,6 +110,7 @@ def HET_RGNN_train_full_graph(
     print("start training...")
     # node_embed = node_embed_layer()
     # model = torch.jit.trace(model, (g, node_embed))
+    # th.cuda.empty_cache()
     for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
@@ -134,6 +135,7 @@ def HET_RGNN_train_full_graph(
         forward_prop_start = th.cuda.Event(enable_timing=True)
         forward_prop_end = th.cuda.Event(enable_timing=True)
         forward_prop_start.record()
+        # for idx in range(10):
         logits = model(g, node_embed)
         # logits = model(emb, blocks)
         forward_prop_end.record()

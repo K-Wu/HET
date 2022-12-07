@@ -5,7 +5,7 @@
 #include <torch/extension.h>
 #include <torch/library.h>
 
-#include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn.cu.h"
+#include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
 
 // TODO: create dummy tensor instead whenever unused field in torch export
@@ -41,7 +41,7 @@ void Layer1_SeparateCOO(at::Tensor& separate_coo_relptrs,
           grid_dim_y, num_relations, BLOCK_SIZE,
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
-              num_relations);
+              num_relations + 1);
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
 
   thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(

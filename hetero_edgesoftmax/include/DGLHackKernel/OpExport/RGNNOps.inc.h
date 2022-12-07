@@ -60,7 +60,7 @@ void _RelationalMatMul_separatecoo(
             grid_dim_y, num_relations, BLOCK_SIZE,
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>(),
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>() +
-                num_relations);
+                num_relations + 1);
   } else {
     at::Tensor separate_coo_relptrs_cpu_contiguous =
         separate_coo_relptrs.cpu().contiguous();
@@ -70,7 +70,7 @@ void _RelationalMatMul_separatecoo(
             grid_dim_y, num_relations, BLOCK_SIZE,
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
-                num_relations);
+                num_relations + 1);
   }
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
 
@@ -114,6 +114,7 @@ void _RelationalMatMul_separatecoo(
               unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
               unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
               separate_coo_relptrs.data_ptr<int64_t>(),
+              separate_coo_node_indices.data_ptr<int64_t>(),
               separate_coo_eids.data_ptr<int64_t>(), num_input_dim,
               num_output_per_head_dim, num_heads,
               thrust::raw_pointer_cast(
@@ -181,7 +182,8 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
       get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
           grid_dim_y, num_ntypes, BLOCK_SIZE,
           ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>(),
-          ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>() + num_ntypes);
+          ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>() + num_ntypes +
+              1);
 
   grid_dim_y = num_blocks_assignment_for_all_prev_ntype_vect.back();
 
@@ -497,7 +499,7 @@ void _BackwardRelationalMatMul_separatecoo(
             grid_dim_y, num_relations, BLOCK_SIZE,
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>(),
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>() +
-                num_relations);
+                num_relations + 1);
 
   } else {
     at::Tensor separate_coo_relptrs_cpu_contiguous =
@@ -508,7 +510,7 @@ void _BackwardRelationalMatMul_separatecoo(
             grid_dim_y, num_relations, BLOCK_SIZE,
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
-                num_relations);
+                num_relations + 1);
   }
   // print all elements of num_blocks_assignment_for_all_prev_relation_vect
   // for (int i = 0; i < num_relations; i++) {
@@ -911,7 +913,8 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
       get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
           grid_dim_y, num_ntypes, BLOCK_SIZE,
           ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>(),
-          ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>() + num_ntypes);
+          ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>() + num_ntypes +
+              1);
 
   grid_dim_y = num_blocks_assignment_for_all_prev_ntype_vect.back();
 

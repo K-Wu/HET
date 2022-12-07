@@ -24,10 +24,12 @@ class HET_HGTLayerHetero(nn.Module):
         use_norm=False,
         hgt_fused_attn_score_flag=False,
         compact_as_of_node_flag=False,
+        fused_message_mean_aggregation_flag=False,
     ):
         super(HET_HGTLayerHetero, self).__init__()
         self.hgt_fused_attn_score_flag = hgt_fused_attn_score_flag
         self.compact_as_of_node_flag = compact_as_of_node_flag
+        self.fused_message_mean_aggregation_flag = fused_message_mean_aggregation_flag
 
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -196,15 +198,6 @@ class HET_HGTLayerHetero(nn.Module):
         #         -1, self.n_heads, self.d_k
         #     )
 
-        message_per_edge = B.rgnn_relational_matmul(
-            G["separate"]["coo"]["original"]["rel_ptr"],
-            G["separate"]["coo"]["original"]["row_idx"],
-            G["separate"]["coo"]["original"]["eids"],
-            self.relation_msg,
-            v,
-            False,
-        )  # shape (num_edges, n_heads, d_k)
-
         if self.hgt_fused_attn_score_flag:
             attn_score = B.hgt_full_graph_hetero_attention_ops_csr(
                 G, self.relation_att, k, q
@@ -256,22 +249,46 @@ class HET_HGTLayerHetero(nn.Module):
         # )
         # NB: the scaling is: attn_score = relation_pri / self.sqrt_dk * attn_score
 
-        new_h = B.hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
-            G,
-            message_per_edge,
-            attn_score,
-            (self.relation_pri / self.sqrt_dk),
-            # g["separate"]["unique_node_idx"]["rel_ptr"],
-            # g["separate"]["unique_node_idx"]["node_idx"],
-        )  # shape (num_nodes, n_heads, d_k)
+        if self.fused_message_mean_aggregation_flag:
+            new_h = B.hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
+                G["separate"]["coo"]["original"]["rel_ptr"],
+                G["separate"]["coo"]["original"]["row_idx"],
+                G["separate"]["coo"]["original"]["col_idx"],
+                G["separate"]["coo"]["original"]["eids"],
+                self.relation_msg,
+                v,
+                G,
+                (self.relation_pri / self.sqrt_dk),
+                attn_score,
+            )
+        else:
+            message_per_edge = B.rgnn_relational_matmul(
+                G["separate"]["coo"]["original"]["rel_ptr"],
+                G["separate"]["coo"]["original"]["row_idx"],
+                G["separate"]["coo"]["original"]["eids"],
+                self.relation_msg,
+                v,
+                False,
+            )  # shape (num_edges, n_heads, d_k)
+            new_h = B.hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
+                G,
+                message_per_edge,
+                attn_score,
+                (self.relation_pri / self.sqrt_dk),
+                # g["separate"]["unique_node_idx"]["rel_ptr"],
+                # g["separate"]["unique_node_idx"]["node_idx"],
+            )  # shape (num_nodes, n_heads, d_k)
 
         new_h = B.rgnn_relational_matmul_no_scatter_gather_list(
             G["original"]["node_type_offsets"],
             (torch.sigmoid(self.skip) * self.a_linears),
             new_h,
         )
-        new_h_normed = torch.empty((G.get_num_nodes(), self.out_dim), device=h.device)
+
         if 0:
+            new_h_normed = torch.empty(
+                (G.get_num_nodes(), self.out_dim), device=h.device
+            )
             for dsttype in dest_nodetypes:
                 """
                 Step 3: Target-specific Aggregation
@@ -310,7 +327,7 @@ class HET_HGTLayerHetero(nn.Module):
                             "node_type_offsets"
                         ][dsttype + 1]
                     ] = trans_out
-        return new_h_normed
+        return new_h
 
 
 class HET_HGT_DGLHetero(nn.Module):
@@ -324,6 +341,7 @@ class HET_HGT_DGLHetero(nn.Module):
         dropout=0.2,
         hgt_fused_attn_score_flag=False,
         compact_as_of_node_flag=False,
+        fused_message_mean_aggregation_flag=False,
     ):  # ,h_dim
         super(HET_HGT_DGLHetero, self).__init__()
         self.mydglgraph = mydglgraph
@@ -339,6 +357,7 @@ class HET_HGT_DGLHetero(nn.Module):
             dropout=dropout,
             hgt_fused_attn_score_flag=hgt_fused_attn_score_flag,
             compact_as_of_node_flag=compact_as_of_node_flag,
+            fused_message_mean_aggregation_flag=fused_message_mean_aggregation_flag,
         )
         # self.layer1 = HET_HGTLayerHetero(
         #    h_dim, out_dim, mydglgraph, n_heads=n_heads, dropout=dropout

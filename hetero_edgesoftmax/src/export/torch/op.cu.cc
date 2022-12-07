@@ -85,8 +85,12 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
         HGT::FwProp::IntegratedCSR::full_graph_hetero_attention_ops);
   m.def("hgt_full_graph_edge_softmax_ops_csr",
         HGT::FwProp::IntegratedCSR::full_graph_edge_softmax_ops);
+  m.def("hgt_full_graph_edge_softmax_ops_separate_coo",
+        HGT::FwProp::full_graph_edge_softmax_ops_separate_coo);
   m.def("hgt_full_graph_edge_softmax_ops_backward_csr",
         HGT::BckProp::IntegratedCSR::full_graph_edge_softmax_ops);
+  m.def("hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo",
+        HGT::FwProp::FullGraphFusedMessageCalcAndMeanAggregationSeparateCOO);
   // Fused GAT CSR Declaration
   m.def("fused_gat_kernel_csr", RGCN::FwProp::IntegratedCSR::FusedKernelImpl);
   m.def("backward_fused_gat_csr",

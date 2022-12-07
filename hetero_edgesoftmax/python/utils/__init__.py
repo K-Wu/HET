@@ -11,3 +11,9 @@ from .graph_synthesizers import *
 from .graph_sampler import *
 from .utils import *
 from .mydglgraph_converters import *
+
+import platform
+
+assert (
+    platform.python_implementation() == "CPython"
+), "mydglgraph class assumes the type order in this class and dglgraph are preserved across run. Therefore one should use the CPython implementation to ensure that."

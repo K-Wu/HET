@@ -7,14 +7,15 @@
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
 
 void try_get_schedule_by_relations(int64_t num_relations, int64_t num_blocks) {
-  std::vector<int64_t> mock_job_entries_per_relation_vec(num_relations, 1000);
+  std::vector<int64_t> mock_job_entries_for_all_prev_relation_vec(
+      num_relations + 1, 1000);
   auto [num_blocks_along_dimx_for_same_relation_vect,
         num_blocks_along_dimx_for_all_prev_relation_vect] =
       get_schedule_by_relation_kernel_launch_metadata<
           false, false, std::vector<int64_t>::iterator>(
           num_relations, num_blocks, -1,
-          mock_job_entries_per_relation_vec.begin(),
-          mock_job_entries_per_relation_vec.end());
+          mock_job_entries_for_all_prev_relation_vec.begin(),
+          mock_job_entries_for_all_prev_relation_vec.end());
 
   // std::vector<int> mock_vect(100, 100);
   // std::vector<int> mock_vect2(100, 100);

@@ -12,6 +12,7 @@ import functools
 #    transpose_csr
 
 import torch
+import torch.jit
 
 import dgl
 
@@ -37,16 +38,11 @@ def recursive_apply_to_each_tensor_in_dict(func, dict_var, filter_key_set):
 class MyDGLGraph:
     # TODO: impl G["original"]["node_type_offsets"]
     def __init__(self):
-        import platform
 
-        assert (
-            platform.python_implementation() == "CPython"
-        ), "This class assumes the type order in this class and dglgraph are preserved across run. Therefore one should use the CPython implementation to ensure that."
         self.graph_data = dict()
 
-    @functools.cache
     @torch.no_grad()
-    def get_num_nodes(self):
+    def _get_num_nodes(self):
         assert "original" in self.graph_data
         if "node_type_offsets" in self.graph_data["original"]:
             return int(self.graph_data["original"]["node_type_offsets"][-1])
@@ -67,6 +63,11 @@ class MyDGLGraph:
                 )
             )
 
+    def get_num_nodes(self):
+        if getattr(self, "num_nodes", None) is None:
+            self.num_nodes = self._get_num_nodes()
+        return self.num_nodes
+
     def get_num_ntypes(self):
         assert "original" in self.graph_data
         if "node_type_offsets" in self.graph_data["original"]:
@@ -74,9 +75,8 @@ class MyDGLGraph:
         else:
             return 1
 
-    @functools.cache
     @torch.no_grad()
-    def get_num_rels(self):
+    def _get_num_rels(self):
         result = int(self.graph_data["original"]["rel_types"].max().item()) + 1
         if result <= 1:
             print("WARNING: get_num_rels <= 1")
@@ -103,13 +103,22 @@ class MyDGLGraph:
                 )
         return result
 
-    @functools.cache
-    def get_num_edges(self):
+    def get_num_rels(self):
+        if getattr(self, "num_rels", None) is None:
+            self.num_rels = self._get_num_rels()
+        return self.num_rels
+
+    def _get_num_edges(self):
         return self.graph_data["original"]["rel_types"].numel()
+
+    def get_num_edges(self):
+        if getattr(self, "num_edges", None) is None:
+            self.num_edges = self._get_num_edges()
+        return self.num_edges
 
     def apply_to_each_tensor(self, func):
         recursive_apply_to_each_tensor_in_dict(
-            func, self.graph_data, {"legacy_metadata_from_dgl"}
+            func, self.graph_data, ["legacy_metadata_from_dgl"]
         )
 
     def to(self, device):

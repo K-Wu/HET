@@ -11,12 +11,14 @@
 // dimBlock.y, num_heads * num_partitions_along_Acol_Brow );
 // MatMulKernel<<<dimGrid, dimBlock>>>(d_A, d_B, d_C);
 // C = A * B (all are row-major matrices)
-template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <int BLOCK_SIZE, typename Idx, typename IdxPtr,
+          bool hgt_instead_of_rgcn_flag>
 __device__ __forceinline__ void _simplified_basic_MatMulKernel(
-    float* A, float* B, float* C, float* edge_norm, IdxPtr separate_coo_row_idx,
-    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids, Idx idx_relation,
-    Idx numARows, Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
-    Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols) {
+    float* A, float* B, float* C, float* edge_norm, /*float* relation_pri,*/
+    IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
+    IdxPtr separate_coo_eids, Idx idx_relation, Idx numARows,
+    Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
+    Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, Idx num_heads) {
   // num_B_cols is output_dim//num_heads as forward propagation weight,
   // output_dim//num_heads as backward propagation weight, and in_feat_dim as
   // features or delta features. num_A_cols is input_dim as forward propagation
@@ -28,8 +30,11 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
   // gradient output feature. It is safe to pass num_A_cols as in_dim.
 
   // Block row and column
-  assert((blockDim.z == 1));
-
+  if constexpr (!hgt_instead_of_rgcn_flag) {
+    // assuming this case is RGCN and there is no multiple head
+    assert((blockDim.z == 1));
+  }  // otherwise assuming HGT
+  Idx idx_head = blockIdx.z;
   IdxPtr A_gather_list = separate_coo_row_idx;
   IdxPtr C_scatter_list = separate_coo_col_idx;
 
@@ -79,17 +84,22 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
 
       // Get sub-matrix Asub of A
       // Asub = &A[blockRow * BLOCK_SIZE * num_A_cols + m * BLOCK_SIZE];
+
       As[thIdxRow][thIdxFeat] =
           (thIdxRow + blockRow * BLOCK_SIZE < numARows &&
            m * BLOCK_SIZE + thIdxFeat < num_A_cols)
               ? A[A_gather_list[thIdxRow + blockRow * BLOCK_SIZE +
                                 blockRowJobEntryBeg] *
-                      num_A_cols +
-                  (thIdxFeat + m * BLOCK_SIZE)] *
+                      num_A_cols * num_heads +
+                  num_A_cols * idx_head + (thIdxFeat + m * BLOCK_SIZE)] *
                     edge_norm[separate_coo_eids[thIdxRow +
                                                 blockRow * BLOCK_SIZE +
                                                 blockRowJobEntryBeg]]
               : 0.0f;
+      // if constexpr (hgt_instead_of_rgcn_flag) {
+      //   As[thIdxRow][thIdxFeat] *=
+      //       relation_pri[idx_relation * num_heads + idx_head];
+      // }
 
       // B matrix the most major dimension is num_heads, i.e., [num_heads,
       // num_B_rows_feat, num_B_cols_feat] instead of [num_nodes|edges,
@@ -100,11 +110,12 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
       // forward propagation or [num_heads, output_dim//num_heads
       // (num_A_cols), input_dim (num_B_cols)] in backward propagation
       // FIXME: incorporate num_head_one_flag
+
       Bs[thIdxRow][thIdxFeat] =
           (m * BLOCK_SIZE + thIdxRow < num_A_cols &&
            blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols)
-              ? B[(m * BLOCK_SIZE + thIdxRow) * num_B_cols +
-                  (blockFeat * BLOCK_SIZE + thIdxFeat)]
+              ? B[(m * BLOCK_SIZE + thIdxRow) * num_B_cols * num_heads +
+                  idx_head * num_B_cols + (blockFeat * BLOCK_SIZE + thIdxFeat)]
               : 0.0f;
 
       // if (ScatterCFlag && !AdvancedScatterCFlag) {
@@ -188,8 +199,8 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
 
       atomicAdd(&C[C_scatter_list[thIdxRow + blockRow * BLOCK_SIZE +
                                   blockRowJobEntryBeg] *
-                       num_B_cols +
-                   blockFeat * BLOCK_SIZE + thIdxFeat],
+                       num_B_cols * num_heads +
+                   idx_head * num_B_cols + blockFeat * BLOCK_SIZE + thIdxFeat],
                 Cvalue);
 
       // atomicAdd(&GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
@@ -215,14 +226,37 @@ __global__ void RGCNMatmulNoScatterGatherListFwProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _simplified_basic_MatMulKernel<BLOCK_SIZE, Idx, IdxPtr>(
+  _simplified_basic_MatMulKernel<BLOCK_SIZE, Idx, IdxPtr, false>(
       node_feat_input, &weights[idx_relation * input_dim * output_dim],
-      linear_projected_node_feat, edge_norm, separate_coo_row_idx,
+      linear_projected_node_feat, edge_norm, /*nullptr, */ separate_coo_row_idx,
       separate_coo_col_idx, separate_coo_eids, idx_relation,
       separate_coo_rel_ptrs[idx_relation + 1] -
           separate_coo_rel_ptrs[idx_relation],
       accum_num_blocks_per_relation[idx_relation],
       (accum_num_blocks_per_relation[idx_relation + 1] -
        accum_num_blocks_per_relation[idx_relation]),
-      separate_coo_rel_ptrs[idx_relation], input_dim, output_dim);
+      separate_coo_rel_ptrs[idx_relation], input_dim, output_dim, 1);
+}
+
+template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
+__global__ void HGTMessageGenerationAndAccumulationFwProp(
+    float* node_feat_input, float* weights, float* linear_projected_node_feat,
+    float* edge_norm, /*float* relation_pri, */ IdxPtr separate_coo_row_idx,
+    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
+    IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
+    Idx num_relations, Idx input_dim, Idx output_dim, Idx num_heads) {
+  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_relation = binary_search<int, int*>(
+      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  _simplified_basic_MatMulKernel<BLOCK_SIZE, Idx, IdxPtr, true>(
+      node_feat_input, &weights[idx_relation * input_dim * output_dim],
+      linear_projected_node_feat, edge_norm,
+      /*relation_pri, */ separate_coo_row_idx, separate_coo_col_idx,
+      separate_coo_eids, idx_relation,
+      separate_coo_rel_ptrs[idx_relation + 1] -
+          separate_coo_rel_ptrs[idx_relation],
+      accum_num_blocks_per_relation[idx_relation],
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
+      separate_coo_rel_ptrs[idx_relation], input_dim, output_dim, num_heads);
 }
