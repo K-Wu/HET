@@ -259,7 +259,7 @@ void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weight, node_feat, ret);
   } else {
-    _RelationalMatMul_separatecoo<16, true, false, false, true>(
+    _RelationalMatMul_separatecoo<16, true, false, false, false>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weight, node_feat, ret);
   }
@@ -278,10 +278,10 @@ void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
         weight, node_feat, ret);
   } else {
-    _RelationalMatMul_separatecoo<16, true, true, false, true>(
-        unique_srcs_and_dests_rel_ptr, separate_coo_node_indices,
-        separate_coo_eids, unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices, weight, node_feat, ret);
+    _RelationalMatMul_separatecoo<16, true, true, false, false>(
+        separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
+        unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+        weight, node_feat, ret);
   }
 }
 

@@ -108,8 +108,7 @@ class HET_HGTLayerHetero(nn.Module):
         #     src_nodetypes.add(srctype)
         #     dest_nodetypes.add(dsttype)
 
-        src_nodetypes = list(range(G.get_num_ntypes()))
-        dest_nodetypes = list(range(G.get_num_ntypes()))
+        # src_nodetypes = list(range(G.get_num_ntypes()))
 
         # k = self.k_linears[0](
         #         h
@@ -286,6 +285,7 @@ class HET_HGTLayerHetero(nn.Module):
         )
 
         if 0:
+            dest_nodetypes = list(range(G.get_num_ntypes()))
             new_h_normed = torch.empty(
                 (G.get_num_nodes(), self.out_dim), device=h.device
             )
