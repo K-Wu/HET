@@ -11,37 +11,37 @@ class RgcnSecondLayerCOO(th.autograd.Function):
     @staticmethod
     def forward(
         ctx,
-        row_idx,
-        col_idx,
-        eids,
-        reltypes,
-        transposed_row_idx,
-        transposed_col_idx,
-        transposed_eids,
-        tranposed_reltypes,
+        in_row_idx,
+        in_col_idx,
+        in_eids,
+        in_reltypes,
+        out_row_idx,
+        out_col_idx,
+        out_eids,
+        out_reltypes,
         x,
         weight,
         norm,
         ret,
     ):
         ctx.save_for_backward(
-            row_idx,
-            col_idx,
-            eids,
-            reltypes,
-            transposed_row_idx,
-            transposed_col_idx,
-            transposed_eids,
-            tranposed_reltypes,
+            in_row_idx,
+            in_col_idx,
+            in_eids,
+            in_reltypes,
+            out_row_idx,
+            out_col_idx,
+            out_eids,
+            out_reltypes,
             weight,
             norm,
             x,
         )
         K.rgcn_layer1_coo(
-            row_idx,
-            col_idx,
-            eids,
-            reltypes,
+            in_row_idx,
+            in_col_idx,
+            in_eids,
+            in_reltypes,
             x,
             weight,
             norm,
@@ -52,14 +52,14 @@ class RgcnSecondLayerCOO(th.autograd.Function):
     @staticmethod
     def backward(ctx, gradout):
         (
-            row_idx,
-            col_idx,
-            eids,
-            reltypes,
-            transposed_row_idx,
-            transposed_col_idx,
-            transposed_eids,
-            tranposed_reltypes,
+            in_row_idx,
+            in_col_idx,
+            in_eids,
+            in_reltypes,
+            out_row_idx,
+            out_col_idx,
+            out_eids,
+            out_reltypes,
             weight,
             norm,
             x,
@@ -67,10 +67,10 @@ class RgcnSecondLayerCOO(th.autograd.Function):
         grad_x = th.zeros_like(x)
         grad_weight = th.zeros_like(weight)
         K.rgcn_layer1_backward_coo(
-            transposed_row_idx,
-            transposed_col_idx,
-            transposed_eids,
-            tranposed_reltypes,
+            out_row_idx,
+            out_col_idx,
+            out_eids,
+            out_reltypes,
             x,
             weight,
             norm,
@@ -82,13 +82,13 @@ class RgcnSecondLayerCOO(th.autograd.Function):
 
 
 def rgcn_layer1_coo(graph, x, weight, norm):
-    row_idx = graph["transposed"]["row_idx"]
-    col_idx = graph["transposed"]["col_idx"]
-    eids = graph["transposed"]["eids"]
-    reltypes = graph["transposed"]["rel_types"]
-    transposed_row_idx = graph["original"]["row_idx"]
-    transposed_col_idx = graph["original"]["col_idx"]
-    transposed_eids = graph["original"]["eids"]
+    in_row_idx = graph["transposed"]["row_idx"]
+    in_col_idx = graph["transposed"]["col_idx"]
+    in_eids = graph["transposed"]["eids"]
+    in_reltypes = graph["transposed"]["rel_types"]
+    out_row_idx = graph["original"]["row_idx"]
+    out_col_idx = graph["original"]["col_idx"]
+    out_eids = graph["original"]["eids"]
     transposed_reltypes = graph["original"]["rel_types"]
     ret = th.zeros(
         (graph.get_num_nodes(), weight.size(2)),
@@ -97,13 +97,13 @@ def rgcn_layer1_coo(graph, x, weight, norm):
         requires_grad=True,
     )
     return RgcnSecondLayerCOO.apply(
-        row_idx,
-        col_idx,
-        eids,
-        reltypes,
-        transposed_row_idx,
-        transposed_col_idx,
-        transposed_eids,
+        in_row_idx,
+        in_col_idx,
+        in_eids,
+        in_reltypes,
+        out_row_idx,
+        out_col_idx,
+        out_eids,
         transposed_reltypes,
         x,
         weight,
