@@ -15,6 +15,8 @@ import functools
 import torch
 import torch.jit
 
+from typing import Dict
+
 import dgl
 
 
@@ -203,6 +205,67 @@ class MyDGLGraph:
             self.graph_data["transposed"]["eids"] = transposed_eids
         return self
 
+    def get_original_coo(self) -> Dict[str, torch.Tensor]:
+        original_coo = dict()
+        original_coo["rel_types"] = self.graph_data["original"]["rel_types"]
+        original_coo["row_idx"] = self.graph_data["original"]["row_idx"]
+        original_coo["col_idx"] = self.graph_data["original"]["col_idx"]
+        original_coo["eids"] = self.graph_data["original"]["eids"]
+        return original_coo
+
+    def get_out_csr(self) -> Dict[str, torch.Tensor]:
+        out_csr = dict()
+        out_csr["rel_types"] = self.graph_data["original"]["rel_types"]
+        out_csr["row_ptr"] = self.graph_data["original"]["row_ptr"]
+        out_csr["col_idx"] = self.graph_data["original"]["col_idx"]
+        out_csr["eids"] = self.graph_data["original"]["eids"]
+        return out_csr
+
+    def get_transposed_coo(self) -> Dict[str, torch.Tensor]:
+        transposed_coo = dict()
+        transposed_coo["rel_types"] = self.graph_data["transposed"]["rel_types"]
+        transposed_coo["row_idx"] = self.graph_data["transposed"]["row_idx"]
+        transposed_coo["col_idx"] = self.graph_data["transposed"]["col_idx"]
+        transposed_coo["eids"] = self.graph_data["transposed"]["eids"]
+        return transposed_coo
+
+    def get_in_csr(self) -> Dict[str, torch.Tensor]:
+        in_csr = dict()
+        in_csr["rel_types"] = self.graph_data["transposed"]["rel_types"]
+        in_csr["row_ptr"] = self.graph_data["transposed"]["row_ptr"]
+        in_csr["col_idx"] = self.graph_data["transposed"]["col_idx"]
+        in_csr["eids"] = self.graph_data["transposed"]["eids"]
+        return in_csr
+
+    def get_original_node_type_offsets(self) -> torch.Tensor:
+        return self.graph_data["original"]["node_type_offsets"]
+
+    def get_separate_coo_original(self) -> Dict[str, torch.Tensor]:
+        separate_coo_original = dict()
+        separate_coo_original["rel_ptr"] = self.graph_data["separate"]["coo"][
+            "original"
+        ]["rel_ptr"]
+        separate_coo_original["row_idx"] = self.graph_data["separate"]["coo"][
+            "original"
+        ]["row_idx"]
+        separate_coo_original["col_idx"] = self.graph_data["separate"]["coo"][
+            "original"
+        ]["col_idx"]
+        separate_coo_original["eids"] = self.graph_data["separate"]["coo"]["original"][
+            "eids"
+        ]
+        return separate_coo_original
+
+    def get_separate_unique_node_indices(self) -> Dict[str, torch.Tensor]:
+        separate_unique_node_indices = dict()
+        separate_unique_node_indices["rel_ptr"] = self.graph_data["separate"][
+            "unique_node_idx"
+        ]["rel_ptr"]
+        separate_unique_node_indices["node_idx"] = self.graph_data["separate"][
+            "unique_node_idx"
+        ]["node_idx"]
+        return separate_unique_node_indices
+
     def to_script_object(self) -> utils.ScriptedMyDGLGraph:
         num_nodes = self.get_num_nodes()
         num_ntypes = self.get_num_ntypes()
@@ -215,72 +278,36 @@ class MyDGLGraph:
             transposed_sparse_format = None
 
         if sparse_format == "coo":
-            original_coo = dict()
-            original_coo["rel_types"] = self.graph_data["original"]["rel_types"]
-            original_coo["row_idx"] = self.graph_data["original"]["row_idx"]
-            original_coo["col_idx"] = self.graph_data["original"]["col_idx"]
-            original_coo["eids"] = self.graph_data["original"]["eids"]
+            original_coo = self.get_original_coo()
             out_csr = None
         elif sparse_format == "csr":
-            out_csr = dict()
-            out_csr["rel_types"] = self.graph_data["original"]["rel_types"]
-            out_csr["row_ptr"] = self.graph_data["original"]["row_ptr"]
-            out_csr["col_idx"] = self.graph_data["original"]["col_idx"]
-            out_csr["eids"] = self.graph_data["original"]["eids"]
+            out_csr = self.get_out_csr()
             original_coo = None
         else:
             raise ValueError("unknown sparse format")
 
         if transposed_sparse_format == "coo":
-            transposed_coo = dict()
-            transposed_coo["rel_types"] = self.graph_data["transposed"]["rel_types"]
-            transposed_coo["row_idx"] = self.graph_data["transposed"]["row_idx"]
-            transposed_coo["col_idx"] = self.graph_data["transposed"]["col_idx"]
-            transposed_coo["eids"] = self.graph_data["transposed"]["eids"]
+            transposed_coo = self.get_transposed_coo()
             in_csr = None
         elif transposed_sparse_format == "csr":
-            in_csr = dict()
-            in_csr["rel_types"] = self.graph_data["transposed"]["rel_types"]
-            in_csr["row_ptr"] = self.graph_data["transposed"]["row_ptr"]
-            in_csr["col_idx"] = self.graph_data["transposed"]["col_idx"]
-            in_csr["eids"] = self.graph_data["transposed"]["eids"]
+            in_csr = self.get_in_csr()
             transposed_coo = None
         else:
             in_csr = None
             transposed_coo = None
 
         if "node_type_offsets" in self.graph_data["original"]:
-            original_node_type_offsets = self.graph_data["original"][
-                "node_type_offsets"
-            ]
+            original_node_type_offsets = self.get_original_node_type_offsets()
         else:
             original_node_type_offsets = None
 
         if "separate" in self.graph_data:
             if "coo" in self.graph_data["separate"]:
-                separate_coo_original = dict()
-                separate_coo_original["rel_types"] = self.graph_data["separate"]["coo"][
-                    "original"
-                ]["rel_types"]
-                separate_coo_original["row_idx"] = self.graph_data["separate"]["coo"][
-                    "original"
-                ]["row_idx"]
-                separate_coo_original["col_idx"] = self.graph_data["separate"]["coo"][
-                    "original"
-                ]["col_idx"]
-                separate_coo_original["eids"] = self.graph_data["separate"]["coo"][
-                    "original"
-                ]["eids"]
+                separate_coo_original = self.get_separate_coo_original()
             else:
                 separate_coo_original = None
             if "unique_node_idx" in self.graph_data["separate"]:
-                separate_unique_node_indices = dict()
-                separate_unique_node_indices["rel_ptr"] = self.graph_data["separate"][
-                    "unique_node_idx"
-                ]["rel_ptr"]
-                separate_unique_node_indices["node_idx"] = self.graph_data["separate"][
-                    "unique_node_idx"
-                ]["node_idx"]
+                separate_unique_node_indices = self.get_separate_unique_node_indices()
             else:
                 separate_unique_node_indices = None
         else:

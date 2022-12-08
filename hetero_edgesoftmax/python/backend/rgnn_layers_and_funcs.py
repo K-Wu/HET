@@ -217,7 +217,7 @@ def rgnn_relational_matmul_no_scatter_gather_list(
         ),  # [num_items, out_feats]
         dtype=weights.dtype,
         device=weights.device,
-        requires_grad=True,
+        # requires_grad=True,
     )
     return RgnnRelationalMatmulNoScatterGatherList.apply(
         ntype_offset_ptrs,

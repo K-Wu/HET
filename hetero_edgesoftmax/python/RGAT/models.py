@@ -111,14 +111,12 @@ class HET_RelationalAttLayer(nn.Module):
         #     module.reset_parameters()
 
     # pylint: disable=invalid-name
-    def forward(
-        self, g: utils.MyDGLGraph, inputs: th.Tensor, myblock: Union[None, list] = None
-    ):
+    def forward(self, g, inputs: th.Tensor, myblock: Union[None, list] = None):
         """Forward computation
 
         Parameters
         ----------
-        g : DGLHeteroGraph
+        g : MyDGLGraph or ScriptedMyDGLGraph
             Input graph.
         inputs : dict[str, torch.Tensor]
             Node feature for each node type.
@@ -152,23 +150,24 @@ class HET_RelationalAttLayer(nn.Module):
                 product_of_conv_weights_attn_l = (
                     self.conv_weights * self.attn_l.unsqueeze(2)
                 )
+                separate_unique_node_idx = g.get_separate_unique_node_indices()
                 feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    g["separate"]["unique_node_idx"]["rel_ptr"],
-                    g["separate"]["unique_node_idx"]["node_idx"],
+                    separate_unique_node_idx["rel_ptr"],
+                    separate_unique_node_idx["node_idx"],
                     self.conv_weights,
                     inputs,
                     True,
                 )
                 el_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    g["separate"]["unique_node_idx"]["rel_ptr"],
-                    g["separate"]["unique_node_idx"]["node_idx"],
+                    separate_unique_node_idx["rel_ptr"],
+                    separate_unique_node_idx["node_idx"],
                     product_of_conv_weights_attn_l,
                     inputs,
                     True,
                 )
                 er_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    g["separate"]["unique_node_idx"]["rel_ptr"],
-                    g["separate"]["unique_node_idx"]["node_idx"],
+                    separate_unique_node_idx["rel_ptr"],
+                    separate_unique_node_idx["node_idx"],
                     product_of_conv_weights_attn_r,
                     inputs,
                     True,
@@ -176,10 +175,11 @@ class HET_RelationalAttLayer(nn.Module):
                 el_compact = el_compact.sum(dim=-1)
                 er_compact = er_compact.sum(dim=-1)
             else:
+                separate_unique_node_idx = g.get_separate_unique_node_indices()
                 # TODO: separate feat_compact_src and feat_compact_dst
                 feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    g["separate"]["unique_node_idx"]["rel_ptr"],
-                    g["separate"]["unique_node_idx"]["node_idx"],
+                    separate_unique_node_idx["rel_ptr"],
+                    separate_unique_node_idx["node_idx"],
                     self.conv_weights,
                     inputs,
                     True,
@@ -192,12 +192,12 @@ class HET_RelationalAttLayer(nn.Module):
             )
 
         else:
-
+            separate_coo_original_dict = g.get_separate_coo_original()
             # print(th.argmin(g["separate"]["coo"]["original"]["eids"])) # 256546 rel_ptr [183, 184)
             feat_src_per_edge = B.rgnn_relational_matmul(
-                g["separate"]["coo"]["original"]["rel_ptr"],
-                g["separate"]["coo"]["original"]["row_idx"],
-                g["separate"]["coo"]["original"]["eids"],
+                separate_coo_original_dict["rel_ptr"],
+                separate_coo_original_dict["row_idx"],
+                separate_coo_original_dict["eids"],
                 # g["separate"]["unique_node_idx"]["rel_ptr"],
                 # g["separate"]["unique_node_idx"]["node_idx"],
                 self.conv_weights,
@@ -205,9 +205,9 @@ class HET_RelationalAttLayer(nn.Module):
                 True,
             )
             el = B.rgnn_relational_matmul(
-                g["separate"]["coo"]["original"]["rel_ptr"],
-                g["separate"]["coo"]["original"]["eids"],
-                g["separate"]["coo"]["original"]["eids"],
+                separate_coo_original_dict["rel_ptr"],
+                separate_coo_original_dict["eids"],
+                separate_coo_original_dict["eids"],
                 self.attn_l.unsqueeze(-1),
                 feat_src_per_edge,
                 False,
@@ -229,22 +229,24 @@ class HET_RelationalAttLayer(nn.Module):
                 # product_of_conv_weights_attn_r = th.reshape(
                 #    product_of_conv_weights_attn_r, (-1, self.n_heads, self.in_feat)
                 # )
+                separate_coo_original_dict = g.get_separate_coo_original()
                 product_of_conv_weights_attn_r = (
                     self.conv_weights * self.attn_r.unsqueeze(2)
                 )
                 er = B.rgnn_relational_matmul(
-                    g["separate"]["coo"]["original"]["rel_ptr"],
-                    g["separate"]["coo"]["original"]["eids"],
-                    g["separate"]["coo"]["original"]["eids"],
+                    separate_coo_original_dict["rel_ptr"],
+                    separate_coo_original_dict["eids"],
+                    separate_coo_original_dict["eids"],
                     product_of_conv_weights_attn_r,
                     inputs,
                     True,
                 )
             else:
+                separate_coo_original_dict = g.get_separate_coo_original()
                 feat_dst_per_edge = B.rgnn_relational_matmul(
-                    g["separate"]["coo"]["original"]["rel_ptr"],
-                    g["separate"]["coo"]["original"]["col_idx"],
-                    g["separate"]["coo"]["original"]["eids"],
+                    separate_coo_original_dict["rel_ptr"],
+                    separate_coo_original_dict["col_idx"],
+                    separate_coo_original_dict["eids"],
                     # g["separate"]["unique_node_idx"]["rel_ptr"],
                     # g["separate"]["unique_node_idx"]["node_idx"],
                     self.conv_weights,
@@ -252,9 +254,9 @@ class HET_RelationalAttLayer(nn.Module):
                     True,
                 )
                 er = B.rgnn_relational_matmul(
-                    g["separate"]["coo"]["original"]["rel_ptr"],
-                    g["separate"]["coo"]["original"]["eids"],
-                    g["separate"]["coo"]["original"]["eids"],
+                    separate_coo_original_dict["rel_ptr"],
+                    separate_coo_original_dict["eids"],
+                    separate_coo_original_dict["eids"],
                     self.attn_r.unsqueeze(-1),
                     feat_dst_per_edge,
                     False,
@@ -373,7 +375,7 @@ class HET_RelationalGATEncoder(nn.Module):
 
     def forward(
         self,
-        g: utils.MyDGLGraph,
+        g,
         h: Union[th.Tensor, None] = None,
         blocks: Union[None, list] = None,
     ):

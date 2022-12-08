@@ -71,14 +71,16 @@ class RgcnFirstLayerCSR(th.autograd.Function):
 
 def rgcn_layer0_csr(graph, weight, norm):
     # NB: notice that in rgcn, in-adjacency list is used and therefore, we input the transposed adj list to forward propagation, and the original to backward propagation.
-    incsr_row_ptr = graph["transposed"]["row_ptr"]
-    incsr_col_idx = graph["transposed"]["col_idx"]
-    incsr_eids = graph["transposed"]["eids"]
-    incsr_reltypes = graph["transposed"]["rel_types"]
-    outcsr_row_ptr = graph["original"]["row_ptr"]
-    outcsr_col_idx = graph["original"]["col_idx"]
-    outcsr_eids = graph["original"]["eids"]
-    outcsr_reltypes = graph["original"]["rel_types"]
+    incsr_dict = graph.get_in_csr()
+    outcsr_dict = graph.get_out_csr()
+    incsr_row_ptr = incsr_dict["row_ptr"]
+    incsr_col_idx = incsr_dict["col_idx"]
+    incsr_eids = incsr_dict["eids"]
+    incsr_reltypes = incsr_dict["rel_types"]
+    outcsr_row_ptr = outcsr_dict["row_ptr"]
+    outcsr_col_idx = outcsr_dict["col_idx"]
+    outcsr_eids = outcsr_dict["eids"]
+    outcsr_reltypes = outcsr_dict["rel_types"]
     ret = th.zeros(
         (weight.size(1), weight.size(2)),
         dtype=weight.dtype,
@@ -338,17 +340,19 @@ def rgcn_layer1_separate_coo(
     weight,
     norm,
 ):
-    incsr_row_ptr = graph["transposed"]["row_ptr"]
+    incsr_dict = graph.get_in_csr()
+    outcsr_dict = graph.get_out_csr()
+    incsr_row_ptr = incsr_dict["row_ptr"]
     ret = th.zeros(
         (incsr_row_ptr.numel() - 1, weight.size(2)),
         dtype=weight.dtype,
         device=weight.device,
         requires_grad=True,
     )
-    outcsr_row_ptr = graph["original"]["row_ptr"]
-    outcsr_col_idx = graph["original"]["col_idx"]
-    outcsr_eids = graph["original"]["eids"]
-    outcsr_reltypes = graph["original"]["rel_types"]
+    outcsr_row_ptr = outcsr_dict["row_ptr"]
+    outcsr_col_idx = outcsr_dict["col_idx"]
+    outcsr_eids = outcsr_dict["eids"]
+    outcsr_reltypes = outcsr_dict["rel_types"]
     return RgcnLayer1SeparateCoo.apply(
         separate_coo_rel_ptr,
         separate_coo_eids,
@@ -374,14 +378,16 @@ def rgcn_layer1_csr(
     num_blocks_on_node_forward=None,
     num_blocks_on_node_backward=None,
 ):
-    incsr_row_ptr = graph["transposed"]["row_ptr"]
-    incsr_col_idx = graph["transposed"]["col_idx"]
-    incsr_eids = graph["transposed"]["eids"]
-    incsr_reltypes = graph["transposed"]["rel_types"]
-    outcsr_row_ptr = graph["original"]["row_ptr"]
-    outcsr_col_idx = graph["original"]["col_idx"]
-    outcsr_eids = graph["original"]["eids"]
-    outcsr_reltypes = graph["original"]["rel_types"]
+    incsr_dict = graph.get_in_csr()
+    outcsr_dict = graph.get_out_csr()
+    incsr_row_ptr = incsr_dict["row_ptr"]
+    incsr_col_idx = incsr_dict["col_idx"]
+    incsr_eids = incsr_dict["eids"]
+    incsr_reltypes = incsr_dict["rel_types"]
+    outcsr_row_ptr = outcsr_dict["row_ptr"]
+    outcsr_col_idx = outcsr_dict["col_idx"]
+    outcsr_eids = outcsr_dict["eids"]
+    outcsr_reltypes = outcsr_dict["rel_types"]
     ret = th.zeros(
         (incsr_row_ptr.numel() - 1, weight.size(2)),
         dtype=weight.dtype,
@@ -413,7 +419,7 @@ def rgcn_layer1_csr(
             incsr_eids,
             incsr_reltypes,
             outcsr_row_ptr,
-            transposed_col_idx,
+            outcsr_col_idx,
             outcsr_eids,
             outcsr_reltypes,
             x,

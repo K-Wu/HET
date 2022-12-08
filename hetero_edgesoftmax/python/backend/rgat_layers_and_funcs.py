@@ -115,9 +115,11 @@ class RelationalFusedGatCSR(th.autograd.Function):
 
 def relational_fused_gat_csr(graph, feat_src, el, er, slope):
     # NB: notice that in rgcn, in-adjacency list is used and therefore, we input the transposed adj list to forward propagation, and the original to backward propagation.
-
+    incsr_dict = graph.get_in_csr()
+    outcsr_dict = graph.get_out_csr()
+    separate_unique_node_indices = graph.get_separate_unique_node_indices()
     exp = el.new_empty(
-        [graph["transposed"]["col_idx"].numel()] + list(el.size()[1:])
+        [incsr_dict["col_idx"].numel()] + list(el.size()[1:])
     )  # [num_edges, num_heads]
     s = el.new_empty(
         [graph.get_num_nodes()] + [el.size()[1]]
@@ -126,16 +128,16 @@ def relational_fused_gat_csr(graph, feat_src, el, er, slope):
         [graph.get_num_nodes()] + list(feat_src.size()[1:])
     )  # [num_dest_nodes, num_heads, out_feats//num_heads]
     return RelationalFusedGatCSR.apply(
-        graph["transposed"]["row_ptr"],
-        graph["transposed"]["col_idx"],
-        graph["transposed"]["eids"],
-        graph["transposed"]["rel_types"],
-        graph["original"]["row_ptr"],
-        graph["original"]["col_idx"],
-        graph["original"]["eids"],
-        graph["original"]["rel_types"],
-        graph["separate"]["unique_node_idx"]["rel_ptr"],
-        graph["separate"]["unique_node_idx"]["node_idx"],
+        incsr_dict["row_ptr"],
+        incsr_dict["col_idx"],
+        incsr_dict["eids"],
+        incsr_dict["rel_types"],
+        outcsr_dict["row_ptr"],
+        outcsr_dict["col_idx"],
+        outcsr_dict["eids"],
+        outcsr_dict["rel_types"],
+        separate_unique_node_indices["rel_ptr"],
+        separate_unique_node_indices["node_idx"],
         feat_src,
         el,
         er,
@@ -258,8 +260,11 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
 def relational_fused_gat_compact_as_of_node(
     g, feat_compact, el_compact, er_compact, negative_slope
 ):
+    separate_unique_node_indices = g.get_separate_unique_node_indices()
+    incsr_dict = g.get_in_csr()
+    outcsr_dict = g.get_out_csr()
     exp = el_compact.new_empty(
-        [g["transposed"]["col_idx"].numel()] + list(el_compact.size()[1:])
+        [incsr_dict["col_idx"].numel()] + list(el_compact.size()[1:])
     )
     s = el_compact.new_empty([g.get_num_nodes()] + list(el_compact.size()[1:]))
     ret = th.empty(
@@ -269,16 +274,16 @@ def relational_fused_gat_compact_as_of_node(
         memory_format=th.contiguous_format,
     )
     return RgatRelationalFusedGATCompactAsOfNodeCSR.apply(
-        g["separate"]["unique_node_idx"]["rel_ptr"],
-        g["separate"]["unique_node_idx"]["node_idx"],
-        g["transposed"]["row_ptr"],
-        g["transposed"]["col_idx"],
-        g["transposed"]["eids"],
-        g["transposed"]["rel_types"],
-        g["original"]["row_ptr"],
-        g["original"]["col_idx"],
-        g["original"]["eids"],
-        g["original"]["rel_types"],
+        separate_unique_node_indices["rel_ptr"],
+        separate_unique_node_indices["node_idx"],
+        incsr_dict["row_ptr"],
+        incsr_dict["col_idx"],
+        incsr_dict["eids"],
+        incsr_dict["rel_types"],
+        outcsr_dict["row_ptr"],
+        outcsr_dict["col_idx"],
+        outcsr_dict["eids"],
+        outcsr_dict["rel_types"],
         feat_compact,
         el_compact,
         er_compact,

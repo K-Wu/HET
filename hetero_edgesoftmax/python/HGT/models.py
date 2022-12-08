@@ -89,7 +89,7 @@ class HET_HGTLayerHetero(nn.Module):
         #     module.reset_parameters()
 
     # @torch.jit.script_method
-    def forward(self, G: utils.MyDGLGraph, h):
+    def forward(self, G, h):
         # G is MyDGLGraph, h is node features with shape (num_nodes, in_dim).
         # We assume h is made up of one continuous memory region, where each node type occupies one continuous subregion.
         # TODO: add node type offset to G.
@@ -127,13 +127,13 @@ class HET_HGTLayerHetero(nn.Module):
         #     )
 
         k = B.rgnn_relational_matmul_no_scatter_gather_list(
-            G["original"]["node_type_offsets"], self.k_linears, h
+            G.get_original_node_type_offsets(), self.k_linears, h
         ).view(-1, self.n_heads, self.d_k)
         q = B.rgnn_relational_matmul_no_scatter_gather_list(
-            G["original"]["node_type_offsets"], self.q_linears, h
+            G.get_original_node_type_offsets(), self.q_linears, h
         ).view(-1, self.n_heads, self.d_k)
         v = B.rgnn_relational_matmul_no_scatter_gather_list(
-            G["original"]["node_type_offsets"], self.v_linears, h
+            G.get_original_node_type_offsets(), self.v_linears, h
         ).view(-1, self.n_heads, self.d_k)
         # k = torch.empty(
         #     (G.get_num_nodes(), self.n_heads, self.d_k),
@@ -203,42 +203,45 @@ class HET_HGTLayerHetero(nn.Module):
             )  # shape (num_edges, n_heads)
         else:
             if self.compact_as_of_node_flag:
+                separate_coo_original_dict = G.get_separate_coo_original()
+                separate_unique_node_indices_dict = G.get_separate_unique_node_indices()
                 # TODO: implement single-sided matmul for compact_as_of_node_flag
                 attn_weight_dst_product_compact = (
                     B.rgnn_relational_matmul_compact_as_of_node_single_ended(
-                        G["separate"]["unique_node_idx"]["rel_ptr"],
-                        G["separate"]["unique_node_idx"]["node_idx"],
-                        G["separate"]["coo"]["original"]["rel_ptr"],
-                        G["separate"]["coo"]["original"]["col_idx"],
-                        G["separate"]["coo"]["original"]["eids"],
+                        separate_unique_node_indices_dict["rel_ptr"],
+                        separate_unique_node_indices_dict["node_idx"],
+                        separate_coo_original_dict["rel_ptr"],
+                        separate_coo_original_dict["col_idx"],
+                        separate_coo_original_dict["eids"],
                         self.relation_att,
                         q,
                         False,
                     )
                 )
                 attn_score = B.rgnn_inner_product_node_compact_and_node(
-                    G["separate"]["unique_node_idx"]["rel_ptr"],
-                    G["separate"]["unique_node_idx"]["node_idx"],
-                    G["separate"]["coo"]["original"]["rel_ptr"],
-                    G["separate"]["coo"]["original"]["eids"],
-                    G["separate"]["coo"]["original"]["row_idx"],
-                    G["separate"]["coo"]["original"]["col_idx"],
+                    separate_unique_node_indices_dict["rel_ptr"],
+                    separate_unique_node_indices_dict["node_idx"],
+                    separate_coo_original_dict["rel_ptr"],
+                    separate_coo_original_dict["eids"],
+                    separate_coo_original_dict["row_idx"],
+                    separate_coo_original_dict["col_idx"],
                     attn_weight_dst_product_compact,
                     k,
                 )
             else:
+                separate_coo_original_dict = G.get_separate_coo_original()
                 attn_weight_dst_product_per_edge = B.rgnn_relational_matmul(
-                    G["separate"]["coo"]["original"]["rel_ptr"],
-                    G["separate"]["coo"]["original"]["col_idx"],
-                    G["separate"]["coo"]["original"]["eids"],
+                    separate_coo_original_dict["rel_ptr"],
+                    separate_coo_original_dict["col_idx"],
+                    separate_coo_original_dict["eids"],
                     self.relation_att,
                     q,
                     False,
                 )
                 attn_score = B.rgnn_inner_product_edge_and_node(
-                    G["separate"]["coo"]["original"]["eids"],
-                    G["separate"]["coo"]["original"]["row_idx"],
-                    G["separate"]["coo"]["original"]["col_idx"],
+                    separate_coo_original_dict["eids"],
+                    separate_coo_original_dict["row_idx"],
+                    separate_coo_original_dict["col_idx"],
                     attn_weight_dst_product_per_edge,
                     k,
                 )
@@ -249,11 +252,12 @@ class HET_HGTLayerHetero(nn.Module):
         # NB: the scaling is: attn_score = relation_pri / self.sqrt_dk * attn_score
 
         if self.fused_message_mean_aggregation_flag:
+            separate_coo_original_dict = G.get_separate_coo_original()
             new_h = B.hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
-                G["separate"]["coo"]["original"]["rel_ptr"],
-                G["separate"]["coo"]["original"]["row_idx"],
-                G["separate"]["coo"]["original"]["col_idx"],
-                G["separate"]["coo"]["original"]["eids"],
+                separate_coo_original_dict["rel_ptr"],
+                separate_coo_original_dict["row_idx"],
+                separate_coo_original_dict["col_idx"],
+                separate_coo_original_dict["eids"],
                 self.relation_msg,
                 v,
                 G,
@@ -261,10 +265,11 @@ class HET_HGTLayerHetero(nn.Module):
                 attn_score,
             )
         else:
+            separate_coo_original_dict = G.get_separate_coo_original()
             message_per_edge = B.rgnn_relational_matmul(
-                G["separate"]["coo"]["original"]["rel_ptr"],
-                G["separate"]["coo"]["original"]["row_idx"],
-                G["separate"]["coo"]["original"]["eids"],
+                separate_coo_original_dict["rel_ptr"],
+                separate_coo_original_dict["row_idx"],
+                separate_coo_original_dict["eids"],
                 self.relation_msg,
                 v,
                 False,
@@ -279,12 +284,13 @@ class HET_HGTLayerHetero(nn.Module):
             )  # shape (num_nodes, n_heads, d_k)
 
         new_h = B.rgnn_relational_matmul_no_scatter_gather_list(
-            G["original"]["node_type_offsets"],
+            G.get_original_node_type_offsets(),
             (torch.sigmoid(self.skip) * self.a_linears),
             new_h,
         )
 
         if 0:
+            node_type_offsets = G.get_original_node_type_offsets()
             dest_nodetypes = list(range(G.get_num_ntypes()))
             new_h_normed = torch.empty(
                 (G.get_num_nodes(), self.out_dim), device=h.device
@@ -298,11 +304,7 @@ class HET_HGTLayerHetero(nn.Module):
                 alpha = torch.sigmoid(self.skip[n_id])
 
                 trans_out = self.drop(
-                    new_h[
-                        G["original"]["node_type_offsets"][dsttype] : G["original"][
-                            "node_type_offsets"
-                        ][dsttype + 1]
-                    ]
+                    new_h[node_type_offsets[dsttype] : node_type_offsets[dsttype + 1]]
                 )
                 # trans_out = self.drop(self.a_linears[n_id](
                 #    new_h[
@@ -317,15 +319,11 @@ class HET_HGTLayerHetero(nn.Module):
                 )  # + h[ntype] * (1-alpha) ?
                 if self.use_norm:
                     new_h_normed[
-                        G["original"]["node_type_offsets"][dsttype] : G["original"][
-                            "node_type_offsets"
-                        ][dsttype + 1]
+                        node_type_offsets[dsttype] : node_type_offsets[dsttype + 1]
                     ] = self.norms[n_id](trans_out)
                 else:
                     new_h_normed[
-                        G["original"]["node_type_offsets"][dsttype] : G["original"][
-                            "node_type_offsets"
-                        ][dsttype + 1]
+                        node_type_offsets[dsttype] : node_type_offsets[dsttype + 1]
                     ] = trans_out
         return new_h
 

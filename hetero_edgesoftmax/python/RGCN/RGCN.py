@@ -282,11 +282,12 @@ class HET_EglRelGraphConv_SeparateCOO(nn.Module):
         if self.layer_type == 0:
             raise NotImplementedError
         else:
+            separate_coo_original_dict = g.get_separate_coo_original()
             node_repr = B.rgcn_layer1_separate_coo(
-                g["separate"]["coo"]["original"]["rel_ptr"],
-                g["separate"]["coo"]["original"]["eids"],
-                g["separate"]["coo"]["original"]["row_idx"],
-                g["separate"]["coo"]["original"]["col_idx"],
+                separate_coo_original_dict["rel_ptr"],
+                separate_coo_original_dict["eids"],
+                separate_coo_original_dict["row_idx"],
+                separate_coo_original_dict["col_idx"],
                 g,
                 x,
                 weight,

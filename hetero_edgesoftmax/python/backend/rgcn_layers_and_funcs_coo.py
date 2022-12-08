@@ -82,14 +82,16 @@ class RgcnSecondLayerCOO(th.autograd.Function):
 
 
 def rgcn_layer1_coo(graph, x, weight, norm):
-    in_row_idx = graph["transposed"]["row_idx"]
-    in_col_idx = graph["transposed"]["col_idx"]
-    in_eids = graph["transposed"]["eids"]
-    in_reltypes = graph["transposed"]["rel_types"]
-    out_row_idx = graph["original"]["row_idx"]
-    out_col_idx = graph["original"]["col_idx"]
-    out_eids = graph["original"]["eids"]
-    transposed_reltypes = graph["original"]["rel_types"]
+    incsr_dict = graph.get_in_csr()
+    outcsr_dict = graph.get_out_csr()
+    in_row_idx = incsr_dict["row_idx"]
+    in_col_idx = incsr_dict["col_idx"]
+    in_eids = incsr_dict["eids"]
+    in_reltypes = incsr_dict["rel_types"]
+    out_row_idx = outcsr_dict["row_idx"]
+    out_col_idx = outcsr_dict["col_idx"]
+    out_eids = outcsr_dict["eids"]
+    transposed_reltypes = outcsr_dict["rel_types"]
     ret = th.zeros(
         (graph.get_num_nodes(), weight.size(2)),
         dtype=weight.dtype,

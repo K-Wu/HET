@@ -359,10 +359,11 @@ def hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
     mu,
     unnormalized_attn_score,
 ):
-    incsr_row_ptr = graph["transposed"]["row_ptr"]
-    incsr_col_idx = graph["transposed"]["col_idx"]
-    incsr_eids = graph["transposed"]["eids"]
-    incsr_reltypes = graph["transposed"]["rel_types"]
+    incsr_dict = graph.get_in_csr()
+    incsr_row_ptr = incsr_dict["row_ptr"]
+    incsr_col_idx = incsr_dict["col_idx"]
+    incsr_eids = incsr_dict["eids"]
+    incsr_reltypes = incsr_dict["rel_types"]
     new_h = th.zeros(
         graph.get_num_nodes(),
         relation_meg_weight.size(1),
@@ -541,14 +542,16 @@ def hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
     # unique_srcs_and_dests_rel_ptr,
     # unique_srcs_and_dests_node_indices,
 ):
-    outcsr_row_ptr = graph["original"]["row_ptr"]
-    outcsr_col_idx = graph["original"]["col_idx"]
-    outcsr_eids = graph["original"]["eids"]
-    outcsr_reltypes = graph["original"]["rel_types"]
-    incsr_row_ptr = graph["transposed"]["row_ptr"]
-    incsr_col_idx = graph["transposed"]["col_idx"]
-    incsr_eids = graph["transposed"]["eids"]
-    incsr_reltypes = graph["transposed"]["rel_types"]
+    outcsr_dict = graph.get_out_csr()
+    incsr_dict = graph.get_in_csr()
+    outcsr_row_ptr = outcsr_dict["row_ptr"]
+    outcsr_col_idx = outcsr_dict["col_idx"]
+    outcsr_eids = outcsr_dict["eids"]
+    outcsr_reltypes = outcsr_dict["rel_types"]
+    incsr_row_ptr = incsr_dict["row_ptr"]
+    incsr_col_idx = incsr_dict["col_idx"]
+    incsr_eids = incsr_dict["eids"]
+    incsr_reltypes = incsr_dict["rel_types"]
     mu_softmax_applied_unnormalized_attn_score = th.zeros_like(
         unnormalized_attn_score, memory_format=th.contiguous_format
     )

@@ -11,6 +11,8 @@ from dgl.heterograph import DGLBlock
 import argparse
 import numpy as np
 
+import torch.jit
+
 
 class RelGraphEmbed(nn.Module):
     r"""Embedding layer for featureless heterograph.
@@ -96,12 +98,11 @@ def HET_RGNN_train_with_sampler(
 
 
 def HET_RGNN_train_full_graph(
-    g: utils.MyDGLGraph,
+    g,
     model,
     node_embed_layer,
     optimizer,
     labels: th.Tensor,
-    device,
     args: argparse.Namespace,
 ):
     # training loop
@@ -111,6 +112,7 @@ def HET_RGNN_train_full_graph(
     # node_embed = node_embed_layer()
     # model = torch.jit.trace(model, (g, node_embed))
     # th.cuda.empty_cache()
+    # scripted_model = torch.jit.script(model)
     for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
@@ -137,6 +139,7 @@ def HET_RGNN_train_full_graph(
         forward_prop_start.record()
         # for idx in range(10):
         logits = model(g, node_embed)
+        # logits = scripted_model(g, node_embed)
         # logits = model(emb, blocks)
         forward_prop_end.record()
         th.cuda.synchronize()

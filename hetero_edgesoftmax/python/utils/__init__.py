@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import torch
 
-from .script_mydgl_graph import *
+from .scripted_mydgl_graph import *
 
 from .mydgl_graph import *
 from .sparse_matrix_converters import *

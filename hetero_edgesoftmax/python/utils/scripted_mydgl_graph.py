@@ -118,20 +118,20 @@ class ScriptedMyDGLGraph(object):
         assert result is not None
         return result
 
-    def get_node_type_offsets(self) -> torch.Tensor:
+    def get_original_node_type_offsets(self) -> torch.Tensor:
         # G["original"]["node_type_offsets"]
         result = self.original_node_type_offsets
         assert result is not None
         return result
 
-    def get_separate_unique_indices(self) -> Dict[str, torch.Tensor]:
+    def get_separate_unique_node_indices(self) -> Dict[str, torch.Tensor]:
         # G["separate"]["unique_node_idx"]["rel_ptr"],
         # G["separate"]["unique_node_idx"]["node_idx"],
         result = self.separate_unique_node_indices
         assert result is not None
         return result
 
-    def get_separate_coo(self) -> Dict[str, torch.Tensor]:
+    def get_separate_coo_original(self) -> Dict[str, torch.Tensor]:
         # G["separate"]["coo"]["original"]["rel_ptr"],
         # G["separate"]["coo"]["original"]["row_idx"],
         # G["separate"]["coo"]["original"]["col_idx"],

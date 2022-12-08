@@ -208,12 +208,12 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
                     "Not implemented full_graph_training in RGAT_main_procedure(dgl_model_flag == False)"
                 )
             HET_RGNN_train_full_graph(
-                g,
+                g.to_script_object(),
                 model,
                 embed_layer,
                 optimizer,
                 labels,
-                device,
+                # device,
                 args,
             )
         # logger.print_statistics(run)
