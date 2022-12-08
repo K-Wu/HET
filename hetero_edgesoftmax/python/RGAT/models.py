@@ -312,6 +312,7 @@ class HET_RelationalGATEncoder(nn.Module):
     @utils.warn_default_arguments
     def __init__(
         self,
+        mydglgraph,
         num_etypes,
         h_dim,
         out_dim,
@@ -324,6 +325,7 @@ class HET_RelationalGATEncoder(nn.Module):
         multiply_among_weights_first_flag: bool = False,
     ):
         super(HET_RelationalGATEncoder, self).__init__()
+        self.mydglgraph = mydglgraph
         self.n_heads = n_heads
         self.num_etypes = num_etypes
         self.h_dim = h_dim
@@ -375,7 +377,6 @@ class HET_RelationalGATEncoder(nn.Module):
 
     def forward(
         self,
-        g,
         h: Union[th.Tensor, None] = None,
         blocks: Union[None, list] = None,
     ):
@@ -392,7 +393,7 @@ class HET_RelationalGATEncoder(nn.Module):
         if blocks is None:
             # full graph training
             for layer in self.layers:
-                h = layer(g, h)
+                h = layer(self.mydglgraph, h)
         else:
             # minibatch training
             for layer, block in zip(self.layers, blocks):

@@ -60,6 +60,7 @@ def RGAT_get_our_model(
     embed_layer = HET_RelGraphEmbed(g, args.n_infeat, exclude=[])  # exclude=["paper"])
 
     model = HET_RelationalGATEncoder(
+        g,
         g.get_num_rels(),
         h_dim=args.n_infeat,
         out_dim=num_classes,

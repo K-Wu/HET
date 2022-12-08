@@ -365,7 +365,7 @@ class HET_HGT_DGLHetero(nn.Module):
         self.layer0.reset_parameters()
         # self.layer1.reset_parameters()
 
-    def forward(self, G, h):
-        h = self.layer0(G, h)
+    def forward(self, h):
+        h = self.layer0(self.mydglgraph, h)
         # h = self.layer1(G, h)
         return h

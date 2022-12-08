@@ -112,7 +112,15 @@ def HET_RGNN_train_full_graph(
     # node_embed = node_embed_layer()
     # model = torch.jit.trace(model, (g, node_embed))
     # th.cuda.empty_cache()
-    # scripted_model = torch.jit.script(model)
+
+    # model.eval()
+    model.train()
+    model.requires_grad_(True)
+    # node_embed_layer.eval()
+    node_embed_layer.train()
+    node_embed_layer.requires_grad_(True)
+    node_embed = node_embed_layer()
+    # scripted_model = torch.jit.trace(model,  node_embed)
     for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
@@ -122,7 +130,6 @@ def HET_RGNN_train_full_graph(
         # node_embed_layer.eval()
         node_embed_layer.train()
         node_embed_layer.requires_grad_(True)
-
         total_loss = 0
 
         # emb = extract_embed(node_embed, input_nodes)
@@ -138,8 +145,8 @@ def HET_RGNN_train_full_graph(
         forward_prop_end = th.cuda.Event(enable_timing=True)
         forward_prop_start.record()
         # for idx in range(10):
-        logits = model(g, node_embed)
-        # logits = scripted_model(g, node_embed)
+        logits = model(node_embed)
+        # logits = scripted_model(node_embed)
         # logits = model(emb, blocks)
         forward_prop_end.record()
         th.cuda.synchronize()
