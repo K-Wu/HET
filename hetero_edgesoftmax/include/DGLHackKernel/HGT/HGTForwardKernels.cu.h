@@ -741,13 +741,14 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
   Idx num_heads = gdata.num_heads;
   if constexpr (OutputMuAppliedAttnScoreSwitch == 2 ||
                 OutputMuAppliedAttnScoreSwitch == 3) {
-    for (Idx feat_idx = tx; feat_idx < num_heads;
-         feat_idx += blockDim.x * gridDim.x) {
-      for (Idx eidx = ty; eidx < num_edges; eidx += blockDim.y * gridDim.y) {
-        Idx src_id = *(column_indices + eidx);
+    for (Idx eidx = ty; eidx < num_edges; eidx += blockDim.y * gridDim.y) {
+      Idx src_id = *(column_indices + eidx);
+
+      Idx edge_id = gdata.eids[eidx];
+      Idx dst_vid = *(row_indices + eidx);
+      for (Idx feat_idx = tx; feat_idx < num_heads;
+           feat_idx += blockDim.x * gridDim.x) {
         Idx feat_off_src = -1;
-        Idx edge_id = gdata.eids[eidx];
-        Idx dst_vid = *(row_indices + eidx);
         if constexpr (OutputMuAppliedAttnScoreSwitch == 3) {
           gdata.normalized_attn_score[edge_id * num_heads + feat_idx] =
               gdata.mu_softmax_applied_unnormalized_attn_score[edge_id *

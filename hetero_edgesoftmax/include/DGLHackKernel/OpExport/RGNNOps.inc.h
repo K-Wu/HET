@@ -370,13 +370,19 @@ void inner_product_various_left_and_node_right(
     int64_t num_edges = separate_coo_row_indices.numel();
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
 
-    int nthrs_x = SeastarFindNumThreads(el_xlen, 64);
-    int nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
-                                        MAX_NTHRS / nthrs_x);
-    int nblks_x = 1;
-    int nblks_y = std::min(num_edges, MAX_NBLKS);
-    const dim3 nthrs(nthrs_x, nthrs_y);
-    const dim3 nblks(nblks_x, nblks_y);
+    // threadIdx.x and threadIdx.y and only this pair is exchanged compared with
+    // original seastar schedule to allow reduction within the warp, i.e., along
+    // x-axis
+    int nthrs_y_inner_product = SeastarFindNumThreads(el_xlen, 64);
+    int nthrs_x_inner_product =
+        SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
+                              MAX_NTHRS / nthrs_y_inner_product);
+    int nblks_inner_product_x = 1;
+    int nblks_inner_product_y = std::min(num_edges, MAX_NBLKS);
+    const dim3 nthrs_inner_product(nthrs_x_inner_product,
+                                   nthrs_y_inner_product);
+    const dim3 nblks_inner_product(nblks_inner_product_x,
+                                   nblks_inner_product_y);
     Idx* separate_coo_row_indices_data_ptr =
         separate_coo_row_indices.numel() > 0
             ? separate_coo_row_indices.data_ptr<Idx>()
@@ -397,13 +403,25 @@ void inner_product_various_left_and_node_right(
         unique_srcs_and_dests_node_indices.numel() > 0
             ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
             : nullptr;
-    HET_inner_product_fw_kernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag,
-                                              true, true, false>
-        <<<nblks, nthrs, 0, stream>>>(
-            gdata, separate_coo_row_indices_data_ptr,
-            separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
-            num_edges, unique_srcs_and_dests_rel_ptr_data_ptr,
-            unique_srcs_and_dests_node_indices_data_ptr, num_relations);
+    if (gdata.feat_src_xlen / gdata.num_heads >= 32) {
+      HET_inner_product_fw_kernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag,
+                                                true, true, false, true>
+          <<<nblks_inner_product, nthrs_inner_product, 0, stream>>>(
+              gdata, separate_coo_row_indices_data_ptr,
+              separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
+              num_edges, unique_srcs_and_dests_rel_ptr_data_ptr,
+              unique_srcs_and_dests_node_indices_data_ptr, num_relations);
+    } else {
+      assert(0 && "Not implemented");
+      // HET_inner_product_fw_kernel_edge_parallel<Idx, DType,
+      // CompactAsOfNodeFlag,
+      //                                       true, true, false, false>
+      // <<<nblks_inner_product, nthrs_inner_product, 0, stream>>>(
+      //     gdata, separate_coo_row_indices_data_ptr,
+      //     separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
+      //     num_edges, unique_srcs_and_dests_rel_ptr_data_ptr,
+      //     unique_srcs_and_dests_node_indices_data_ptr, num_relations);
+    }
 
   } else {
     assert(0 && "Not implemented");

@@ -16,6 +16,8 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx eidx = blockIdx.y; eidx < num_edges; eidx += gridDim.y) {
     Idx dst_vid = col_indices[eidx];
+
+    Idx src_vid = row_indices[eidx];
     // for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y)
     // { Idx start_off = *(row_offsets + dst_vid); Idx end_off = *(row_offsets +
     // dst_vid + 1);
@@ -25,7 +27,6 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
            feat_idx += blockDim.y) {
         DType s = 0.;
         // for (Idx eidx = start_off; eidx < end_off; eidx++) {
-        Idx src_vid = row_indices[eidx];
         Idx feat_src_entry_id = -1;
         Idx edge_id = gdata.eids[eidx];
         if constexpr (RelationalFlag) {

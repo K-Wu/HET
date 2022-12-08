@@ -21,6 +21,8 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
     // Idx start_off = row_offsets[src_vid];
     // Idx end_off = row_offsets[src_vid + 1];
     Idx src_vid = row_indices[e];
+    Idx eid = gdata.eids[e];
+    Idx dst_vid = col_indices[e];
 
     for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
          head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
@@ -38,8 +40,6 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
           el_idx = src_vid * num_heads + head_idx;
         }
         // for (Idx e = start_off; e < end_off; ++e) {
-        Idx eid = gdata.eids[e];
-        Idx dst_vid = col_indices[e];
         Idx er_idx = -1;
         Idx dst_vid_relational = -1;
         if constexpr (!CompactAsOfNodeFlag) {
@@ -146,6 +146,9 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx e = blockIdx.y; e < num_edges; e += gridDim.y) {
     Idx src_vid = row_indices[e];
+
+    Idx eid = gdata.eids[e];
+    Idx dst_vid = col_indices[e];
     // for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y)
     // {
     // Idx start_off = row_offsets[src_vid];
@@ -163,8 +166,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
               src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
         }
         // for (Idx e = start_off; e < end_off; ++e) {
-        Idx eid = gdata.eids[e];
-        Idx dst_vid = col_indices[e];
         Idx dst_vid_relational = -1;
         if constexpr (!CompactAsOfNodeFlag) {
           // in this case, feat_src_offset, er_idx and el_idx are related to
@@ -234,6 +235,9 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx e = blockIdx.y; e < num_edges; e += gridDim.y) {
     Idx src_vid = row_indices[e];
+
+    Idx eid = gdata.eids[e];
+    Idx dst_vid = column_indices[e];
     // for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y)
     // {
     //  Idx start_off = row_offsets[src_vid];
@@ -254,8 +258,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
         }
         // for (Idx e = start_off; e < end_off; ++e) {
         Idx edge_offset = gdata.eids[e] * num_heads + head_idx;
-        Idx eid = gdata.eids[e];
-        Idx dst_vid = column_indices[e];
         Idx er_idx = -1;
         Idx dst_vid_relational = -1;
         if constexpr (!CompactAsOfNodeFlag) {

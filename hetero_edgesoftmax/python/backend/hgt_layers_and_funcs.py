@@ -259,10 +259,6 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
         new_h,
     ):
         K.hgt_full_graph_edge_softmax_ops_separate_coo(
-            # incsr_row_ptr,
-            # incsr_col_idx,
-            # incsr_eids,
-            # incsr_reltypes,
             separate_coo_row_indices,
             separate_coo_col_indices,
             separate_coo_eids,
@@ -273,6 +269,18 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             mu_softmax_applied_unnormalized_attn_score,
             normalized_attn_score,
         )
+
+        # K.hgt_full_graph_edge_softmax_ops_csr(
+        #     incsr_row_ptr,
+        #     incsr_col_idx,
+        #     incsr_eids,
+        #     incsr_reltypes,
+        #     unnormalized_attn_score,
+        #     mu,
+        #     edgesoftmax_sum_per_node,
+        #     mu_softmax_applied_unnormalized_attn_score,
+        #     normalized_attn_score,
+        # )
 
         K.hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo(
             separate_coo_relptrs,

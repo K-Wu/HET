@@ -5,7 +5,8 @@
 // adapted from _gatSumProdZipDivKernel in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
+          bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
+          bool FeatSizeNoLessThanWarpSize>
 __global__ void HET_inner_product_fw_kernel_edge_parallel(
     InnerProductData<Idx, DType> gdata, const Idx* row_indices,
     const Idx* column_indices, const Idx* etypes, int64_t num_edges,
@@ -15,17 +16,19 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx eidx = blockIdx.y; eidx < num_edges; eidx += gridDim.y) {
     Idx dst_vid = row_indices[eidx];
+    Idx edge_id = gdata.eids[eidx];
+    Idx src_vid = column_indices[eidx];
     // Idx start_off = *(row_offsets + dst_vid);
     // Idx end_off = *(row_offsets + dst_vid + 1);
-    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
-      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
-           feat_idx += blockDim.y) {
+
+    for (Idx head_idx = threadIdx.y; head_idx < num_heads;
+         head_idx += blockDim.y) {
+      for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
+           feat_idx < hidden_xlen; feat_idx += blockDim.x * gridDim.x) {
         // for (Idx eidx = start_off; eidx < end_off; eidx++) {
         DType s = 0.;
-        Idx src_vid = column_indices[eidx];
+
         Idx feat_src_entry_id = -1;
-        Idx edge_id = gdata.eids[eidx];
         if constexpr (RelationalFlag) {
           // Idx sum_idx = -1;
           if constexpr (CompactAsOfNodeFlag) {
@@ -64,6 +67,7 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
                               head_idx * hidden_xlen + feat_idx] *
                gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx];
+
         } else {  // !RelationalFlag
           // NB: feat_src_entry_id varies between edge_id and src_vid
           // depending on compactasofnodeflag
@@ -77,7 +81,22 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
                gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx];
         }
-        atomicAdd(&gdata.edge_inner_product[edge_id * num_heads + head_idx], s);
+        // warp reduction
+        if constexpr (FeatSizeNoLessThanWarpSize) {
+          s += __shfl_xor_sync(0xffffffff, s, 16);
+          s += __shfl_xor_sync(0xffffffff, s, 8);
+          s += __shfl_xor_sync(0xffffffff, s, 4);
+          s += __shfl_xor_sync(0xffffffff, s, 2);
+          s += __shfl_xor_sync(0xffffffff, s, 1);
+          if (threadIdx.x % 32 == 0) {
+            atomicAdd(&gdata.edge_inner_product[edge_id * num_heads + head_idx],
+                      s);
+          }
+        } else {
+          CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(
+              FeatSizeNoLessThanWarpSize,
+              "should be non-reachable not implemented");
+        }
       }
       //}
     }

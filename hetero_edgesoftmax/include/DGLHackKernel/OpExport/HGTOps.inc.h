@@ -229,8 +229,8 @@ void _full_graph_edge_softmax_ops(
   // Configure kernel launch parameters. From _gatExpLeakyReluSumKernel
   // configurations in
   // HET::TorchExport::RGCN::FwProp::IntegratedCSR::_FusedKernelImpl
-  int nthrs_x = 32;
-  int nthrs_y = 1;
+  int nthrs_x = 1;
+  int nthrs_y = 32;
   int nblks_x = (num_heads + nthrs_x - 1) / (nthrs_x);
   int64_t incsr_num_rows_or_edges = incsr_rowptr_or_indices.numel() - 1;
   int nblks_y = std::min(incsr_num_rows_or_edges, MAX_NBLKS);
