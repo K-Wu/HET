@@ -13,8 +13,8 @@ namespace HET {
 namespace TorchExport {
 namespace RGNN {
 namespace FwProp {
-template <int BLOCK_SIZE, bool CompactAsOfNodeFlag,
-          bool SingleSidedCompactAsOfNodeFlag,
+template <bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE,
+          bool CompactAsOfNodeFlag, bool SingleSidedCompactAsOfNodeFlag,
           bool ACGatherScatterListIdenticalFlag, bool InputNumHeadOneFlag>
 void _RelationalMatMul_separatecoo(
     at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
@@ -32,7 +32,8 @@ void _RelationalMatMul_separatecoo(
       weights.size(3);  // weight shape (num_relations, n_heads,
                         // in_feat, out_feat // n_heads)
   int64_t num_edges;
-
+  constexpr int WORK_BLOCK_SIZE =
+      COARSEN_FACTOR_2_FLAG ? (THREADING_BLOCK_SIZE * 2) : THREADING_BLOCK_SIZE;
   if constexpr (SingleSidedCompactAsOfNodeFlag) {
     CONSTEXPR_TRUE_CLAUSE_STATIC_ASSERT(
         SingleSidedCompactAsOfNodeFlag, CompactAsOfNodeFlag,
@@ -45,7 +46,7 @@ void _RelationalMatMul_separatecoo(
     num_edges = separate_coo_eids.numel();
   }
   int grid_dim_y = std::min(
-      ceil_div<>(num_edges, (int64_t)BLOCK_SIZE),
+      ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE),
       (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
                         // case the total number of blocks is slightly larger
                         // due to relationship with very few workloads
@@ -57,7 +58,7 @@ void _RelationalMatMul_separatecoo(
     std::tie(num_blocks_assignment_for_same_relation_vect,
              num_blocks_assignment_for_all_prev_relation_vect) =
         get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
-            grid_dim_y, num_relations, BLOCK_SIZE,
+            grid_dim_y, num_relations, WORK_BLOCK_SIZE,
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>(),
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>() +
                 num_relations + 1);
@@ -67,7 +68,7 @@ void _RelationalMatMul_separatecoo(
     std::tie(num_blocks_assignment_for_same_relation_vect,
              num_blocks_assignment_for_all_prev_relation_vect) =
         get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
-            grid_dim_y, num_relations, BLOCK_SIZE,
+            grid_dim_y, num_relations, WORK_BLOCK_SIZE,
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
                 num_relations + 1);
@@ -88,14 +89,14 @@ void _RelationalMatMul_separatecoo(
           CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag,
           "CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag");
     }
-    const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
+    const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
-    const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
+    const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
     // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
     //           << " nblks.z: " << nblks.z << std::endl;
     if constexpr (!SingleSidedCompactAsOfNodeFlag) {
-      HET_RGNNFeatCompactFWProp<BLOCK_SIZE, int64_t, int64_t*,
-                                InputNumHeadOneFlag>
+      HET_RGNNFeatCompactFWProp<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE,
+                                int64_t, int64_t*, InputNumHeadOneFlag>
           <<<nblks, nthrs, 0, stream>>>(
               node_feat.data_ptr<float>(), weights.data_ptr<float>(),
               ret.data_ptr<float>(),
@@ -107,8 +108,9 @@ void _RelationalMatMul_separatecoo(
               num_relations);
 
     } else {
-      HET_RGNNFeatCompactFWPropSingleSided<BLOCK_SIZE, int64_t, int64_t*,
-                                           InputNumHeadOneFlag>
+      HET_RGNNFeatCompactFWPropSingleSided<COARSEN_FACTOR_2_FLAG,
+                                           THREADING_BLOCK_SIZE, int64_t,
+                                           int64_t*, InputNumHeadOneFlag>
           <<<nblks, nthrs, 0, stream>>>(
               node_feat.data_ptr<float>(), weights.data_ptr<float>(),
               ret.data_ptr<float>(),
@@ -124,25 +126,25 @@ void _RelationalMatMul_separatecoo(
     }
 
   } else {
-    const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
+    const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
-    const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
+    const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
     // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
     //           << " nblks.z: " << nblks.z << std::endl;
     if constexpr (ACGatherScatterListIdenticalFlag) {
       HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical<
-          BLOCK_SIZE, int64_t, int64_t*, InputNumHeadOneFlag>
-          <<<nblks, nthrs, 0, stream>>>(
-              node_feat.data_ptr<float>(), weights.data_ptr<float>(),
-              ret.data_ptr<float>(), separate_coo_relptrs.data_ptr<int64_t>(),
-              separate_coo_eids.data_ptr<int64_t>(), num_input_dim,
-              num_output_per_head_dim, num_heads,
-              thrust::raw_pointer_cast(
-                  dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-              num_relations);
+          COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*,
+          InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+          node_feat.data_ptr<float>(), weights.data_ptr<float>(),
+          ret.data_ptr<float>(), separate_coo_relptrs.data_ptr<int64_t>(),
+          separate_coo_eids.data_ptr<int64_t>(), num_input_dim,
+          num_output_per_head_dim, num_heads,
+          thrust::raw_pointer_cast(
+              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+          num_relations);
     } else {
-      HET_RGNNFeatPerEdgeFWProp<BLOCK_SIZE, int64_t, int64_t*,
-                                InputNumHeadOneFlag>
+      HET_RGNNFeatPerEdgeFWProp<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE,
+                                int64_t, int64_t*, InputNumHeadOneFlag>
           <<<nblks, nthrs, 0, stream>>>(
               node_feat.data_ptr<float>(), weights.data_ptr<float>(),
               ret.data_ptr<float>(),
@@ -157,7 +159,7 @@ void _RelationalMatMul_separatecoo(
   }
 }
 
-template <int BLOCK_SIZE>
+template <bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE>
 void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
                                           at::Tensor& weights,
                                           at::Tensor& inputs, at::Tensor& ret) {
@@ -169,8 +171,12 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
   int64_t num_ntypes = ntype_offset_ptrs.numel() - 1;
   int64_t num_nodes = inputs.size(0);
 
+  constexpr int WORK_BLOCK_SIZE =
+      (COARSEN_FACTOR_2_FLAG ? (THREADING_BLOCK_SIZE * 2)
+                             : THREADING_BLOCK_SIZE);
+
   int grid_dim_y = std::min(
-      ceil_div<>(num_nodes, (int64_t)BLOCK_SIZE),
+      ceil_div<>(num_nodes, (int64_t)WORK_BLOCK_SIZE),
       (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
                         // case the total number of blocks is slightly larger
                         // due to relationship with very few workloads
@@ -182,7 +188,7 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
   std::tie(num_blocks_assignment_for_same_ntype_vect,
            num_blocks_assignment_for_all_prev_ntype_vect) =
       get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
-          grid_dim_y, num_ntypes, BLOCK_SIZE,
+          grid_dim_y, num_ntypes, WORK_BLOCK_SIZE,
           ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>(),
           ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>() + num_ntypes +
               1);
@@ -196,12 +202,13 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
       num_blocks_assignment_for_all_prev_ntype_vect.begin(),
       num_blocks_assignment_for_all_prev_ntype_vect.end());
 
-  const dim3 nblks(ceil_div<>(num_output_dim, (long)BLOCK_SIZE), grid_dim_y,
-                   num_heads);
-  const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
+  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
+                   grid_dim_y, num_heads);
+  const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
   // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
   //           << " nblks.z: " << nblks.z << std::endl;
-  HET_RGNNMatmulNoScatterGatherListFwOrBwProp<BLOCK_SIZE, int64_t, int64_t*>
+  HET_RGNNMatmulNoScatterGatherListFwOrBwProp<
+      COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*>
       <<<nblks, nthrs, 0, stream>>>(
           inputs.data_ptr<float>(), weights.data_ptr<float>(),
           ret.data_ptr<float>(), ntype_offset_ptrs.data_ptr<int64_t>(),
@@ -214,8 +221,8 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
 void RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
                                          at::Tensor& weights,
                                          at::Tensor& inputs, at::Tensor& ret) {
-  _RelationalMatmulNoScatterGatherList<16>(ntype_offset_ptrs, weights, inputs,
-                                           ret);
+  _RelationalMatmulNoScatterGatherList<true, 16>(ntype_offset_ptrs, weights,
+                                                 inputs, ret);
 }
 
 void RelationalMatMul_separatecoo(at::Tensor& separate_coo_relptrs,
@@ -225,11 +232,11 @@ void RelationalMatMul_separatecoo(at::Tensor& separate_coo_relptrs,
                                   at::Tensor& ret, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<16, false, false, false, true>(
+    _RelationalMatMul_separatecoo<true, 16, false, false, false, true>(
         separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
         dummy_tensor, dummy_tensor, weights, node_feat, ret);
   } else {
-    _RelationalMatMul_separatecoo<16, false, false, false, false>(
+    _RelationalMatMul_separatecoo<true, 16, false, false, false, false>(
         separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
         dummy_tensor, dummy_tensor, weights, node_feat, ret);
   }
@@ -241,11 +248,11 @@ void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<16, false, false, true, true>(
+    _RelationalMatMul_separatecoo<true, 16, false, false, true, true>(
         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
         dummy_tensor, weights, node_feat, ret);
   } else {
-    _RelationalMatMul_separatecoo<16, false, false, true, false>(
+    _RelationalMatMul_separatecoo<true, 16, false, false, true, false>(
         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
         dummy_tensor, weights, node_feat, ret);
   }
@@ -257,11 +264,11 @@ void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
     at::Tensor& node_feat, at::Tensor& ret, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<16, true, false, false, true>(
+    _RelationalMatMul_separatecoo<true, 16, true, false, false, true>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weight, node_feat, ret);
   } else {
-    _RelationalMatMul_separatecoo<16, true, false, false, false>(
+    _RelationalMatMul_separatecoo<true, 16, true, false, false, false>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weight, node_feat, ret);
   }
@@ -275,12 +282,12 @@ void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
     at::Tensor& ret, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<16, true, true, false, true>(
+    _RelationalMatMul_separatecoo<true, 16, true, true, false, true>(
         separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
         weight, node_feat, ret);
   } else {
-    _RelationalMatMul_separatecoo<16, true, true, false, false>(
+    _RelationalMatMul_separatecoo<true, 16, true, true, false, false>(
         separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
         weight, node_feat, ret);
@@ -466,8 +473,8 @@ void inner_product_edge_and_node_separatecoo(
 }  // namespace FwProp
 
 namespace BckProp {
-template <int BLOCK_SIZE, bool CompactAsOfNodeFlag,
-          bool SingleSidedCompactAsOfNodeFlag,
+template <bool COARSEN_2_FACTOR_FLAG, int THREADING_BLOCK_SIZE,
+          bool CompactAsOfNodeFlag, bool SingleSidedCompactAsOfNodeFlag,
           bool ACGatherScatterListIdenticalFlag, bool InputNumHeadOneFlag>
 void _BackwardRelationalMatMul_separatecoo(
     at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
@@ -485,6 +492,10 @@ void _BackwardRelationalMatMul_separatecoo(
   const int64_t num_output_per_head_dim =
       weights_transposed.size(2);  // weight shape (num_relations, n_heads,
                                    // in_feat, out_feat // n_heads)
+
+  constexpr int64_t WORK_BLOCK_SIZE =
+      (COARSEN_2_FACTOR_FLAG ? (THREADING_BLOCK_SIZE * 2)
+                             : THREADING_BLOCK_SIZE);
 
   int64_t num_edges;
   assert(weights_transposed.is_contiguous());
@@ -504,7 +515,7 @@ void _BackwardRelationalMatMul_separatecoo(
     num_edges = separate_coo_eids.numel();
   }
   int grid_dim_y = std::min(
-      ceil_div<>(num_edges, (int64_t)BLOCK_SIZE),
+      ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE),
       (int64_t)4096);  // using 32768 instead of 65535 to leave some space in
                        // case the total number of blocks is slightly larger
                        // due to relationship with very few workloads
@@ -516,7 +527,7 @@ void _BackwardRelationalMatMul_separatecoo(
     std::tie(num_blocks_assignment_for_same_relation_vect,
              num_blocks_assignment_for_all_prev_relation_vect) =
         get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
-            grid_dim_y, num_relations, BLOCK_SIZE,
+            grid_dim_y, num_relations, WORK_BLOCK_SIZE,
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>(),
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>() +
                 num_relations + 1);
@@ -527,7 +538,7 @@ void _BackwardRelationalMatMul_separatecoo(
     std::tie(num_blocks_assignment_for_same_relation_vect,
              num_blocks_assignment_for_all_prev_relation_vect) =
         get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
-            grid_dim_y, num_relations, BLOCK_SIZE,
+            grid_dim_y, num_relations, WORK_BLOCK_SIZE,
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
                 num_relations + 1);
@@ -558,20 +569,22 @@ void _BackwardRelationalMatMul_separatecoo(
           CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag,
           "CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag");
     }
-    const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
+    const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nblks_outer_product(
-        ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
-        ceil_div<>(num_input_dim, (long)BLOCK_SIZE), num_heads * grid_dim_y);
+        ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
+        ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE),
+        num_heads * grid_dim_y);
     assert(num_heads * grid_dim_y < 65535 && "num_head*grid_dim_y>=65535");
 
-    const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
+    const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
     // NB: #head of node_feat is 1 when InputNumHeadOneFlag is true
     if constexpr (!SingleSidedCompactAsOfNodeFlag) {
       // cuda_err_chk(cudaGetLastError());
       std::cout << gradout.numel() << std::endl;
-      HET_RGNNDeltaNodeFeatInputCompactBWProp<BLOCK_SIZE, int64_t, int64_t*,
-                                              InputNumHeadOneFlag>
+      HET_RGNNDeltaNodeFeatInputCompactBWProp<COARSEN_2_FACTOR_FLAG,
+                                              THREADING_BLOCK_SIZE, int64_t,
+                                              int64_t*, InputNumHeadOneFlag>
           <<<nblks, nthrs, 0, stream>>>(
               gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
               grad_node_feat.data_ptr<float>(),
@@ -582,7 +595,8 @@ void _BackwardRelationalMatMul_separatecoo(
                   dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
               num_relations);
       // cuda_err_chk(cudaGetLastError());
-      HET_RGNNDeltaWeightCompactBWProp<BLOCK_SIZE, int64_t, int64_t*,
+      HET_RGNNDeltaWeightCompactBWProp<COARSEN_2_FACTOR_FLAG,
+                                       THREADING_BLOCK_SIZE, int64_t, int64_t*,
                                        InputNumHeadOneFlag>
           <<<nblks_outer_product, nthrs, 0, stream>>>(
               gradout.data_ptr<float>(), node_feat.data_ptr<float>(),
@@ -596,20 +610,21 @@ void _BackwardRelationalMatMul_separatecoo(
       // cuda_err_chk(cudaGetLastError());
     } else {
       HET_RGNNDeltaNodeFeatInputCompactBWPropSingleSided<
-          BLOCK_SIZE, int64_t, int64_t*, InputNumHeadOneFlag>
-          <<<nblks, nthrs, 0, stream>>>(
-              gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
-              grad_node_feat.data_ptr<float>(),
-              unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
-              unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
-              separate_coo_relptrs.data_ptr<int64_t>(),
-              separate_coo_eids.data_ptr<int64_t>(), num_edges,
-              num_output_per_head_dim, num_input_dim, num_heads,
-              thrust::raw_pointer_cast(
-                  dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-              num_relations);
-      HET_RGNNDeltaWeightCompactBWPropSingleSided<BLOCK_SIZE, int64_t, int64_t*,
-                                                  InputNumHeadOneFlag>
+          COARSEN_2_FACTOR_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*,
+          InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+          gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
+          grad_node_feat.data_ptr<float>(),
+          unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
+          unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
+          separate_coo_relptrs.data_ptr<int64_t>(),
+          separate_coo_eids.data_ptr<int64_t>(), num_edges,
+          num_output_per_head_dim, num_input_dim, num_heads,
+          thrust::raw_pointer_cast(
+              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+          num_relations);
+      HET_RGNNDeltaWeightCompactBWPropSingleSided<COARSEN_2_FACTOR_FLAG,
+                                                  THREADING_BLOCK_SIZE, int64_t,
+                                                  int64_t*, InputNumHeadOneFlag>
           <<<nblks_outer_product, nthrs, 0, stream>>>(
               gradout.data_ptr<float>(), node_feat.data_ptr<float>(),
               grad_weights.data_ptr<float>(),
@@ -623,44 +638,45 @@ void _BackwardRelationalMatMul_separatecoo(
               num_relations);
     }
   } else {
-    const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
+    const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nblks_outer_product(
-        ceil_div<>(num_output_per_head_dim, (long)BLOCK_SIZE),
-        ceil_div<>(num_input_dim, (long)BLOCK_SIZE), num_heads * grid_dim_y);
+        ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
+        ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE),
+        num_heads * grid_dim_y);
     assert(num_heads * grid_dim_y < 65535 && "num_head*grid_dim_y>=65535");
-    const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
+    const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
     // NB: #head of node_feat is 1 when InputNumHeadOneFlag is true
     if constexpr (ACGatherScatterListIdenticalFlag) {
       HET_RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical<
-          BLOCK_SIZE, int64_t, int64_t*, InputNumHeadOneFlag>
-          <<<nblks, nthrs, 0, stream>>>(
-              gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
-              grad_node_feat.data_ptr<float>(),
-              separate_coo_eids.data_ptr<int64_t>(),
-              separate_coo_relptrs.data_ptr<int64_t>(), num_output_per_head_dim,
-              num_input_dim, num_heads,
-              thrust::raw_pointer_cast(
-                  dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-              num_relations);
+          COARSEN_2_FACTOR_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*,
+          InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+          gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
+          grad_node_feat.data_ptr<float>(),
+          separate_coo_eids.data_ptr<int64_t>(),
+          separate_coo_relptrs.data_ptr<int64_t>(), num_output_per_head_dim,
+          num_input_dim, num_heads,
+          thrust::raw_pointer_cast(
+              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+          num_relations);
       // FIXME: outer_product should assume num_heads == 1 and change blockDim.x
       // and/or blockDim.y accordingly
       // FIXME: outer_product should have num_heads == 1 and num_heads for
       // node_feat and output respectively, and therefore distinction should be
       // made when get row major from A and B
       HET_RGNNDeltaWeightBWPropACGatherScatterListIdentical<
-          BLOCK_SIZE, int64_t, int64_t*, InputNumHeadOneFlag>
-          <<<nblks_outer_product, nthrs, 0, stream>>>(
-              node_feat.data_ptr<float>(), gradout.data_ptr<float>(),
-              grad_weights.data_ptr<float>(),
-              separate_coo_eids.data_ptr<int64_t>(),
-              separate_coo_relptrs.data_ptr<int64_t>(), num_input_dim,
-              num_output_per_head_dim, num_heads,
-              thrust::raw_pointer_cast(
-                  dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-              num_relations);
+          COARSEN_2_FACTOR_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*,
+          InputNumHeadOneFlag><<<nblks_outer_product, nthrs, 0, stream>>>(
+          node_feat.data_ptr<float>(), gradout.data_ptr<float>(),
+          grad_weights.data_ptr<float>(), separate_coo_eids.data_ptr<int64_t>(),
+          separate_coo_relptrs.data_ptr<int64_t>(), num_input_dim,
+          num_output_per_head_dim, num_heads,
+          thrust::raw_pointer_cast(
+              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+          num_relations);
     } else {
-      HET_RGNNDeltaNodeFeatInputBWProp<BLOCK_SIZE, int64_t, int64_t*,
+      HET_RGNNDeltaNodeFeatInputBWProp<COARSEN_2_FACTOR_FLAG,
+                                       THREADING_BLOCK_SIZE, int64_t, int64_t*,
                                        InputNumHeadOneFlag>
           <<<nblks, nthrs, 0, stream>>>(
               gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
@@ -672,8 +688,8 @@ void _BackwardRelationalMatMul_separatecoo(
               thrust::raw_pointer_cast(
                   dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
               num_relations);
-      HET_RGNNDeltaWeightBWProp<BLOCK_SIZE, int64_t, int64_t*,
-                                InputNumHeadOneFlag>
+      HET_RGNNDeltaWeightBWProp<COARSEN_2_FACTOR_FLAG, THREADING_BLOCK_SIZE,
+                                int64_t, int64_t*, InputNumHeadOneFlag>
           <<<nblks_outer_product, nthrs, 0, stream>>>(
               node_feat.data_ptr<float>(), gradout.data_ptr<float>(),
               grad_weights.data_ptr<float>(),
@@ -696,12 +712,12 @@ void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _BackwardRelationalMatMul_separatecoo<16, true, false, false, true>(
+    _BackwardRelationalMatMul_separatecoo<true, 16, true, false, false, true>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weights_transposed, node_feat,
         gradout, grad_node_feat, grad_weights);
   } else {
-    _BackwardRelationalMatMul_separatecoo<16, true, false, false, false>(
+    _BackwardRelationalMatMul_separatecoo<true, 16, true, false, false, false>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weights_transposed, node_feat,
         gradout, grad_node_feat, grad_weights);
@@ -715,12 +731,12 @@ void RelationalMatMul_separatecoo(
     at::Tensor& grad_weights, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _BackwardRelationalMatMul_separatecoo<16, false, false, false, true>(
+    _BackwardRelationalMatMul_separatecoo<true, 16, false, false, false, true>(
         separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
         dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
         grad_node_feat, grad_weights);
   } else {
-    _BackwardRelationalMatMul_separatecoo<16, false, false, false, false>(
+    _BackwardRelationalMatMul_separatecoo<true, 16, false, false, false, false>(
         separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
         dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
         grad_node_feat, grad_weights);
@@ -734,12 +750,12 @@ void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _BackwardRelationalMatMul_separatecoo<16, false, false, true, true>(
+    _BackwardRelationalMatMul_separatecoo<true, 16, false, false, true, true>(
         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
         dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
         grad_weights);
   } else {
-    _BackwardRelationalMatMul_separatecoo<16, false, false, true, false>(
+    _BackwardRelationalMatMul_separatecoo<true, 16, false, false, true, false>(
         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
         dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
         grad_weights);
@@ -756,12 +772,12 @@ void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _BackwardRelationalMatMul_separatecoo<16, true, true, false, true>(
+    _BackwardRelationalMatMul_separatecoo<true, 16, true, true, false, true>(
         separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
         weight_transposed, node_feat, gradout, grad_node_feat, grad_weights);
   } else {
-    _BackwardRelationalMatMul_separatecoo<16, true, true, false, false>(
+    _BackwardRelationalMatMul_separatecoo<true, 16, true, true, false, false>(
         separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
         weight_transposed, node_feat, gradout, grad_node_feat, grad_weights);
@@ -903,7 +919,7 @@ void inner_product_edge_and_node_separatecoo(
       grad_right_node_vectors);
 }
 
-template <int BLOCK_SIZE>
+template <bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE>
 void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
                                           at::Tensor& weights_transposed,
                                           at::Tensor& node_feat_input,
@@ -919,8 +935,12 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
   int64_t num_ntypes = ntype_offset_ptrs.numel() - 1;
   int64_t num_nodes = node_feat_input.size(0);
 
+  constexpr int64_t WORK_BLOCK_SIZE =
+      (COARSEN_FACTOR_2_FLAG ? (THREADING_BLOCK_SIZE * 2)
+                             : THREADING_BLOCK_SIZE);
+
   int grid_dim_y = std::min(
-      ceil_div<>(num_nodes, (int64_t)BLOCK_SIZE),
+      ceil_div<>(num_nodes, (int64_t)WORK_BLOCK_SIZE),
       (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
                         // case the total number of blocks is slightly larger
                         // due to relationship with very few workloads
@@ -932,7 +952,7 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
   std::tie(num_blocks_assignment_for_same_ntype_vect,
            num_blocks_assignment_for_all_prev_ntype_vect) =
       get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
-          grid_dim_y, num_ntypes, BLOCK_SIZE,
+          grid_dim_y, num_ntypes, WORK_BLOCK_SIZE,
           ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>(),
           ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>() + num_ntypes +
               1);
@@ -946,12 +966,13 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
       num_blocks_assignment_for_all_prev_ntype_vect.begin(),
       num_blocks_assignment_for_all_prev_ntype_vect.end());
 
-  const dim3 nblks(ceil_div<>(num_output_dim, (long)BLOCK_SIZE), grid_dim_y,
-                   num_heads);
-  const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
+  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
+                   grid_dim_y, num_heads);
+  const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
   // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
   //           << " nblks.z: " << nblks.z << std::endl;
-  HET_RGNNMatmulNoScatterGatherListFwOrBwProp<BLOCK_SIZE, int64_t, int64_t*>
+  HET_RGNNMatmulNoScatterGatherListFwOrBwProp<
+      COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*>
       <<<nblks, nthrs, 0, stream>>>(
           grad_node_feat_output.data_ptr<float>(),
           weights_transposed.data_ptr<float>(),
@@ -961,10 +982,11 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
               dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
           num_ntypes, num_output_dim, num_input_dim);
 
-  const dim3 nblks_outer_product(ceil_div<>(num_input_dim, (long)BLOCK_SIZE),
-                                 ceil_div<>(num_output_dim, (long)BLOCK_SIZE),
-                                 grid_dim_y);
-  HET_RGNNDeltaWeightNoScatterGatherListBWProp<BLOCK_SIZE, int64_t, int64_t*>
+  const dim3 nblks_outer_product(
+      ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE),
+      ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE), grid_dim_y);
+  HET_RGNNDeltaWeightNoScatterGatherListBWProp<
+      COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*>
       <<<nblks_outer_product, nthrs, 0, stream>>>(
           node_feat_input.data_ptr<float>(),
           grad_node_feat_output.data_ptr<float>(),
@@ -981,7 +1003,7 @@ void RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
                                          at::Tensor& grad_node_feat_output,
                                          at::Tensor& grad_weights,
                                          at::Tensor& grad_node_feat_input) {
-  _RelationalMatmulNoScatterGatherList<16>(
+  _RelationalMatmulNoScatterGatherList<true, 16>(
       ntype_offset_ptrs, weights_transposed, node_feat_input,
       grad_node_feat_output, grad_weights, grad_node_feat_input);
 }

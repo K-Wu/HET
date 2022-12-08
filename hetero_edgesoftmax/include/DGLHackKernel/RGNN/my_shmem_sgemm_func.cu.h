@@ -67,11 +67,12 @@ __device__ __forceinline__ float& GetRowMajorElement(
 // dimBlock.y, num_heads * num_partitions_along_Acol_Brow );
 // MatMulKernel<<<dimGrid, dimBlock>>>(d_A, d_B, d_C);
 // C = A * B (all are row-major matrices)
-template <int BLOCK_SIZE, bool OuterProductFlag, bool GatherAFlag,
-          bool AdvancedGatherAFlag, bool GatherBFlag, bool AdvancedGatherBFlag,
-          bool ScatterCFlag, bool AdvancedScatterCFlag, bool AtomicUpdateFlag,
-          typename Idx, typename IdxPtr, bool A_num_head_one_flag,
-          bool B_num_head_one_flag, bool C_num_head_one_flag>
+template <bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE,
+          bool OuterProductFlag, bool GatherAFlag, bool AdvancedGatherAFlag,
+          bool GatherBFlag, bool AdvancedGatherBFlag, bool ScatterCFlag,
+          bool AdvancedScatterCFlag, bool AtomicUpdateFlag, typename Idx,
+          typename IdxPtr, bool A_num_head_one_flag, bool B_num_head_one_flag,
+          bool C_num_head_one_flag>
 __device__ __forceinline__ void _basic_MatMulKernel(
     float* A, float* B, float* C, IdxPtr A_gather_list, IdxPtr B_gather_list,
     IdxPtr C_scatter_list, IdxPtr unique_srcs_and_dests_rel_ptr,
@@ -88,7 +89,8 @@ __device__ __forceinline__ void _basic_MatMulKernel(
   // always 1 and the other is num_heads, at least in case of RGAT. In the
   // implementation, when OuterProductFlag is true, A is always input and B the
   // gradient output feature. It is safe to pass num_A_cols as in_dim.
-
+  constexpr int SHMEM_BLOCK_SIZE =
+      COARSEN_FACTOR_2_FLAG ? THREADING_BLOCK_SIZE * 2 : THREADING_BLOCK_SIZE;
   // Block row and column
   Idx idx_head = blockIdx.z % num_heads;
 
@@ -109,7 +111,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
     blockRowLoopInc = 1;
   } else {
     blockRowLoopBeg = blockIdx.y - blockIdxAlongRowBeg;
-    blockRowLoopEnd = ceil_div<>(numARows, (int64_t)BLOCK_SIZE);
+    blockRowLoopEnd = ceil_div<>(numARows, (int64_t)SHMEM_BLOCK_SIZE);
     blockRowLoopInc = strideNumBlocksAlongRow;
   }
 
@@ -122,9 +124,18 @@ __device__ __forceinline__ void _basic_MatMulKernel(
     // BLOCK_SIZE]; Each thread computes one element of Csub by accumulating
     // results into Cvalue
     float Cvalue = 0.0f;
+    float Cvalue_1 = 0.0f;
+    float Cvalue_2 = 0.0f;
+    float Cvalue_3 = 0.0f;
     // Thread row and column within Csub
-    Idx thIdxRow = threadIdx.y;
-    Idx thIdxFeat = threadIdx.x;
+    Idx thIdxRow_initial = threadIdx.y;
+    Idx thIdxFeat_initial = threadIdx.x;
+    if constexpr (COARSEN_FACTOR_2_FLAG) {
+      // redo the thread indexing
+      Idx thIdx = threadIdx.y * blockDim.x + threadIdx.x;
+      thIdxRow_initial = thIdx / SHMEM_BLOCK_SIZE;
+      thIdxFeat_initial = thIdx % SHMEM_BLOCK_SIZE;
+    }
     // Loop over all the sub-matrices of A and B that are
     // required to compute Csub
     // Multiply each pair of sub-matrices together
@@ -140,140 +151,158 @@ __device__ __forceinline__ void _basic_MatMulKernel(
       // (num_output_per_head_dim//BLOCK_SIZE,num_edges,num_heads)
       Idx blockAssignmentIdx = blockIdx.z / num_heads;
       mLoopBeg = blockAssignmentIdx - blockIdxAlongRowBeg;
-      mLoopEnd = ceil_div<>(numARows, (int64_t)BLOCK_SIZE);
+      mLoopEnd = ceil_div<>(numARows, (int64_t)SHMEM_BLOCK_SIZE);
       mLoopInc = strideNumBlocksAlongRow;
     } else {
       Idx InnerProductPartitionIdx = blockIdx.z / num_heads;
       Idx NumInnerProductionPartitions = blockDim.z / num_heads;
-      mLoopBeg = ceil_div<Idx>(num_A_cols, BLOCK_SIZE) *
+      mLoopBeg = ceil_div<Idx>(num_A_cols, SHMEM_BLOCK_SIZE) *
                  InnerProductPartitionIdx / NumInnerProductionPartitions;
-      mLoopEnd = ceil_div<Idx>(num_A_cols, BLOCK_SIZE) *
+      mLoopEnd = ceil_div<Idx>(num_A_cols, SHMEM_BLOCK_SIZE) *
                  (InnerProductPartitionIdx + 1) / NumInnerProductionPartitions;
       mLoopInc = 1;
     }
     for (Idx m = mLoopBeg; m < mLoopEnd; m += mLoopInc) {
       // Shared memory used to store Asub and Bsub respectively
-      __shared__ float As[BLOCK_SIZE][BLOCK_SIZE];
-      __shared__ float Bs[BLOCK_SIZE][BLOCK_SIZE];
+      __shared__ float As[SHMEM_BLOCK_SIZE][SHMEM_BLOCK_SIZE];
+      __shared__ float Bs[SHMEM_BLOCK_SIZE][SHMEM_BLOCK_SIZE];
 
       // Get sub-matrix Bsub of B
       // float* Bsub = &B[m * num_B_cols * BLOCK_SIZE + blockFeat * BLOCK_SIZE];
       // float* Asub;
       // Load Asub and Bsub from device memory to shared memory
       // Each thread loads one element of each sub-matrix
-      if constexpr (OuterProductFlag) {
-        // Get sub-matrix Asub of A
-        // Asub = &A[m * BLOCK_SIZE * num_A_cols + blockRow * BLOCK_SIZE];
-        As[thIdxFeat][thIdxRow] =
-            (thIdxRow + (m)*BLOCK_SIZE + blockRowJobEntryBeg < numARows &&
-             blockRow * BLOCK_SIZE + thIdxFeat < num_A_cols)
-                ? GetRowMajorElement<Idx, IdxPtr, GatherAFlag,
-                                     AdvancedGatherAFlag>(
-                      A, A_gather_list, unique_srcs_and_dests_rel_ptr,
-                      unique_srcs_and_dests_node_indices, idx_relation,
-                      thIdxRow + (m)*BLOCK_SIZE + blockRowJobEntryBeg,
-                      /*idx_head*/ 0, thIdxFeat + blockRow * BLOCK_SIZE,
-                      /*num_heads*/ 1, num_A_cols)
-                : 0.0f;
-
-        Bs[thIdxRow][thIdxFeat] =
-            ((m)*BLOCK_SIZE + thIdxRow + blockRowJobEntryBeg < numARows &&
-             blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols &&
-             idx_head < num_heads)
-                ? GetRowMajorElement<Idx, IdxPtr, GatherBFlag,
-                                     AdvancedGatherBFlag>(
-                      B, B_gather_list, unique_srcs_and_dests_rel_ptr,
-                      unique_srcs_and_dests_node_indices, idx_relation,
-                      (m)*BLOCK_SIZE + blockRowJobEntryBeg + thIdxRow,
-                      B_num_head_one_flag ? 0 : idx_head,
-                      blockFeat * BLOCK_SIZE + thIdxFeat,
-                      B_num_head_one_flag ? 1 : num_heads, num_B_cols)
-                : 0.0f;
-      } else {
-        // Get sub-matrix Asub of A
-        // Asub = &A[blockRow * BLOCK_SIZE * num_A_cols + m * BLOCK_SIZE];
-        As[thIdxRow][thIdxFeat] =
-            (thIdxRow + blockRow * BLOCK_SIZE < numARows &&
-             m * BLOCK_SIZE + thIdxFeat < num_A_cols && idx_head < num_heads)
-                ? GetRowMajorElement<Idx, IdxPtr, GatherAFlag,
-                                     AdvancedGatherAFlag>(
-                      A, A_gather_list, unique_srcs_and_dests_rel_ptr,
-                      unique_srcs_and_dests_node_indices, idx_relation,
-                      thIdxRow + blockRow * BLOCK_SIZE + blockRowJobEntryBeg,
-                      A_num_head_one_flag ? 0 : idx_head,
-                      thIdxFeat + m * BLOCK_SIZE,
-                      A_num_head_one_flag ? 1 : num_heads, num_A_cols)
-                : 0.0f;
-        if constexpr (BWeightInsteadOfFeatureFlag) {
-          // B matrix the most major dimension is num_heads, i.e., [num_heads,
-          // num_B_rows_feat, num_B_cols_feat] instead of [num_nodes|edges,
-          // num_heads, num_feats]
-          // NB: B's num_B_cols_feat is the same as input_dim whereas
-          // num_B_rows_feat is per head i.e., B dimension is [num_heads,
-          // input_dim (num_A_cols), output_dim//num_heads (num_B_cols)] in
-          // forward propagation or [num_heads, output_dim//num_heads
-          // (num_A_cols), input_dim (num_B_cols)] in backward propagation
-          // FIXME: incorporate num_head_one_flag
-          Bs[thIdxRow][thIdxFeat] =
-              (m * BLOCK_SIZE + thIdxRow < num_A_cols &&
-               blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols &&
-               idx_head < num_heads)
-                  ? B[idx_head * num_A_cols * num_B_cols +
-                      (m * BLOCK_SIZE + thIdxRow) * num_B_cols +
-                      (blockFeat * BLOCK_SIZE + thIdxFeat)]
+      for (Idx loadLoopIdx = 0; loadLoopIdx < (COARSEN_FACTOR_2_FLAG ? 4 : 1);
+           loadLoopIdx++) {
+        Idx thIdxRow = thIdxRow_initial + loadLoopIdx * (SHMEM_BLOCK_SIZE / 4);
+        Idx thIdxFeat = thIdxFeat_initial;
+        if constexpr (OuterProductFlag) {
+          // Get sub-matrix Asub of A
+          // Asub = &A[m * BLOCK_SIZE * num_A_cols + blockRow * BLOCK_SIZE];
+          As[thIdxFeat][thIdxRow] =
+              (thIdxRow + (m)*SHMEM_BLOCK_SIZE + blockRowJobEntryBeg <
+                   numARows &&
+               blockRow * SHMEM_BLOCK_SIZE + thIdxFeat < num_A_cols)
+                  ? GetRowMajorElement<Idx, IdxPtr, GatherAFlag,
+                                       AdvancedGatherAFlag>(
+                        A, A_gather_list, unique_srcs_and_dests_rel_ptr,
+                        unique_srcs_and_dests_node_indices, idx_relation,
+                        thIdxRow + (m)*SHMEM_BLOCK_SIZE + blockRowJobEntryBeg,
+                        /*idx_head*/ 0, thIdxFeat + blockRow * SHMEM_BLOCK_SIZE,
+                        /*num_heads*/ 1, num_A_cols)
                   : 0.0f;
-        } else {
+
           Bs[thIdxRow][thIdxFeat] =
-              (m * BLOCK_SIZE + thIdxRow < num_A_cols &&
-               blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols &&
+              ((m)*SHMEM_BLOCK_SIZE + thIdxRow + blockRowJobEntryBeg <
+                   numARows &&
+               blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols &&
                idx_head < num_heads)
                   ? GetRowMajorElement<Idx, IdxPtr, GatherBFlag,
                                        AdvancedGatherBFlag>(
                         B, B_gather_list, unique_srcs_and_dests_rel_ptr,
                         unique_srcs_and_dests_node_indices, idx_relation,
-                        m * BLOCK_SIZE + thIdxRow,
+                        (m)*SHMEM_BLOCK_SIZE + blockRowJobEntryBeg + thIdxRow,
                         B_num_head_one_flag ? 0 : idx_head,
-                        blockFeat * BLOCK_SIZE + thIdxFeat,
+                        blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat,
                         B_num_head_one_flag ? 1 : num_heads, num_B_cols)
                   : 0.0f;
-        }
-        // if (ScatterCFlag && !AdvancedScatterCFlag) {
-        //   bool WriteCInRangeFlag =
-        //       thIdxRow + blockRow * BLOCK_SIZE < numARows &&
-        //       idx_head < num_heads &&
-        //       blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols;
-        //   if (C_scatter_list[thIdxRow + blockRow * BLOCK_SIZE +
-        //                      blockRowJobEntryBeg] == 0 &&
-        //       WriteCInRangeFlag) {
-        //     bool bflag = m * BLOCK_SIZE + thIdxRow < num_A_cols &&
-        //                  blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols &&
-        //                  idx_head < num_heads;
-        //     bool aflag = thIdxRow + blockRow * BLOCK_SIZE < numARows &&
-        //                  m * BLOCK_SIZE + thIdxFeat < num_A_cols &&
-        //                  idx_head < num_heads;
+        } else {
+          // Get sub-matrix Asub of A
+          // Asub = &A[blockRow * BLOCK_SIZE * num_A_cols + m * BLOCK_SIZE];
+          As[thIdxRow][thIdxFeat] =
+              (thIdxRow + blockRow * SHMEM_BLOCK_SIZE < numARows &&
+               m * SHMEM_BLOCK_SIZE + thIdxFeat < num_A_cols &&
+               idx_head < num_heads)
+                  ? GetRowMajorElement<Idx, IdxPtr, GatherAFlag,
+                                       AdvancedGatherAFlag>(
+                        A, A_gather_list, unique_srcs_and_dests_rel_ptr,
+                        unique_srcs_and_dests_node_indices, idx_relation,
+                        thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
+                            blockRowJobEntryBeg,
+                        A_num_head_one_flag ? 0 : idx_head,
+                        thIdxFeat + m * SHMEM_BLOCK_SIZE,
+                        A_num_head_one_flag ? 1 : num_heads, num_A_cols)
+                  : 0.0f;
+          if constexpr (BWeightInsteadOfFeatureFlag) {
+            // B matrix the most major dimension is num_heads, i.e., [num_heads,
+            // num_B_rows_feat, num_B_cols_feat] instead of [num_nodes|edges,
+            // num_heads, num_feats]
+            // NB: B's num_B_cols_feat is the same as input_dim whereas
+            // num_B_rows_feat is per head i.e., B dimension is [num_heads,
+            // input_dim (num_A_cols), output_dim//num_heads (num_B_cols)] in
+            // forward propagation or [num_heads, output_dim//num_heads
+            // (num_A_cols), input_dim (num_B_cols)] in backward propagation
+            // FIXME: incorporate num_head_one_flag
+            Bs[thIdxRow][thIdxFeat] =
+                (m * SHMEM_BLOCK_SIZE + thIdxRow < num_A_cols &&
+                 blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols &&
+                 idx_head < num_heads)
+                    ? B[idx_head * num_A_cols * num_B_cols +
+                        (m * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols +
+                        (blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat)]
+                    : 0.0f;
+          } else {
+            Bs[thIdxRow][thIdxFeat] =
+                (m * SHMEM_BLOCK_SIZE + thIdxRow < num_A_cols &&
+                 blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols &&
+                 idx_head < num_heads)
+                    ? GetRowMajorElement<Idx, IdxPtr, GatherBFlag,
+                                         AdvancedGatherBFlag>(
+                          B, B_gather_list, unique_srcs_and_dests_rel_ptr,
+                          unique_srcs_and_dests_node_indices, idx_relation,
+                          m * SHMEM_BLOCK_SIZE + thIdxRow,
+                          B_num_head_one_flag ? 0 : idx_head,
+                          blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat,
+                          B_num_head_one_flag ? 1 : num_heads, num_B_cols)
+                    : 0.0f;
+          }
+          // if (ScatterCFlag && !AdvancedScatterCFlag) {
+          //   bool WriteCInRangeFlag =
+          //       thIdxRow + blockRow * BLOCK_SIZE < numARows &&
+          //       idx_head < num_heads &&
+          //       blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols;
+          //   if (C_scatter_list[thIdxRow + blockRow * BLOCK_SIZE +
+          //                      blockRowJobEntryBeg] == 0 &&
+          //       WriteCInRangeFlag) {
+          //     bool bflag = m * BLOCK_SIZE + thIdxRow < num_A_cols &&
+          //                  blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols &&
+          //                  idx_head < num_heads;
+          //     bool aflag = thIdxRow + blockRow * BLOCK_SIZE < numARows &&
+          //                  m * BLOCK_SIZE + thIdxFeat < num_A_cols &&
+          //                  idx_head < num_heads;
 
-        //     printf(
-        //         "0 found(WriteCInRangeFlag)!!! (thIdxRow %ld, blockRow %ld, "
-        //         "blockRowJobEntryBeg "
-        //         "%ld, numARows %ld), (thIdxFeat %ld, blockFeat %ld,
-        //         num_B_cols "
-        //         "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld) "
-        //         "(mLoopBeg %ld mLoopEnd %ld m%ld) (bweightflag %d aflag %d "
-        //         "bflag %d) (shmem A %f B %f)\n",
-        //         thIdxRow, blockRow, blockRowJobEntryBeg, numARows, thIdxFeat,
-        //         blockFeat, num_B_cols, idx_head, num_heads, idx_relation,
-        //         mLoopBeg, mLoopEnd, m, BWeightInsteadOfFeatureFlag, aflag,
-        //         bflag, As[thIdxRow][thIdxFeat], Bs[thIdxRow][thIdxFeat]);
-        //   }
-        // }
+          //     printf(
+          //         "0 found(WriteCInRangeFlag)!!! (thIdxRow %ld, blockRow %ld,
+          //         " "blockRowJobEntryBeg "
+          //         "%ld, numARows %ld), (thIdxFeat %ld, blockFeat %ld,
+          //         num_B_cols "
+          //         "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld) "
+          //         "(mLoopBeg %ld mLoopEnd %ld m%ld) (bweightflag %d aflag %d
+          //         " "bflag %d) (shmem A %f B %f)\n", thIdxRow, blockRow,
+          //         blockRowJobEntryBeg, numARows, thIdxFeat, blockFeat,
+          //         num_B_cols, idx_head, num_heads, idx_relation, mLoopBeg,
+          //         mLoopEnd, m, BWeightInsteadOfFeatureFlag, aflag, bflag,
+          //         As[thIdxRow][thIdxFeat], Bs[thIdxRow][thIdxFeat]);
+          //   }
+          // }
+        }
       }
 
       // Synchronize to make sure the sub-matrices are loaded
       // before starting the computation
       __syncthreads();
       // Multiply Asub and Bsub together
-      for (int e = 0; e < BLOCK_SIZE; ++e)
-        Cvalue += As[thIdxRow][e] * Bs[e][thIdxFeat];
+      for (int e = 0; e < SHMEM_BLOCK_SIZE; ++e) {
+        Cvalue += As[thIdxRow_initial][e] * Bs[e][thIdxFeat_initial];
+        if constexpr (COARSEN_FACTOR_2_FLAG) {
+          Cvalue_1 += As[thIdxRow_initial + 1 * (SHMEM_BLOCK_SIZE / 4)][e] *
+                      Bs[e][thIdxFeat_initial];
+          Cvalue_2 += As[thIdxRow_initial + 2 * (SHMEM_BLOCK_SIZE / 4)][e] *
+                      Bs[e][thIdxFeat_initial];
+          Cvalue_3 += As[thIdxRow_initial + 3 * (SHMEM_BLOCK_SIZE / 4)][e] *
+                      Bs[e][thIdxFeat_initial];
+        }
+      }
       // Synchronize to make sure that the preceding
       // computation is done before loading two new
       // sub-matrices of A and B in the next iteration
@@ -282,79 +311,96 @@ __device__ __forceinline__ void _basic_MatMulKernel(
 
     // Write Csub to device memory
     // Each thread writes one element
-    if constexpr (OuterProductFlag) {
-      // C is weight instead of feature.
-      bool WriteCInRangeFlag =
-          blockRow * BLOCK_SIZE + thIdxRow < num_A_cols &&
-          blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols &&
-          idx_head < num_heads;
-      if constexpr (!AtomicUpdateFlag) {
-        CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(
-            OuterProductFlag && AtomicUpdateFlag,
-            "OuterproductFlag==true case must use atomic update");
+    for (Idx storeLoopIdx = 0; storeLoopIdx < (COARSEN_FACTOR_2_FLAG ? 4 : 1);
+         storeLoopIdx++) {
+      Idx thIdxRow = thIdxRow_initial + storeLoopIdx * (SHMEM_BLOCK_SIZE / 4);
+      Idx thIdxFeat = thIdxFeat_initial;
+      if constexpr (COARSEN_FACTOR_2_FLAG) {
+        if (storeLoopIdx == 1) {
+          Cvalue = Cvalue_1;
+        } else if (storeLoopIdx == 2) {
+          Cvalue = Cvalue_2;
+        } else if (storeLoopIdx == 3) {
+          Cvalue = Cvalue_3;
+        }
       }
-      if (WriteCInRangeFlag) {
-        // FIXME: offset dependent on whether one-side num_head is 1
-        atomicAdd(&C[idx_head * num_A_cols /*A is transposed in the fly*/ *
-                         num_B_cols +
-                     (blockRow * BLOCK_SIZE + thIdxRow) * num_B_cols +
-                     blockFeat * BLOCK_SIZE + thIdxFeat],
-                  Cvalue);
-      }
-    } else {  //  !OuterProductFlag
-
-      bool WriteCInRangeFlag = thIdxRow + blockRow * BLOCK_SIZE < numARows &&
-                               idx_head < num_heads &&
-                               blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols;
-      // if (ScatterCFlag && !AdvancedScatterCFlag) {
-      //   if (C_scatter_list[thIdxRow + blockRow * BLOCK_SIZE +
-      //                      blockRowJobEntryBeg] == 0) {
-      //     printf(
-      //         "0 found(%d)!!! (thIdxRow %ld, blockRow %ld,
-      //         blockRowJobEntryBeg "
-      //         "%ld, numARows %ld), (thIdxFeat %ld, blockFeat %ld, num_B_cols
-      //         "
-      //         "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld)
-      //         (mLoopBeg "
-      //         "%ld mLoopEnd %ld) CValue %f\n",
-      //         WriteCInRangeFlag, thIdxRow, blockRow, blockRowJobEntryBeg,
-      //         numARows, thIdxFeat, blockFeat, num_B_cols, idx_head,
-      //         num_heads, idx_relation, mLoopBeg, mLoopEnd, Cvalue);
-      //   }
-      // }
-      if (WriteCInRangeFlag) {
-        if constexpr (AtomicUpdateFlag) {
-          // print GetRowMajorElement arguments
-          // if constexpr (!OuterProductFlag && !GatherAFlag &&
-          // !AdvancedGatherAFlag && !GatherBFlag && !AdvancedGatherBFlag &&
-          // ScatterCFlag && !AdvancedScatterCFlag && AtomicUpdateFlag)
-          // if (ScatterCFlag && !AdvancedScatterCFlag)
-          // printf("C %p C_scatter_list %p unique_srcs_and_dests_rel_ptr %p "
-          //        "unique_srcs_and_dests_node_indices %p idx_relation %ld "
-          //        "idxRow %ld scatter_list[idxRow] %ld idxFeat %ld idx_head
-          //        %ld num_heads %ld " "num_B_cols %ld, numARows %ld\n", C,
-          //        C_scatter_list, unique_srcs_and_dests_rel_ptr,
-          //        unique_srcs_and_dests_node_indices, idx_relation,
-          //        thIdxRow + blockRow * BLOCK_SIZE, C_scatter_list[thIdxRow +
-          //        blockRow * BLOCK_SIZE], blockFeat * BLOCK_SIZE + thIdxFeat,
-          //        idx_head, num_heads, num_B_cols, numARows);
-          atomicAdd(&GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
-                                        AdvancedScatterCFlag>(
-                        C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
-                        unique_srcs_and_dests_node_indices, idx_relation,
-                        thIdxRow + blockRow * BLOCK_SIZE + blockRowJobEntryBeg,
-                        C_num_head_one_flag ? 0 : idx_head,
-                        blockFeat * BLOCK_SIZE + thIdxFeat,
-                        C_num_head_one_flag ? 1 : num_heads, num_B_cols),
+      if constexpr (OuterProductFlag) {
+        // C is weight instead of feature.
+        bool WriteCInRangeFlag =
+            blockRow * SHMEM_BLOCK_SIZE + thIdxRow < num_A_cols &&
+            blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols &&
+            idx_head < num_heads;
+        if constexpr (!AtomicUpdateFlag) {
+          CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(
+              OuterProductFlag && AtomicUpdateFlag,
+              "OuterproductFlag==true case must use atomic update");
+        }
+        if (WriteCInRangeFlag) {
+          // FIXME: offset dependent on whether one-side num_head is 1
+          atomicAdd(&C[idx_head * num_A_cols /*A is transposed in the fly*/ *
+                           num_B_cols +
+                       (blockRow * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols +
+                       blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat],
                     Cvalue);
-        } else {  // !AtomicUpdateFlag
-          GetRowMajorElement<Idx, IdxPtr, ScatterCFlag, AdvancedScatterCFlag>(
-              C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
-              unique_srcs_and_dests_node_indices, idx_relation,
-              thIdxRow + blockRow * BLOCK_SIZE + blockRowJobEntryBeg,
-              C_num_head_one_flag ? 0 : idx_head,
-              blockFeat * BLOCK_SIZE + thIdxFeat,
-              C_num_head_one_flag ? 1 : num_heads, num_B_cols) = Cvalue;
+        }
+      } else {  //  !OuterProductFlag
+
+        bool WriteCInRangeFlag =
+            thIdxRow + blockRow * SHMEM_BLOCK_SIZE < numARows &&
+            idx_head < num_heads &&
+            blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols;
+        // if (ScatterCFlag && !AdvancedScatterCFlag) {
+        //   if (C_scatter_list[thIdxRow + blockRow * BLOCK_SIZE +
+        //                      blockRowJobEntryBeg] == 0) {
+        //     printf(
+        //         "0 found(%d)!!! (thIdxRow %ld, blockRow %ld,
+        //         blockRowJobEntryBeg "
+        //         "%ld, numARows %ld), (thIdxFeat %ld, blockFeat %ld,
+        //         num_B_cols
+        //         "
+        //         "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld)
+        //         (mLoopBeg "
+        //         "%ld mLoopEnd %ld) CValue %f\n",
+        //         WriteCInRangeFlag, thIdxRow, blockRow, blockRowJobEntryBeg,
+        //         numARows, thIdxFeat, blockFeat, num_B_cols, idx_head,
+        //         num_heads, idx_relation, mLoopBeg, mLoopEnd, Cvalue);
+        //   }
+        // }
+        if (WriteCInRangeFlag) {
+          if constexpr (AtomicUpdateFlag) {
+            // print GetRowMajorElement arguments
+            // if constexpr (!OuterProductFlag && !GatherAFlag &&
+            // !AdvancedGatherAFlag && !GatherBFlag && !AdvancedGatherBFlag &&
+            // ScatterCFlag && !AdvancedScatterCFlag && AtomicUpdateFlag)
+            // if (ScatterCFlag && !AdvancedScatterCFlag)
+            // printf("C %p C_scatter_list %p unique_srcs_and_dests_rel_ptr %p "
+            //        "unique_srcs_and_dests_node_indices %p idx_relation %ld "
+            //        "idxRow %ld scatter_list[idxRow] %ld idxFeat %ld idx_head
+            //        %ld num_heads %ld " "num_B_cols %ld, numARows %ld\n", C,
+            //        C_scatter_list, unique_srcs_and_dests_rel_ptr,
+            //        unique_srcs_and_dests_node_indices, idx_relation,
+            //        thIdxRow + blockRow * BLOCK_SIZE, C_scatter_list[thIdxRow
+            //        + blockRow * BLOCK_SIZE], blockFeat * BLOCK_SIZE +
+            //        thIdxFeat, idx_head, num_heads, num_B_cols, numARows);
+            atomicAdd(&GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
+                                          AdvancedScatterCFlag>(
+                          C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
+                          unique_srcs_and_dests_node_indices, idx_relation,
+                          thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
+                              blockRowJobEntryBeg,
+                          C_num_head_one_flag ? 0 : idx_head,
+                          blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat,
+                          C_num_head_one_flag ? 1 : num_heads, num_B_cols),
+                      Cvalue);
+          } else {  // !AtomicUpdateFlag
+            GetRowMajorElement<Idx, IdxPtr, ScatterCFlag, AdvancedScatterCFlag>(
+                C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
+                unique_srcs_and_dests_node_indices, idx_relation,
+                thIdxRow + blockRow * SHMEM_BLOCK_SIZE + blockRowJobEntryBeg,
+                C_num_head_one_flag ? 0 : idx_head,
+                blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat,
+                C_num_head_one_flag ? 1 : num_heads, num_B_cols) = Cvalue;
+          }
         }
       }
     }
@@ -390,7 +436,8 @@ __device__ __forceinline__ void _basic_MatMulKernel(
 
 // blockIdx.y == ceil_div (num_edges, BLOCK_SIZE)
 template <
-    int BLOCK_SIZE, typename Idx, typename IdxPtr,
+    bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+    typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNFeatPerEdgeFWProp(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
@@ -400,8 +447,9 @@ __global__ void HET_RGNNFeatPerEdgeFWProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
-                      false, Idx, IdxPtr, A_num_head_one_flag, false, false>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, false, true,
+                      false, false, false, true, false, false, Idx, IdxPtr,
+                      A_num_head_one_flag, false, false>(
       node_feat_input,
       &weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) * input_dim *
               output_per_head_dim],
@@ -414,7 +462,8 @@ __global__ void HET_RGNNFeatPerEdgeFWProp(
       A_rel_ptr[idx_relation], input_dim, output_per_head_dim, num_heads);
 }
 
-template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+          typename IdxPtr>
 __global__ void HET_RGNNMatmulNoScatterGatherListFwOrBwProp(
     float* node_feat_input, float* weights, float* linear_projected_node_feat,
     IdxPtr ntype_ptrs, int* accum_num_blocks_per_ntype, Idx num_ntypes,
@@ -422,8 +471,9 @@ __global__ void HET_RGNNMatmulNoScatterGatherListFwOrBwProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_ntype = binary_search<int, int*>(
       num_ntypes, accum_num_blocks_per_ntype, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, false, false, false, false, false, false,
-                      false, false, Idx, IdxPtr, true, false, true>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, false, false,
+                      false, false, false, false, false, false, Idx, IdxPtr,
+                      true, false, true>(
       node_feat_input, weights, linear_projected_node_feat, nullptr, nullptr,
       nullptr, nullptr, nullptr, 0,
       ntype_ptrs[idx_ntype + 1] - ntype_ptrs[idx_ntype],
@@ -433,7 +483,8 @@ __global__ void HET_RGNNMatmulNoScatterGatherListFwOrBwProp(
       ntype_ptrs[idx_ntype], input_dim, output_dim, 1);
 }
 
-template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+          typename IdxPtr>
 __global__ void HET_RGNNDeltaWeightNoScatterGatherListBWProp(
     float* node_feat_input, float* delta_feat, float* delta_weight,
     IdxPtr ntype_ptrs, Idx A_delta_input_dim, Idx B_delta_output_dim,
@@ -441,8 +492,9 @@ __global__ void HET_RGNNDeltaWeightNoScatterGatherListBWProp(
   Idx idx_block_assignment = blockIdx.z;
   Idx idx_ntype = binary_search<int, int*>(
       num_ntypes, accum_num_blocks_per_ntype, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, true, false, false, false, false, false,
-                      false, true, Idx, IdxPtr, true, true, true>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, true, false,
+                      false, false, false, false, false, true, Idx, IdxPtr,
+                      true, true, true>(
       node_feat_input, delta_feat,
       &delta_weight[idx_ntype * A_delta_input_dim * B_delta_output_dim],
       nullptr, nullptr, nullptr, nullptr, nullptr, idx_ntype,
@@ -454,7 +506,8 @@ __global__ void HET_RGNNDeltaWeightNoScatterGatherListBWProp(
 }
 
 template <
-    int BLOCK_SIZE, typename Idx, typename IdxPtr,
+    bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+    typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
@@ -464,8 +517,9 @@ __global__ void HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
-                      false, Idx, IdxPtr, A_num_head_one_flag, false, false>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, false, true,
+                      false, false, false, true, false, false, Idx, IdxPtr,
+                      A_num_head_one_flag, false, false>(
       node_feat_input,
       &weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) * input_dim *
               output_per_head_dim],
@@ -479,7 +533,8 @@ __global__ void HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
 }
 
 template <
-    int BLOCK_SIZE, typename Idx, typename IdxPtr,
+    bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+    typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNFeatCompactFWProp(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
@@ -490,8 +545,9 @@ __global__ void HET_RGNNFeatCompactFWProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, true,
-                      false, Idx, IdxPtr, A_num_head_one_flag, false, false>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, false, true,
+                      false, false, false, true, true, false, Idx, IdxPtr,
+                      A_num_head_one_flag, false, false>(
       node_feat_input,
       &weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) * input_dim *
               output_per_head_dim],
@@ -508,7 +564,8 @@ __global__ void HET_RGNNFeatCompactFWProp(
 }
 
 template <
-    int BLOCK_SIZE, typename Idx, typename IdxPtr,
+    bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+    typename IdxPtr,
     bool C_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaNodeFeatInputBWProp(
     float* delta_feat_per_edge, float* weight_transposed,
@@ -519,8 +576,9 @@ __global__ void HET_RGNNDeltaNodeFeatInputBWProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
-                      true, Idx, IdxPtr, false, false, C_num_head_one_flag>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, false, true,
+                      false, false, false, true, false, true, Idx, IdxPtr,
+                      false, false, C_num_head_one_flag>(
       delta_feat_per_edge,
       &weight_transposed[idx_relation * (C_num_head_one_flag ? num_heads : 1) *
                          delta_input_dim * delta_output_per_head_dim],
@@ -535,7 +593,8 @@ __global__ void HET_RGNNDeltaNodeFeatInputBWProp(
 }
 
 template <
-    int BLOCK_SIZE, typename Idx, typename IdxPtr,
+    bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+    typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaWeightBWProp(
     float* node_feat_input, float* delta_feat_per_edge, float* delta_weight,
@@ -546,8 +605,9 @@ __global__ void HET_RGNNDeltaWeightBWProp(
   Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, true, true, false, true, false, false, false,
-                      true, Idx, IdxPtr, A_num_head_one_flag, false, false>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, true, true,
+                      false, true, false, false, false, true, Idx, IdxPtr,
+                      A_num_head_one_flag, false, false>(
       node_feat_input, delta_feat_per_edge,
       &delta_weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) *
                     B_delta_output_per_head_dim * A_delta_input_dim],
@@ -561,7 +621,8 @@ __global__ void HET_RGNNDeltaWeightBWProp(
 }
 
 template <
-    int BLOCK_SIZE, typename Idx, typename IdxPtr,
+    bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+    typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaWeightBWPropACGatherScatterListIdentical(
     float* node_feat_input, float* delta_feat_per_edge, float* delta_weight,
@@ -571,8 +632,9 @@ __global__ void HET_RGNNDeltaWeightBWPropACGatherScatterListIdentical(
   Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, true, true, false, true, false, false, false,
-                      true, Idx, IdxPtr, A_num_head_one_flag, false, false>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, true, true,
+                      false, true, false, false, false, true, Idx, IdxPtr,
+                      A_num_head_one_flag, false, false>(
       node_feat_input, delta_feat_per_edge,
       &delta_weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) *
                     B_delta_output_per_head_dim * A_delta_input_dim],
@@ -587,7 +649,8 @@ __global__ void HET_RGNNDeltaWeightBWPropACGatherScatterListIdentical(
 
 // blockDim.y == ceil_div(A_col_row_idx_gather_list.size(), BLOCK_SIZE)
 template <
-    int BLOCK_SIZE, typename Idx, typename IdxPtr,
+    bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+    typename IdxPtr,
     bool B_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaWeightCompactBWProp(
     float* delta_weight, float* feat_input, float* delta_feat_compact,
@@ -598,8 +661,9 @@ __global__ void HET_RGNNDeltaWeightCompactBWProp(
   Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, true, true, false, false, false, false, false,
-                      true, Idx, IdxPtr, false, B_num_head_one_flag, false>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, true, true,
+                      false, false, false, false, false, true, Idx, IdxPtr,
+                      false, B_num_head_one_flag, false>(
       feat_input, delta_feat_compact,
       &delta_weight[idx_relation * (B_num_head_one_flag ? num_heads : 1) *
                     B_delta_output_per_head_dim * A_delta_input_dim],
@@ -616,7 +680,8 @@ __global__ void HET_RGNNDeltaWeightCompactBWProp(
 }
 
 template <
-    int BLOCK_SIZE, typename Idx, typename IdxPtr,
+    bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+    typename IdxPtr,
     bool C_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical(
     float* delta_feat_per_edge, float* weight_transposed,
@@ -626,8 +691,9 @@ __global__ void HET_RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, false,
-                      true, Idx, IdxPtr, false, false, C_num_head_one_flag>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, false, true,
+                      false, false, false, true, false, true, Idx, IdxPtr,
+                      false, false, C_num_head_one_flag>(
       delta_feat_per_edge,
       &weight_transposed[idx_relation * (C_num_head_one_flag ? num_heads : 1) *
                          delta_input_dim * delta_output_per_head_dim],
@@ -643,7 +709,8 @@ __global__ void HET_RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical(
 
 // blockDim.y == ceil_div(A_col_row_idx_gather_list.size(), BLOCK_SIZE)
 template <
-    int BLOCK_SIZE, typename Idx, typename IdxPtr,
+    bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+    typename IdxPtr,
     bool C_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
     float* delta_feat_compact, float* weight_transpose,
@@ -654,9 +721,9 @@ __global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, false, false, false, false, false, true,
-                      false, true, Idx, IdxPtr, false, false,
-                      C_num_head_one_flag>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, false, false,
+                      false, false, false, true, false, true, Idx, IdxPtr,
+                      false, false, C_num_head_one_flag>(
       delta_feat_compact,
       &weight_transpose[idx_relation * (C_num_head_one_flag ? num_heads : 1) *
                         delta_output_per_head_dim * delta_input_dim],
@@ -676,7 +743,8 @@ __global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
 // following functions blockDim.y == ceil_div(A_col_row_idx_gather_list.size(),
 // BLOCK_SIZE)
 template <
-    int BLOCK_SIZE, typename Idx, typename IdxPtr,
+    bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+    typename IdxPtr,
     bool C_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaNodeFeatInputCompactBWPropSingleSided(
     float* delta_feat_compact, float* weight_transpose,
@@ -688,9 +756,9 @@ __global__ void HET_RGNNDeltaNodeFeatInputCompactBWPropSingleSided(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, false, false, false, false, false, true,
-                      false, true, Idx, IdxPtr, false, false,
-                      C_num_head_one_flag>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, false, false,
+                      false, false, false, true, false, true, Idx, IdxPtr,
+                      false, false, C_num_head_one_flag>(
       delta_feat_compact,
       &weight_transpose[idx_relation * (C_num_head_one_flag ? num_heads : 1) *
                         delta_output_per_head_dim * delta_input_dim],
@@ -707,7 +775,8 @@ __global__ void HET_RGNNDeltaNodeFeatInputCompactBWPropSingleSided(
 }
 
 template <
-    int BLOCK_SIZE, typename Idx, typename IdxPtr,
+    bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+    typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNFeatCompactFWPropSingleSided(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
@@ -719,8 +788,9 @@ __global__ void HET_RGNNFeatCompactFWPropSingleSided(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, false, true, false, false, false, true, true,
-                      false, Idx, IdxPtr, A_num_head_one_flag, false, false>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, false, true,
+                      false, false, false, true, true, false, Idx, IdxPtr,
+                      A_num_head_one_flag, false, false>(
       node_feat_input,
       &weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) * input_dim *
               output_per_head_dim],
@@ -737,7 +807,8 @@ __global__ void HET_RGNNFeatCompactFWPropSingleSided(
 }
 
 template <
-    int BLOCK_SIZE, typename Idx, typename IdxPtr,
+    bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
+    typename IdxPtr,
     bool B_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaWeightCompactBWPropSingleSided(
     float* delta_weight, float* feat_input, float* delta_feat_compact,
@@ -749,8 +820,9 @@ __global__ void HET_RGNNDeltaWeightCompactBWPropSingleSided(
   Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<BLOCK_SIZE, true, true, false, true, true, false, false,
-                      true, Idx, IdxPtr, false, B_num_head_one_flag, false>(
+  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, true, true,
+                      false, true, true, false, false, true, Idx, IdxPtr, false,
+                      B_num_head_one_flag, false>(
       feat_input, delta_feat_compact,
       &delta_weight[idx_relation * (B_num_head_one_flag ? num_heads : 1) *
                     B_delta_output_per_head_dim * A_delta_input_dim],
