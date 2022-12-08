@@ -65,7 +65,7 @@ void _RelationalFusedGATKernel(
     const dim3 nblks(nblks_x, nblks_y);
     const dim3 nthrs(nthrs_x, nthrs_y);
 
-    gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, true>
+    HET_gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, true>
         <<<nblks, nthrs, 0, stream>>>(
             gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
             incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
@@ -80,7 +80,7 @@ void _RelationalFusedGATKernel(
     const dim3 nthrs2(nthrs_x, nthrs_y);
     const dim3 nblks2(nblks_x, nblks_y);
 
-    gatSumProdZipDivKernel<Idx, DType, CompactAsOfNodeFlag, true>
+    HET_gatSumProdZipDivKernel<Idx, DType, CompactAsOfNodeFlag, true>
         <<<nblks2, nthrs2, 0, stream>>>(
             gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
             incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
@@ -101,8 +101,8 @@ void _RelationalFusedGATKernel(
     const dim3 nblks(nblks_x, nblks_y);
     const dim3 nthrs(nthrs_x, nthrs_y);
 
-    gatExpLeakyReluSumKernel_relational_separate_coo<Idx, DType,
-                                                     CompactAsOfNodeFlag>
+    HET_gatExpLeakyReluSumKernel_relational_separate_coo<Idx, DType,
+                                                         CompactAsOfNodeFlag>
         <<<nblks, nthrs, 0, stream>>>(
             gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
             separate_coo_row_indices.data_ptr<Idx>(),
@@ -117,8 +117,8 @@ void _RelationalFusedGATKernel(
     nblks_y = std::min(num_edges, MAX_NBLKS);
     const dim3 nthrs2(nthrs_x, nthrs_y);
     const dim3 nblks2(nblks_x, nblks_y);
-    gatSumProdZipDivKernel_relational_separate_coo<Idx, DType,
-                                                   CompactAsOfNodeFlag>
+    HET_gatSumProdZipDivKernel_relational_separate_coo<Idx, DType,
+                                                       CompactAsOfNodeFlag>
         <<<nblks2, nthrs2, 0, stream>>>(
             gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
             separate_coo_row_indices.data_ptr<Idx>(),
@@ -242,25 +242,26 @@ void _RelationalFusedGATKernel(
     const dim3 nthrs(nthrs_x, nthrs_y);
     const dim3 nblks(nblks_x, nblks_y);
     if constexpr (!FLAG_KERNEL_FUSED) {
-      fusedGatBackwardGradFeatSrc<Idx, DType, CompactAsOfNodeFlag, true>
+      HET_fusedGatBackwardGradFeatSrc<Idx, DType, CompactAsOfNodeFlag, true>
           <<<nblks, nthrs, 0, stream>>>(
               gdata, outcsr_row_ptr.data_ptr<Idx>(),
               outcsr_col_idx.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
               outcsr_num_rows, unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
               unique_srcs_and_dests_node_indices.data_ptr<Idx>());
-      fusedGatBackwardGradElEr<Idx, DType, CompactAsOfNodeFlag, true>
+      HET_fusedGatBackwardGradElEr<Idx, DType, CompactAsOfNodeFlag, true>
           <<<nblks, nthrs, 0, stream>>>(
               gdata, outcsr_row_ptr.data_ptr<Idx>(),
               outcsr_col_idx.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
               outcsr_num_rows, unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
               unique_srcs_and_dests_node_indices.data_ptr<Idx>());
     } else {
-      fusedGatBackwardGradElErFeatSrcFused<Idx, DType, CompactAsOfNodeFlag,
-                                           true><<<nblks, nthrs, 0, stream>>>(
-          gdata, outcsr_row_ptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
-          outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
-          unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
-          unique_srcs_and_dests_node_indices.data_ptr<Idx>());
+      HET_fusedGatBackwardGradElErFeatSrcFused<Idx, DType, CompactAsOfNodeFlag,
+                                               true>
+          <<<nblks, nthrs, 0, stream>>>(
+              gdata, outcsr_row_ptr.data_ptr<Idx>(),
+              outcsr_col_idx.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
+              outcsr_num_rows, unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+              unique_srcs_and_dests_node_indices.data_ptr<Idx>());
     }
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
@@ -277,17 +278,15 @@ void _RelationalFusedGATKernel(
     const dim3 nthrs(nthrs_x, nthrs_y);
     const dim3 nblks(nblks_x, nblks_y);
     if constexpr (!FLAG_KERNEL_FUSED) {
-      fusedGatBackwardGradFeatSrc_relational_separate_coo<Idx, DType,
-                                                          CompactAsOfNodeFlag>
-          <<<nblks, nthrs, 0, stream>>>(
-              gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
-              separate_coo_row_indices.data_ptr<Idx>(),
-              separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-              unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
-              unique_srcs_and_dests_node_indices.data_ptr<Idx>(),
-              num_relations);
-      fusedGatBackwardGradElEr_relational_separate_coo<Idx, DType,
-                                                       CompactAsOfNodeFlag>
+      HET_fusedGatBackwardGradFeatSrc_relational_separate_coo<
+          Idx, DType, CompactAsOfNodeFlag><<<nblks, nthrs, 0, stream>>>(
+          gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
+          separate_coo_row_indices.data_ptr<Idx>(),
+          separate_coo_col_indices.data_ptr<Idx>(), num_edges,
+          unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
+      HET_fusedGatBackwardGradElEr_relational_separate_coo<Idx, DType,
+                                                           CompactAsOfNodeFlag>
           <<<nblks, nthrs, 0, stream>>>(
               gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
               separate_coo_row_indices.data_ptr<Idx>(),
@@ -296,7 +295,7 @@ void _RelationalFusedGATKernel(
               unique_srcs_and_dests_node_indices.data_ptr<Idx>(),
               num_relations);
     } else {
-      fusedGatBackwardGradElErFeatSrcFused_relational_separate_coo<
+      HET_fusedGatBackwardGradElErFeatSrcFused_relational_separate_coo<
           Idx, DType, CompactAsOfNodeFlag><<<nblks, nthrs, 0, stream>>>(
           gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
           separate_coo_row_indices.data_ptr<Idx>(),

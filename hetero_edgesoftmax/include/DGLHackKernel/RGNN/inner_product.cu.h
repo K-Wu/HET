@@ -34,7 +34,7 @@ struct BackwardInnerProductData {
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
-__global__ void inner_product_fw_kernel(
+__global__ void HET_inner_product_fw_kernel(
     InnerProductData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
@@ -116,7 +116,7 @@ __global__ void inner_product_fw_kernel(
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag>
-__global__ void inner_product_bck_kernel(
+__global__ void HET_inner_product_bck_kernel(
     BackwardInnerProductData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,

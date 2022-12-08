@@ -2,7 +2,7 @@
 #include "DGLHackKernel/DGLHackKernel.h"
 #include "DGLHackKernel/GAT/FusedGAT.cu.h"
 
-// edge-centric schedule cf. gatSumProdZipDivKernel in
+// edge-centric schedule cf. HET_gatSumProdZipDivKernel in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool FullCartesianFlag>
@@ -90,7 +90,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
 }
 
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
-__global__ void gatSumProdZipDivKernel_relational_separate_coo(
+__global__ void HET_gatSumProdZipDivKernel_relational_separate_coo(
     GatFusedData<Idx, DType> gdata, const Idx* rel_ptrs, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
@@ -102,7 +102,7 @@ __global__ void gatSumProdZipDivKernel_relational_separate_coo(
       num_relations);
 }
 
-// edge-centric schedule cf. gatExpLeakyReluSumKernel in
+// edge-centric schedule cf. HET_gatExpLeakyReluSumKernel in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool FullCartesianFlag>
@@ -192,7 +192,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
 }
 
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
-__global__ void gatExpLeakyReluSumKernel_relational_separate_coo(
+__global__ void HET_gatExpLeakyReluSumKernel_relational_separate_coo(
     GatFusedData<Idx, DType> gdata, const Idx* rel_ptrs, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,

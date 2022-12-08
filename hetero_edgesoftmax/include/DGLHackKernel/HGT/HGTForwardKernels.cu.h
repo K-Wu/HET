@@ -9,7 +9,7 @@
 // template <int NODE_INPUT_DIM_PER_HEAD/*derived from OUT_DIM and NUM_HEADS*/,
 // NUM_HEADS, OUT_DIM, COARSE_SGEMM_NODES_PER_BLOCK>
 template <int TILE_SZ_A, int TILE_SZ_B, int OUT_DIM, int NUM_HEADS>
-__global__ void _global_EdgeMessageConcatenatedCOOKernel(
+__global__ void HET__global_EdgeMessageConcatenatedCOOKernel(
     float** intermediate_node_vect, int nnz, int* matCols, int* matRelation,
     float* node_input_data, float* relation_message_matrices,
     int** dest_node_to_unique_index_per_relation,
@@ -110,7 +110,7 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
   }
 }
 
-__global__ void HGTTriviallyEdgeParallelVanillaNodeMeanAggregation(
+__global__ void HET_HGTTriviallyEdgeParallelVanillaNodeMeanAggregation(
     int64_t* col_idxes, int64_t* etypes, int64_t* eids, float* EdgeMessages,
     float* EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
     int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
@@ -124,7 +124,7 @@ __global__ void HGTTriviallyEdgeParallelVanillaNodeMeanAggregation(
       nullptr, nullptr);
 }
 
-__global__ void HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation(
+__global__ void HET_HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation(
     int64_t* col_idxes, int64_t* etypes, int64_t* eids, float* EdgeMessages,
     float* EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
     int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
@@ -140,10 +140,10 @@ __global__ void HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation(
       ETypeUniqueIndexToNodeIndexMap, etype_unique_node_offsets, row_indices);
 }
 
-// constexpr auto HGTTriviallyEdgeParallelVanillaNodeMeanAggregation =
+// constexpr auto HET_HGTTriviallyEdgeParallelVanillaNodeMeanAggregation =
 // HGTTriviallyEdgeParallelNodeMeanAggregation<int, float, false, float *>;
-// constexpr auto HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation =
-// HGTTriviallyEdgeParallelNodeMeanAggregation<int, float, true, float **>;
+// constexpr auto HET_HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation
+// = HGTTriviallyEdgeParallelNodeMeanAggregation<int, float, true, float **>;
 
 // We need to use separate coo at this moment
 // this kernel can be used for either sW in edge attention computation (vanilla
@@ -153,7 +153,7 @@ template <typename Idx, typename DType, int TILE_SZ_A, int TILE_SZ_B,
           int OUT_DIM, int NUM_HEADS, bool WORK_ASSIGNMENT_INDEX_FLAG,
           bool InputNodeFeaturesCompactOfNodeFlag,
           bool ETypeUniqueNodeIndexBinarySearchFlag>
-__global__ void EdgeMessageGeneration(
+__global__ void HET_EdgeMessageGeneration(
     Idx* etype_edge_offsets, Idx* etype_block_offsets, Idx* row_idxes,
     Idx* col_idxes, Idx* etypes, Idx* eids, DType* weight, Idx num_nodes,
     Idx num_edges, Idx num_etypes, DType* NodeFeatures, DType* OutEdgeMessage,
@@ -164,9 +164,9 @@ __global__ void EdgeMessageGeneration(
   int stride;
   int relation_idx;
   if constexpr (WORK_ASSIGNMENT_INDEX_FLAG) {
-    assert(
-        0 &&
-        "WORK_ASSIGNMENT_INDEX_FLAG is not supported in EdgeMessageGeneration");
+    assert(0 &&
+           "WORK_ASSIGNMENT_INDEX_FLAG is not supported in "
+           "HET_EdgeMessageGeneration");
     // int beg_edge_entry_idx = beg_edge_entry_idxes_vect[blockIdx.x];
     // stride = num_blocks_xdim_for_same_relation_per_block_vect[blockIdx.x] *
     //             COARSE_SGEMM_EDGES_PER_BLOCK;
@@ -225,14 +225,14 @@ __global__ void EdgeMessageGeneration(
 // This is to calculate the product of (sW) and t where (sW) is stored per edge
 // and t is stored per node.
 constexpr auto HGTVanillaEdgeAttentionSecondStage =
-    GeneralEdgeMessageMultiplyNodeFeature<
+    HET_GeneralEdgeMessageMultiplyNodeFeature<
         float, /*ProductCompactAsOfNodeFlag = */ false,
         /*EidEnableFlag = */ true, float*>;
 
 // This is to calculate the product of (sW) and t where (sW) is stored per edge
 // and t is stored per node.
 constexpr auto HGTCompactAsOfNodesEdgeAttentionSecondStage =
-    GeneralEdgeMessageMultiplyNodeFeature<float, true, false, float**>;
+    HET_GeneralEdgeMessageMultiplyNodeFeature<float, true, false, float**>;
 
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
 struct HgtDstOutData {
@@ -285,7 +285,7 @@ struct HgtDstOutData<Idx, DType, 2> {
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int UseMuAppliedAttnScoreSwitch>
-__global__ void _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
+__global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
     HgtDstOutData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
     const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
     int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
@@ -468,7 +468,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 3> {
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int OutputMuAppliedAttnScoreSwitch>
-__global__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
+__global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
     int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
@@ -615,7 +615,7 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyKernel(
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int OutputMuAppliedAttnScoreSwitch>
-__global__ void _hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
+__global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx* row_indices, const Idx* column_indices, const Idx* etypes,
     int64_t num_edges, const Idx* unique_srcs_and_dests_rel_ptr,
@@ -731,7 +731,7 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int OutputMuAppliedAttnScoreSwitch>
-__global__ void _hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
+__global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx* row_indices, const Idx* column_indices, const Idx* etypes,
     int64_t num_edges, const Idx* unique_srcs_and_dests_rel_ptr,

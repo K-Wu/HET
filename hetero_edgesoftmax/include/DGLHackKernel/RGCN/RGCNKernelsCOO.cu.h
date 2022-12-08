@@ -37,7 +37,7 @@ __device__ __forceinline__ void RgcnLayer1COOKernelEdgePerWarp(
 // consistency, we pass row_idx as dst_ids and col_idx as src_ids and use those
 // of the transposed graph. This is the same as the CSR kernel.
 template <typename Idx, typename DType>
-__global__ void RgcnLayer1COOKernelImpl(
+__global__ void HET_RgcnLayer1COOKernelImpl(
     const Idx* dst_ids, const Idx* src_ids, const Idx* eids, const Idx* types,
     const DType* hidden, const DType* weight, const DType* norm, DType* ret,
     Idx num_edges, Idx feat_len_y, Idx feat_len_x, Idx ntypes) {

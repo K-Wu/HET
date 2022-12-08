@@ -2,7 +2,8 @@
 #include "DGLHackKernel/DGLHackKernel.h"
 
 template <typename Idx, typename DType>
-__global__ void HGTBackwardFusedGradientSmFirstPartGradientAImplMAGSpecificHack(
+__global__ void
+HET_HGTBackwardFusedGradientSmFirstPartGradientAImplMAGSpecificHack(
     Idx* ranges, Idx* dst_ids, Idx* eids, Idx* types,
     DType* grad_a,               // |E| * N_HEADS
     DType* grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
@@ -68,7 +69,7 @@ __global__ void HGTBackwardFusedGradientSmFirstPartGradientAImplMAGSpecificHack(
 }
 
 template <typename Idx, typename DType>
-__global__ void HGTBackwardGradientAImplMAGSpecificHack(
+__global__ void HET_HGTBackwardGradientAImplMAGSpecificHack(
     Idx* ranges, Idx* dst_ids, Idx* eids, Idx* types,
     DType* grad_a,            // |E| * N_HEADS
     DType* grad_t_neighbour,  //|V| * N_HEADS * DIM_PER_HEAD
@@ -120,7 +121,7 @@ __global__ void HGTBackwardGradientAImplMAGSpecificHack(
 }
 
 template <typename Idx, typename DType>
-__global__ void HGTBackwardGradientSmFirstPartImplMAGSpecificHack(
+__global__ void HET_HGTBackwardGradientSmFirstPartImplMAGSpecificHack(
     Idx* ranges, Idx* dst_ids, Idx* eids, Idx* types,
     DType* grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
     DType* grad_t_neighbour,     //|V| * N_HEADS * DIM_PER_HEAD

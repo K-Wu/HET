@@ -77,12 +77,12 @@ void _FusedKernelImpl(at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
   // incsr_elements[0], incsr_elements[1], incsr_elements[2]); print_gdata<Idx,
   // DType>(feat_src,el,er,sum,exp,ret,el_xlen, feat_src_xlen,
   // graph->NumVertices(0),incsr_elements[1].NumElements(), incsr_elements[0],
-  // incsr_elements[1], incsr_elements[2]); gatExpLeakyReluSumKernel<<<nblks,
-  // nthrs, el_xlen*sizeof(DType), thr_entry->stream>>>(gdata, csr);
-  // cuda_err_chk(cudaDeviceSynchronize());
+  // incsr_elements[1], incsr_elements[2]);
+  // HET_gatExpLeakyReluSumKernel<<<nblks, nthrs, el_xlen*sizeof(DType),
+  // thr_entry->stream>>>(gdata, csr); cuda_err_chk(cudaDeviceSynchronize());
   //   std::chrono::high_resolution_clock::time_point t1 =
   //       std::chrono::high_resolution_clock::now();
-  gatExpLeakyReluSumKernel<Idx, DType, true, false>
+  HET_gatExpLeakyReluSumKernel<Idx, DType, true, false>
       <<<nblks, nthrs, 0, stream>>>(gdata, incsr_row_ptr.data_ptr<Idx>(),
                                     incsr_col_idx.data_ptr<Idx>(), nullptr,
                                     incsr_num_rows, nullptr, nullptr);
@@ -97,7 +97,7 @@ void _FusedKernelImpl(at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
   const dim3 nblks2(nblks_x, nblks_y);
   // LOG(INFO) << "kernel2 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:"
   // <<nthrs_x << "*" << nthrs_y;
-  gatSumProdZipDivKernel<Idx, DType, true, false>
+  HET_gatSumProdZipDivKernel<Idx, DType, true, false>
       <<<nblks2, nthrs2, 0, stream>>>(gdata, incsr_row_ptr.data_ptr<Idx>(),
                                       incsr_col_idx.data_ptr<Idx>(), nullptr,
                                       incsr_num_rows, nullptr, nullptr);
@@ -197,19 +197,19 @@ void _FusedKernelImpl(
   //   std::chrono::high_resolution_clock::time_point t1 =
   //       std::chrono::high_resolution_clock::now();
   if constexpr (!FLAG_KERNEL_FUSED) {
-    fusedGatBackwardGradFeatSrc<Idx, DType, true, false>
+    HET_fusedGatBackwardGradFeatSrc<Idx, DType, true, false>
         <<<nblks, nthrs, 0, stream>>>(gdata, outcsr_row_ptr.data_ptr<Idx>(),
                                       outcsr_col_idx.data_ptr<Idx>(), nullptr,
                                       outcsr_num_rows, nullptr, nullptr);
     // const dim3 nthrs3(nthrs_y, nthrs_x);
     // fusedGatBackwardGradElEr4<<<nblks, nthrs3, 0, thr_entry->stream>>>(gdata,
     // ocsr);
-    fusedGatBackwardGradElEr<Idx, DType, true, false>
+    HET_fusedGatBackwardGradElEr<Idx, DType, true, false>
         <<<nblks, nthrs, 0, stream>>>(gdata, outcsr_row_ptr.data_ptr<Idx>(),
                                       outcsr_col_idx.data_ptr<Idx>(), nullptr,
                                       outcsr_num_rows, nullptr, nullptr);
   } else {
-    fusedGatBackwardGradElErFeatSrcFused<Idx, DType, true, false>
+    HET_fusedGatBackwardGradElErFeatSrcFused<Idx, DType, true, false>
         <<<nblks, nthrs, 0, stream>>>(gdata, outcsr_row_ptr.data_ptr<Idx>(),
                                       outcsr_col_idx.data_ptr<Idx>(), nullptr,
                                       outcsr_num_rows, nullptr, nullptr);

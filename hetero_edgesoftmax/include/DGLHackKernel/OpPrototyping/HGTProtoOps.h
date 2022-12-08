@@ -202,7 +202,7 @@ void CompressedEdgeMessageConcatenatedCOOKernel(
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   // v*W
-  EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel<
+  HET_EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel<
       TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS><<<grid, block>>>(
       thrust::raw_pointer_cast(
           (intermediate_data->get_intermediate_node_vect_d()).data()),
@@ -296,7 +296,7 @@ void EdgeAttentionConcatenatedCOOKernel(
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   // k*W
-  EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel<
+  HET_EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel<
       TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS><<<grid, block>>>(
       thrust::raw_pointer_cast(
           (intermediate_data->get_intermediate_node_vect_d()).data()),
@@ -400,7 +400,7 @@ void HGTBackPropGradientSMAFusion(
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
-  HGTBackwardGradientSmFirstPartImpl<Idx, DType><<<nblks, nthrs>>>(
+  HET_HGTBackwardGradientSmFirstPartImpl<Idx, DType><<<nblks, nthrs>>>(
       range_data, ids_data, eids_data, typeids_data, grad_sm_first_stage_data,
       grad_t_neighbour_data, message_data, sigmas_data, num_nodes, num_heads,
       feat_dim_per_head, n_rel_types);
@@ -409,14 +409,14 @@ void HGTBackPropGradientSMAFusion(
   std::chrono::high_resolution_clock::time_point t2 =
       std::chrono::high_resolution_clock::now();
   std::cout
-      << "HGTBackwardGradientSmFirstPartImpl time: "
+      << "HET_HGTBackwardGradientSmFirstPartImpl time: "
       << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
       << " ms" << std::endl;
 
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t1_kernel2 =
       std::chrono::high_resolution_clock::now();
-  HGTBackwardGradientAImpl<Idx, DType><<<nblks, nthrs>>>(
+  HET_HGTBackwardGradientAImpl<Idx, DType><<<nblks, nthrs>>>(
       range_data, ids_data, eids_data, typeids_data, grad_a_data,
       grad_t_neighbour_data, message_data, sigmas_data, num_nodes, num_heads,
       feat_dim_per_head, n_rel_types);
@@ -424,7 +424,7 @@ void HGTBackPropGradientSMAFusion(
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t2_kernel2 =
       std::chrono::high_resolution_clock::now();
-  std::cout << "HGTBackwardGradientAImpl time: "
+  std::cout << "HET_HGTBackwardGradientAImpl time: "
             << std::chrono::duration_cast<std::chrono::milliseconds>(
                    t2_kernel2 - t1_kernel2)
                    .count()
@@ -434,7 +434,7 @@ void HGTBackPropGradientSMAFusion(
   std::chrono::high_resolution_clock::time_point t1_kernel3 =
       std::chrono::high_resolution_clock::now();
 
-  HGTBackwardFusedGradientSmFirstPartGradientAImpl<Idx, DType>
+  HET_HGTBackwardFusedGradientSmFirstPartGradientAImpl<Idx, DType>
       <<<nblks, nthrs>>>(range_data, ids_data, eids_data, typeids_data,
                          grad_a_data, grad_sm_first_stage_data,
                          grad_t_neighbour_data, message_data, sigmas_data,
@@ -443,7 +443,7 @@ void HGTBackPropGradientSMAFusion(
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t2_kernel3 =
       std::chrono::high_resolution_clock::now();
-  std::cout << "HGTBackwardFusedGradientSmFirstPartGradientAImpl time: "
+  std::cout << "HET_HGTBackwardFusedGradientSmFirstPartGradientAImpl time: "
             << std::chrono::duration_cast<std::chrono::milliseconds>(
                    t2_kernel3 - t1_kernel3)
                    .count()
@@ -490,7 +490,8 @@ void HGTForwardImpl(
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
-  HGTExperimentalEdgeAttentionFusedCOOKernel_512_32<256, 4><<<grid, block>>>(
+  HET_HGTExperimentalEdgeAttentionFusedCOOKernel_512_32<256,
+                                                        4><<<grid, block>>>(
       graph.num_rels, attention.Ptr(), node_features.Ptr(), weight.Ptr(),
       static_cast<int *>(
           thrust::raw_pointer_cast(graph.num_src_nodes_per_edge_type.data())),
@@ -550,7 +551,8 @@ void HGTForwardImpl(
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t1second =
       std::chrono::high_resolution_clock::now();
-  HGTExperimentalEdgeAttentionResidueCSR<256, 4, NUM_EDGES_TO_PROCESS_PER_BLOCK>
+  HET_HGTExperimentalEdgeAttentionResidueCSR<256, 4,
+                                             NUM_EDGES_TO_PROCESS_PER_BLOCK>
       <<<grid_residual, block_residual>>>(
           graph.csr.num_rels, graph.csr.num_rows, attention.Ptr(),
           node_features.Ptr(), weight.Ptr(),

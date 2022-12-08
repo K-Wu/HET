@@ -217,7 +217,7 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
 }
 
 template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
-__global__ void RGCNMatmulNoScatterGatherListFwProp(
+__global__ void HET_RGCNMatmulNoScatterGatherListFwProp(
     float* node_feat_input, float* weights, float* linear_projected_node_feat,
     float* edge_norm, IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
     IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
@@ -239,7 +239,7 @@ __global__ void RGCNMatmulNoScatterGatherListFwProp(
 }
 
 template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
-__global__ void HGTMessageGenerationAndAccumulationFwProp(
+__global__ void HET_HGTMessageGenerationAndAccumulationFwProp(
     float* node_feat_input, float* weights, float* linear_projected_node_feat,
     float* edge_norm, /*float* relation_pri, */ IdxPtr separate_coo_row_idx,
     IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,

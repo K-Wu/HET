@@ -47,11 +47,9 @@ __device__ __forceinline__ void RgcnLayer0BackwardKernelNodePerBlock(
 }
 
 template <typename Idx, typename DType>
-__global__ void RgcnLayer0BackwardKernelImpl(Idx *ranges, Idx *dst_ids,
-                                             Idx *eids, Idx *types,
-                                             DType *grad_out, DType *norm,
-                                             DType *grad_weight, Idx num_nodes,
-                                             Idx feat_len, Idx ntypes) {
+__global__ void HET_RgcnLayer0BackwardKernelImpl(
+    Idx *ranges, Idx *dst_ids, Idx *eids, Idx *types, DType *grad_out,
+    DType *norm, DType *grad_weight, Idx num_nodes, Idx feat_len, Idx ntypes) {
   if (blockIdx.x < num_nodes) {
     RgcnLayer0BackwardKernelNodePerBlock(ranges, dst_ids, eids, types, grad_out,
                                          norm, grad_weight, num_nodes, feat_len,
@@ -60,7 +58,7 @@ __global__ void RgcnLayer0BackwardKernelImpl(Idx *ranges, Idx *dst_ids,
 }
 
 template <typename Idx, typename DType>
-__global__ void RgcnLayer0BackwardKernelHybridAssignImpl(
+__global__ void HET_RgcnLayer0BackwardKernelHybridAssignImpl(
     Idx *ranges, Idx *dst_ids, Idx *eids, Idx *types, DType *grad_out,
     DType *norm, DType *grad_weight, Idx num_nodes, Idx feat_len, Idx ntypes,
     int num_blocks_on_blocks_per_node) {
@@ -146,7 +144,7 @@ __device__ __forceinline__ void RgcnLayer1BackwardKernelNodePerBlock(
 }
 
 template <typename Idx, typename DType>
-__global__ void RgcnLayer1BackwardKernelImpl(
+__global__ void HET_RgcnLayer1BackwardKernelImpl(
     Idx *ranges, Idx *dst_ids, Idx *eids, Idx *types, DType *hidden,
     DType *weight, DType *norm, DType *grad_out, DType *grad_hidden,
     DType *grad_weight, Idx num_nodes, Idx feat_len_y, Idx feat_len_x,
@@ -160,7 +158,7 @@ __global__ void RgcnLayer1BackwardKernelImpl(
 }
 
 template <typename Idx, typename DType>
-__global__ void RgcnLayer1BackwardKernelHybridAssignImpl(
+__global__ void HET_RgcnLayer1BackwardKernelHybridAssignImpl(
     Idx *ranges, Idx *dst_ids, Idx *eids, Idx *types, DType *hidden,
     DType *weight, DType *norm, DType *grad_out, DType *grad_hidden,
     DType *grad_weight, Idx num_nodes, Idx feat_len_y, Idx feat_len_x,

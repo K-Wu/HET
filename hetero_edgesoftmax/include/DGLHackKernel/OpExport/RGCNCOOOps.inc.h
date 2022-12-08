@@ -31,7 +31,7 @@ void _LayerImpl(at::Tensor& coo_row_idx, at::Tensor& coo_col_idx,
     assert(nthrs % 32 == 0);
     int nblks =
         ceil_div<>(num_edges, (int64_t)nthrs / 32);  // 32 is the warp size
-    RgcnLayer1COOKernelImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
+    HET_RgcnLayer1COOKernelImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
         row_idx_data, ids_data, eids_data, typeids_data, hidden_data,
         weight_data, norm_data, ret_data, num_edges, feat_len_y, feat_len_x,
         ntypes);
@@ -40,7 +40,7 @@ void _LayerImpl(at::Tensor& coo_row_idx, at::Tensor& coo_col_idx,
     Idx feat_len = weight.size(2);
     int nthrs = feat_len;
     assert(0 && "not implemented");
-    // RgcnLayer0KernelImpl<Idx, DType>
+    // HET_RgcnLayer0KernelImpl<Idx, DType>
     //    <<<nblks, nthrs >>>(
     //        range_data, ids_data, eids_data, typeids_data, weight_data,
     //        norm_data, ret_data, num_nodes, feat_len, ntypes);
@@ -115,7 +115,7 @@ void _LayerBackwardImpl(
     assert(nthrs % 32 == 0);
     int nblks =
         ceil_div<>(num_edges, (int64_t)nthrs / 32);  // 32 is the warp size
-    RgcnLayer1BackwardCOOKernelImpl<<<nblks, nthrs, 0, stream>>>(
+    HET_RgcnLayer1BackwardCOOKernelImpl<<<nblks, nthrs, 0, stream>>>(
         row_idx_data, ids_data, eids_data, typeids_data, hidden_data,
         weight_data, norm_data, grad_out_data, grad_hidden_data,
         grad_weight_data, num_edges, feat_len_y, feat_len_x, ntypes);
@@ -124,7 +124,7 @@ void _LayerBackwardImpl(
     Idx feat_len = ret.size(2);
     int nthrs = feat_len;
     assert(0 && "not implemented");
-    // RgcnLayer0BackwardKernelImpl<<<nblks, nthrs>>>(
+    // HET_RgcnLayer0BackwardKernelImpl<<<nblks, nthrs>>>(
     //    range_data, ids_data, eids_data, typeids_data, grad_out_data,
     //    norm_data, ret_data, num_nodes, feat_len, ntypes);
   }

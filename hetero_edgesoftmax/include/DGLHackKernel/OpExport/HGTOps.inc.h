@@ -58,7 +58,7 @@ void FullGraphFusedMessageCalcAndMeanAggregationSeparateCOO(
   const dim3 nblks(ceil_div<>(num_output_dim, (long)BLOCK_SIZE), grid_dim_y,
                    num_heads);
   const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
-  HGTMessageGenerationAndAccumulationFwProp<BLOCK_SIZE, int64_t, int64_t*>
+  HET_HGTMessageGenerationAndAccumulationFwProp<BLOCK_SIZE, int64_t, int64_t*>
       <<<nblks, nthrs, 0, stream>>>(
           node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
           node_feat_output.data_ptr<float>(),
@@ -79,7 +79,7 @@ void _full_graph_message_mean_aggregation(
     at::Tensor& incsr_reltypes, at::Tensor& incsr_eids,
     at::Tensor& edge_messages, at::Tensor& edge_attn_score,
     at::Tensor& edgesoftmax_sum_per_node, at::Tensor& mu, at::Tensor& ret) {
-  // using _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum based on
+  // using HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum based on
   // _gatSumProdZipDivKernel whose driver code is
   // HET::TorchExport::RGCN::FwProp::IntegratedCSR::_FusedKernelImpl in
   // [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/GATOps.inc.h]] NB:
@@ -143,7 +143,7 @@ void _full_graph_message_mean_aggregation(
   const dim3 nblks(nblks_x, nblks_y);
   printf("nblks_x=%d, nblks_y=%d, nthrs_x=%d, nthrs_y=%d\n", nblks_x, nblks_y,
          nthrs_x, nthrs_y);
-  _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum<
+  HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum<
       Idx, DType, false, true, false, false, UseMuAppliedAttnScoreSwitch>
       <<<nblks, nthrs, 0, stream>>>(
           gdata, incsr_rowptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
@@ -186,7 +186,7 @@ void _full_graph_edge_softmax_ops(
     at::Tensor& edgesoftmax_sum_per_node,
     at::Tensor& mu_softmax_applied_unnormalized_attn_score,
     at::Tensor& normalized_attn_score) {
-  // using _hgtEdgeSoftmaxAccumStageOnlyKernel based on
+  // using HET__hgtEdgeSoftmaxAccumStageOnlyKernel based on
   // _gatExpLeakyReluSumKernel in
   // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]].
   // There is an existing implementation with tricky API in
@@ -238,7 +238,7 @@ void _full_graph_edge_softmax_ops(
   const dim3 nthrs(nthrs_x, nthrs_y);
 
   if (EdgeParallelFlag) {
-    _hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel<
+    HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel<
         Idx, DType, false, true, true, false, OutputMuAppliedAttnScoreSwitch>
         <<<nblks, nthrs, 0, stream>>>(
             gdata, incsr_rowptr_or_indices.data_ptr<Idx>(),
@@ -246,7 +246,7 @@ void _full_graph_edge_softmax_ops(
             incsr_reltypes_or_relptr.data_ptr<Idx>(), incsr_num_rows_or_edges,
             /*no need when !CompactAsOfNode*/ nullptr,
             /*no need when !CompactAsOfNode*/ nullptr, num_relations);
-    _hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2<
+    HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2<
         Idx, DType, false, true, true, false, OutputMuAppliedAttnScoreSwitch>
         <<<nblks, nthrs, 0, stream>>>(
             gdata, incsr_rowptr_or_indices.data_ptr<Idx>(),
@@ -255,8 +255,8 @@ void _full_graph_edge_softmax_ops(
             /*no need when !CompactAsOfNode*/ nullptr,
             /*no need when !CompactAsOfNode*/ nullptr, num_relations);
   } else {
-    _hgtEdgeSoftmaxAccumStageOnlyKernel<Idx, DType, false, true, false, false,
-                                        OutputMuAppliedAttnScoreSwitch>
+    HET__hgtEdgeSoftmaxAccumStageOnlyKernel<
+        Idx, DType, false, true, false, false, OutputMuAppliedAttnScoreSwitch>
         <<<nblks, nthrs, 0, stream>>>(
             gdata, incsr_rowptr_or_indices.data_ptr<Idx>(),
             incsr_col_idx.data_ptr<Idx>(),
@@ -286,7 +286,7 @@ void full_graph_edge_softmax_only_accumu_stage_ops(
     at::Tensor& incsr_reltypes, at::Tensor& unnormalized_attn_score,
     at::Tensor& mu, at::Tensor& edgesoftmax_sum_per_node,
     at::Tensor& mu_softmax_applied_unnormalized_attn_score) {
-  // using _hgtEdgeSoftmaxAccumStageOnlyKernel based on
+  // using HET__hgtEdgeSoftmaxAccumStageOnlyKernel based on
   // _gatExpLeakyReluSumKernel whose driver code is
   // HET::TorchExport::RGCN::FwProp::IntegratedCSR::_FusedKernelImpl in
   // [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/GATOps.inc.h]]
@@ -366,16 +366,17 @@ void HGTBackPropGradientSMAFusionExperimental(
   // cuda_err_chk(cudaDeviceSynchronize());
   // std::chrono::high_resolution_clock::time_point t1 =
   //     std::chrono::high_resolution_clock::now();
-  HGTBackwardGradientSmFirstPartImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
-      range_data, ids_data, eids_data, typeids_data, grad_sm_first_stage_data,
-      grad_t_neighbour_data, message_data, sigmas_data, num_nodes, num_heads,
-      feat_dim_per_head, n_rel_types);
+  HET_HGTBackwardGradientSmFirstPartImpl<Idx, DType>
+      <<<nblks, nthrs, 0, stream>>>(
+          range_data, ids_data, eids_data, typeids_data,
+          grad_sm_first_stage_data, grad_t_neighbour_data, message_data,
+          sigmas_data, num_nodes, num_heads, feat_dim_per_head, n_rel_types);
   // cuda_err_chk(cudaPeekAtLastError());
   // cuda_err_chk(cudaDeviceSynchronize());
   // std::chrono::high_resolution_clock::time_point t2 =
   //     std::chrono::high_resolution_clock::now();
   // std::cout
-  //     << "HGTBackwardGradientSmFirstPartImpl time: "
+  //     << "HET_HGTBackwardGradientSmFirstPartImpl time: "
   //     << std::chrono::duration_cast<std::chrono::milliseconds>(t2 -
   //     t1).count()
   //     << " ms" << std::endl;
@@ -383,7 +384,7 @@ void HGTBackPropGradientSMAFusionExperimental(
   // cuda_err_chk(cudaDeviceSynchronize());
   // std::chrono::high_resolution_clock::time_point t1_kernel2 =
   //     std::chrono::high_resolution_clock::now();
-  HGTBackwardGradientAImpl<Idx, DType><<<nblks, nthrs>>>(
+  HET_HGTBackwardGradientAImpl<Idx, DType><<<nblks, nthrs>>>(
       range_data, ids_data, eids_data, typeids_data, grad_a_data,
       grad_t_neighbour_data, message_data, sigmas_data, num_nodes, num_heads,
       feat_dim_per_head, n_rel_types);
@@ -391,7 +392,7 @@ void HGTBackPropGradientSMAFusionExperimental(
   // cuda_err_chk(cudaDeviceSynchronize());
   // std::chrono::high_resolution_clock::time_point t2_kernel2 =
   //     std::chrono::high_resolution_clock::now();
-  // std::cout << "HGTBackwardGradientAImpl time: "
+  // std::cout << "HET_HGTBackwardGradientAImpl time: "
   //           << std::chrono::duration_cast<std::chrono::milliseconds>(
   //                  t2_kernel2 - t1_kernel2)
   //                  .count()
@@ -401,7 +402,7 @@ void HGTBackPropGradientSMAFusionExperimental(
   // std::chrono::high_resolution_clock::time_point t1_kernel3 =
   //     std::chrono::high_resolution_clock::now();
 
-  HGTBackwardFusedGradientSmFirstPartGradientAImpl<Idx, DType>
+  HET_HGTBackwardFusedGradientSmFirstPartGradientAImpl<Idx, DType>
       <<<nblks, nthrs, 0, stream>>>(
           range_data, ids_data, eids_data, typeids_data, grad_a_data,
           grad_sm_first_stage_data, grad_t_neighbour_data, message_data,
@@ -410,7 +411,7 @@ void HGTBackPropGradientSMAFusionExperimental(
   // cuda_err_chk(cudaDeviceSynchronize());
   // std::chrono::high_resolution_clock::time_point t2_kernel3 =
   //     std::chrono::high_resolution_clock::now();
-  // std::cout << "HGTBackwardFusedGradientSmFirstPartGradientAImpl time: "
+  // std::cout << "HET_HGTBackwardFusedGradientSmFirstPartGradientAImpl time: "
   //           << std::chrono::duration_cast<std::chrono::milliseconds>(
   //                  t2_kernel3 - t1_kernel3)
   //                  .count()
@@ -496,8 +497,8 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
   const dim3 nblks(nblks_x, nblks_y);
 
   // gdata_msg.grad_message_src = grad_message.data_ptr<DType>();
-  _hgtAttnAndMessageSrcFusedBckKernel<Idx, DType, false, true, false,
-                                      AttnScoreUseMuAppliedAttnScoreSwitch>
+  HET__hgtAttnAndMessageSrcFusedBckKernel<Idx, DType, false, true, false,
+                                          AttnScoreUseMuAppliedAttnScoreSwitch>
       <<<nblks, nthrs, 0, stream>>>(
           gdata_attn, grad_message.data_ptr<DType>(),
           outcsr_rowptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
@@ -514,8 +515,9 @@ void _full_graph_message_mean_aggregation(
     at::Tensor& mu, at::Tensor& mu_softmax_applied_unnormalized_attn_score,
     at::Tensor& normalized_attn_score, at::Tensor& gradout,
     at::Tensor& grad_message) {
-  // using _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel
-  // that based on _fusedGatBackwardGradFeatSrc whose driver code is
+  // using
+  // HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel that
+  // based on _fusedGatBackwardGradFeatSrc whose driver code is
   // HET::TorchExport::RGCN::BckProp::IntegratedCSR::_FusedKernelImpl in
   // [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/GATOps.inc.h]]
 
@@ -573,7 +575,7 @@ void _full_graph_message_mean_aggregation(
   const dim3 nthrs(nthrs_x, nthrs_y);
   const dim3 nblks(nblks_x, nblks_y);
 
-  _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel<
+  HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel<
       Idx, DType, false, true, false, UseMuAppliedAttnScoreSwitch>
       <<<nblks, nthrs, 0, stream>>>(
           gdata, outcsr_rowptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
@@ -667,8 +669,8 @@ void _full_graph_edge_softmax_ops(
   int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
   const dim3 nthrs(nthrs_x, nthrs_y);
   const dim3 nblks(nblks_x, nblks_y);
-  _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel<Idx, DType, false, true, false,
-                                              OutputMuAppliedAttnScoreSwitch>
+  HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel<
+      Idx, DType, false, true, false, OutputMuAppliedAttnScoreSwitch>
       <<<nblks, nthrs, 0, stream>>>(
           gdata, outcsr_row_ptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
           outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
@@ -698,7 +700,7 @@ void full_graph_edge_softmax_only_accumu_stage_ops(
     at::Tensor& mu_softmax_applied_unnormalized_attn_score, at::Tensor& out,
     at::Tensor& gradout, at::Tensor& mu, at::Tensor& grad_attn_score,
     at::Tensor& grad_mu) {
-  // using _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel based on
+  // using HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel based on
   // _fusedGatBackwardGradElEr whose driver code is
   // HET::TorchExport::RGCN::BckProp::IntegratedCSR::_FusedKernelImpl in
   // [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/GATOps.inc.h]]

@@ -392,7 +392,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void RGNNFeatPerEdgeFWProp(
+__global__ void HET_RGNNFeatPerEdgeFWProp(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
     IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
     IdxPtr C_eid_scatter_list, Idx input_dim, Idx output_per_head_dim,
@@ -415,7 +415,7 @@ __global__ void RGNNFeatPerEdgeFWProp(
 }
 
 template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
-__global__ void RGNNMatmulNoScatterGatherListFwOrBwProp(
+__global__ void HET_RGNNMatmulNoScatterGatherListFwOrBwProp(
     float* node_feat_input, float* weights, float* linear_projected_node_feat,
     IdxPtr ntype_ptrs, int* accum_num_blocks_per_ntype, Idx num_ntypes,
     Idx input_dim, Idx output_dim) {
@@ -434,7 +434,7 @@ __global__ void RGNNMatmulNoScatterGatherListFwOrBwProp(
 }
 
 template <int BLOCK_SIZE, typename Idx, typename IdxPtr>
-__global__ void RGNNDeltaWeightNoScatterGatherListBWProp(
+__global__ void HET_RGNNDeltaWeightNoScatterGatherListBWProp(
     float* node_feat_input, float* delta_feat, float* delta_weight,
     IdxPtr ntype_ptrs, Idx A_delta_input_dim, Idx B_delta_output_dim,
     int* accum_num_blocks_per_ntype, Idx num_ntypes) {
@@ -456,7 +456,7 @@ __global__ void RGNNDeltaWeightNoScatterGatherListBWProp(
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
+__global__ void HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
     IdxPtr A_rel_ptr, IdxPtr AC_eid_gather_scatter_list, Idx input_dim,
     Idx output_per_head_dim, Idx num_heads, int* accum_num_blocks_per_relation,
@@ -481,14 +481,12 @@ __global__ void RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void RGNNFeatCompactFWProp(float* node_feat_input, float* weight,
-                                      float* node_feat_per_edge,
-                                      IdxPtr unique_srcs_and_dests_rel_ptr,
-                                      IdxPtr unique_srcs_and_dests_node_indices,
-                                      Idx input_dim, Idx output_per_head_dim,
-                                      Idx num_heads,
-                                      int* accum_num_blocks_per_relation,
-                                      Idx num_relations) {
+__global__ void HET_RGNNFeatCompactFWProp(
+    float* node_feat_input, float* weight, float* node_feat_per_edge,
+    IdxPtr unique_srcs_and_dests_rel_ptr,
+    IdxPtr unique_srcs_and_dests_node_indices, Idx input_dim,
+    Idx output_per_head_dim, Idx num_heads, int* accum_num_blocks_per_relation,
+    Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -512,7 +510,7 @@ __global__ void RGNNFeatCompactFWProp(float* node_feat_input, float* weight,
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool C_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void RGNNDeltaNodeFeatInputBWProp(
+__global__ void HET_RGNNDeltaNodeFeatInputBWProp(
     float* delta_feat_per_edge, float* weight_transposed,
     float* delta_node_input, IdxPtr A_eid_gather_list, IdxPtr A_rel_ptr,
     IdxPtr C_col_row_idx_scatter_list, Idx delta_output_per_head_dim,
@@ -539,7 +537,7 @@ __global__ void RGNNDeltaNodeFeatInputBWProp(
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void RGNNDeltaWeightBWProp(
+__global__ void HET_RGNNDeltaWeightBWProp(
     float* node_feat_input, float* delta_feat_per_edge, float* delta_weight,
     IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
     IdxPtr B_eid_gather_list, Idx A_delta_input_dim,
@@ -565,7 +563,7 @@ __global__ void RGNNDeltaWeightBWProp(
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void RGNNDeltaWeightBWPropACGatherScatterListIdentical(
+__global__ void HET_RGNNDeltaWeightBWPropACGatherScatterListIdentical(
     float* node_feat_input, float* delta_feat_per_edge, float* delta_weight,
     IdxPtr A_rel_ptr, IdxPtr AB_eid_gather_list, Idx A_delta_input_dim,
     Idx B_delta_output_per_head_dim, Idx num_heads,
@@ -591,7 +589,7 @@ __global__ void RGNNDeltaWeightBWPropACGatherScatterListIdentical(
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool B_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void RGNNDeltaWeightCompactBWProp(
+__global__ void HET_RGNNDeltaWeightCompactBWProp(
     float* delta_weight, float* feat_input, float* delta_feat_compact,
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx num_edges,
@@ -620,7 +618,7 @@ __global__ void RGNNDeltaWeightCompactBWProp(
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool C_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical(
+__global__ void HET_RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical(
     float* delta_feat_per_edge, float* weight_transposed,
     float* delta_node_input, IdxPtr A_C_eid_gather_scatter_list,
     IdxPtr A_rel_ptr, Idx delta_output_per_head_dim, Idx delta_input_dim,
@@ -647,7 +645,7 @@ __global__ void RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical(
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool C_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void RGNNDeltaNodeFeatInputCompactBWProp(
+__global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
     float* delta_feat_compact, float* weight_transpose,
     float* delta_node_feat_input, IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx num_edges,
@@ -680,7 +678,7 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWProp(
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool C_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void RGNNDeltaNodeFeatInputCompactBWPropSingleSided(
+__global__ void HET_RGNNDeltaNodeFeatInputCompactBWPropSingleSided(
     float* delta_feat_compact, float* weight_transpose,
     float* delta_node_feat_input, IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, IdxPtr separate_coo_relptrs,
@@ -711,7 +709,7 @@ __global__ void RGNNDeltaNodeFeatInputCompactBWPropSingleSided(
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void RGNNFeatCompactFWPropSingleSided(
+__global__ void HET_RGNNFeatCompactFWPropSingleSided(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, IdxPtr separate_coo_relptrs,
@@ -741,7 +739,7 @@ __global__ void RGNNFeatCompactFWPropSingleSided(
 template <
     int BLOCK_SIZE, typename Idx, typename IdxPtr,
     bool B_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void RGNNDeltaWeightCompactBWPropSingleSided(
+__global__ void HET_RGNNDeltaWeightCompactBWPropSingleSided(
     float* delta_weight, float* feat_input, float* delta_feat_compact,
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, IdxPtr separate_coo_relptrs,

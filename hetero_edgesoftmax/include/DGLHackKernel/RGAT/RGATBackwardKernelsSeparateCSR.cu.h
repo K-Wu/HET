@@ -2,11 +2,12 @@
 #include "DGLHackKernel/DGLHackKernel.h"
 #include "DGLHackKernel/GAT/FusedGATBackward.cu.h"
 
-// vertex centric schedule similar to fusedGatBackwardGradElErFeatSrcFused in
+// vertex centric schedule similar to HET_fusedGatBackwardGradElErFeatSrcFused
+// in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
 __global__ void
-fusedGatBackwardGradElErFeatSrcFused_relational_separate_csr_vertex_parallel(
+HET_fusedGatBackwardGradElErFeatSrcFused_relational_separate_csr_vertex_parallel(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* rel_ptrs,
     const Idx* row_offsets, const Idx* col_indices, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
@@ -18,11 +19,11 @@ fusedGatBackwardGradElErFeatSrcFused_relational_separate_csr_vertex_parallel(
       num_relations);
 }
 
-// vertex centric schedule similar to fusedGatBackwardGradFeatSrc in
+// vertex centric schedule similar to HET_fusedGatBackwardGradFeatSrc in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
 __global__ void
-fusedGatBackwardGradFeatSrc_relational_separate_csr_vertex_parallel(
+HET_fusedGatBackwardGradFeatSrc_relational_separate_csr_vertex_parallel(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* rel_ptrs,
     const Idx* row_offsets, const Idx* col_indices, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
@@ -33,11 +34,11 @@ fusedGatBackwardGradFeatSrc_relational_separate_csr_vertex_parallel(
       num_relations);
 }
 
-// vertex centric schedule similar to fusedGatBackwardGradElEr in
+// vertex centric schedule similar to HET_fusedGatBackwardGradElEr in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
 __global__ void
-fusedGatBackwardGradElEr_relational_separate_csr_vertex_parallel(
+HET_fusedGatBackwardGradElEr_relational_separate_csr_vertex_parallel(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* rel_ptrs,
     const Idx* row_offsets, const Idx* col_indices, const Idx* column_indices,
     int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,

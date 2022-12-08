@@ -54,7 +54,7 @@ void Layer1_SeparateCOO(at::Tensor& separate_coo_relptrs,
 
   const dim3 nblks(ceil_div<>(num_output_dim, (long)BLOCK_SIZE), grid_dim_y, 1);
   const dim3 nthrs(BLOCK_SIZE, BLOCK_SIZE);
-  RGCNMatmulNoScatterGatherListFwProp<BLOCK_SIZE, int64_t, int64_t*>
+  HET_RGCNMatmulNoScatterGatherListFwProp<BLOCK_SIZE, int64_t, int64_t*>
       <<<nblks, nthrs, 0, stream>>>(
           node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
           node_feat_output.data_ptr<float>(), edge_norm.data_ptr<float>(),
@@ -101,12 +101,13 @@ void _LayerImpl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
     // int nthrs = feat_len_y * feat_len_x;
     int nthrs = feat_len_x < 512 ? 512 : feat_len_x;
     if constexpr (HybridAssignmentFlag) {
-      RgcnLayer1KernelHybridAssignImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
-          range_data, ids_data, eids_data, typeids_data, hidden_data,
-          weight_data, norm_data, ret_data, num_nodes, feat_len_y, feat_len_x,
-          ntypes, num_blocks_on_blocks_per_node);
+      HET_RgcnLayer1KernelHybridAssignImpl<Idx, DType>
+          <<<nblks, nthrs, 0, stream>>>(
+              range_data, ids_data, eids_data, typeids_data, hidden_data,
+              weight_data, norm_data, ret_data, num_nodes, feat_len_y,
+              feat_len_x, ntypes, num_blocks_on_blocks_per_node);
     } else {
-      RgcnLayer1KernelImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
+      HET_RgcnLayer1KernelImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
           range_data, ids_data, eids_data, typeids_data, hidden_data,
           weight_data, norm_data, ret_data, num_nodes, feat_len_y, feat_len_x,
           ntypes);
@@ -116,11 +117,13 @@ void _LayerImpl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
     Idx feat_len = weight.size(2);
     int nthrs = feat_len;
     if constexpr (HybridAssignmentFlag) {
-      RgcnLayer0KernelHybridAssignImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
-          range_data, ids_data, eids_data, typeids_data, weight_data, norm_data,
-          ret_data, num_nodes, feat_len, ntypes, num_blocks_on_blocks_per_node);
+      HET_RgcnLayer0KernelHybridAssignImpl<Idx, DType>
+          <<<nblks, nthrs, 0, stream>>>(range_data, ids_data, eids_data,
+                                        typeids_data, weight_data, norm_data,
+                                        ret_data, num_nodes, feat_len, ntypes,
+                                        num_blocks_on_blocks_per_node);
     } else {
-      RgcnLayer0KernelImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
+      HET_RgcnLayer0KernelImpl<Idx, DType><<<nblks, nthrs, 0, stream>>>(
           range_data, ids_data, eids_data, typeids_data, weight_data, norm_data,
           ret_data, num_nodes, feat_len, ntypes);
     }
@@ -233,13 +236,13 @@ void _LayerImpl(
     int nthrs = feat_len_x < 256 ? 256 : feat_len_x;  // feat_len_y *
                                                       // feat_len_x;
     if constexpr (HybridAssignmentFlag) {
-      RgcnLayer1BackwardKernelHybridAssignImpl<<<nblks, nthrs, 0, stream>>>(
+      HET_RgcnLayer1BackwardKernelHybridAssignImpl<<<nblks, nthrs, 0, stream>>>(
           range_data, ids_data, eids_data, typeids_data, hidden_data,
           weight_data, norm_data, grad_out_data, grad_hidden_data,
           grad_weight_data, num_nodes, feat_len_y, feat_len_x, ntypes,
           num_blocks_on_blocks_per_node);
     } else {
-      RgcnLayer1BackwardKernelImpl<<<nblks, nthrs, 0, stream>>>(
+      HET_RgcnLayer1BackwardKernelImpl<<<nblks, nthrs, 0, stream>>>(
           range_data, ids_data, eids_data, typeids_data, hidden_data,
           weight_data, norm_data, grad_out_data, grad_hidden_data,
           grad_weight_data, num_nodes, feat_len_y, feat_len_x, ntypes);
@@ -249,12 +252,12 @@ void _LayerImpl(
     Idx feat_len = ret.size(2);
     int nthrs = feat_len;
     if constexpr (HybridAssignmentFlag) {
-      RgcnLayer0BackwardKernelHybridAssignImpl<<<nblks, nthrs, 0, stream>>>(
+      HET_RgcnLayer0BackwardKernelHybridAssignImpl<<<nblks, nthrs, 0, stream>>>(
           range_data, ids_data, eids_data, typeids_data, grad_out_data,
           norm_data, ret_data, num_nodes, feat_len, ntypes,
           num_blocks_on_blocks_per_node);
     } else {
-      RgcnLayer0BackwardKernelImpl<<<nblks, nthrs, 0, stream>>>(
+      HET_RgcnLayer0BackwardKernelImpl<<<nblks, nthrs, 0, stream>>>(
           range_data, ids_data, eids_data, typeids_data, grad_out_data,
           norm_data, ret_data, num_nodes, feat_len, ntypes);
     }

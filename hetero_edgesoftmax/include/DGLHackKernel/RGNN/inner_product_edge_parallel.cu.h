@@ -6,7 +6,7 @@
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
-__global__ void inner_product_fw_kernel_edge_parallel(
+__global__ void HET_inner_product_fw_kernel_edge_parallel(
     InnerProductData<Idx, DType> gdata, const Idx* row_indices,
     const Idx* column_indices, const Idx* etypes, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
@@ -88,7 +88,7 @@ __global__ void inner_product_fw_kernel_edge_parallel(
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag>
-__global__ void inner_product_bck_kernel_edge_parallel(
+__global__ void HET_inner_product_bck_kernel_edge_parallel(
     BackwardInnerProductData<Idx, DType> gdata, const Idx* row_indices,
     const Idx* column_indices, const Idx* etypes, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,

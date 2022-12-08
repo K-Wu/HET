@@ -143,7 +143,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
 
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag>
-__global__ void fusedGatBackwardGradElErFeatSrcFused(
+__global__ void HET_fusedGatBackwardGradElErFeatSrcFused(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
@@ -245,7 +245,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
 
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag>
-__global__ void fusedGatBackwardGradFeatSrc(
+__global__ void HET_fusedGatBackwardGradFeatSrc(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
@@ -374,7 +374,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
 
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag>
-__global__ void fusedGatBackwardGradElEr(
+__global__ void HET_fusedGatBackwardGradElEr(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
@@ -387,10 +387,10 @@ __global__ void fusedGatBackwardGradElEr(
 
 template <typename Idx, typename DType>
 constexpr auto relational_fusedGatBackwardGradElEr_per_edge =
-    fusedGatBackwardGradElEr<Idx, DType, false, true>;
+    HET_fusedGatBackwardGradElEr<Idx, DType, false, true>;
 template <typename Idx, typename DType>
 constexpr auto relational_fusedGatBackwardGradFeatSrc_per_edge =
-    fusedGatBackwardGradFeatSrc<Idx, DType, false, true>;
+    HET_fusedGatBackwardGradFeatSrc<Idx, DType, false, true>;
 template <typename Idx, typename DType>
 constexpr auto relational_fusedGatBackwardGradElErFeatSrcFused_per_edge =
-    fusedGatBackwardGradElErFeatSrcFused<Idx, DType, false, true>;
+    HET_fusedGatBackwardGradElErFeatSrcFused<Idx, DType, false, true>;

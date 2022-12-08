@@ -615,7 +615,7 @@ __device__ __forceinline__ static void func512_32_mysgemm_exec(
 // grid size equals num
 template <int OUT_DIM, int NUM_HEADS>
 //__launch_bounds__(512,1)
-__global__ void HGTExperimentalEdgeAttentionFusedCOOKernel_512_32(
+__global__ void HET_HGTExperimentalEdgeAttentionFusedCOOKernel_512_32(
     int num_relations, float4 *attention, float *node_input_data,
     float *relation_attention_matrices, int *num_src_nodes_per_edge_type,
     int *exclusive_scan_num_src_nodes_per_edge_type,
@@ -676,7 +676,7 @@ __device__ __forceinline__ T my_min(T a, T b) {
 }
 
 template <int OUT_DIM, int NUM_HEADS, int NUM_EDGES_TO_PROCESS_PER_BLOCK>
-__global__ void HGTExperimentalEdgeAttentionResidueCSR(
+__global__ void HET_HGTExperimentalEdgeAttentionResidueCSR(
     int num_relations, int num_rows, float4 *attention, float *node_input_data,
     float *weights, int *num_nnzs_per_relation, int *rel_ptr, int *row_ptr,
     int *col_idx, int *eids, int *exclusive_scan_numBlocks_per_relationship) {
@@ -752,7 +752,7 @@ __global__ void HGTExperimentalEdgeAttentionResidueCSR(
 
 // TODO: implement float4
 __global__ void
-HGTExpermentalEdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel(
+HET_HGTExpermentalEdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel(
     float *outEdges, int nnz, int *matCols, int *matRows, int *matRelation,
     float *node_input_data, float **intermediate_node_vect_per_relation,
     int **dest_node_to_unique_index_per_relation) {

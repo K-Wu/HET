@@ -4,7 +4,7 @@
 // bgs:
 template <typename Idx, typename DType, int ELL_logical_width,
           int ELL_physical_width>
-__global__ void RgcnLayer1MyHYBKernelImpl(
+__global__ void HET_RgcnLayer1MyHYBKernelImpl(
     const Idx* ellcolidx_data, const Idx* ellreltype_data,
     const Idx* elleids_data, const Idx* ranges, const Idx* src_ids,
     const Idx* eids, const Idx* types, const DType* hidden, const DType* weight,

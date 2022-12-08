@@ -73,7 +73,7 @@
 // The original use should be <float4, true, false, float**>
 template <typename OutDType, bool ProductCompactAsOfNodeFlag,
           bool EidEnableFlag, typename IntermediateProductPointerType>
-__global__ void GeneralEdgeMessageMultiplyNodeFeature(
+__global__ void HET_GeneralEdgeMessageMultiplyNodeFeature(
     OutDType *__restrict__ outEdges, int nnz, int *__restrict__ matCols,
     int *__restrict__ matRows, int *__restrict__ matRelation,
     int *__restrict__ matEids, float *__restrict__ node_input_data,
@@ -201,13 +201,14 @@ __global__ void GeneralEdgeMessageMultiplyNodeFeature(
 
 constexpr auto
     EdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel =
-        GeneralEdgeMessageMultiplyNodeFeature<float4, true, false, float **>;
+        HET_GeneralEdgeMessageMultiplyNodeFeature<float4, true, false,
+                                                  float **>;
 
 // extract this kernel with mysgemm_ into template specialization
 // template <int NODE_INPUT_DIM_PER_HEAD/*derived from OUT_DIM and NUM_HEADS*/,
 // NUM_HEADS, OUT_DIM, COARSE_SGEMM_NODES_PER_BLOCK>
 template <int TILE_SZ_A, int TILE_SZ_B, int OUT_DIM, int NUM_HEADS>
-__global__ void EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel(
+__global__ void HET_EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel(
     float **__restrict__ intermediate_node_vect, int nnz,
     int *__restrict__ matCols, int *__restrict__ matRelation,
     float *__restrict__ node_input_data,
@@ -474,7 +475,7 @@ EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel(
   // thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()),
   // thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
   // node_input_data);
-  EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel<
+  HET_EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel<
       TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS><<<grid, block>>>(
       thrust::raw_pointer_cast(intermediate_node_vect_d.data()),
       concatenated_coo_matrix_column_indices.size(),
@@ -839,7 +840,7 @@ EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_512_32(
   // thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()),
   // thrust::raw_pointer_cast(concatenated_coo_matrix_values.data()),
   // node_input_data);
-  EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel<512, 32, 256, 4>
+  HET_EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel<512, 32, 256, 4>
       <<<grid, block>>>(
           thrust::raw_pointer_cast(intermediate_node_vect_d.data()),
           concatenated_coo_matrix_column_indices.size(),

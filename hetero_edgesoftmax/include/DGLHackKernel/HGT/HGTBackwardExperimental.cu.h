@@ -2,7 +2,7 @@
 #include "DGLHackKernel/DGLHackKernel.h"
 
 template <typename Idx, typename DType>
-__global__ void HGTBackwardFusedGradientSmFirstPartGradientAImpl(
+__global__ void HET_HGTBackwardFusedGradientSmFirstPartGradientAImpl(
     Idx* ranges, Idx* dst_ids, Idx* eids, Idx* types,
     DType* grad_a,               // |E| * N_HEADS
     DType* grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
@@ -71,7 +71,7 @@ __global__ void HGTBackwardFusedGradientSmFirstPartGradientAImpl(
 }
 
 template <typename Idx, typename DType>
-__global__ void HGTBackwardGradientAImpl(
+__global__ void HET_HGTBackwardGradientAImpl(
     Idx* ranges, Idx* dst_ids, Idx* eids, Idx* types,
     DType* grad_a,            // |E| * N_HEADS
     DType* grad_t_neighbour,  //|V| * N_HEADS * DIM_PER_HEAD
@@ -123,7 +123,7 @@ __global__ void HGTBackwardGradientAImpl(
 }
 
 template <typename Idx, typename DType>
-__global__ void HGTBackwardGradientSmFirstPartImpl(
+__global__ void HET_HGTBackwardGradientSmFirstPartImpl(
     Idx* ranges, Idx* dst_ids, Idx* eids, Idx* types,
     DType* grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
     DType* grad_t_neighbour,     //|V| * N_HEADS * DIM_PER_HEAD

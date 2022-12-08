@@ -111,7 +111,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
 
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag>
-__global__ void gatSumProdZipDivKernel(
+__global__ void HET_gatSumProdZipDivKernel(
     GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
@@ -223,7 +223,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
 
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag>
-__global__ void gatExpLeakyReluSumKernel(
+__global__ void HET_gatExpLeakyReluSumKernel(
     GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
@@ -236,7 +236,7 @@ __global__ void gatExpLeakyReluSumKernel(
 
 template <typename Idx, typename DType>
 constexpr auto relational_gatExpLeakyReluSumKernel_per_edge =
-    gatExpLeakyReluSumKernel<Idx, DType, false, false, false>;
+    HET_gatExpLeakyReluSumKernel<Idx, DType, false, false, false>;
 template <typename Idx, typename DType>
 constexpr auto relational_gatSumProdZipDivKernel_per_edge =
-    gatSumProdZipDivKernel<Idx, DType, false, false>;
+    HET_gatSumProdZipDivKernel<Idx, DType, false, false>;

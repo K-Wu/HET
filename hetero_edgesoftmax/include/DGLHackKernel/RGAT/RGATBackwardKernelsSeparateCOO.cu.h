@@ -2,7 +2,7 @@
 #include "DGLHackKernel/DGLHackKernel.h"
 #include "DGLHackKernel/GAT/FusedGATBackward.cu.h"
 
-// edge-centric schedule cf. fusedGatBackwardGradElErFeatSrcFused in
+// edge-centric schedule cf. HET_fusedGatBackwardGradElErFeatSrcFused in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag>
@@ -119,7 +119,8 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
 }
 
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
-__global__ void fusedGatBackwardGradElErFeatSrcFused_relational_separate_coo(
+__global__ void
+HET_fusedGatBackwardGradElErFeatSrcFused_relational_separate_coo(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* rel_ptrs,
     const Idx* row_indices, const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
@@ -131,7 +132,7 @@ __global__ void fusedGatBackwardGradElErFeatSrcFused_relational_separate_coo(
       num_relations);
 }
 
-// edge-centric schedule cf. fusedGatBackwardGradFeatSrc in
+// edge-centric schedule cf. HET_fusedGatBackwardGradFeatSrc in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag>
@@ -216,7 +217,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
   }
 }
 
-// edge-centric schedule cf. fusedGatBackwardGradElEr in
+// edge-centric schedule cf. HET_fusedGatBackwardGradElEr in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag>
@@ -315,7 +316,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
 }
 
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
-__global__ void fusedGatBackwardGradFeatSrc_relational_separate_coo(
+__global__ void HET_fusedGatBackwardGradFeatSrc_relational_separate_coo(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* rel_ptrs,
     const Idx* row_indices, const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
@@ -328,7 +329,7 @@ __global__ void fusedGatBackwardGradFeatSrc_relational_separate_coo(
 }
 
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
-__global__ void fusedGatBackwardGradElEr_relational_separate_coo(
+__global__ void HET_fusedGatBackwardGradElEr_relational_separate_coo(
     BackwardGatFusedData<Idx, DType> gdata, const Idx* rel_ptrs,
     const Idx* row_indices, const Idx* column_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,

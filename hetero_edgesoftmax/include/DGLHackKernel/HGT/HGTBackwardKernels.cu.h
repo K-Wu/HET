@@ -50,7 +50,7 @@ template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag,
           int UseMuAppliedAttnScoreSwitch>
 __global__ void
-_hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
+HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
     BackwardHGTMessageData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
     const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
     int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
@@ -208,7 +208,7 @@ struct BackwardHGTAttnScoreData<Idx, DType, 0> {
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag,
           int FwdOutputMuAppliedAttnScoreSwitch>
-__global__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
+__global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
     BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreSwitch>
         gdata,
     const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
@@ -345,14 +345,14 @@ __global__ void _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
 }
 
 // fusing kernel
-// _hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel and
-// _hgtEdgeSoftmaxAccumStageOnlyBackwardKernel Corresponding python autograd
+// HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel and
+// HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel Corresponding python autograd
 // function HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR in
 // [[hetero_edgesoftmax/python/backend/hgt_layers_and_funcs.py]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag,
           int FwdOutputMuAppliedAttnScoreSwitch>
-__global__ void _hgtAttnAndMessageSrcFusedBckKernel(
+__global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
     BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreSwitch>
         gdata,
     DType* grad_message_src, const Idx* row_offsets, const Idx* column_indices,

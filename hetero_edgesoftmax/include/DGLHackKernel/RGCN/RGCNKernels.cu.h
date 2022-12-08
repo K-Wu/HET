@@ -57,10 +57,10 @@ __device__ __forceinline__ void RgcnLayer0KernelNodePerWarp(
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 template <typename Idx, typename DType>
-__global__ void RgcnLayer0KernelImpl(Idx* ranges, Idx* src_ids, Idx* eids,
-                                     Idx* types, DType* weight, DType* norm,
-                                     DType* ret, Idx num_nodes, Idx feat_len,
-                                     Idx ntypes) {
+__global__ void HET_RgcnLayer0KernelImpl(Idx* ranges, Idx* src_ids, Idx* eids,
+                                         Idx* types, DType* weight, DType* norm,
+                                         DType* ret, Idx num_nodes,
+                                         Idx feat_len, Idx ntypes) {
   if (blockIdx.x < num_nodes) {
     RgcnLayer0KernelNodePerBlock<Idx, DType>(
         ranges, src_ids, eids, types, weight, norm, ret, num_nodes, feat_len,
@@ -71,7 +71,7 @@ __global__ void RgcnLayer0KernelImpl(Idx* ranges, Idx* src_ids, Idx* eids,
 // TODO: export hybrid assign kernels in
 // [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/RGCNOps.inc.h]]
 template <typename Idx, typename DType>
-__global__ void RgcnLayer0KernelHybridAssignImpl(
+__global__ void HET_RgcnLayer0KernelHybridAssignImpl(
     Idx* ranges, Idx* src_ids, Idx* eids, Idx* types, DType* weight,
     DType* norm, DType* ret, Idx num_nodes, Idx feat_len, Idx ntypes,
     int num_blocks_on_blocks_per_node) {
@@ -158,12 +158,10 @@ __device__ __forceinline__ void RgcnLayer1KernelNodePerBlock(
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 // bgs:
 template <typename Idx, typename DType>
-__global__ void RgcnLayer1KernelImpl(const Idx* ranges, const Idx* src_ids,
-                                     const Idx* eids, const Idx* types,
-                                     const DType* hidden, const DType* weight,
-                                     const DType* norm, DType* ret,
-                                     Idx num_nodes, Idx feat_len_y,
-                                     Idx feat_len_x, Idx ntypes) {
+__global__ void HET_RgcnLayer1KernelImpl(
+    const Idx* ranges, const Idx* src_ids, const Idx* eids, const Idx* types,
+    const DType* hidden, const DType* weight, const DType* norm, DType* ret,
+    Idx num_nodes, Idx feat_len_y, Idx feat_len_x, Idx ntypes) {
   if (blockIdx.x < num_nodes) {
     RgcnLayer1KernelNodePerBlock(ranges, src_ids, eids, types, hidden, weight,
                                  norm, ret, num_nodes, feat_len_y, feat_len_x,
@@ -172,7 +170,7 @@ __global__ void RgcnLayer1KernelImpl(const Idx* ranges, const Idx* src_ids,
 }
 
 template <typename Idx, typename DType>
-__global__ void RgcnLayer1KernelHybridAssignImpl(
+__global__ void HET_RgcnLayer1KernelHybridAssignImpl(
     const Idx* ranges, const Idx* src_ids, const Idx* eids, const Idx* types,
     const DType* hidden, const DType* weight, const DType* norm, DType* ret,
     Idx num_nodes, Idx feat_len_y, Idx feat_len_x, Idx ntypes,

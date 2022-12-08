@@ -29,7 +29,7 @@ __device__ __forceinline__ void RgcnLayer1BackwardCOOKernelEdgePerWarp(
 }
 
 template <typename Idx, typename DType>
-__global__ void RgcnLayer1BackwardCOOKernelImpl(
+__global__ void HET_RgcnLayer1BackwardCOOKernelImpl(
     Idx *src_ids, Idx *dst_ids, Idx *eids, Idx *types, DType *hidden,
     DType *weight, DType *norm, DType *grad_out, DType *grad_hidden,
     DType *grad_weight, Idx num_edges, Idx feat_len_y, Idx feat_len_x,
