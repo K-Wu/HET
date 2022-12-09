@@ -106,7 +106,9 @@ __device__ __forceinline__ void _basic_MatMulKernel(
 
   Idx blockRowLoopBeg, blockRowLoopEnd, blockRowLoopInc;
   if constexpr (OuterProductFlag) {
-    blockRowLoopBeg = blockIdx.y;  // [0, input_dim)
+    blockRowLoopBeg =
+        blockIdx
+            .y;  // [0, input_dim) // FIXME: check if bias needs to be applied
     blockRowLoopEnd = blockIdx.y + 1;
     blockRowLoopInc = 1;
   } else {
