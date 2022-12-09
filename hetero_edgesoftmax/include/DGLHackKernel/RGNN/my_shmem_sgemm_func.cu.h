@@ -107,8 +107,11 @@ __device__ __forceinline__ void _basic_MatMulKernel(
   Idx blockRowLoopBeg, blockRowLoopEnd, blockRowLoopInc;
   if constexpr (OuterProductFlag) {
     blockRowLoopBeg =
-        blockIdx
-            .y;  // [0, input_dim) // FIXME: check if bias needs to be applied
+        blockIdx.y;  // [0, input_dim) // NB: When OuterProductFlag is true, the
+                     // delta_weight height/width is assigned to
+                     // theblockIdx.y-dimension, and blockIdxAssignment is
+                     // assigned to m loop instead. Therefore, the
+                     // blockIdxAlongRowBeg bias is applied to the m loop too.
     blockRowLoopEnd = blockIdx.y + 1;
     blockRowLoopInc = 1;
   } else {
@@ -234,12 +237,13 @@ __device__ __forceinline__ void _basic_MatMulKernel(
             // input_dim (num_A_cols), output_dim//num_heads (num_B_cols)] in
             // forward propagation or [num_heads, output_dim//num_heads
             // (num_A_cols), input_dim (num_B_cols)] in backward propagation
-            // FIXME: incorporate num_head_one_flag
+            // NB: incorporate num_head_one_flag
             Bs[thIdxRow][thIdxFeat] =
                 (m * SHMEM_BLOCK_SIZE + thIdxRow < num_A_cols &&
                  blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols &&
                  idx_head < num_heads)
-                    ? B[idx_head * num_A_cols * num_B_cols +
+                    ? B[(B_num_head_one_flag ? 0 : idx_head) * num_A_cols *
+                            num_B_cols +
                         (m * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols +
                         (blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat)]
                     : 0.0f;
@@ -338,12 +342,13 @@ __device__ __forceinline__ void _basic_MatMulKernel(
               "OuterproductFlag==true case must use atomic update");
         }
         if (WriteCInRangeFlag) {
-          // FIXME: offset dependent on whether one-side num_head is 1
-          atomicAdd(&C[idx_head * num_A_cols /*A is transposed in the fly*/ *
-                           num_B_cols +
-                       (blockRow * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols +
-                       blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat],
-                    Cvalue);
+          // NB: offset dependent on whether one-side num_head is 1
+          atomicAdd(
+              &C[(C_num_head_one_flag ? 0 : idx_head) *
+                     num_A_cols /*A is transposed in the fly*/ * num_B_cols +
+                 (blockRow * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols +
+                 blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat],
+              Cvalue);
         }
       } else {  //  !OuterProductFlag
 
@@ -655,7 +660,7 @@ template <
     typename IdxPtr,
     bool B_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaWeightCompactBWProp(
-    float* delta_weight, float* feat_input, float* delta_feat_compact,
+    float* delta_feat_compact, float* feat_input, float* delta_weight,
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx num_edges,
     Idx A_delta_input_dim, Idx B_delta_output_per_head_dim, Idx num_heads,
@@ -741,8 +746,10 @@ __global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
       delta_input_dim, num_heads);
 }
 
-// FIXME: separate_coo_relptrs and separate_coo_node_indices are unused in the
-// following functions blockDim.y == ceil_div(A_col_row_idx_gather_list.size(),
+// NB: In the following functions, separate_coo_relptrs and
+// separate_coo_node_indices are used as gather/scatter list and work assignment
+// offset pointers, instead of the unique_srcs_and_dests pair in the above
+// functions. blockDim.y == ceil_div(A_col_row_idx_gather_list.size(),
 // BLOCK_SIZE)
 template <
     bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
@@ -813,7 +820,7 @@ template <
     typename IdxPtr,
     bool B_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaWeightCompactBWPropSingleSided(
-    float* delta_weight, float* feat_input, float* delta_feat_compact,
+    float* delta_feat_compact, float* feat_input, float* delta_weight,
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, IdxPtr separate_coo_relptrs,
     IdxPtr separate_coo_node_indices, Idx num_edges, Idx A_delta_input_dim,

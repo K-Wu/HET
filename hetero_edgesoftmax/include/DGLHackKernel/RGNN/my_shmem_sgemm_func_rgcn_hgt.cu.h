@@ -41,9 +41,9 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
   IdxPtr C_scatter_list;
   IdxPtr B_gather_list;
   if constexpr (OuterProductFlag) {
-    // A is gradient output feature, B is  input feature
-    B_gather_list = separate_coo_row_idx;
-    A_gather_list = separate_coo_col_idx;
+    // A is input feature, B is gradient output feature
+    A_gather_list = separate_coo_row_idx;
+    B_gather_list = separate_coo_col_idx;
   } else {
     A_gather_list = separate_coo_row_idx;
     C_scatter_list = separate_coo_col_idx;
@@ -55,8 +55,9 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
   Idx blockRowLoopBeg, blockRowLoopEnd, blockRowLoopInc;
   if constexpr (OuterProductFlag) {
     blockRowLoopBeg =
-        blockIdx
-            .y;  // [0, input_dim) // FIXME: check if bias needs to be applied
+        blockIdx.y;  // [0, input_dim) // check my_shmem_sgemm_func.cu.h NB on
+                     // why -blockIdxAlongRowBeg bias is not applied here but
+                     // applied to the m loop
     blockRowLoopEnd = blockIdx.y + 1;
     blockRowLoopInc = 1;
   } else {
@@ -343,6 +344,9 @@ __global__ void HET_RGCNMatmulNoScatterGatherListFwProp(
        accum_num_blocks_per_relation[idx_relation]),
       separate_coo_rel_ptrs[idx_relation], input_dim, output_dim, 1);
 }
+
+// delta weight: A delta_feat_out, B feat_input, C delta_weight,
+// delta in: A delta_feat_out, B weight_transposed, C delta_feat_in,
 
 template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
           typename IdxPtr>

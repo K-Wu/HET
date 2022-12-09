@@ -446,7 +446,9 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
   //             << std::endl;
   // }
   Idx num_relations = mu.numel() / num_heads;
-  // FIXME: remove repeated struct members
+  // NB: grad_attn_score structure is kept and the unique items from
+  // grad_message structure is passed into kernel as individual parameters one
+  // by one
   gdata_attn.num_heads = num_heads;
   assert(gdata_attn.num_heads == message.size(message.ndimension() - 2) &&
          "expecting message.size[-2] to be num_heads but turned out not");
