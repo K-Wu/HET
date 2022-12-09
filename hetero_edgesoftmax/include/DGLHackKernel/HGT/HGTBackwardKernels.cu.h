@@ -337,7 +337,8 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
                         gdata.unnormalized_attn_score[edge_offset]);
         }
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
-          atomicAdd(gdata.grad_attn_score + message_src_idx, s);
+          atomicAdd(gdata.grad_attn_score + (src_vid * num_heads + head_idx),
+                    s);
         }
       }
     }
@@ -491,7 +492,8 @@ __global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
                         gdata.unnormalized_attn_score[edge_offset]);
         }
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
-          atomicAdd(gdata.grad_attn_score + message_src_idx, s);
+          atomicAdd(gdata.grad_attn_score + (src_vid * num_heads + head_idx),
+                    s);
           grad_message_src[message_src_offset] = s_message_src;
         }
       }
