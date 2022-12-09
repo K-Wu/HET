@@ -21,6 +21,7 @@ import torch.nn.functional as F
 # from dgl.contrib.data import load_data
 from .. import backend as B
 from .. import utils
+from .. import utils_lite
 from ..RGNNUtils import *
 
 # from functools import partial
@@ -33,7 +34,7 @@ from torch import nn
 
 
 class HET_EglRelGraphConv(nn.Module):
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(
         self,
         in_feat,
@@ -183,7 +184,7 @@ class HET_EglRelGraphConv(nn.Module):
 
 
 class HET_EglRelGraphConv_SeparateCOO(nn.Module):
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(
         self,
         in_feat,
@@ -312,7 +313,7 @@ class HET_EglRelGraphConv_SeparateCOO(nn.Module):
 
 
 class HET_EGLRGCNSingleLayerModel(nn.Module):
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(
         self,
         n_infeat,
@@ -358,7 +359,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
 
 
 class HET_EGLRGCNModel(nn.Module):
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(
         self,
         num_nodes,

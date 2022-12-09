@@ -9,11 +9,11 @@ import torch.nn as nn
 import dgl.function as fn
 from dgl.nn.functional import edge_softmax
 
-from .. import utils
+from .. import utils_lite
 
 
 class HGTLayerHetero(nn.Module):
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(
         self,
         in_dim,
@@ -132,7 +132,7 @@ class HGTLayerHetero(nn.Module):
 
 
 class HGT_DGLHetero(nn.Module):
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(
         self, node_dict, edge_dict, in_dim, out_dim, n_heads=1, dropout=0.2
     ):  # , h_dim

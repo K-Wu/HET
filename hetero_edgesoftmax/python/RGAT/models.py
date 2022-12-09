@@ -8,7 +8,7 @@ import dgl
 
 # import dgl.nn as dglnn
 from .. import backend as B
-from .. import utils
+from .. import utils_lite
 
 
 class HET_RelationalAttLayer(nn.Module):
@@ -38,7 +38,7 @@ class HET_RelationalAttLayer(nn.Module):
         Dropout rate. Default: 0.0
     """
 
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(
         self,
         in_feat,
@@ -309,7 +309,7 @@ class HET_RelationalGATEncoder(nn.Module):
         Whether add activation at the last layer
     """
 
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(
         self,
         mydglgraph,

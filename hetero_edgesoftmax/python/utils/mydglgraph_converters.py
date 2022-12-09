@@ -2,7 +2,7 @@
 
 from .loaders_from_npy import *
 import torch as th
-from . import sparse_matrix_converters
+from ..utils_lite import sparse_matrix_converters
 from . import mydgl_graph
 from . import graphiler_datasets
 import numpy as np

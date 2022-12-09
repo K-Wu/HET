@@ -6,6 +6,7 @@ from torch import nn
 
 # import torch.jit
 from .. import utils
+from .. import utils_lite
 
 from dgl.heterograph import DGLBlock
 import argparse
@@ -27,7 +28,7 @@ class RelGraphEmbed(nn.Module):
         The list of node-types to exclude (e.g., because they have natural features)
     """
 
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(self, g, embed_size, exclude=list()):
 
         super(RelGraphEmbed, self).__init__()
@@ -65,7 +66,7 @@ class HET_RelGraphEmbed(nn.Module):
         The list of node-types to exclude (e.g., because they have natural features)
     """
 
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(self, g: utils.MyDGLGraph, embed_size, exclude=list()):
 
         super(HET_RelGraphEmbed, self).__init__()

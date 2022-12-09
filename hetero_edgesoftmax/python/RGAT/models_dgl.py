@@ -14,7 +14,7 @@ from dgl.heterograph import DGLBlock
 # from hetero_edgesoftmax.python.utils.mydgl_graph import MyDGLGraph
 # from ogb.nodeproppred import DglNodePropPredDataset
 # from .models import HET_RelationalGATEncoder  # , HET_RelationalAttLayer
-from .. import utils
+from .. import utils_lite
 
 # involve code heavily from dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
 
@@ -46,7 +46,7 @@ class RelationalAttLayer(nn.Module):
         Dropout rate. Default: 0.0
     """
 
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(
         self,
         in_feat,
@@ -174,7 +174,7 @@ class RelationalGATEncoder(nn.Module):
         Whether add activation at the last layer
     """
 
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(
         self,
         g,

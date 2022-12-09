@@ -4,7 +4,7 @@
 
 import dgl
 import torch
-from . import coo2csr
+from ..utils_lite import coo2csr
 
 
 def extract_adj_arrays_from_dgl_subgraph(

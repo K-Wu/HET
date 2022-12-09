@@ -9,11 +9,11 @@ import torch.jit
 # import dgl.function as fn
 # from dgl.nn.functional import edge_softmax
 from .. import backend as B
-from .. import utils
+from .. import utils_lite
 
 
 class HET_HGTLayerHetero(nn.Module):
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(
         self,
         in_dim,
@@ -329,7 +329,7 @@ class HET_HGTLayerHetero(nn.Module):
 
 
 class HET_HGT_DGLHetero(nn.Module):
-    @utils.warn_default_arguments
+    @utils_lite.warn_default_arguments
     def __init__(
         self,
         mydglgraph,
