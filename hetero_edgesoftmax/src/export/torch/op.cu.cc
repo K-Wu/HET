@@ -28,6 +28,7 @@
 #include "DGLHackKernel/OpExport/DataConverters.inc.h"
 #include "DGLHackKernel/OpExport/GATOps.inc.h"
 #include "DGLHackKernel/OpExport/HGTOps.inc.h"
+#include "DGLHackKernel/OpExport/HGTOpsEdgeParallel.inc.h"
 #include "DGLHackKernel/OpExport/RGATOps.inc.h"
 #include "DGLHackKernel/OpExport/RGCNCOOOps.inc.h"
 #include "DGLHackKernel/OpExport/RGCNOps.inc.h"
@@ -90,7 +91,14 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("hgt_full_graph_edge_softmax_ops_backward_csr",
         HGT::BckProp::IntegratedCSR::full_graph_edge_softmax_ops);
   m.def("hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo",
-        HGT::FwProp::FullGraphFusedMessageCalcAndMeanAggregationSeparateCOO);
+        HGT::FwProp::SeparateCOO::EdgeParallel::
+            FullGraphFusedMessageCalcAndMeanAggregation);
+
+  m.def(
+      "backward_hgt_full_graph_fused_message_calc_and_mean_aggregation_"
+      "separate_coo",
+      HGT::BckProp::SeparateCOO::EdgeParallel::
+          FullGraphFusedMessageCalcAndMeanAggregation);
   // Fused GAT CSR Declaration
   m.def("fused_gat_kernel_csr", RGCN::FwProp::IntegratedCSR::FusedKernelImpl);
   m.def("backward_fused_gat_csr",
