@@ -44,7 +44,7 @@ class RgnnRelationalMatmulACScatterGatherListIdentical(th.autograd.Function):
         input_num_head_one_flag = ctx.input_num_head_one_flag
         grad_weight = th.zeros_like(weights, memory_format=th.contiguous_format)
         grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
-        K.rgnn_relational_matmul_backward_ac_gather_scatter_list_identical(
+        K.backward_rgnn_relational_matmul_ac_gather_scatter_list_identical(
             separate_coo_relptrs,
             separate_coo_eids,
             th.transpose(weights, 2, 3).contiguous(),
@@ -103,7 +103,7 @@ class RgnnRelationalMatmul(th.autograd.Function):
         grad_weight = th.zeros_like(weights, memory_format=th.contiguous_format)
         grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
         # FIXME: seems there is a deadlock here
-        K.rgnn_relational_matmul_backward(
+        K.backward_rgnn_relational_matmul(
             separate_coo_relptrs,
             separate_coo_node_indices,
             separate_coo_eids,
@@ -192,7 +192,7 @@ class RgnnRelationalMatmulNoScatterGatherList(th.autograd.Function):
         grad_weight = th.zeros_like(weights, memory_format=th.contiguous_format)
         grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
         # FIXME: seems there is a deadlock here
-        K.rgnn_relational_matmul_no_scatter_gather_list_backward(
+        K.backward_rgnn_relational_matmul_no_scatter_gather_list(
             ntype_offset_ptrs,
             th.transpose(weights, 2, 3).contiguous(),
             node_feat_output,

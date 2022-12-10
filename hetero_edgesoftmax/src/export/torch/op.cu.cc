@@ -59,28 +59,29 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("test_argument_takein", test_argument_takein);
   // RGCN CSR Declaration
   m.def("rgcn_layer0_csr", RGCN::FwProp::IntegratedCSR::Layer0Impl);
-  m.def("rgcn_layer0_backward_csr", RGCN::BckProp::IntegratedCSR::Layer0Impl);
+  m.def("backward_rgcn_layer0_csr", RGCN::BckProp::IntegratedCSR::Layer0Impl);
   m.def("rgcn_layer1_csr", RGCN::FwProp::IntegratedCSR::Layer1Impl);
-  m.def("rgcn_layer1_backward_csr", RGCN::BckProp::IntegratedCSR::Layer1Impl);
+  m.def("backward_rgcn_layer1_csr", RGCN::BckProp::IntegratedCSR::Layer1Impl);
+  // FIXME: hybrid assign is unused. Apply it in python backend submodule
   m.def("rgcn_layer0_csr_hybrid_assign",
         RGCN::FwProp::IntegratedCSR::Layer0HybridAssignmentImpl);
-  m.def("rgcn_layer0_backward_csr_hybrid_assign",
+  m.def("backward_rgcn_layer0_csr_hybrid_assign",
         RGCN::BckProp::IntegratedCSR::Layer0HybridAssignmentImpl);
   m.def("rgcn_layer1_csr_hybrid_assign",
         RGCN::FwProp::IntegratedCSR::Layer1HybridAssignmentImpl);
-  m.def("rgcn_layer1_backward_csr_hybrid_assign",
+  m.def("backward_rgcn_layer1_csr_hybrid_assign",
         RGCN::BckProp::IntegratedCSR::Layer1HybridAssignmentImpl);
   m.def("rgcn_layer1_separate_coo", RGCN::FwProp::Layer1_SeparateCOO);
   // RGCN COO Declaration
   m.def("rgcn_layer1_coo", RGCN::FwProp::IntegratedCOO::Layer1Impl);
-  m.def("rgcn_layer1_backward_coo",
+  m.def("backward_rgcn_layer1_coo",
         RGCN::BckProp::IntegratedCOO::Layer1BackwardImpl);
   // HGT CSR Declaration
-  m.def("hgt_full_graph_message_mean_aggregation_backward_csr",
+  m.def("backward_hgt_full_graph_message_mean_aggregation_csr",
         HGT::BckProp::IntegratedCSR::full_graph_message_mean_aggregation);
   m.def("hgt_full_graph_message_mean_aggregation_csr",
         HGT::FwProp::IntegratedCSR::full_graph_message_mean_aggregation);
-  m.def("hgt_full_graph_hetero_attention_ops_backward_csr",
+  m.def("backward_hgt_full_graph_hetero_attention_ops_csr",
         HGT::BckProp::IntegratedCSR::full_graph_hetero_attention_ops);
   m.def("hgt_full_graph_hetero_attention_ops_csr",
         HGT::FwProp::IntegratedCSR::full_graph_hetero_attention_ops);
@@ -88,7 +89,7 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
         HGT::FwProp::IntegratedCSR::full_graph_edge_softmax_ops);
   m.def("hgt_full_graph_edge_softmax_ops_separate_coo",
         HGT::FwProp::full_graph_edge_softmax_ops_separate_coo);
-  m.def("hgt_full_graph_edge_softmax_ops_backward_csr",
+  m.def("backward_hgt_full_graph_edge_softmax_ops_csr",
         HGT::BckProp::IntegratedCSR::full_graph_edge_softmax_ops);
   m.def("hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo",
         HGT::FwProp::SeparateCOO::EdgeParallel::
@@ -106,13 +107,13 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   // kernels for generic hetero-gnn use declaration
   // RGNN Relational GEMM
   m.def("rgnn_relational_matmul", RGNN::FwProp::RelationalMatMul_separatecoo);
-  m.def("rgnn_relational_matmul_backward",
+  m.def("backward_rgnn_relational_matmul",
         RGNN::BckProp::RelationalMatMul_separatecoo);
   m.def(
       "rgnn_relational_matmul_ac_gather_scatter_list_identical",
       RGNN::FwProp::RelationalMatMul_ACGatherScatterListIdentical_separatecoo);
   m.def(
-      "rgnn_relational_matmul_backward_ac_gather_scatter_list_identical",
+      "backward_rgnn_relational_matmul_ac_gather_scatter_list_identical",
       RGNN::BckProp::RelationalMatMul_ACGatherScatterListIdentical_separatecoo);
   m.def("backward_rgnn_relational_matmul_compact_as_of_node",
         RGNN::BckProp::RelationalMatMulCompactAsOfNode_unique_rel_node_indices);
@@ -128,7 +129,7 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
           RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices);  // args: unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_idx, separate_coo_rel_ptr, separate_coo_node_indices, weight_transposed, node_feat, ret, gradout, grad_weight, grad_node_feat
   m.def("rgnn_relational_matmul_no_scatter_gather_list",
         RGNN::FwProp::RelationalMatmulNoScatterGatherList);
-  m.def("rgnn_relational_matmul_no_scatter_gather_list_backward",
+  m.def("backward_rgnn_relational_matmul_no_scatter_gather_list",
         RGNN::BckProp::RelationalMatmulNoScatterGatherList);
   // RGNN innerproduct
   m.def(

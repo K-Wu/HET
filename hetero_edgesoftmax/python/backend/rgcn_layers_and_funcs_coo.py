@@ -66,7 +66,7 @@ class RgcnSecondLayerCOO(th.autograd.Function):
         ) = ctx.saved_tensors
         grad_x = th.zeros_like(x)
         grad_weight = th.zeros_like(weight)
-        K.rgcn_layer1_backward_coo(
+        K.backward_rgcn_layer1_coo(
             out_row_idx,
             out_col_idx,
             out_eids,

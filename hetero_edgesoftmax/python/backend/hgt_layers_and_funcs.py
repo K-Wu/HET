@@ -71,7 +71,7 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
         grad_q = th.zeros_like(
             applied_qlinear_node_features, memory_format=th.contiguous_format
         )
-        K.hgt_full_graph_hetero_attention_ops_backward_csr(
+        K.backward_hgt_full_graph_hetero_attention_ops_csr(
             transposed_row_ptr,
             transposed_col_idx,
             transposed_eids,
@@ -149,7 +149,7 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
 #         ) = ctx.saved_tensors
 #         grad_message = th.zeros_like(message_per_edge)
 #         grad_attn_score = th.zeros_like(attn_score)
-#         K.hgt_full_graph_message_mean_aggregation_backward_csr(
+#         K.backward_hgt_full_graph_message_mean_aggregation_csr(
 #             outcsr_row_ptr,
 #             outcsr_col_idx,
 #             outcsr_eids,
@@ -309,7 +309,7 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             message_generation_weights, memory_format=th.contiguous_format
         )
         grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
-        K.rgnn_relational_matmul_backward_ac_gather_scatter_list_identical(
+        K.backward_rgnn_relational_matmul_ac_gather_scatter_list_identical(
             separate_coo_relptrs,
             separate_coo_eids,
             th.transpose(weights, 2, 3).contiguous(),
@@ -325,7 +325,7 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
         )
 
         # FIXME: unique_srcs_and_dests_rel_ptr and unique_srcs_and_dests_node_indices are not used in the backward pass but used in forward pass, check if there is similar issue in the original routine
-        K.hgt_full_graph_message_mean_aggregation_backward_csr(
+        K.backward_hgt_full_graph_message_mean_aggregation_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,
@@ -340,7 +340,7 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             unnormalized_attn_score, memory_format=th.contiguous_format
         )
         grad_mu = th.zeros_like(mu, memory_format=th.contiguous_format)
-        K.hgt_full_graph_edge_softmax_ops_backward_csr(
+        K.backward_hgt_full_graph_edge_softmax_ops_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,
@@ -505,7 +505,7 @@ class HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR(th.autograd.Functio
         )
 
         # FIXME: unique_srcs_and_dests_rel_ptr and unique_srcs_and_dests_node_indices are not used in the backward pass but used in forward pass, check if there is similar issue in the original routine
-        K.hgt_full_graph_message_mean_aggregation_backward_csr(
+        K.backward_hgt_full_graph_message_mean_aggregation_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,
@@ -520,7 +520,7 @@ class HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR(th.autograd.Functio
             unnormalized_attn_score, memory_format=th.contiguous_format
         )
         grad_mu = th.zeros_like(mu, memory_format=th.contiguous_format)
-        K.hgt_full_graph_edge_softmax_ops_backward_csr(
+        K.backward_hgt_full_graph_edge_softmax_ops_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,

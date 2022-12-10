@@ -57,7 +57,7 @@ class RgcnFirstLayerCSR(th.autograd.Function):
         ) = ctx.saved_tensors
         print(weight.numel())
         grad_weight = th.zeros_like(weight)
-        K.rgcn_layer0_backward_csr(
+        K.backward_rgcn_layer0_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,
@@ -161,7 +161,7 @@ class RgcnSecondLayerCSR(th.autograd.Function):
         ) = ctx.saved_tensors
         grad_x = th.zeros_like(x)
         grad_weight = th.zeros_like(weight)
-        K.rgcn_layer1_backward_csr(
+        K.backward_rgcn_layer1_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,
@@ -240,7 +240,7 @@ class RgcnSecondLayerCSRHybridAssign(th.autograd.Function):
         num_blocks_on_node_backward = ctx.num_blocks_on_node_backward
         grad_x = th.zeros_like(x)
         grad_weight = th.zeros_like(weight)
-        K.rgcn_layer1_backward_csr_hybrid_assign(
+        K.backward_rgcn_layer1_csr_hybrid_assign(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,
@@ -315,7 +315,7 @@ class RgcnLayer1SeparateCoo(th.autograd.Function):
         ) = ctx.saved_tensors
         grad_x = th.zeros_like(x)
         grad_weight = th.zeros_like(weight)
-        K.rgcn_layer1_backward_csr(
+        K.backward_rgcn_layer1_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,
