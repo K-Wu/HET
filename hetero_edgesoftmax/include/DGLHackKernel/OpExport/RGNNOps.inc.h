@@ -165,8 +165,10 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
                                           at::Tensor& inputs, at::Tensor& ret) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   const int64_t num_heads = 1;
-  const int64_t num_input_dim = weights.size(1);
-  const int64_t num_output_dim = weights.size(2);  // weight shape (num_ntypes,
+
+  assert(weights_transposed.size(1) == 1 && "assertion n_head == 1 failed");
+  const int64_t num_input_dim = weights.size(2);
+  const int64_t num_output_dim = weights.size(3);  // weight shape (num_ntypes,
                                                    // in_feat, out_feat)
   int64_t num_ntypes = ntype_offset_ptrs.numel() - 1;
   int64_t num_nodes = inputs.size(0);
@@ -928,9 +930,10 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
                                           at::Tensor& grad_node_feat_input) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   const int64_t num_heads = 1;
-  const int64_t num_input_dim = weights_transposed.size(2);
+  assert(weights_transposed.size(1) == 1 && "assertion n_head == 1 failed");
+  const int64_t num_input_dim = weights_transposed.size(3);
   const int64_t num_output_dim =
-      weights_transposed.size(1);  // weight shape (num_ntypes,
+      weights_transposed.size(2);  // weight shape (num_ntypes,
                                    // in_feat, out_feat)
   int64_t num_ntypes = ntype_offset_ptrs.numel() - 1;
   int64_t num_nodes = node_feat_input.size(0);

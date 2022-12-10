@@ -47,10 +47,12 @@ class HET_HGTLayerHetero(nn.Module):
         # self.q_linears = nn.ModuleList()
         # self.v_linears = nn.ModuleList()
         # self.a_linears = nn.ModuleList()
-        self.k_linears = nn.Parameter(torch.Tensor(self.num_ntypes, in_dim, out_dim))
-        self.q_linears = nn.Parameter(torch.Tensor(self.num_ntypes, in_dim, out_dim))
-        self.v_linears = nn.Parameter(torch.Tensor(self.num_ntypes, in_dim, out_dim))
-        self.a_linears = nn.Parameter(torch.Tensor(self.num_ntypes, out_dim, out_dim))
+        self.k_linears = nn.Parameter(torch.Tensor(self.num_ntypes, 1, in_dim, out_dim))
+        self.q_linears = nn.Parameter(torch.Tensor(self.num_ntypes, 1, in_dim, out_dim))
+        self.v_linears = nn.Parameter(torch.Tensor(self.num_ntypes, 1, in_dim, out_dim))
+        self.a_linears = nn.Parameter(
+            torch.Tensor(self.num_ntypes, 1, out_dim, out_dim)
+        )
         self.norms = nn.ModuleList()
         self.use_norm = use_norm
 
@@ -69,7 +71,7 @@ class HET_HGTLayerHetero(nn.Module):
         self.relation_msg = nn.Parameter(
             torch.Tensor(self.num_relations, n_heads, self.d_k, self.d_k)
         )
-        self.skip = nn.Parameter(torch.ones(self.num_ntypes, 1, 1))
+        self.skip = nn.Parameter(torch.ones(self.num_ntypes, 1, 1, 1))
         self.drop = nn.Dropout(dropout)
 
     def reset_parameters(self):

@@ -194,7 +194,7 @@ class RgnnRelationalMatmulNoScatterGatherList(th.autograd.Function):
         # FIXME: seems there is a deadlock here
         K.rgnn_relational_matmul_no_scatter_gather_list_backward(
             ntype_offset_ptrs,
-            th.transpose(weights, 1, 2).contiguous(),
+            th.transpose(weights, 2, 3).contiguous(),
             node_feat_output,
             gradout.contiguous(),
             grad_weight,
@@ -213,7 +213,7 @@ def rgnn_relational_matmul_no_scatter_gather_list(
     ret = th.zeros(
         (
             inputs.size(0),
-            weights.size(2),
+            weights.size(3),
         ),  # [num_items, out_feats]
         dtype=weights.dtype,
         device=weights.device,
