@@ -39,10 +39,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
     Idx start_off = row_offsets[src_vid];
     Idx end_off = row_offsets[src_vid + 1];
-    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
-      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
-           feat_idx += blockDim.y) {
+    for (Idx head_idx = threadIdx.y; head_idx < num_heads;
+         head_idx += blockDim.y) {
+      for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
+           feat_idx < hidden_xlen; feat_idx += blockDim.x * gridDim.x) {
         DType s = 0.;
         DType sfeatsrc = 0.;
         Idx feat_src_offset = -1;
@@ -176,10 +176,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
     Idx start_off = row_offsets[src_vid];
     Idx end_off = row_offsets[src_vid + 1];
-    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
-      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
-           feat_idx += blockDim.y) {
+    for (Idx head_idx = threadIdx.y; head_idx < num_heads;
+         head_idx += blockDim.y) {
+      for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
+           feat_idx < hidden_xlen; feat_idx += blockDim.x * gridDim.x) {
         DType s = 0.;
         Idx feat_src_offset = -1;
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
@@ -295,10 +295,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
     Idx start_off = row_offsets[src_vid];
     Idx end_off = row_offsets[src_vid + 1];
-    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
-      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
-           feat_idx += blockDim.y) {
+    for (Idx head_idx = threadIdx.y; head_idx < num_heads;
+         head_idx += blockDim.y) {
+      for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
+           feat_idx < hidden_xlen; feat_idx += blockDim.x * gridDim.x) {
         DType s = 0.;
         Idx feat_src_offset = -1;
         Idx el_idx = -1;

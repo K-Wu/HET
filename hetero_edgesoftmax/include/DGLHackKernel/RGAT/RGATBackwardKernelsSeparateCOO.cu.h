@@ -24,10 +24,10 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
     Idx eid = gdata.eids[e];
     Idx dst_vid = col_indices[e];
 
-    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
-      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
-           feat_idx += blockDim.y) {
+    for (Idx head_idx = threadIdx.y; head_idx < num_heads;
+         head_idx += blockDim.y) {
+      for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
+           feat_idx < hidden_xlen; feat_idx += blockDim.x * gridDim.x) {
         DType s = 0.;
         DType sfeatsrc = 0.;
         Idx feat_src_offset = -1;
@@ -153,10 +153,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
     // {
     // Idx start_off = row_offsets[src_vid];
     // Idx end_off = row_offsets[src_vid + 1];
-    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
-      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
-           feat_idx += blockDim.y) {
+    for (Idx head_idx = threadIdx.y; head_idx < num_heads;
+         head_idx += blockDim.y) {
+      for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
+           feat_idx < hidden_xlen; feat_idx += blockDim.x * gridDim.x) {
         DType s = 0.;
         Idx feat_src_offset = -1;
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
@@ -242,10 +242,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
     // {
     //  Idx start_off = row_offsets[src_vid];
     // Idx end_off = row_offsets[src_vid + 1];
-    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
-      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
-           feat_idx += blockDim.y) {
+    for (Idx head_idx = threadIdx.y; head_idx < num_heads;
+         head_idx += blockDim.y) {
+      for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
+           feat_idx < hidden_xlen; feat_idx += blockDim.x * gridDim.x) {
         DType s = 0.;
         Idx feat_src_offset = -1;
         Idx el_idx = -1;

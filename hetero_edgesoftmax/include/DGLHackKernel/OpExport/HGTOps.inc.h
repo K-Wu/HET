@@ -78,7 +78,7 @@ void _full_graph_message_mean_aggregation(
   // }
 
   // Configure kernel launch parameters.
-  // TODO: Type 2 Schedule:
+  // NB: updated to Type 2 Schedule:
   // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
   // head -> threadIdx.y
   // node -> blockIdx.y
@@ -86,11 +86,11 @@ void _full_graph_message_mean_aggregation(
   // threadIdx.x and threadIdx.y and only this pair is exchanged compared with
   // original seastar schedule to allow reduction within the warp, i.e., along
   // x-axis
-  int nthrs_x = SeastarFindNumThreads(num_heads, 64);
-  int nthrs_y = SeastarFindNumThreads(
+  int nthrs_y = SeastarFindNumThreads(num_heads, 64);
+  int nthrs_x = SeastarFindNumThreads(
       gdata.message_out_dim,
       MAX_NTHRS /
-          nthrs_x);  // NB: message_out_dim is the total dim, and the number of
+          nthrs_y);  // NB: message_out_dim is the total dim, and the number of
                      // elements for each head is message_out_dim//num_heads
   int nblks_x = 1;
   int nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
@@ -447,18 +447,19 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
   // }
 
   // preparing kernel launch configuration
-  int nthrs_x = SeastarFindNumThreads(num_heads, 64);
-  int nthrs_y = SeastarFindNumThreads(
-      gdata_attn.message_src_xlen,
-      MAX_NTHRS / nthrs_x);  // NB: message_src_xlen is the total dimension
-                             // whereas each head gets message_src_xlen //
-                             // num_heads number of elements
-  int64_t outcsr_num_rows = outcsr_rowptr.numel() - 1;
-  // Type 2 Schedule:
+
+  // NB: updated to Type 2 Schedule:
   // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
+  int nthrs_y = SeastarFindNumThreads(num_heads, 64);
+  int nthrs_x = SeastarFindNumThreads(
+      gdata_attn.message_src_xlen,
+      MAX_NTHRS / nthrs_y);  // NB: message_src_xlen is the total dimension
+                             // whereas each head gets message_src_xlen //
+                             // num_heads number of elements
+  int64_t outcsr_num_rows = outcsr_rowptr.numel() - 1;
   int nblks_x = 1;
   int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
   const dim3 nthrs(nthrs_x, nthrs_y);
@@ -495,9 +496,9 @@ void _full_graph_message_mean_aggregation(
 
   // preparing gdata
   BackwardHGTMessageData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata;
-  Idx num_heads =
+  gdata.num_heads =
       normalized_attn_score.size(normalized_attn_score.ndimension() - 1);
-  Idx num_relations = mu.numel() / num_heads;
+  Idx num_relations = mu.numel() / gdata.num_heads;
   // if (num_heads <= 1) {
   //   std::cout << "Warning: num_heads <= 1 in "
   //                "HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_"
@@ -505,7 +506,6 @@ void _full_graph_message_mean_aggregation(
   //             << std::endl;
   // }
 
-  gdata.num_heads = num_heads;
   assert(gdata.num_heads == grad_message.size(grad_message.ndimension() - 2) &&
          "assuming num_heads is the same for grad_message but turned out not");
   gdata.message_src_xlen =
@@ -531,15 +531,15 @@ void _full_graph_message_mean_aggregation(
   }
 
   // kernel parameter configurations
-  // TODO: Type 2 Schedule:
+  // NB: updated to Type 2 Schedule:
   // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-  int nthrs_x = SeastarFindNumThreads(num_heads, 64);
-  int nthrs_y = SeastarFindNumThreads(
+  int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+  int nthrs_x = SeastarFindNumThreads(
       gdata.message_src_xlen,
-      MAX_NTHRS / nthrs_x);  // NB: message_src_xlen is the total dimension
+      MAX_NTHRS / nthrs_y);  // NB: message_src_xlen is the total dimension
                              // whereas each head gets message_src_xlen //
                              // num_heads number of elements
   int64_t outcsr_num_rows = outcsr_rowptr.numel() - 1;
@@ -596,15 +596,14 @@ void _full_graph_edge_softmax_ops(
   const Idx MAX_NTHRS = 1024;
   // preparing gdata
   BackwardHGTAttnScoreData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata;
-  Idx num_heads = grad_attn_score.size(grad_attn_score.ndimension() - 1);
+  gdata.num_heads = grad_attn_score.size(grad_attn_score.ndimension() - 1);
   // if (num_heads <= 1) {
   //   std::cout << "Warning: num_heads <= 1 in "
   //                "HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_"
   //                "edge_softmax_ops"
   //             << std::endl;
   // }
-  Idx num_relations = mu.numel() / num_heads;
-  gdata.num_heads = num_heads;
+  Idx num_relations = mu.numel() / gdata.num_heads;
   assert(gdata.num_heads == message.size(message.ndimension() - 2) &&
          "expecting message.size[-2] to be num_heads but turned out not");
   gdata.message_src_xlen =
@@ -631,7 +630,7 @@ void _full_graph_edge_softmax_ops(
   }
 
   // preparing kernel launch configuration
-  // TODO: Type 2 Schedule:
+  // NB: updated to Type 2 Schedule:
   // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
   // head -> threadIdx.y
   // node -> blockIdx.y
@@ -639,10 +638,10 @@ void _full_graph_edge_softmax_ops(
   // threadIdx.x and threadIdx.y and only this pair is exchanged compared with
   // original seastar schedule to allow reduction within the warp, i.e., along
   // x-axis
-  int nthrs_x = SeastarFindNumThreads(num_heads, 64);
-  int nthrs_y = SeastarFindNumThreads(
+  int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+  int nthrs_x = SeastarFindNumThreads(
       gdata.message_src_xlen,
-      MAX_NTHRS / nthrs_x);  // NB: message_src_xlen is the total dimension
+      MAX_NTHRS / nthrs_y);  // NB: message_src_xlen is the total dimension
                              // whereas each head gets message_src_xlen //
                              // num_heads number of elements
   int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;

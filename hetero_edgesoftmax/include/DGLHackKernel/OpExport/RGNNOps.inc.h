@@ -320,7 +320,7 @@ void inner_product_various_left_and_node_right(
   const Idx MAX_NTHRS = 1024;
   InnerProductData<Idx, DType> gdata;
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  int64_t el_xlen = SeastarComputeXLength<>(edge_inner_product);
+  gdata.num_heads = SeastarComputeXLength<>(edge_inner_product);
   int64_t feat_src_xlen = SeastarComputeXLength<>(feat_src);
   // NB: in this case gdata.n, calculation is removed since el is now per edge
   // rather than per node
@@ -328,7 +328,6 @@ void inner_product_various_left_and_node_right(
   gdata.feat_dst = feat_dst.data_ptr<DType>();
   gdata.edge_inner_product = edge_inner_product.data_ptr<DType>();
   // gdata.n = el.numel() / el_xlen;
-  gdata.num_heads = el_xlen;
   gdata.feat_src_xlen = feat_src_xlen;
 
   if constexpr (IntegratedFormatRatherThanSeparateFlag &&
@@ -337,17 +336,18 @@ void inner_product_various_left_and_node_right(
     gdata.eids = incsr_eids.data_ptr<Idx>();
     // Configure kernel launch parameters.
 
-    // TODO: Type 2 Schedule:
+    // NB: updated to Type 2 Schedule:
     // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
 
-    nthrs_x = SeastarFindNumThreads(el_xlen, 64);
-    nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
-                                    MAX_NTHRS / nthrs_x);
-    nblks_x = 1;
-    nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
+    int64_t nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+    int64_t nthrs_x = SeastarFindNumThreads(
+        gdata.feat_src_xlen / gdata.num_heads, MAX_NTHRS / nthrs_y);
+    int64_t nblks_x = 1;
+    int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
+    int64_t nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
     const dim3 nthrs2(nthrs_x, nthrs_y);
     const dim3 nblks2(nblks_x, nblks_y);
 
@@ -380,7 +380,7 @@ void inner_product_various_left_and_node_right(
     int64_t num_edges = separate_coo_row_indices.numel();
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
 
-    // TODO: Type 2 Schedule:
+    // NB: Type 2 Schedule:
     // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
     // edge -> blockIdx.y
@@ -388,7 +388,7 @@ void inner_product_various_left_and_node_right(
     // threadIdx.x and threadIdx.y and only this pair is exchanged compared with
     // original seastar schedule to allow reduction within the warp, i.e., along
     // x-axis
-    int nthrs_y_inner_product = SeastarFindNumThreads(el_xlen, 64);
+    int nthrs_y_inner_product = SeastarFindNumThreads(gdata.num_heads, 64);
     int nthrs_x_inner_product =
         SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
                               MAX_NTHRS / nthrs_y_inner_product);
@@ -829,14 +829,14 @@ void inner_product_various_left_and_node_right(
                 CSRRatherThanCOOFlag) {
     // Integrated CSR
     gdata.eids = outcsr_eids.data_ptr<Idx>();
-    // TODO: Type 2 Schedule:
+    // NB: updated to Type 2 Schedule:
     // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-    int nthrs_x = SeastarFindNumThreads(gdata.num_heads, 64);
-    int nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
-                                        MAX_NTHRS / nthrs_x);
+    int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+    int nthrs_x = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
+                                        MAX_NTHRS / nthrs_y);
     int nblks_x = 1;
     int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
     int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
@@ -857,14 +857,14 @@ void inner_product_various_left_and_node_right(
     gdata.eids = separate_coo_eids.data_ptr<Idx>();
     int64_t num_edges = separate_coo_row_indices.numel();
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
-    // TODO: Type 2 Schedule:
+    // NB: updated to Type 2 Schedule:
     // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-    int nthrs_x = SeastarFindNumThreads(gdata.num_heads, 64);
-    int nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
-                                        MAX_NTHRS / nthrs_x);
+    int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+    int nthrs_x = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
+                                        MAX_NTHRS / nthrs_y);
     int nblks_x = 1;
     int nblks_y = std::min(num_edges, MAX_NBLKS);
     int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;

@@ -41,10 +41,10 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
     Idx start_off = *(row_offsets + dst_vid);
     Idx end_off = *(row_offsets + dst_vid + 1);
-    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
-         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
-      for (Idx feat_idx = threadIdx.y; feat_idx < hidden_xlen;
-           feat_idx += blockDim.y) {
+    for (Idx head_idx = threadIdx.y; head_idx < num_heads;
+         head_idx += blockDim.y) {
+      for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
+           feat_idx < hidden_xlen; feat_idx += blockDim.x * gridDim.x) {
         DType s = 0.;
         for (Idx eidx = start_off; eidx < end_off; eidx++) {
           Idx src_vid = column_indices[eidx];

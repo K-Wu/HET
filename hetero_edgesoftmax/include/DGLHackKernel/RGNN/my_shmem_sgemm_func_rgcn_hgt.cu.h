@@ -18,11 +18,10 @@ template <bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
           typename IdxPtr, bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
           bool DoGradNormFlag>
 __device__ __forceinline__ void _simplified_basic_MatMulKernel(
-    float* A, float* B, float* C, float* edge_norm,
-    float* input_node_feat_for_grad_norm, float* grad_edge_norm,
-    IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
-    IdxPtr separate_coo_eids, Idx idx_relation, Idx numARows,
-    Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
+    float* A, float* B, float* C, float* edge_norm, float* grad_edge_norm,
+    float* input_node_feat_for_grad_norm, IdxPtr separate_coo_row_idx,
+    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids, Idx idx_relation,
+    Idx numARows, Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
     Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, Idx num_heads) {
   // num_B_cols is output_dim//num_heads as forward propagation weight,
   // output_dim//num_heads as backward propagation weight, and in_feat_dim as
@@ -398,7 +397,7 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
   _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
                                  false, false, false>(
       node_feat_input, delta_linear_projected_node_feat,
-      &delta_weights[idx_relation * delta_output_dim * delta_input_dim], ,
+      &delta_weights[idx_relation * delta_output_dim * delta_input_dim],
       edge_norm, nullptr, nullptr, separate_coo_row_idx, separate_coo_col_idx,
       separate_coo_eids, idx_relation,
       separate_coo_rel_ptrs[idx_relation + 1] -
@@ -426,7 +425,7 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
                                  false, false, true>(
       delta_linear_projected_node_feat,
       &weights_transposed[idx_relation * delta_output_dim * delta_input_dim],
-      delta_node_feat_input, , edge_norm, grad_edge_norm,
+      delta_node_feat_input, edge_norm, grad_edge_norm,
       input_node_feat_for_grad_norm, separate_coo_row_idx, separate_coo_col_idx,
       separate_coo_eids, idx_relation,
       separate_coo_rel_ptrs[idx_relation + 1] -
