@@ -59,7 +59,7 @@ __device__ __forceinline__ float& GetRowMajorElement(
   }
 }
 
-// code from
+// vanilla tiled shmem gemm code from
 // http://www.shodor.org/media/content//petascale/materials/UPModules/matrixMultiplication/moduleDocument.pdf
 //@@ Example of grid and block configuration
 //	dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
@@ -85,10 +85,12 @@ __device__ __forceinline__ void _basic_MatMulKernel(
   // input feature, output_dim//num_heads as delta input feature
   constexpr bool BWeightInsteadOfFeatureFlag = !OuterProductFlag;
 
-  // NB: when OuterProductFlag is true, num_heads of the input features is
-  // always 1 and the other is num_heads, at least in case of RGAT. In the
-  // implementation, when OuterProductFlag is true, A is always input and B the
-  // gradient output feature. It is safe to pass num_A_cols as in_dim.
+  // NB: when OuterProductFlag is true and the model is RGAT, num_heads of the
+  // input features is always 1 and the other is num_heads. In case of RGCN,
+  // both are 1. In case of HGT, both are num_heads except for the kqva linear
+  // (both are 1). In the implementation, when OuterProductFlag is true, A is
+  // always input and B the gradient output feature. It is safe to pass
+  // num_A_cols as in_dim.
   constexpr int SHMEM_BLOCK_SIZE =
       COARSEN_FACTOR_2_FLAG ? THREADING_BLOCK_SIZE * 2 : THREADING_BLOCK_SIZE;
   // Block row and column
@@ -469,6 +471,7 @@ __global__ void HET_RGNNFeatPerEdgeFWProp(
       A_rel_ptr[idx_relation], input_dim, output_per_head_dim, num_heads);
 }
 
+// for HGT nodewise linear layers
 template <bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
           typename IdxPtr>
 __global__ void HET_RGNNMatmulNoScatterGatherListFwOrBwProp(
@@ -480,7 +483,7 @@ __global__ void HET_RGNNMatmulNoScatterGatherListFwOrBwProp(
       num_ntypes, accum_num_blocks_per_ntype, idx_block_assignment);
   _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, false, false,
                       false, false, false, false, false, false, Idx, IdxPtr,
-                      true, false, true>(
+                      true, true, true>(
       node_feat_input, weights, linear_projected_node_feat, nullptr, nullptr,
       nullptr, nullptr, nullptr, 0,
       ntype_ptrs[idx_ntype + 1] - ntype_ptrs[idx_ntype],
@@ -490,6 +493,7 @@ __global__ void HET_RGNNMatmulNoScatterGatherListFwOrBwProp(
       ntype_ptrs[idx_ntype], input_dim, output_dim, 1);
 }
 
+// for HGT nodewise linear layers
 template <bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
           typename IdxPtr>
 __global__ void HET_RGNNDeltaWeightNoScatterGatherListBWProp(

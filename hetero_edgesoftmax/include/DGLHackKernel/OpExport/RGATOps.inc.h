@@ -57,6 +57,10 @@ void _RelationalFusedGATKernel(
     // Configure kernel launch parameters.
     // TODO: we can safely reshape (nthrs_x, nthrs_y) to assign more y dimension
     // to rows as usually n_head is smaller than 32
+    // TODO: Type 1 Schedule:
+    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
+    // head -> blockIdx.x * blockDim.x + threadIdx.x;
+    // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
     int nthrs_x = 32;
     int nthrs_y = 1;
     int nblks_x = (el_xlen + nthrs_x - 1) / (nthrs_x);
@@ -72,6 +76,11 @@ void _RelationalFusedGATKernel(
             unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
             unique_srcs_and_dests_node_indices.data_ptr<Idx>());
 
+    // TODO: follow Type 2 Schedule:
+    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // head -> threadIdx.y
+    // node -> blockIdx.y
+    // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
     nthrs_x = SeastarFindNumThreads(el_xlen, 64);
     nthrs_y =
         SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
@@ -94,6 +103,10 @@ void _RelationalFusedGATKernel(
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
     // TODO: we can safely reshape (nthrs_x, nthrs_y) to assign more y dimension
     // to edges as usually n_head is smaller than 32
+    // TODO: Type 1 Schedule:
+    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
+    // head -> blockIdx.x * blockDim.x + threadIdx.x;
+    // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
     int nthrs_x = 32;
     int nthrs_y = 1;
     int nblks_x = (el_xlen + nthrs_x - 1) / (nthrs_x);
@@ -110,6 +123,11 @@ void _RelationalFusedGATKernel(
             unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
             unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
 
+    // TODO: follow Type 2 Schedule:
+    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // head -> threadIdx.y
+    // node -> blockIdx.y
+    // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
     nthrs_x = SeastarFindNumThreads(el_xlen, 64);
     nthrs_y =
         SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
@@ -233,6 +251,11 @@ void _RelationalFusedGATKernel(
                 CSRRatherThanCOOFlag) {
     // Integrated CSR
     gdata.eids = outcsr_eids.data_ptr<Idx>();
+    // TODO: follow Type 2 Schedule:
+    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // head -> threadIdx.y
+    // node -> blockIdx.y
+    // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
     int nthrs_x = SeastarFindNumThreads(el_xlen, 64);
     int nthrs_y =
         SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
@@ -269,6 +292,12 @@ void _RelationalFusedGATKernel(
     gdata.eids = separate_coo_eids.data_ptr<Idx>();
     int64_t num_edges = separate_coo_row_indices.numel();
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
+
+    // TODO: follow Type 2 Schedule:
+    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // head -> threadIdx.y
+    // node -> blockIdx.y
+    // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
     int nthrs_x = SeastarFindNumThreads(el_xlen, 64);
     int nthrs_y =
         SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);

@@ -45,7 +45,7 @@ struct BackwardHGTMessageData<Idx, DType, 0> {
 
 // based on _fusedGatBackwardGradFeatSrc, as it is to calculate the gradient of
 // message
-// TODO: add mu into the term
+// NB: notice how mu is involved in the term
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag,
           int UseMuAppliedAttnScoreSwitch>
@@ -202,7 +202,7 @@ struct BackwardHGTAttnScoreData<Idx, DType, 0> {
 // S_j = expf(z_j) / sum_k expf(z_k)
 // deltaz_edge=S_edge*deltaout_dst^T*message_edge - S_edge * deltaout_dst^T *
 // out_dst
-// TODO: add mu into the term
+// NB: notice how mu is involved in the term
 // based on _fusedGatBackwardGradElEr, as it is to calculate gradient of
 // attention
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,

@@ -89,6 +89,7 @@ void _RelationalMatMul_separatecoo(
           CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag,
           "CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag");
     }
+    // NB: my shmem sgemm matmul scheme
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
@@ -126,6 +127,7 @@ void _RelationalMatMul_separatecoo(
     }
 
   } else {
+    // NB: my shmem sgemm matmul scheme
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
@@ -203,7 +205,7 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
   thrust::device_vector<int> dev_num_blocks_assignment_for_all_prev_ntype_vect(
       num_blocks_assignment_for_all_prev_ntype_vect.begin(),
       num_blocks_assignment_for_all_prev_ntype_vect.end());
-
+  // NB: my shmem sgemm matmul scheme
   const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, num_heads);
   const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
@@ -334,13 +336,12 @@ void inner_product_various_left_and_node_right(
     // Integrated CSR
     gdata.eids = incsr_eids.data_ptr<Idx>();
     // Configure kernel launch parameters.
-    int nthrs_x = 32;
-    int nthrs_y = 1;
-    int nblks_x = (el_xlen + nthrs_x - 1) / (nthrs_x);
-    int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
-    int nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
-    const dim3 nblks(nblks_x, nblks_y);
-    const dim3 nthrs(nthrs_x, nthrs_y);
+
+    // TODO: Type 2 Schedule:
+    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // head -> threadIdx.y
+    // node -> blockIdx.y
+    // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
 
     nthrs_x = SeastarFindNumThreads(el_xlen, 64);
     nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
@@ -379,6 +380,11 @@ void inner_product_various_left_and_node_right(
     int64_t num_edges = separate_coo_row_indices.numel();
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
 
+    // TODO: Type 2 Schedule:
+    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // head -> threadIdx.y
+    // edge -> blockIdx.y
+    // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
     // threadIdx.x and threadIdx.y and only this pair is exchanged compared with
     // original seastar schedule to allow reduction within the warp, i.e., along
     // x-axis
@@ -571,6 +577,7 @@ void _BackwardRelationalMatMul_separatecoo(
           CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag,
           "CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag");
     }
+    // NB: my shmem sgemm matmul scheme
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nblks_outer_product(
@@ -640,6 +647,7 @@ void _BackwardRelationalMatMul_separatecoo(
               num_relations);
     }
   } else {
+    // NB: my shmem sgemm matmul scheme
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nblks_outer_product(
@@ -821,6 +829,11 @@ void inner_product_various_left_and_node_right(
                 CSRRatherThanCOOFlag) {
     // Integrated CSR
     gdata.eids = outcsr_eids.data_ptr<Idx>();
+    // TODO: Type 2 Schedule:
+    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // head -> threadIdx.y
+    // node -> blockIdx.y
+    // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
     int nthrs_x = SeastarFindNumThreads(gdata.num_heads, 64);
     int nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
                                         MAX_NTHRS / nthrs_x);
@@ -844,6 +857,11 @@ void inner_product_various_left_and_node_right(
     gdata.eids = separate_coo_eids.data_ptr<Idx>();
     int64_t num_edges = separate_coo_row_indices.numel();
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
+    // TODO: Type 2 Schedule:
+    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // head -> threadIdx.y
+    // node -> blockIdx.y
+    // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
     int nthrs_x = SeastarFindNumThreads(gdata.num_heads, 64);
     int nthrs_y = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
                                         MAX_NTHRS / nthrs_x);
@@ -968,7 +986,7 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
   thrust::device_vector<int> dev_num_blocks_assignment_for_all_prev_ntype_vect(
       num_blocks_assignment_for_all_prev_ntype_vect.begin(),
       num_blocks_assignment_for_all_prev_ntype_vect.end());
-
+  // NB: my shmem sgemm matmul scheme
   const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, num_heads);
   const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
@@ -984,7 +1002,7 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
           thrust::raw_pointer_cast(
               dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
           num_ntypes, num_output_dim, num_input_dim);
-
+  // NB: my shmem sgemm matmul scheme
   const dim3 nblks_outer_product(
       ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE),
       ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE), grid_dim_y);

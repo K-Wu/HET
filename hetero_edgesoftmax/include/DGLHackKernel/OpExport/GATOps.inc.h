@@ -66,6 +66,11 @@ void _FusedKernelImpl(at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
   int nblks_x = (el_xlen + nthrs_x - 1) / (nthrs_x);
   int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
   int nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
+
+  // TODO: follow Type 1 Schedule:
+  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
+  // head -> blockIdx.x * blockDim.x + threadIdx.x;
+  // node -> blockIdx.y * blockDim.y + threadIdx.y;
   const dim3 nblks(nblks_x, nblks_y);
   const dim3 nthrs(nthrs_x, nthrs_y);
 
@@ -89,6 +94,12 @@ void _FusedKernelImpl(at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
 
   // cuda_err_chk(cudaPeekAtLastError());
   // cuda_err_chk(cudaDeviceSynchronize());
+  // TODO: follow Type 2 Schedule:
+  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // head -> threadIdx.y
+  // node -> blockIdx.y
+  // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
+  //
   nthrs_x = SeastarFindNumThreads(el_xlen, 64);
   nthrs_y = SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
   nblks_x = 1;
@@ -189,8 +200,14 @@ void _FusedKernelImpl(
   int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
   int nblks_x = 1;
   int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
+  // TODO: follow Type 2 Schedule:
+  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // head -> threadIdx.y
+  // edge|node -> blockIdx.y
+  // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
   const dim3 nthrs(nthrs_x, nthrs_y);
   const dim3 nblks(nblks_x, nblks_y);
+
   // LOG(INFO) << "GradFeatSrc kernel blk dim:" << nblks_x << "*" <<nblks_y << "
   // thr dim:" <<nthrs_x << "*" << nthrs_y;
   // cuda_err_chk(cudaDeviceSynchronize());
@@ -201,9 +218,6 @@ void _FusedKernelImpl(
         <<<nblks, nthrs, 0, stream>>>(gdata, outcsr_row_ptr.data_ptr<Idx>(),
                                       outcsr_col_idx.data_ptr<Idx>(), nullptr,
                                       outcsr_num_rows, nullptr, nullptr);
-    // const dim3 nthrs3(nthrs_y, nthrs_x);
-    // fusedGatBackwardGradElEr4<<<nblks, nthrs3, 0, thr_entry->stream>>>(gdata,
-    // ocsr);
     HET_fusedGatBackwardGradElEr<Idx, DType, true, false>
         <<<nblks, nthrs, 0, stream>>>(gdata, outcsr_row_ptr.data_ptr<Idx>(),
                                       outcsr_col_idx.data_ptr<Idx>(), nullptr,

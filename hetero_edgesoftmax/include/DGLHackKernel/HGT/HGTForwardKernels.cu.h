@@ -612,6 +612,8 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
   }
 }
 
+// head -> blockIdx.x * blockDim.x + threadIdx.x;
+// edge -> blockIdx.y * blockDim.y + threadIdx.y;
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int OutputMuAppliedAttnScoreSwitch>

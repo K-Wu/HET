@@ -54,7 +54,7 @@ void Layer1_SeparateCOO(at::Tensor& separate_coo_relptrs,
       dev_num_blocks_assignment_for_all_prev_relation_vect(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
           num_blocks_assignment_for_all_prev_relation_vect.end());
-
+  // NB: my shmem sgemm matmul scheme
   const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, 1);
   const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);

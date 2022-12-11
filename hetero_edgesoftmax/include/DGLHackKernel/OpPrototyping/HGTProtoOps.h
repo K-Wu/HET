@@ -195,15 +195,15 @@ void CompressedEdgeMessageConcatenatedCOOKernel(
           num_blocks_for_all_prev_relation_vect, RTX_3090_GRIDSIZE,
           COARSE_SGEMM_NODES_PER_BLOCK);
 
-  dim3 block(COARSE_SGEMM_BLOCKSIZE, 1, 1);
-  dim3 grid(num_blocks_for_all_prev_relation_vect
-                [num_blocks_for_all_prev_relation_vect.size() - 1],
-            2, 1);
+  const dim3 nthrs(COARSE_SGEMM_BLOCKSIZE, 1, 1);
+  const dim3 nblks(num_blocks_for_all_prev_relation_vect
+                       [num_blocks_for_all_prev_relation_vect.size() - 1],
+                   2, 1);
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   // v*W
   HET_EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel<
-      TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS><<<grid, block>>>(
+      TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS><<<nblks, nthrs>>>(
       thrust::raw_pointer_cast(
           (intermediate_data->get_intermediate_node_vect_d()).data()),
       concatenated_coo_matrix_column_indices.size(),
@@ -289,15 +289,15 @@ void EdgeAttentionConcatenatedCOOKernel(
           num_blocks_for_all_prev_relation_vect, RTX_3090_GRIDSIZE,
           COARSE_SGEMM_NODES_PER_BLOCK);
 
-  dim3 block(COARSE_SGEMM_BLOCKSIZE, 1, 1);
-  dim3 grid(num_blocks_for_all_prev_relation_vect
-                [num_blocks_for_all_prev_relation_vect.size() - 1],
-            2, 1);
+  const dim3 nthrs(COARSE_SGEMM_BLOCKSIZE, 1, 1);
+  const dim3 nblks(num_blocks_for_all_prev_relation_vect
+                       [num_blocks_for_all_prev_relation_vect.size() - 1],
+                   2, 1);
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   // k*W
   HET_EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel<
-      TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS><<<grid, block>>>(
+      TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS><<<nblks, nthrs>>>(
       thrust::raw_pointer_cast(
           (intermediate_data->get_intermediate_node_vect_d()).data()),
       concatenated_coo_matrix_column_indices.size(),
@@ -321,11 +321,11 @@ void EdgeAttentionConcatenatedCOOKernel(
       thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()),
       thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
 
-  dim3 block2(RTX_3090_BLOCKSIZE, 1, 1);
-  dim3 grid2(RTX_3090_GRIDSIZE, 1, 1);
+  const dim3 nthrs2(RTX_3090_BLOCKSIZE, 1, 1);
+  const dim3 nblks2(RTX_3090_GRIDSIZE, 1, 1);
   // (kW)*q
   EdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel<<<
-      grid2, block2>>>(
+      nblks2, nthrs2>>>(
       (intermediate_data->EdgeAttention).Ptr(),
       concatenated_coo_matrix_column_indices.size(),
       thrust::raw_pointer_cast(concatenated_coo_matrix_column_indices.data()),
@@ -482,16 +482,16 @@ void HGTForwardImpl(
   // print_range("exclusive_scan_numBlocks_per_relationship",
   // exclusive_scan_numBlocks_per_relationship.begin(),
   // exclusive_scan_numBlocks_per_relationship.end());
-  dim3 block(512, 1, 1);
-  dim3 grid(exclusive_scan_numBlocks_per_relationship_h
-                [exclusive_scan_numBlocks_per_relationship_h.size() - 1],
-            1, 1);
+  const dim3 nthrs(512, 1, 1);
+  const dim3 nblks(exclusive_scan_numBlocks_per_relationship_h
+                       [exclusive_scan_numBlocks_per_relationship_h.size() - 1],
+                   1, 1);
 
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   HET_HGTExperimentalEdgeAttentionFusedCOOKernel_512_32<256,
-                                                        4><<<grid, block>>>(
+                                                        4><<<nblks, nthrs>>>(
       graph.num_rels, attention.Ptr(), node_features.Ptr(), weight.Ptr(),
       static_cast<int *>(
           thrust::raw_pointer_cast(graph.num_src_nodes_per_edge_type.data())),
@@ -542,8 +542,8 @@ void HGTForwardImpl(
       residual_num_nnzs_per_relation_device.end(),
       exclusive_scan_residual_num_nnzs_per_relation_device.begin());
 
-  dim3 block_residual(256, 1, 1);
-  dim3 grid_residual(
+  const dim3 nthrs_residual(256, 1, 1);
+  const dim3 nblks_residual(
       residual_exclusive_scan_numBlocks_per_relationship_h
           [residual_exclusive_scan_numBlocks_per_relationship_h.size() - 1],
       1, 1);
@@ -553,7 +553,7 @@ void HGTForwardImpl(
       std::chrono::high_resolution_clock::now();
   HET_HGTExperimentalEdgeAttentionResidueCSR<256, 4,
                                              NUM_EDGES_TO_PROCESS_PER_BLOCK>
-      <<<grid_residual, block_residual>>>(
+      <<<nblks_residual, nthrs_residual>>>(
           graph.csr.num_rels, graph.csr.num_rows, attention.Ptr(),
           node_features.Ptr(), weight.Ptr(),
           static_cast<int *>(thrust::raw_pointer_cast(

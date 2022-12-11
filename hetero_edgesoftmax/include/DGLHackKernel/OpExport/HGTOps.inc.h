@@ -78,6 +78,14 @@ void _full_graph_message_mean_aggregation(
   // }
 
   // Configure kernel launch parameters.
+  // TODO: Type 2 Schedule:
+  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // head -> threadIdx.y
+  // node -> blockIdx.y
+  // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
+  // threadIdx.x and threadIdx.y and only this pair is exchanged compared with
+  // original seastar schedule to allow reduction within the warp, i.e., along
+  // x-axis
   int nthrs_x = SeastarFindNumThreads(num_heads, 64);
   int nthrs_y = SeastarFindNumThreads(
       gdata.message_out_dim,
@@ -176,6 +184,12 @@ void _full_graph_edge_softmax_ops(
   // Configure kernel launch parameters. From _gatExpLeakyReluSumKernel
   // configurations in
   // HET::TorchExport::RGCN::FwProp::IntegratedCSR::_FusedKernelImpl
+
+  // Type 1 Schedule:
+  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
+  // head -> blockIdx.x * blockDim.x + threadIdx.x;
+  // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
+
   int nthrs_x = 1;
   int nthrs_y = 32;
   int nblks_x = (num_heads + nthrs_x - 1) / (nthrs_x);
@@ -440,6 +454,11 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
                              // whereas each head gets message_src_xlen //
                              // num_heads number of elements
   int64_t outcsr_num_rows = outcsr_rowptr.numel() - 1;
+  // Type 2 Schedule:
+  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // head -> threadIdx.y
+  // node -> blockIdx.y
+  // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
   int nblks_x = 1;
   int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
   const dim3 nthrs(nthrs_x, nthrs_y);
@@ -512,6 +531,11 @@ void _full_graph_message_mean_aggregation(
   }
 
   // kernel parameter configurations
+  // TODO: Type 2 Schedule:
+  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // head -> threadIdx.y
+  // node -> blockIdx.y
+  // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
   int nthrs_x = SeastarFindNumThreads(num_heads, 64);
   int nthrs_y = SeastarFindNumThreads(
       gdata.message_src_xlen,
@@ -607,6 +631,14 @@ void _full_graph_edge_softmax_ops(
   }
 
   // preparing kernel launch configuration
+  // TODO: Type 2 Schedule:
+  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // head -> threadIdx.y
+  // node -> blockIdx.y
+  // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
+  // threadIdx.x and threadIdx.y and only this pair is exchanged compared with
+  // original seastar schedule to allow reduction within the warp, i.e., along
+  // x-axis
   int nthrs_x = SeastarFindNumThreads(num_heads, 64);
   int nthrs_y = SeastarFindNumThreads(
       gdata.message_src_xlen,
@@ -642,6 +674,9 @@ void full_graph_edge_softmax_ops(
       normalized_attn_score, out, gradout, mu, grad_attn_score, grad_mu);
 }
 
+// TODO: this function is not exported yet. Merge this with the
+// full_graph_edge_softmax_ops API with an additional integer indicating the
+// template int MuAppliedAttnScoreSwitch
 void full_graph_edge_softmax_only_accumu_stage_ops(
     at::Tensor& outcsr_row_ptr, at::Tensor& outcsr_col_idx,
     at::Tensor& outcsr_eids, at::Tensor& outcsr_reltypes, at::Tensor& message,
