@@ -200,7 +200,7 @@ class HET_HGTLayerHetero(nn.Module):
         #     )
 
         if self.hgt_fused_attn_score_flag:
-            attn_score = B.hgt_full_graph_hetero_attention_ops_csr(
+            attn_score = B.hgt_full_graph_hetero_attention_ops_coo(
                 G, self.relation_att, k, q
             )  # shape (num_edges, n_heads)
         else:

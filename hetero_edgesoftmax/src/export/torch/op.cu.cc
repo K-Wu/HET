@@ -82,15 +82,21 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
   m.def("hgt_full_graph_message_mean_aggregation_csr",
         HGT::FwProp::IntegratedCSR::full_graph_message_mean_aggregation);
   m.def("backward_hgt_full_graph_hetero_attention_ops_csr",
-        HGT::BckProp::IntegratedCSR::full_graph_hetero_attention_ops);
-  m.def("hgt_full_graph_hetero_attention_ops_csr",
-        HGT::FwProp::IntegratedCSR::full_graph_hetero_attention_ops);
+        HGT::BckProp::IntegratedCSR::
+            _unsupported_full_graph_hetero_attention_ops);
+  m.def(
+      "hgt_full_graph_hetero_attention_ops_coo",
+      HGT::FwProp::SeparateCOO::EdgeParallel::full_graph_hetero_attention_ops);
   m.def("hgt_full_graph_edge_softmax_ops_csr",
         HGT::FwProp::IntegratedCSR::full_graph_edge_softmax_ops);
   m.def("hgt_full_graph_edge_softmax_ops_separate_coo",
-        HGT::FwProp::full_graph_edge_softmax_ops_separate_coo);
+        HGT::FwProp::SeparateCOO::EdgeParallel::full_graph_edge_softmax_ops);
   m.def("backward_hgt_full_graph_edge_softmax_ops_csr",
         HGT::BckProp::IntegratedCSR::full_graph_edge_softmax_ops);
+  m.def("backward_hgt_full_graph_enorm_to_unnormalized_attn_score_csr",
+        HGT::BckProp::IntegratedCSR::
+            full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore<int64_t,
+                                                                  float>);
   m.def("hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo",
         HGT::FwProp::SeparateCOO::EdgeParallel::
             FullGraphFusedMessageCalcAndMeanAggregation);

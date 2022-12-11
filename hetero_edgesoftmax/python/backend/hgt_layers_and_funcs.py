@@ -8,45 +8,40 @@ from ..kernels import K
 class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
     @staticmethod
     def forward(
-        ctx,
-        row_ptr,
-        col_idx,
-        eids,
-        reltypes,
-        transposed_row_ptr,
-        transposed_col_idx,
-        transposed_eids,
-        transposed_reltypes,
-        weight,
+        separate_coo_row_idx,
+        separate_coo_col_idx,
+        separate_coo_eids,
+        separate_coo_relptrs,
         applied_klinear_node_features,
         applied_qlinear_node_features,
-        ret,
+        attn_score_weight,
+        edge_norm,
+        unnormalized_attn_score,
     ):
 
         ctx.save_for_backward(
-            row_ptr,
-            col_idx,
-            eids,
-            reltypes,
-            transposed_row_ptr,
-            transposed_col_idx,
-            transposed_eids,
-            transposed_reltypes,
-            weight,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_coo_eids,
+            separate_coo_relptrs,
             applied_klinear_node_features,
             applied_qlinear_node_features,
+            attn_score_weight,
+            edge_norm,
+            unnormalized_attn_score,
         )
-        K.hgt_full_graph_hetero_attention_ops_csr(
-            row_ptr,
-            col_idx,
-            eids,
-            reltypes,
-            weight,
+        K.hgt_full_graph_hetero_attention_ops_coo(
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_coo_eids,
+            separate_coo_relptrs,
             applied_klinear_node_features,
             applied_qlinear_node_features,
-            ret,
+            attn_score_weight,
+            edge_norm,
+            unnormalized_attn_score,
         )
-        return ret
+        return unnormalized_attn_score
 
     @staticmethod
     def backward(ctx, gradout):
@@ -71,7 +66,7 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
         grad_q = th.zeros_like(
             applied_qlinear_node_features, memory_format=th.contiguous_format
         )
-        K.backward_hgt_full_graph_hetero_attention_ops_csr(
+        K.backward_hgt_full_graph_hetero_attention_ops_coo(
             transposed_row_ptr,
             transposed_col_idx,
             transposed_eids,
@@ -165,7 +160,7 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
 #         # fmt: on
 
 
-def hgt_full_graph_hetero_attention_ops_csr(
+def hgt_full_graph_hetero_attention_ops_coo(
     graph, weight, applied_klinear_node_features, applied_qlinear_node_features
 ):
     raise NotImplementedError("C++ kernel not done yet")
@@ -187,18 +182,15 @@ def hgt_full_graph_hetero_attention_ops_csr(
         requires_grad=True,
     )
     return HGTFullGraphHeteroAttentionOps.apply(
-        row_ptr,
-        col_idx,
-        eids,
-        reltypes,
-        transposed_row_ptr,
-        transposed_col_idx,
-        transposed_eids,
-        transposed_reltypes,
-        weight,
+        separate_coo_row_idx,
+        separate_coo_col_idx,
+        separate_coo_eids,
+        separate_coo_relptrs,
         applied_klinear_node_features,
         applied_qlinear_node_features,
-        ret,
+        attn_score_weight,
+        edge_norm,
+        unnormalized_attn_score,
     )
 
 
@@ -243,11 +235,11 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
         incsr_row_ptr,
         incsr_col_idx,
         incsr_eids,
+        incsr_reltypes,
         separate_coo_relptrs,
         separate_coo_row_indices,
         separate_coo_col_indices,
         separate_coo_eids,
-        incsr_reltypes,
         message_generation_weights,
         inputs,
         # relation_pri,
@@ -295,6 +287,26 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             # mu,
             new_h,
         )
+
+        ctx.save_for_backward(
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            separate_coo_relptrs,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            separate_coo_eids,
+            message_generation_weights,
+            inputs,
+            # relation_pri,
+            unnormalized_attn_score,
+            edgesoftmax_sum_per_node,
+            mu,
+            mu_softmax_applied_unnormalized_attn_score,
+            normalized_attn_score,
+            new_h,
+        )
         return new_h
 
     # mere fusing of the original rgnn_relational_matmul and hgt_full_graph_edge_softmax_and_mean_aggregation_csr for now
@@ -303,63 +315,96 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
         ctx,
         gradout,  # delta out node feature
     ):
-        raise NotImplementedError("C++ kernel not done yet")
-        input_num_head_one_flag = ctx.input_num_head_one_flag
+        # input_num_head_one_flag = ctx.input_num_head_one_flag
+
+        (
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            separate_coo_relptrs,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            separate_coo_eids,
+            message_generation_weights,
+            inputs,
+            # relation_pri,
+            unnormalized_attn_score,
+            edgesoftmax_sum_per_node,
+            mu,
+            mu_softmax_applied_unnormalized_attn_score,
+            normalized_attn_score,
+            new_h,
+        ) = ctx.saved_tensors
+
         grad_message_generation_weight = th.zeros_like(
             message_generation_weights, memory_format=th.contiguous_format
         )
         grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
-        K.backward_rgnn_relational_matmul_ac_gather_scatter_list_identical(
-            separate_coo_relptrs,
-            separate_coo_eids,
-            th.transpose(weights, 2, 3).contiguous(),
-            inputs,
-            gradout.contiguous(),
-            grad_input,
-            grad_message_generation_weight,
-            input_num_head_one_flag,
+
+        grad_normalized_attn_score = th.zeros_like(
+            normalized_attn_score, memory_format=th.contiguous_format
         )
 
-        grad_message = th.zeros_like(
-            message_per_edge, memory_format=th.contiguous_format
-        )
-
-        # FIXME: unique_srcs_and_dests_rel_ptr and unique_srcs_and_dests_node_indices are not used in the backward pass but used in forward pass, check if there is similar issue in the original routine
-        K.backward_hgt_full_graph_message_mean_aggregation_csr(
-            outcsr_row_ptr,
-            outcsr_col_idx,
-            outcsr_eids,
-            outcsr_reltypes,
-            edgesoftmax_sum_per_node,
-            normalized_attn_score,
-            gradout,
-            grad_message,
-        )
-
-        grad_attn_score = th.zeros_like(
+        grad_unnormalized_attn_score = th.zeros_like(
             unnormalized_attn_score, memory_format=th.contiguous_format
         )
         grad_mu = th.zeros_like(mu, memory_format=th.contiguous_format)
-        K.backward_hgt_full_graph_edge_softmax_ops_csr(
-            outcsr_row_ptr,
-            outcsr_col_idx,
-            outcsr_eids,
-            outcsr_reltypes,
-            message_per_edge,
-            unnormalized_attn_score,
+
+        K.hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo(
+            separate_coo_relptrs,
+            separate_coo_eids,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            inputs,
+            gradout,
+            th.transpose(message_generation_weights, 2, 3).contiguous(),
             normalized_attn_score,
             new_h,
+            grad_input,
+            grad_input,
+            grad_message_generation_weight,
+            grad_normalized_attn_score,
             gradout,
+        )
+
+        K.backward_hgt_full_graph_enorm_to_unnormalized_attn_score_csr(
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            unnormalized_attn_score,
+            normalized_attn_score,
+            grad_normalized_attn_score,
             mu,
-            grad_attn_score,
+            grad_unnormalized_attn_score,
             grad_mu,
+        )
+
+        return (
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            grad_message_generation_weight,
+            grad_input,
+            grad_unnormalized_attn_score,
+            False,
+            grad_mu,
+            False,
+            False,
+            False,
         )
 
 
 def hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
     separate_coo_relptrs,
-    selarate_coo_row_idx,
-    selarate_coo_col_idx,
+    separate_coo_row_idx,
+    separate_coo_col_idx,
     separate_coo_eids,
     relation_meg_weight,
     inputs,
@@ -399,11 +444,11 @@ def hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
         incsr_row_ptr,
         incsr_col_idx,
         incsr_eids,
-        separate_coo_relptrs,
-        selarate_coo_row_idx,
-        selarate_coo_col_idx,
-        separate_coo_eids,
         incsr_reltypes,
+        separate_coo_relptrs,
+        separate_coo_row_idx,
+        separate_coo_col_idx,
+        separate_coo_eids,
         relation_meg_weight,
         inputs,
         unnormalized_attn_score,

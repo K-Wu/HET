@@ -6,6 +6,8 @@
 #include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.h"
 #include "EdgeSoftmax_1/EdgeSoftmaxCSR.h"
 
+#include "HGTOps.inc.h"
+
 #include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
 
@@ -15,6 +17,20 @@ namespace HGT {
 namespace FwProp {
 namespace SeparateCOO {
 namespace EdgeParallel {
+void full_graph_edge_softmax_ops(
+    at::Tensor& row_indices, at::Tensor& col_idx, at::Tensor& eids,
+    at::Tensor& reltypes_ptr, at::Tensor& unnormalized_attn_score,
+    at::Tensor& mu, at::Tensor& edgesoftmax_sum_per_node,
+    at::Tensor& mu_softmax_applied_unnormalized_attn_score,
+    at::Tensor& normalized_attn_score) {
+  // calling the partial specialized version of _full_graph_edge_softmax_ops
+  // that does both stages, i.e., MuAppliedAttnScoreSwitch == 2
+  HET::TorchExport::HGT::FwProp::_full_graph_edge_softmax_ops<int64_t, float, 3,
+                                                              true>(
+      row_indices, col_idx, eids, reltypes_ptr, unnormalized_attn_score, mu,
+      edgesoftmax_sum_per_node, mu_softmax_applied_unnormalized_attn_score,
+      normalized_attn_score);
+}
 // adapted from HET::TorchExport::RGCN::FwProp::Layer1_SeparateCOO
 void FullGraphFusedMessageCalcAndMeanAggregation(
     at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_eids,
@@ -71,19 +87,86 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
               dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
           num_relations, num_input_dim, num_output_dim, num_heads);
 }
+
+// based on
+// HGT::BckProp::SeparateCOO::EdgeParallel::FullGraphFusedMessageCalcAndMeanAggregation,
+// i.e., wrapper function of
+// HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp
+void full_graph_hetero_attention_ops(
+    at::Tensor& separate_coo_row_idx, at::Tensor& separate_coo_col_idx,
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_relptrs,
+    at::Tensor& applied_klinear_node_features,
+    at::Tensor& applied_qlinear_node_features, at::Tensor& attn_score_weight,
+    at::Tensor& edge_norm, at::Tensor& unnormalized_attn_score) {
+  // we need to implement a fused kernel based on W*t via RGNN relational_matmul
+  // and RGNN inner_product
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
+  constexpr int THREADING_BLOCK_SIZE = 16;
+  constexpr bool COARSEN_FACTOR_2_FLAG = true;
+  constexpr int WORK_BLOCK_SIZE =
+      COARSEN_FACTOR_2_FLAG ? (THREADING_BLOCK_SIZE * 2) : THREADING_BLOCK_SIZE;
+
+  const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
+  const int64_t num_heads = attn_score_weight.size(1);
+  const int64_t num_input_dim = attn_score_weight.size(2);
+  const int64_t num_output_dim = attn_score_weight.size(3);
+  int64_t num_edges = separate_coo_eids.numel();
+  int grid_dim_y =
+      std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE), (int64_t)4096);
+  at::Tensor separate_coo_relptrs_cpu_contiguous =
+      separate_coo_relptrs.cpu().contiguous();
+  std::vector<int> num_blocks_assignment_for_same_relation_vect,
+      num_blocks_assignment_for_all_prev_relation_vect;
+  std::tie(num_blocks_assignment_for_same_relation_vect,
+           num_blocks_assignment_for_all_prev_relation_vect) =
+      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
+          grid_dim_y, num_relations, WORK_BLOCK_SIZE,
+          separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
+          separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
+              num_relations + 1);
+  grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
+
+  thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
+      num_blocks_assignment_for_same_relation_vect.begin(),
+      num_blocks_assignment_for_same_relation_vect.end());
+  thrust::device_vector<int>
+      dev_num_blocks_assignment_for_all_prev_relation_vect(
+          num_blocks_assignment_for_all_prev_relation_vect.begin(),
+          num_blocks_assignment_for_all_prev_relation_vect.end());
+  // NB: my shmem sgemm matmul scheme
+  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
+                   grid_dim_y, num_heads);
+  const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
+
+  HET_HGTFusedAttnScoreFwProp<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE,
+                              int64_t, int64_t*>
+      <<<nblks_outer_product, nthrs, 0, stream>>>(
+          applied_klinear_node_features.data_ptr<float>(),
+          applied_qlinear_node_features.data_ptr<float>(),
+          attn_score_weight.data_ptr<float>(), edge_norm.data_ptr<float>(),
+          unnormalized_attn_score.data_ptr<float>(),
+          separate_coo_row_idx.data_ptr<int64_t>(),
+          separate_coo_col_idx.data_ptr<int64_t>(),
+          separate_coo_eids.data_ptr<int64_t>(),
+          separate_coo_relptrs.data_ptr<int64_t>(),
+          thrust::raw_pointer_cast(
+              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+          num_relations, num_input_dim, num_output_dim, num_heads);
+}
 }  // namespace EdgeParallel
 }  // namespace SeparateCOO
 
-namespace IntegratedCSR {
-namespace EdgeParallel {
-void full_graph_message_mean_aggregation() {
-  // We may use HET_HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation
-  // in hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTForwardKernels.cu.h
-  assert(0 && "Not implemented yet");
-}
-void full_graph_edge_softmax_ops() { assert(0 && "Not implemented yet"); }
-}  // namespace EdgeParallel
-}  // namespace IntegratedCSR
+// namespace IntegratedCSR {
+// namespace EdgeParallel {
+// void full_graph_message_mean_aggregation() {
+//   // We may use
+//   HET_HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation
+//   // in hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTForwardKernels.cu.h
+//   assert(0 && "Not implemented yet");
+// }
+// void full_graph_edge_softmax_ops() { assert(0 && "Not implemented yet"); }
+// }  // namespace EdgeParallel
+// }  // namespace IntegratedCSR
 }  // namespace FwProp
 namespace BckProp {
 namespace SeparateCOO {
@@ -130,6 +213,7 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
           num_blocks_assignment_for_all_prev_relation_vect.end());
   // NB: my shmem sgemm matmul scheme
+  // FIXME: seems like blockIdx.x should be num_input_dim
   const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, num_heads);
   const dim3 nblks_outer_product(
@@ -168,14 +252,14 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
 
 }  // namespace EdgeParallel
 }  // namespace SeparateCOO
-namespace IntegratedCSR {
-namespace EdgeParallel {
-void full_graph_message_mean_aggregation() {
-  assert(0 && "Not implemented yet");
-}
-void full_graph_edge_softmax_ops() { assert(0 && "Not implemented yet"); }
-}  // namespace EdgeParallel
-}  // namespace IntegratedCSR
+// namespace IntegratedCSR {
+// namespace EdgeParallel {
+// void full_graph_message_mean_aggregation() {
+//   assert(0 && "Not implemented yet");
+// }
+// void full_graph_edge_softmax_ops() { assert(0 && "Not implemented yet"); }
+// }  // namespace EdgeParallel
+// }  // namespace IntegratedCSR
 }  // namespace BckProp
 
 }  // namespace HGT

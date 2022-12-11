@@ -43,6 +43,183 @@ struct BackwardHGTMessageData<Idx, DType, 0> {
   // DType* normalized_attn_score{nullptr};
 };
 
+template <typename Idx, typename DType>
+struct BackwardHGTMessageData<Idx, DType, 0> {
+  Idx num_heads{0};
+  Idx message_src_xlen{0};
+  Idx* eids;
+  DType *grad_message_src{nullptr}, *edgesoftmax_sum_per_node{nullptr},
+      *grad_out{nullptr};
+  DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
+  // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
+  // DType* normalized_attn_score{nullptr};
+};
+
+template <typename Idx, typename DType>
+struct BackwardNormToUnNormalizedAttnScoreData {
+  Idx num_heads{0};
+  Idx* eids;
+  DType *grad_normalized_attn_score{nullptr}, *normalized_attn_score{nullptr},
+      *grad_mu{nullptr}, *mu{nullptr};
+  DType *unnormalized_attn_score{nullptr},
+      *grad_unnormalized_attn_score{nullptr};
+};
+
+// based on HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel, as
+// normalized_attn_score is present, this is similar to the case where
+// FwdOutputMuAppliedAttnScoreSwitch == 2 denote aj as attn_score of edge j,
+// mu_j as the corresponding mu of edge j, Sj as the normalized attn score. In
+// other words, grad_normalized_attn_score is delta S delta a_j = (-Sum_{i,
+// including i==j} Si*Sj*deltaSi + Sj * deltaSj) * mu_j. delta mu_j = (-Sum_{i,
+// including i==j} Si*Sj*deltaSi + Sj * deltaSj) * a_j. We first calculate
+// -Sum_{incoming edges} (Si * delta Si) at each destination node, and then
+// iterate every edge
+// NB: Compact as of node is irrelevant here as the data are edge-wise
+template <typename Idx, typename DType,  // bool CompactAsOfNodeFlag,
+          bool RelationalFlag, bool ETypeRelPtrFlag>
+__global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
+    BackwardNormToUnNormalizedAttnScoreData<Idx, DType> gdata,
+    const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
+    int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+  // if constexpr (CompactAsOfNodeFlag) {
+  //   CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(CompactAsOfNodeFlag,
+  //                                     "not implemented yet");
+  // }
+  Idx num_heads = gdata.num_heads;  // originally e_xlen
+  for (Idx src_vid = blockIdx.y * blockDim.y + threadIdx.y; src_vid < num_rows;
+       src_vid += gridDim.y * blockDim.y) {
+    Idx start_off = row_offsets[src_vid];
+    Idx end_off = row_offsets[src_vid + 1];
+    for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
+         head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
+      // DType s = 0.;
+      // Idx message_src_offset = -1;
+      // Idx message_src_idx = -1;
+      // if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+      //   // in this case, message_src_offset is the same regardless of which
+      //   // outgoing edge we deal with
+      //   message_src_offset = src_vid * gdata.message_src_xlen +
+      //                        head_idx * hidden_xlen + feat_idx;
+      //   message_src_idx =
+      //       (src_vid * num_heads + head_idx) * hidden_xlen + feat_idx;
+      // }
+
+      DType sum_incoming_edges_product_softmax_score = 0.;
+      for (int stage_idx = 0; stage_idx < 2; stage_idx += 1) {
+        // stage 1 accumulates the sum of Si * delta Si
+        // stage 2 caclulate delta a and delta mu for this edge
+        for (Idx e = start_off; e < end_off; ++e) {
+          Idx edge_offset = gdata.eids[e] * num_heads + head_idx;
+          Idx eid = gdata.eids[e];
+          Idx dst_vid = column_indices[e];
+          // Idx edgesoftmax_sum_per_node_idx = -1;
+          // Idx dst_vid_relational = -1;
+          Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
+                          // !RelationalFlag, the default value is set as 0
+          if constexpr (RelationalFlag) {
+            if constexpr (ETypeRelPtrFlag) {
+              etype = binary_search(num_relations, etypes, e);
+            } else {
+              etype = etypes[e];
+            }
+          }
+          // Compact as of node is irrelevant here as the data are edge-wise
+          // if constexpr (!CompactAsOfNodeFlag) {
+          // in this case, message_src_offset
+          // and message_src_idx are related to edge id, regardless of the
+          // type of the edge
+          // edgesoftmax_sum_per_node_idx is still one (num_heads,) vector per
+          // destination node
+          // message_src_offset =
+          //     eid * gdata.message_src_xlen + head_idx * hidden_xlen +
+          //     feat_idx;
+          // edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
+          // message_src_idx =
+          //     (eid * num_heads + head_idx) * hidden_xlen + feat_idx;
+          //} else {  // CompactAsOfNodeFlag
+          //   if constexpr (!RelationalFlag) {
+          //     edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
+          //   } else {
+          //     // in this case, edgesoftmax_sum_per_node_idx (sum's index) is
+          //     // related to (relation, unique node index) message_src_idx is
+          //     // related to (relation, unique node index) message_src_offset
+          //     is
+          //     // related to (relation, unique node index) Idx etype =
+          //     etypes[e];
+
+          //     if constexpr (ETypeRelPtrFlag) {
+          //       etype = binary_search(num_relations, etypes, e);
+          //     } else {
+          //       etype = etypes[e];
+          //     }
+          //     // dst_vid_relational =
+          //     find_relational_compact_as_of_node_index(
+          //     //    etype, dst_vid, unique_srcs_and_dests_rel_ptr,
+          //     //    unique_srcs_and_dests_node_indices);
+          //     // edgesoftmax_sum_per_node_idx =
+          //     //     dst_vid_relational * num_heads + head_idx;
+          //     edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
+          //     Idx src_vid_relational =
+          //     find_relational_compact_as_of_node_index(
+          //         etype, src_vid, unique_srcs_and_dests_rel_ptr,
+          //         unique_srcs_and_dests_node_indices);
+          //     message_src_idx =
+          //         (src_vid_relational * num_heads + head_idx) * hidden_xlen +
+          //         feat_idx;
+          //     message_src_offset = src_vid_relational *
+          //     gdata.message_src_xlen +
+          //                          head_idx * hidden_xlen + feat_idx;
+          //   }
+          // }
+          // Idx dst_out_offset = dst_vid * gdata.message_src_xlen +
+          //                      head_idx * hidden_xlen + feat_idx;
+
+          DType mu;
+          if constexpr (RelationalFlag) {
+            mu = gdata.mu[etype * num_heads + head_idx];
+          } else {
+            mu = gdata.mu[head_idx];
+          }
+          if (stage_idx == 0) {
+            sum_incoming_edges_product_softmax_score +=
+                gdata.grad_normalized_attn_score[edge_offset] *
+                gdata.normalized_attn_score[edge_offset];
+          } else {
+            // delta a_j = (-Sum_{i, including i==j} Si*Sj*deltaSi + Sj *
+            // deltaSj) * mu_j.
+            // delta mu_j = (-Sum_{i, including i==j} Si*Sj*deltaSi + Sj *
+            // deltaSj) * a_j.
+            DType normalized_attn_score =
+                gdata.normalized_attn_score[edge_offset];
+
+            DType delta_a_for_curr_edge =
+                (-sum_incoming_edges_product_softmax_score +
+                 gdata.grad_normalized_attn_score[edge_offset]) *
+                normalized_attn_score * mu;
+            DType delta_mu_for_curr_edge =
+                (-sum_incoming_edges_product_softmax_score +
+                 gdata.grad_normalized_attn_score[edge_offset]) *
+                normalized_attn_score * unnormalized_attn_score[edge_offset];
+
+            // if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
+            gdata.grad_unnormalized_attn_score[edge_offset] =
+                delta_a_for_curr_edge;
+            //}
+
+            atomicAdd(gdata.grad_mu + etype * num_heads + head_idx,
+                      delta_a_for_curr_edge);
+          }
+        }
+        // if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+        //   atomicAdd(gdata.grad_attn_score + (src_vid * num_heads + head_idx),
+        //   s);
+        // }
+      }
+    }
+  }
+}
+
 // based on _fusedGatBackwardGradFeatSrc, as it is to calculate the gradient of
 // message
 // NB: notice how mu is involved in the term
@@ -76,7 +253,8 @@ HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
           Idx eid = gdata.eids[e];
           Idx dst_vid = column_indices[e];
           Idx dst_vid_relational = -1;
-          Idx etype = -1;
+          Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
+                          // !RelationalFlag, the default value is set as 0
           if constexpr (!CompactAsOfNodeFlag) {
             // in this case, message_src_offset, er_idx and el_idx are related
             // to edge id, regardless of the type of the edge
@@ -244,7 +422,8 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
           Idx dst_vid = column_indices[e];
           Idx edgesoftmax_sum_per_node_idx = -1;
           // Idx dst_vid_relational = -1;
-          Idx etype = -1;
+          Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
+                          // !RelationalFlag, the default value is set as 0
           if constexpr (!CompactAsOfNodeFlag) {
             // in this case, message_src_offset
             // and message_src_idx are related to edge id, regardless of the
@@ -391,7 +570,8 @@ __global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
           Idx dst_vid = column_indices[e];
           Idx edgesoftmax_sum_per_node_idx = -1;
           Idx dst_vid_relational = -1;
-          Idx etype = -1;
+          Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
+                          // !RelationalFlag, the default value is set as 0
           if constexpr (!CompactAsOfNodeFlag) {
             // in this case, message_src_offset
             // and message_src_idx are related to edge id, regardless of the

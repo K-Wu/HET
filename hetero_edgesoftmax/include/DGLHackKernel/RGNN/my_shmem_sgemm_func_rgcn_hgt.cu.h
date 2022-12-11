@@ -14,12 +14,19 @@
 // for each edge, grad enorm = message * grad_output = input *
 // grad_input_from_this_edge which we can compute  by the way when calculating
 // delta node feat
+// NB: this do grad norm is further generalized to be extended to do attention
+// score in the fly as both are inner product inner_product_other_term is
+// input_node_feat for grad_norm, and input_node_term for attention_score
+// calculation DoInnerProductSwitch 0: no inner product, 1: do inner product, 2:
+// do inner product and do no C inner_product is grad_edge_norm or
+// unnormalized_attn_score
 template <bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
           typename IdxPtr, bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
-          bool DoGradNormFlag>
+          int DoInnerProductSwitch,
+          bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag>
 __device__ __forceinline__ void _simplified_basic_MatMulKernel(
-    float* A, float* B, float* C, float* edge_norm, float* grad_edge_norm,
-    float* input_node_feat_for_grad_norm, IdxPtr separate_coo_row_idx,
+    float* A, float* B, float* C, float* edge_norm, float* inner_product,
+    float* input_node_feat_for_inner_product, IdxPtr separate_coo_row_idx,
     IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids, Idx idx_relation,
     Idx numARows, Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
     Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, Idx num_heads) {
@@ -37,7 +44,7 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
 
   // Block row and column
   // if constexpr(!DoHalfGradNormFlag){
-  //   assert(grad_edge_norm == nullptr);
+  //   assert(inner_product == nullptr);
   // }
   if constexpr (!HGT_INSTEAD_OF_RGCN_FLAG) {
     // assuming this case is RGCN and there is no multiple head
@@ -49,6 +56,7 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
   IdxPtr A_gather_list;
   IdxPtr C_scatter_list;
   IdxPtr B_gather_list;
+  IdxPtr inner_product_term_gather_list;
   if constexpr (OuterProductFlag) {
     // A is input feature, B is gradient output feature
     A_gather_list = separate_coo_row_idx;
@@ -56,6 +64,13 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
   } else {
     A_gather_list = separate_coo_row_idx;
     C_scatter_list = separate_coo_col_idx;
+  }
+  if constexpr (DoInnerProductSwitch > 0) {
+    if constexpr (InnerProductGatherListNodeInsteadOfEdge) {
+      inner_product_term_gather_list = separate_coo_col_idx;
+    } else {
+      inner_product_term_gather_list = separate_coo_eids;
+    }
   }
   // Idx blockRow = blockIdx.y - blockIdxAlongRowBeg;
   Idx blockFeat = blockIdx.x;  // when OuterProductFlag==True, it is in [0,
@@ -139,9 +154,14 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
                           num_A_cols * num_heads +
                       num_A_cols * idx_head +
                       (blockRow * SHMEM_BLOCK_SIZE + thIdxFeat)] *
-                        edge_norm[separate_coo_eids[thIdxRow +
-                                                    (m)*SHMEM_BLOCK_SIZE +
-                                                    blockRowJobEntryBeg]]
+                        (NoEdgeNormFlag
+                             ? 1.0f
+                             : edge_norm
+                                   [separate_coo_eids[thIdxRow +
+                                                      (m)*SHMEM_BLOCK_SIZE +
+                                                      blockRowJobEntryBeg] *
+                                        num_heads +
+                                    idx_head])
                   : 0.0f;
           Bs[thIdxRow][thIdxFeat] =
               ((m)*SHMEM_BLOCK_SIZE + thIdxRow + blockRowJobEntryBeg <
@@ -162,9 +182,14 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
                           num_A_cols * num_heads +
                       num_A_cols * idx_head +
                       (thIdxFeat + m * SHMEM_BLOCK_SIZE)] *
-                        edge_norm[separate_coo_eids
-                                      [thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
-                                       blockRowJobEntryBeg]]
+                        (NoEdgeNormFlag
+                             ? 1.0f
+                             : edge_norm[separate_coo_eids
+                                                 [thIdxRow +
+                                                  blockRow * SHMEM_BLOCK_SIZE +
+                                                  blockRowJobEntryBeg] *
+                                             num_heads +
+                                         idx_head])
                   : 0.0f;
           // if constexpr (HGT_INSTEAD_OF_RGCN_FLAG) {
           //   As[thIdxRow][thIdxFeat] *=
@@ -272,14 +297,16 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
         bool WriteCInRangeFlag =
             blockRow * SHMEM_BLOCK_SIZE + thIdxRow < num_A_cols &&
             blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols;
-
-        if (WriteCInRangeFlag) {
-          // NB: this indexing scheme works for both cases whether num_head is 1
-          atomicAdd(&C[idx_head * num_A_cols /*A is transposed in the fly*/ *
-                           num_B_cols +
-                       (blockRow * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols +
-                       blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat],
-                    Cvalue);
+        if constexpr (DoInnerProductSwitch <= 1) {
+          if (WriteCInRangeFlag) {
+            // NB: this indexing scheme works for both cases whether num_head is
+            // 1
+            atomicAdd(&C[idx_head * num_A_cols /*A is transposed in the fly*/ *
+                             num_B_cols +
+                         (blockRow * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols +
+                         blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat],
+                      Cvalue);
+          }
         }
       } else {
         bool WriteCInRangeFlag =
@@ -302,56 +329,59 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
         //         num_heads, idx_relation, mLoopBeg, mLoopEnd, Cvalue);
         //   }
         // }
-        if (WriteCInRangeFlag) {
-          // print GetRowMajorElement arguments
-          // if constexpr (!OuterProductFlag && !GatherAFlag &&
-          // !AdvancedGatherAFlag && !GatherBFlag && !AdvancedGatherBFlag &&
-          // ScatterCFlag && !AdvancedScatterCFlag && AtomicUpdateFlag)
-          // if (ScatterCFlag && !AdvancedScatterCFlag)
-          // printf("C %p C_scatter_list %p unique_srcs_and_dests_rel_ptr %p "
-          //        "unique_srcs_and_dests_node_indices %p idx_relation %ld "
-          //        "idxRow %ld scatter_list[idxRow] %ld idxFeat %ld idx_head
-          //        %ld num_heads %ld " "num_B_cols %ld, numARows %ld\n", C,
-          //        C_scatter_list, unique_srcs_and_dests_rel_ptr,
-          //        unique_srcs_and_dests_node_indices, idx_relation,
-          //        thIdxRow + blockRow * BLOCK_SIZE, C_scatter_list[thIdxRow +
-          //        blockRow * BLOCK_SIZE], blockFeat * BLOCK_SIZE + thIdxFeat,
-          //        idx_head, num_heads, num_B_cols, numARows);
+        if constexpr (DoInnerProductSwitch <= 1) {
+          if (WriteCInRangeFlag) {
+            // print GetRowMajorElement arguments
+            // if constexpr (!OuterProductFlag && !GatherAFlag &&
+            // !AdvancedGatherAFlag && !GatherBFlag && !AdvancedGatherBFlag &&
+            // ScatterCFlag && !AdvancedScatterCFlag && AtomicUpdateFlag)
+            // if (ScatterCFlag && !AdvancedScatterCFlag)
+            // printf("C %p C_scatter_list %p unique_srcs_and_dests_rel_ptr %p "
+            //        "unique_srcs_and_dests_node_indices %p idx_relation %ld "
+            //        "idxRow %ld scatter_list[idxRow] %ld idxFeat %ld idx_head
+            //        %ld num_heads %ld " "num_B_cols %ld, numARows %ld\n", C,
+            //        C_scatter_list, unique_srcs_and_dests_rel_ptr,
+            //        unique_srcs_and_dests_node_indices, idx_relation,
+            //        thIdxRow + blockRow * BLOCK_SIZE, C_scatter_list[thIdxRow
+            //        + blockRow * BLOCK_SIZE], blockFeat * BLOCK_SIZE +
+            //        thIdxFeat, idx_head, num_heads, num_B_cols, numARows);
 
-          atomicAdd(&C[C_scatter_list[thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
-                                      blockRowJobEntryBeg] *
-                           num_B_cols * num_heads +
-                       idx_head * num_B_cols + blockFeat * SHMEM_BLOCK_SIZE +
-                       thIdxFeat],
-                    Cvalue);
-
-          if constexpr (DoGradNormFlag) {
-            // TODO: we may hide the global mem read latency by moving input
-            // node feat load ahead at the cost of more shmem (copy async) or
-            // more registers use
-            atomicAdd(
-                &grad_edge_norm[separate_coo_eids[thIdxRow +
-                                                  blockRow * SHMEM_BLOCK_SIZE +
-                                                  blockRowJobEntryBeg] *
-                                    num_heads +
-                                idx_head],
-                Cvalue *
-                    input_node_feat_for_grad_norm
-                        [C_scatter_list[thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
+            atomicAdd(&C[C_scatter_list[thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
                                         blockRowJobEntryBeg] *
                              num_B_cols * num_heads +
                          idx_head * num_B_cols + blockFeat * SHMEM_BLOCK_SIZE +
-                         thIdxFeat]);
+                         thIdxFeat],
+                      Cvalue);
+
+            if constexpr (DoInnerProductSwitch > 0) {
+              // TODO: we may hide the global mem read latency by moving input
+              // node feat load ahead at the cost of more shmem (copy async) or
+              // more registers use
+              atomicAdd(&inner_product[inner_product_term_gather_list
+                                               [thIdxRow +
+                                                blockRow * SHMEM_BLOCK_SIZE +
+                                                blockRowJobEntryBeg] *
+                                           num_heads +
+                                       idx_head],
+                        Cvalue *
+                            input_node_feat_for_inner_product
+                                [C_scatter_list[thIdxRow +
+                                                blockRow * SHMEM_BLOCK_SIZE +
+                                                blockRowJobEntryBeg] *
+                                     num_B_cols * num_heads +
+                                 idx_head * num_B_cols +
+                                 blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat]);
+            }
+            // atomicAdd(&GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
+            //                               AdvancedScatterCFlag>(
+            //               C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
+            //               unique_srcs_and_dests_node_indices, idx_relation,
+            //               thIdxRow + blockRow * BLOCK_SIZE +
+            //               blockRowJobEntryBeg, C_num_head_one_flag ? 0 :
+            //               idx_head, blockFeat * BLOCK_SIZE + thIdxFeat,
+            //               C_num_head_one_flag ? 1 : num_heads, num_B_cols),
+            //           Cvalue);
           }
-          // atomicAdd(&GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
-          //                               AdvancedScatterCFlag>(
-          //               C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
-          //               unique_srcs_and_dests_node_indices, idx_relation,
-          //               thIdxRow + blockRow * BLOCK_SIZE +
-          //               blockRowJobEntryBeg, C_num_head_one_flag ? 0 :
-          //               idx_head, blockFeat * BLOCK_SIZE + thIdxFeat,
-          //               C_num_head_one_flag ? 1 : num_heads, num_B_cols),
-          //           Cvalue);
         }
       }
     }
@@ -370,7 +400,7 @@ __global__ void HET_RGCNMatmulNoScatterGatherListFwProp(
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
-                                 false, false, false>(
+                                 false, false, 0, false, false>(
       node_feat_input, &weights[idx_relation * input_dim * output_dim],
       linear_projected_node_feat, edge_norm, nullptr, nullptr,
       separate_coo_row_idx, separate_coo_col_idx, separate_coo_eids,
@@ -395,7 +425,7 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
-                                 false, false, false>(
+                                 false, false, 0, false, false>(
       node_feat_input, delta_linear_projected_node_feat,
       &delta_weights[idx_relation * delta_output_dim * delta_input_dim],
       edge_norm, nullptr, nullptr, separate_coo_row_idx, separate_coo_col_idx,
@@ -422,7 +452,7 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
-                                 false, false, true>(
+                                 false, false, 1, false, false>(
       delta_linear_projected_node_feat,
       &weights_transposed[idx_relation * delta_output_dim * delta_input_dim],
       delta_node_feat_input, edge_norm, grad_edge_norm,
@@ -452,7 +482,7 @@ __global__ void HET_HGTMessageGenerationAndAccumulationFwProp(
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
-                                 true, false, false>(
+                                 true, false, 0, false, false>(
       node_feat_input,
       &weights[idx_relation * num_heads * input_dim * output_dim],
       linear_projected_node_feat, edge_norm, nullptr, nullptr,
@@ -480,7 +510,7 @@ __global__ void HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp(
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
-                                 true, true, false>(
+                                 true, true, 0, false, false>(
       node_feat_input, delta_linear_projected_node_feat,
       &delta_weights[idx_relation * num_heads * input_dim * delta_output_dim],
       edge_norm, nullptr, nullptr, separate_coo_row_idx, separate_coo_col_idx,
@@ -508,7 +538,7 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
-                                 true, false, true>(
+                                 true, false, 1, false, false>(
       delta_linear_projected_node_feat,
       &weights_transposed[idx_relation * num_heads * delta_output_dim *
                           delta_input_dim],
@@ -522,4 +552,33 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
        accum_num_blocks_per_relation[idx_relation]),
       separate_coo_rel_ptrs[idx_relation], delta_output_dim, delta_input_dim,
       num_heads);
+}
+
+template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
+          typename IdxPtr>
+__global__ void HET_HGTFusedAttnScoreFwProp(
+    float* applied_klinear_node_features, float* applied_qlinear_node_features,
+    float* attn_score_weight, float* edge_norm, float* unnormalized_attn_score,
+    IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
+    IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
+    int* accum_num_blocks_per_relation, Idx num_relations,
+    Idx input_dim_per_head, Idx output_dim_per_head, Idx num_heads) {
+  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_relation = binary_search<int, int*>(
+      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
+                                 true, false, 2, false, true>(
+      applied_klinear_node_features,
+      &attn_score_weight[idx_relation * num_heads * output_dim_per_head *
+                         input_dim_per_head],
+      nullptr, edge_norm, unnormalized_attn_score,
+      applied_qlinear_node_features, separate_coo_row_idx, separate_coo_col_idx,
+      separate_coo_eids, idx_relation,
+      separate_coo_rel_ptrs[idx_relation + 1] -
+          separate_coo_rel_ptrs[idx_relation],
+      accum_num_blocks_per_relation[idx_relation],
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
+      separate_coo_rel_ptrs[idx_relation], input_dim_per_head,
+      output_dim_per_head, num_heads);
 }

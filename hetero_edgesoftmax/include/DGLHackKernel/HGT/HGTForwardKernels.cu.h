@@ -657,7 +657,8 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
       Idx feat_off_src = -1;
       Idx edge_id = gdata.eids[eidx];
       // Idx dst_vid_relational = -1;
-      Idx etype = -1;
+      Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
+                      // !RelationalFlag, the default value is set as 0
       DType mu;
       if constexpr (RelationalFlag) {
         if constexpr (ETypeRelPtrFlag) {
