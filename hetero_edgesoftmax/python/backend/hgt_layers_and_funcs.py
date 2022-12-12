@@ -8,6 +8,11 @@ from ..kernels import K
 class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
     @staticmethod
     def forward(
+        ctx,
+        incsr_row_ptr,
+        incsr_col_idx,
+        incsr_eids,
+        incsr_reltypes,
         separate_coo_row_idx,
         separate_coo_col_idx,
         separate_coo_eids,
@@ -15,21 +20,25 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
         applied_klinear_node_features,
         applied_qlinear_node_features,
         attn_score_weight,
-        edge_norm,
-        unnormalized_attn_score,
     ):
-
-        ctx.save_for_backward(
-            separate_coo_row_idx,
-            separate_coo_col_idx,
-            separate_coo_eids,
-            separate_coo_relptrs,
-            applied_klinear_node_features,
-            applied_qlinear_node_features,
-            attn_score_weight,
-            edge_norm,
-            unnormalized_attn_score,
+        unnormalized_attn_score = th.zeros(
+            (
+                incsr_row_ptr.numel() - 1,
+                attn_score_weight.size(2),
+            ),  # weight size (self.num_relations, n_heads, self.d_k, self.d_k)
+            dtype=attn_score_weight.dtype,
+            device=attn_score_weight.device,
+            requires_grad=True,
         )
+
+        # edge_norm = th.zeros_like(unnormalized_attn_score, memory_format=th.contiguous_format)
+        attn_score_inner_product = th.zeros(
+            separate_coo_eids.size(0),
+            applied_klinear_node_features.size(1),
+            applied_klinear_node_features.size(3),
+            dtype=unnormalized_attn_score.dtype,
+            device=unnormalized_attn_score.device,
+        ).contiguous()
         K.hgt_full_graph_hetero_attention_ops_coo(
             separate_coo_row_idx,
             separate_coo_col_idx,
@@ -38,28 +47,48 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             applied_klinear_node_features,
             applied_qlinear_node_features,
             attn_score_weight,
-            edge_norm,
+            attn_score_inner_product,
+            unnormalized_attn_score,
+        )
+
+        ctx.save_for_backward(
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_coo_eids,
+            separate_coo_relptrs,
+            applied_klinear_node_features,
+            applied_qlinear_node_features,
+            attn_score_inner_product,
+            attn_score_weight,
             unnormalized_attn_score,
         )
         return unnormalized_attn_score
 
     @staticmethod
-    def backward(ctx, gradout):
+    def backward(ctx, grad_unnorm_attn_score):
         (
-            row_ptr,
-            col_idx,
-            eids,
-            reltypes,
-            transposed_row_ptr,
-            transposed_col_idx,
-            transposed_eids,
-            transposed_reltypes,
-            weight,
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_coo_eids,
+            separate_coo_relptrs,
             applied_klinear_node_features,
             applied_qlinear_node_features,
+            attn_score_inner_product,
+            attn_score_weight,
+            unnormalized_attn_score,
         ) = ctx.saved_tensors
-        print(weight.numel())
-        grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
+        print(attn_score_weight.numel())
+        grad_attn_weight = th.zeros_like(
+            attn_score_weight, memory_format=th.contiguous_format
+        )
         grad_k = th.zeros_like(
             applied_klinear_node_features, memory_format=th.contiguous_format
         )
@@ -67,21 +96,27 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             applied_qlinear_node_features, memory_format=th.contiguous_format
         )
         K.backward_hgt_full_graph_hetero_attention_ops_coo(
-            transposed_row_ptr,
-            transposed_col_idx,
-            transposed_eids,
-            transposed_reltypes,
-            weight,
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_coo_eids,
+            separate_coo_relptrs,
+            attn_score_weight,
+            th.transpose(attn_score_weight, 2, 3, memory_format=th.contiguous_format),
             applied_klinear_node_features,
             applied_qlinear_node_features,
-            gradout,
-            grad_weight,
+            attn_score_inner_product,
+            grad_unnorm_attn_score,
+            grad_attn_weight,
             grad_k,
             grad_q,
         )
         # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
         # fmt: off
-        return None, None, None, None, None, None, None, None, grad_weight, grad_k, grad_q, None
+        return  None, None, None, None, None, None, None, None,  grad_k, grad_q, grad_attn_weight
         # fmt: on
 
 
@@ -163,34 +198,21 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
 def hgt_full_graph_hetero_attention_ops_coo(
     graph, weight, applied_klinear_node_features, applied_qlinear_node_features
 ):
-    raise NotImplementedError("C++ kernel not done yet")
-    row_ptr = graph["original"]["row_ptr"]
-    col_idx = graph["original"]["col_idx"]
-    eids = graph["original"]["eids"]
-    reltypes = graph["original"]["rel_types"]
-    transposed_row_ptr = graph["transposed"]["row_ptr"]
-    transposed_col_idx = graph["transposed"]["col_idx"]
-    transposed_eids = graph["transposed"]["eids"]
-    transposed_reltypes = graph["transposed"]["rel_types"]
-    ret = th.zeros(
-        (
-            graph["original"]["row_ptr"].numel() - 1,
-            weight.size(2),
-        ),  # weight size (self.num_relations, n_heads, self.d_k, self.d_k)
-        dtype=weight.dtype,
-        device=weight.device,
-        requires_grad=True,
-    )
+    separate_coo_dict = graph.get_separate_coo_original()
+    incsr_dict = graph.get_in_csr()
+
     return HGTFullGraphHeteroAttentionOps.apply(
-        separate_coo_row_idx,
-        separate_coo_col_idx,
-        separate_coo_eids,
-        separate_coo_relptrs,
+        incsr_dict["row_ptr"],
+        incsr_dict["col_idx"],
+        incsr_dict["eids"],
+        incsr_dict["rel_types"],
+        separate_coo_dict["row_idx"],
+        separate_coo_dict["col_idx"],
+        separate_coo_dict["eids"],
+        separate_coo_dict["rel_ptr"],
         applied_klinear_node_features,
         applied_qlinear_node_features,
-        attn_score_weight,
-        edge_norm,
-        unnormalized_attn_score,
+        weight,
     )
 
 
@@ -417,6 +439,8 @@ def hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
     incsr_col_idx = incsr_dict["col_idx"]
     incsr_eids = incsr_dict["eids"]
     incsr_reltypes = incsr_dict["rel_types"]
+
+    # TODO: move tensor creation into the kernel
     new_h = th.zeros(
         graph.get_num_nodes(),
         relation_meg_weight.size(1),

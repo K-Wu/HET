@@ -81,9 +81,9 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
         HGT::BckProp::IntegratedCSR::full_graph_message_mean_aggregation);
   m.def("hgt_full_graph_message_mean_aggregation_csr",
         HGT::FwProp::IntegratedCSR::full_graph_message_mean_aggregation);
-  m.def("backward_hgt_full_graph_hetero_attention_ops_csr",
-        HGT::BckProp::IntegratedCSR::
-            _unsupported_full_graph_hetero_attention_ops);
+  m.def(
+      "backward_hgt_full_graph_hetero_attention_ops_coo",
+      HGT::BckProp::SeparateCOO::EdgeParallel::full_graph_hetero_attention_ops);
   m.def(
       "hgt_full_graph_hetero_attention_ops_coo",
       HGT::FwProp::SeparateCOO::EdgeParallel::full_graph_hetero_attention_ops);

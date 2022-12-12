@@ -507,7 +507,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
         Idx edge_id = gdata.eids[eidx];
         // Idx dst_vid_relational = -1;
         Idx etype = -1;
-        DType mu;
+        DType mu = 1.0;
         if constexpr (RelationalFlag) {
           if constexpr (ETypeRelPtrFlag) {
             etype = binary_search(num_relations, etypes, eidx);
@@ -546,6 +546,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
         } else {
           mu = gdata.mu[feat_idx];
         }
+
         // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] +
         // er[threadIdx.x], gdata.leaky_relu_slope);
         // TODO: we need to determine where to calculate expf as the

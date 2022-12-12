@@ -44,20 +44,9 @@ struct BackwardHGTMessageData<Idx, DType, 0> {
 };
 
 template <typename Idx, typename DType>
-struct BackwardHGTMessageData<Idx, DType, 0> {
-  Idx num_heads{0};
-  Idx message_src_xlen{0};
-  Idx* eids;
-  DType *grad_message_src{nullptr}, *edgesoftmax_sum_per_node{nullptr},
-      *grad_out{nullptr};
-  DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
-  // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
-  // DType* normalized_attn_score{nullptr};
-};
-
-template <typename Idx, typename DType>
 struct BackwardNormToUnNormalizedAttnScoreData {
   Idx num_heads{0};
+  Idx k_vect_dim_per_head{0};
   Idx* eids;
   DType *grad_normalized_attn_score{nullptr}, *normalized_attn_score{nullptr},
       *grad_mu{nullptr}, *mu{nullptr};
@@ -65,6 +54,113 @@ struct BackwardNormToUnNormalizedAttnScoreData {
       *grad_unnormalized_attn_score{nullptr};
 };
 
+// NB: no mu flag is used to generalize this scheme to calculate delta q vector
+// = delta_attn_score * inner_product
+template <typename Idx, typename DType>
+struct BackwardToDeltaQData {
+  Idx num_heads{0};
+  Idx k_vect_dim_per_head{0};
+  Idx* eids;
+  DType *grad_unnormalized_attn_score{nullptr}, *k_inner_product{nullptr},
+      *grad_q_vectors{nullptr};
+};
+
+// delta_q = delta_attn_score*inner_product
+// based on
+// HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool RelationalFlag, bool ETypeRelPtrFlag>
+__global__ void HET__hgtQVectType2BackwardKernel(
+    BackwardToDeltaQData<Idx, DType> gdata, const Idx* row_offsets,
+    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
+    const Idx* unique_srcs_and_dests_rel_ptr,
+    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+  Idx num_heads = gdata.num_heads;  // originally e_xlen
+  Idx hidden_xlen = gdata.k_vect_dim_per_head;
+  for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
+    Idx start_off = row_offsets[dst_vid];
+    Idx end_off = row_offsets[dst_vid + 1];
+    for (Idx head_idx = threadIdx.y; head_idx < num_heads;
+         head_idx += blockDim.y) {
+      for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
+           feat_idx < hidden_xlen; feat_idx += blockDim.x * gridDim.x) {
+        DType s = 0.;
+
+        for (Idx e = start_off; e < end_off; ++e) {
+          Idx eid = gdata.eids[e];
+          Idx src_vid = column_indices[e];
+          // Idx dst_vid_relational = -1;
+          Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
+                          // !RelationalFlag, the default value is set as 0
+          Idx k_inner_product_offset = -1;
+          if constexpr (!CompactAsOfNodeFlag) {
+            // in this case, k_inner_product_offset, er_idx and el_idx are
+            // related to edge id, regardless of the type of the edge
+            k_inner_product_offset =
+                eid * (gdata.k_vect_dim_per_head * num_heads) +
+                head_idx * hidden_xlen + feat_idx;
+          } else {  // CompactAsOfNodeFlag
+            if constexpr (RelationalFlag) {
+              // Idx etype = etypes[e];
+
+              if constexpr (ETypeRelPtrFlag) {
+                etype = binary_search(num_relations, etypes, e);
+              } else {  // !ETypeRelPtrFlag
+                etype = etypes[e];
+              }
+              Idx src_vid_relational = find_relational_compact_as_of_node_index(
+                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
+              k_inner_product_offset =
+                  src_vid_relational * (gdata.k_vect_dim_per_head * num_heads) +
+                  head_idx * hidden_xlen + feat_idx;
+              // dst_vid_relational = find_relational_compact_as_of_node_index(
+              //     etype, dst_vid, unique_srcs_and_dests_rel_ptr,
+              //     unique_srcs_and_dests_node_indices);
+            } else {
+              // in this case, k_inner_product_offset is the same regardless of
+              // which
+              // outgoing edge we deal with
+              k_inner_product_offset =
+                  src_vid * (gdata.k_vect_dim_per_head * num_heads) +
+                  head_idx * hidden_xlen + feat_idx;
+            }
+          }
+
+          // TODO: maybe it's better to cache exp/sum to reduce mem traffic as
+          // well as redundant computation?
+          // Idx sum_vid = dst_vid;
+          // if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
+          //   sum_vid = dst_vid_relational;
+          // }
+
+          DType grad_unnormalized_attn_score =
+              gdata.grad_unnormalized_attn_score[eid * num_heads + head_idx];
+
+          if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
+            atomicAdd(gdata.grad_q_vectors +
+                          (dst_vid * (gdata.k_vect_dim_per_head * num_heads) +
+                           head_idx * hidden_xlen + feat_idx),
+                      grad_unnormalized_attn_score *
+                          gdata.k_inner_product[k_inner_product_offset]);
+          } else {  // CompactAsOfNodeFlag && !RelationalFlag
+            // exp scheme (both eid and head_idx) could be used for attn_score
+            // message_src's could be used for message_src
+            s += grad_unnormalized_attn_score *
+                 gdata.k_inner_product[k_inner_product_offset];
+          }
+        }
+        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+          gdata.grad_q_vectors[(dst_vid *
+                                    (gdata.k_vect_dim_per_head * num_heads) +
+                                head_idx * hidden_xlen + feat_idx)] = s;
+        }
+      }
+    }
+  }
+}
+
+// TODO: do an edge parallel version
 // based on HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel, as
 // normalized_attn_score is present, this is similar to the case where
 // FwdOutputMuAppliedAttnScoreSwitch == 2 denote aj as attn_score of edge j,
@@ -86,6 +182,7 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
   //   CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(CompactAsOfNodeFlag,
   //                                     "not implemented yet");
   // }
+
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   for (Idx src_vid = blockIdx.y * blockDim.y + threadIdx.y; src_vid < num_rows;
        src_vid += gridDim.y * blockDim.y) {
@@ -117,6 +214,7 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
           // Idx dst_vid_relational = -1;
           Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
                           // !RelationalFlag, the default value is set as 0
+
           if constexpr (RelationalFlag) {
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, e);
@@ -124,6 +222,7 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
               etype = etypes[e];
             }
           }
+
           // Compact as of node is irrelevant here as the data are edge-wise
           // if constexpr (!CompactAsOfNodeFlag) {
           // in this case, message_src_offset
@@ -175,7 +274,8 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
           // Idx dst_out_offset = dst_vid * gdata.message_src_xlen +
           //                      head_idx * hidden_xlen + feat_idx;
 
-          DType mu;
+          DType mu = 1.0f;
+
           if constexpr (RelationalFlag) {
             mu = gdata.mu[etype * num_heads + head_idx];
           } else {
@@ -200,7 +300,7 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
             DType delta_mu_for_curr_edge =
                 (-sum_incoming_edges_product_softmax_score +
                  gdata.grad_normalized_attn_score[edge_offset]) *
-                normalized_attn_score * unnormalized_attn_score[edge_offset];
+                normalized_attn_score;
 
             // if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
             gdata.grad_unnormalized_attn_score[edge_offset] =

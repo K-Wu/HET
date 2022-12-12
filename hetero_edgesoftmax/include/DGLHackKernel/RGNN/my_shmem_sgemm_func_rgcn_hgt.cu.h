@@ -558,20 +558,22 @@ template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
           typename IdxPtr>
 __global__ void HET_HGTFusedAttnScoreFwProp(
     float* applied_klinear_node_features, float* applied_qlinear_node_features,
-    float* attn_score_weight, float* edge_norm, float* unnormalized_attn_score,
-    IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
-    IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
-    int* accum_num_blocks_per_relation, Idx num_relations,
-    Idx input_dim_per_head, Idx output_dim_per_head, Idx num_heads) {
+    float* attn_score_weight, float* attn_score_inner_product,
+    float* unnormalized_attn_score, IdxPtr separate_coo_row_idx,
+    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
+    IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
+    Idx num_relations, Idx fw_input_dim_per_head, Idx fw_output_dim_per_head,
+    Idx num_heads) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  // FIXME: need to output inner product for bck prop use
   _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
-                                 true, false, 2, false, true>(
+                                 true, false, 1, false, true>(
       applied_klinear_node_features,
-      &attn_score_weight[idx_relation * num_heads * output_dim_per_head *
-                         input_dim_per_head],
-      nullptr, edge_norm, unnormalized_attn_score,
+      &attn_score_weight[idx_relation * num_heads * fw_output_dim_per_head *
+                         fw_input_dim_per_head],
+      attn_score_inner_product, nullptr, unnormalized_attn_score,
       applied_qlinear_node_features, separate_coo_row_idx, separate_coo_col_idx,
       separate_coo_eids, idx_relation,
       separate_coo_rel_ptrs[idx_relation + 1] -
@@ -579,6 +581,71 @@ __global__ void HET_HGTFusedAttnScoreFwProp(
       accum_num_blocks_per_relation[idx_relation],
       (accum_num_blocks_per_relation[idx_relation + 1] -
        accum_num_blocks_per_relation[idx_relation]),
-      separate_coo_rel_ptrs[idx_relation], input_dim_per_head,
-      output_dim_per_head, num_heads);
+      separate_coo_rel_ptrs[idx_relation], fw_input_dim_per_head,
+      fw_output_dim_per_head, num_heads);
+}
+
+// delta_k = delta_inner_product*weight_transposed =
+// delta_attn_score*q*weight_transposed
+template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
+          typename IdxPtr>
+__global__ void HET_HGTFusedAttnScoreDeltaKVectBckProp(
+    float* applied_qlinear_node_features, float* attn_score_weight_transposed,
+    float* delta_applied_klinear_node_features, float* grad_attn_score,
+    IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
+    IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
+    int* accum_num_blocks_per_relation, Idx num_relations,
+    Idx fw_input_dim_per_head, Idx fw_output_dim_per_head, Idx num_heads) {
+  // edge_norm is delta_attn_score
+
+  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_relation = binary_search<int, int*>(
+      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
+                                 true, false, 0, false, false>(
+      applied_qlinear_node_features,
+      &attn_score_weight_transposed[idx_relation * num_heads *
+                                    fw_output_dim_per_head *
+                                    fw_input_dim_per_head],
+      delta_applied_klinear_node_features, grad_attn_score, nullptr, nullptr,
+      separate_coo_row_idx, separate_coo_col_idx, separate_coo_eids,
+      idx_relation,
+      separate_coo_rel_ptrs[idx_relation + 1] -
+          separate_coo_rel_ptrs[idx_relation],
+      accum_num_blocks_per_relation[idx_relation],
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
+      separate_coo_rel_ptrs[idx_relation], fw_output_dim_per_head,
+      fw_input_dim_per_head, num_heads);
+}
+
+// delta_weight=delta_attn_score*inner_product_transposed
+template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
+          typename IdxPtr>
+__global__ void HET_HGTFusedAttnScoreDeltaWeightBckProp(
+    float* applied_klinear_node_features, float* applied_qlinear_node_features,
+    float* attn_score_weight, float* grad_attn_score,
+    IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
+    IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
+    int* accum_num_blocks_per_relation, Idx num_relations,
+    Idx fw_input_dim_per_head, Idx fw_output_dim_per_head, Idx num_heads) {
+  // edge_norm is delta_attn_score
+
+  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_relation = binary_search<int, int*>(
+      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
+                                 true, true, 0, false, false>(
+      applied_klinear_node_features, applied_qlinear_node_features,
+      &attn_score_weight[idx_relation * num_heads * fw_output_dim_per_head *
+                         fw_input_dim_per_head],
+      grad_attn_score, nullptr, nullptr, separate_coo_row_idx,
+      separate_coo_col_idx, separate_coo_eids, idx_relation,
+      separate_coo_rel_ptrs[idx_relation + 1] -
+          separate_coo_rel_ptrs[idx_relation],
+      accum_num_blocks_per_relation[idx_relation],
+      (accum_num_blocks_per_relation[idx_relation + 1] -
+       accum_num_blocks_per_relation[idx_relation]),
+      separate_coo_rel_ptrs[idx_relation], fw_input_dim_per_head,
+      fw_output_dim_per_head, num_heads);
 }

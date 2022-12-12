@@ -20,7 +20,9 @@ class LegendrePolynomial3(torch.autograd.Function):
         to stash information for backward computation. You can cache arbitrary
         objects for use in the backward pass using the ctx.save_for_backward method.
         """
-        ctx.save_for_backward(inputs)
+        inputs_to_save = torch.zeros_like(inputs)
+        inputs_to_save[:] = inputs
+        ctx.save_for_backward(inputs_to_save)
         return 0.5 * (5 * inputs**3 - 3 * inputs)
 
     @staticmethod

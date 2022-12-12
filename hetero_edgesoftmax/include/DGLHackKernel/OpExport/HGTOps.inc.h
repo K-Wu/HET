@@ -367,8 +367,9 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
   const Idx MAX_NBLKS = 65535;
   const Idx MAX_NTHRS = 1024;
   // preparing gdata
-  HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel<Idx, DType> gdata;
-  gdata.num_heads = grad_attn_score.size(grad_attn_score.ndimension() - 1);
+  BackwardNormToUnNormalizedAttnScoreData<Idx, DType> gdata;
+  gdata.num_heads = grad_normalized_attn_score.size(
+      grad_normalized_attn_score.ndimension() - 1);
   // if (num_heads <= 1) {
   //   std::cout << "Warning: num_heads <= 1 in "
   //                "HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_"
@@ -376,7 +377,7 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
   //             << std::endl;
   // }
   Idx num_relations = mu.numel() / gdata.num_heads;
-  gdata.eids = outcsr_eids.data_ptr<Idx>();
+  gdata.eids = incsr_eids.data_ptr<Idx>();
   gdata.grad_normalized_attn_score =
       grad_normalized_attn_score.data_ptr<DType>();
   gdata.unnormalized_attn_score = unnormalized_attn_score.data_ptr<DType>();
@@ -397,16 +398,15 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
   // node -> blockIdx.y * blockDim.y + threadIdx.y;
   int nthrs_y = 32;
   int nthrs_x = 1;
-  int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
   int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
-  int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
+  int nblks_y = std::min(incsr_row_ptr.numel() - 1, MAX_NBLKS);
   const dim3 nthrs(nthrs_x, nthrs_y);
   const dim3 nblks(nblks_x, nblks_y);
   HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel<Idx, DType, false,
-                                                            true, false>
+                                                            true>
       <<<nblks, nthrs, 0, stream>>>(
           gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
-          incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
+          incsr_reltypes.data_ptr<Idx>(), incsr_row_ptr.numel() - 1,
           /*no need when !CompactAsOfNodeFlag*/ nullptr,
           /*no need when !CompactAsOfNodeFlag*/ nullptr, num_relations);
 }
@@ -598,18 +598,6 @@ void full_graph_message_mean_aggregation(
       outcsr_rowptr, outcsr_col_idx, outcsr_reltypes, outcsr_eids,
       edgesoftmax_sum_per_node, dummy_tensor, dummy_tensor, dummy_tensor,
       normalized_attn_score, gradout, grad_message);
-}
-
-void _unsupported_full_graph_hetero_attention_ops(
-    at::Tensor& row_ptr, at::Tensor& col_idx, at::Tensor& eids,
-    at::Tensor& reltypes, at::Tensor& weight,
-    at::Tensor& applied_klinear_node_features,
-    at::Tensor& applied_qlinear_node_features, at::Tensor& gradout,
-    at::Tensor& grad_weight, at::Tensor& grad_k, at::Tensor& grad_q) {
-  // we need to implement a fused kernel based on back prop of RGNN
-  // inner_product and back prop of W*t via RGNN relational_matmul
-
-  assert(0 && "the performant implementation not done yet");
 }
 
 template <typename Idx, typename DType, int OutputMuAppliedAttnScoreSwitch>
