@@ -448,11 +448,14 @@ template <
     bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
     typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void HET_RGNNFeatPerEdgeFWProp(
-    float* node_feat_input, float* weight, float* node_feat_per_edge,
-    IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
-    IdxPtr C_eid_scatter_list, Idx input_dim, Idx output_per_head_dim,
-    Idx num_heads, int* accum_num_blocks_per_relation, Idx num_relations) {
+__global__ void __launch_bounds__(256, 3)
+    HET_RGNNFeatPerEdgeFWProp(float* node_feat_input, float* weight,
+                              float* node_feat_per_edge,
+                              IdxPtr A_col_row_idx_gather_list,
+                              IdxPtr A_rel_ptr, IdxPtr C_eid_scatter_list,
+                              Idx input_dim, Idx output_per_head_dim,
+                              Idx num_heads, int* accum_num_blocks_per_relation,
+                              Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);

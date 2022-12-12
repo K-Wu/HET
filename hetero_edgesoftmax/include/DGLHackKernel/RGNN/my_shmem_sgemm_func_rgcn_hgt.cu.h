@@ -411,12 +411,14 @@ class _simplified_basic_MatMulKernel<
 
 template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
           typename IdxPtr>
-__global__ void HET_RGCNMatmulNoScatterGatherListFwProp(
-    float* node_feat_input, float* weights, float* linear_projected_node_feat,
-    float* edge_norm, IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
-    IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
-    int* accum_num_blocks_per_relation, Idx num_relations, Idx input_dim,
-    Idx output_dim) {
+__global__ void __launch_bounds__(256, 3)
+    HET_RGCNMatmulNoScatterGatherListFwProp(
+        float* node_feat_input, float* weights,
+        float* linear_projected_node_feat, float* edge_norm,
+        IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
+        IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
+        int* accum_num_blocks_per_relation, Idx num_relations, Idx input_dim,
+        Idx output_dim) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -496,12 +498,14 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
 
 template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
           typename IdxPtr>
-__global__ void HET_HGTMessageGenerationAndAccumulationFwProp(
-    float* node_feat_input, float* weights, float* linear_projected_node_feat,
-    float* edge_norm, /*float* relation_pri, */ IdxPtr separate_coo_row_idx,
-    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
-    IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
-    Idx num_relations, Idx input_dim, Idx output_dim, Idx num_heads) {
+__global__ void __launch_bounds__(256, 3)
+    HET_HGTMessageGenerationAndAccumulationFwProp(
+        float* node_feat_input, float* weights,
+        float* linear_projected_node_feat, float* edge_norm,
+        /*float* relation_pri, */ IdxPtr separate_coo_row_idx,
+        IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
+        IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
+        Idx num_relations, Idx input_dim, Idx output_dim, Idx num_heads) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
