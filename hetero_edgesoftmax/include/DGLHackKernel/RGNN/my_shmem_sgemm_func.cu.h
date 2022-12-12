@@ -498,7 +498,7 @@ template <bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
           typename IdxPtr>
 __global__ void HET_RGNNDeltaWeightNoScatterGatherListBWProp(
     float* node_feat_input, float* delta_feat, float* delta_weight,
-    IdxPtr ntype_ptrs, Idx A_delta_input_dim, Idx B_delta_output_dim,
+    IdxPtr ntype_ptrs, Idx A_input_dim, Idx B_delta_output_dim,
     int* accum_num_blocks_per_ntype, Idx num_ntypes) {
   Idx idx_block_assignment = blockIdx.z;
   Idx idx_ntype = binary_search<int, int*>(
@@ -513,7 +513,7 @@ __global__ void HET_RGNNDeltaWeightNoScatterGatherListBWProp(
       accum_num_blocks_per_ntype[idx_ntype],
       (accum_num_blocks_per_ntype[idx_ntype + 1] -
        accum_num_blocks_per_ntype[idx_ntype]),
-      ntype_ptrs[idx_ntype], A_delta_input_dim, B_delta_output_dim, 1);
+      ntype_ptrs[idx_ntype], A_input_dim, B_delta_output_dim, 1);
 }
 
 template <

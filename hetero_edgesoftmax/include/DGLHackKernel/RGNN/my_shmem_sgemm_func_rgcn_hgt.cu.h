@@ -567,9 +567,9 @@ __global__ void HET_HGTFusedAttnScoreFwProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  // FIXME: need to output inner product for bck prop use
+  // NB: should be mode 2 since we need to output inner product for bck prop use
   _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
-                                 true, false, 1, false, true>(
+                                 true, false, 2, false, true>(
       applied_klinear_node_features,
       &attn_score_weight[idx_relation * num_heads * fw_output_dim_per_head *
                          fw_input_dim_per_head],

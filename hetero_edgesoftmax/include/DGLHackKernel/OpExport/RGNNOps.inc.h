@@ -578,7 +578,7 @@ void _BackwardRelationalMatMul_separatecoo(
           "CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag");
     }
     // NB: my shmem sgemm matmul scheme
-    const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
+    const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nblks_outer_product(
         ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
@@ -648,7 +648,7 @@ void _BackwardRelationalMatMul_separatecoo(
     }
   } else {
     // NB: my shmem sgemm matmul scheme
-    const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
+    const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nblks_outer_product(
         ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
@@ -669,11 +669,10 @@ void _BackwardRelationalMatMul_separatecoo(
           thrust::raw_pointer_cast(
               dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
           num_relations);
-      // FIXME: outer_product should assume num_heads == 1 and change blockDim.x
-      // and/or blockDim.y accordingly
-      // FIXME: outer_product should have num_heads == 1 and num_heads for
-      // node_feat and output respectively, and therefore distinction should be
-      // made when get row major from A and B
+      // NB: NumHeadOneFlag addresses the case where num_heads == 1. in
+      // deltaweight case, InputNumHeadOneFlag is true for RGAT and false for
+      // HGT, and the delta weight is calculated accordingly. The original grid
+      // configuration scheme dependent on weight dimensions should  still work
       HET_RGNNDeltaWeightBWPropACGatherScatterListIdentical<
           COARSEN_2_FACTOR_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*,
           InputNumHeadOneFlag><<<nblks_outer_product, nthrs, 0, stream>>>(
@@ -987,8 +986,8 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
       num_blocks_assignment_for_all_prev_ntype_vect.begin(),
       num_blocks_assignment_for_all_prev_ntype_vect.end());
   // NB: my shmem sgemm matmul scheme
-  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
-                   grid_dim_y, num_heads);
+  const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), grid_dim_y,
+                   num_heads);
   const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
   // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
   //           << " nblks.z: " << nblks.z << std::endl;
@@ -1004,8 +1003,8 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
           num_ntypes, num_output_dim, num_input_dim);
   // NB: my shmem sgemm matmul scheme
   const dim3 nblks_outer_product(
-      ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE),
-      ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE), grid_dim_y);
+      ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
+      ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), grid_dim_y);
   HET_RGNNDeltaWeightNoScatterGatherListBWProp<
       COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*>
       <<<nblks_outer_product, nthrs, 0, stream>>>(

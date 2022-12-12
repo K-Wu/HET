@@ -220,7 +220,6 @@ void full_graph_hetero_attention_ops(
   // NB: my shmem sgemm matmul scheme
   // NB: fw_input_dim is the actual delta_k feat dimension and therefore used to
   // determine nblks.x
-  // FIXME: do nblks_outer_product also
   const dim3 nblks(ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, num_heads);
   // NB: delta_weight's feature is (num_heads, num_fw_input_dim,
@@ -294,7 +293,6 @@ void full_graph_hetero_attention_ops(
   int nblks_y_type2 = std::min(incsr_row_ptr.numel() - 1, MAX_NBLKS);
   const dim3 nthrs_type2(nthrs_x_type2, nthrs_y_type2);
   const dim3 nblks_type2(nblks_x_type2, nblks_y_type2);
-  // FIXME: check if gdata.eids are coherent with argument passed
   HET__hgtQVectType2BackwardKernel<int64_t, float, false, true, true>
       <<<nblks_type2, nthrs_type2, 0, stream>>>(
           gdata, incsr_row_ptr.data_ptr<int64_t>(),
@@ -344,9 +342,9 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
           num_blocks_assignment_for_all_prev_relation_vect.end());
   // NB: my shmem sgemm matmul scheme
-  // FIXME: seems like blockIdx.x should be num_input_dim
-  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
-                   grid_dim_y, num_heads);
+  // NB: nblks.x should be num_input_dim
+  const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), grid_dim_y,
+                   num_heads);
   const dim3 nblks_outer_product(
       ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
       ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), num_heads * grid_dim_y);
