@@ -23,8 +23,8 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
     ):
         unnormalized_attn_score = th.zeros(
             (
-                incsr_row_ptr.numel() - 1,
-                attn_score_weight.size(2),
+                separate_coo_row_idx.numel(),
+                attn_score_weight.size(1),
             ),  # weight size (self.num_relations, n_heads, self.d_k, self.d_k)
             dtype=attn_score_weight.dtype,
             device=attn_score_weight.device,
@@ -35,7 +35,7 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
         attn_score_inner_product = th.zeros(
             separate_coo_eids.size(0),
             applied_klinear_node_features.size(1),
-            applied_klinear_node_features.size(3),
+            applied_klinear_node_features.size(2),
             dtype=unnormalized_attn_score.dtype,
             device=unnormalized_attn_score.device,
         ).contiguous()

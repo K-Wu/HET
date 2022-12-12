@@ -507,8 +507,8 @@ __global__ void HET_RGNNDeltaWeightNoScatterGatherListBWProp(
                       false, false, false, false, false, true, Idx, IdxPtr,
                       true, true, true>(
       node_feat_input, delta_feat,
-      &delta_weight[idx_ntype * A_delta_input_dim * B_delta_output_dim],
-      nullptr, nullptr, nullptr, nullptr, nullptr, idx_ntype,
+      &delta_weight[idx_ntype * A_input_dim * B_delta_output_dim], nullptr,
+      nullptr, nullptr, nullptr, nullptr, idx_ntype,
       ntype_ptrs[idx_ntype + 1] - ntype_ptrs[idx_ntype],
       accum_num_blocks_per_ntype[idx_ntype],
       (accum_num_blocks_per_ntype[idx_ntype + 1] -

@@ -25,8 +25,9 @@ namespace FwProp {
 template <typename Idx, typename DType, int OutputMuAppliedAttnScoreSwitch,
           bool EdgeParallelFlag>
 void _full_graph_edge_softmax_ops(
-    at::Tensor& incsr_rowptr_or_indices, at::Tensor& incsr_col_idx,
-    at::Tensor& incsr_eids, at::Tensor& incsr_reltypes_or_relptr,
+    at::Tensor& incsr_or_sep_coo_rowptr_or_indices,
+    at::Tensor& incsr_or_sep_coo_col_idx, at::Tensor& incsr_or_sep_coo_eids,
+    at::Tensor& incsr_or_sep_coo_reltypes_or_relptr,
     at::Tensor& unnormalized_attn_score, at::Tensor& mu,
     at::Tensor& edgesoftmax_sum_per_node,
     at::Tensor& mu_softmax_applied_unnormalized_attn_score,
@@ -53,7 +54,7 @@ void _full_graph_edge_softmax_ops(
   // }
   Idx num_relations = mu.numel() / gdata.num_heads;
 
-  gdata.eids = incsr_eids.data_ptr<Idx>();
+  gdata.eids = incsr_or_sep_coo_eids.data_ptr<Idx>();
   gdata.mu = mu.data_ptr<DType>();
   gdata.unnormalized_attn_score = unnormalized_attn_score.data_ptr<DType>();
   gdata.edgesoftmax_sum_per_node = edgesoftmax_sum_per_node.data_ptr<DType>();
@@ -82,35 +83,41 @@ void _full_graph_edge_softmax_ops(
   int nthrs_x = 1;
   int nthrs_y = 32;
   int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
-  int64_t incsr_num_rows_or_edges = incsr_rowptr_or_indices.numel() - 1;
-  int nblks_y = std::min(incsr_num_rows_or_edges, MAX_NBLKS);
+  int64_t incsr_or_sep_coo_num_rows_or_edges =
+      incsr_or_sep_coo_rowptr_or_indices.numel() - 1;
+  int nblks_y = std::min(incsr_or_sep_coo_num_rows_or_edges, MAX_NBLKS);
   const dim3 nblks(nblks_x, nblks_y);
   const dim3 nthrs(nthrs_x, nthrs_y);
 
-  if (EdgeParallelFlag) {
+  if constexpr (EdgeParallelFlag) {
+    // use separate coo instead of in csr
     HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel<
         Idx, DType, false, true, true, false, OutputMuAppliedAttnScoreSwitch>
         <<<nblks, nthrs, 0, stream>>>(
-            gdata, incsr_rowptr_or_indices.data_ptr<Idx>(),
-            incsr_col_idx.data_ptr<Idx>(),
-            incsr_reltypes_or_relptr.data_ptr<Idx>(), incsr_num_rows_or_edges,
+            gdata, incsr_or_sep_coo_rowptr_or_indices.data_ptr<Idx>(),
+            incsr_or_sep_coo_col_idx.data_ptr<Idx>(),
+            incsr_or_sep_coo_reltypes_or_relptr.data_ptr<Idx>(),
+            incsr_or_sep_coo_num_rows_or_edges,
             /*no need when !CompactAsOfNode*/ nullptr,
             /*no need when !CompactAsOfNode*/ nullptr, num_relations);
     HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2<
         Idx, DType, false, true, true, false, OutputMuAppliedAttnScoreSwitch>
         <<<nblks, nthrs, 0, stream>>>(
-            gdata, incsr_rowptr_or_indices.data_ptr<Idx>(),
-            incsr_col_idx.data_ptr<Idx>(),
-            incsr_reltypes_or_relptr.data_ptr<Idx>(), incsr_num_rows_or_edges,
+            gdata, incsr_or_sep_coo_rowptr_or_indices.data_ptr<Idx>(),
+            incsr_or_sep_coo_col_idx.data_ptr<Idx>(),
+            incsr_or_sep_coo_reltypes_or_relptr.data_ptr<Idx>(),
+            incsr_or_sep_coo_num_rows_or_edges,
             /*no need when !CompactAsOfNode*/ nullptr,
             /*no need when !CompactAsOfNode*/ nullptr, num_relations);
   } else {
+    // use in csr
     HET__hgtEdgeSoftmaxAccumStageOnlyKernel<
         Idx, DType, false, true, false, false, OutputMuAppliedAttnScoreSwitch>
         <<<nblks, nthrs, 0, stream>>>(
-            gdata, incsr_rowptr_or_indices.data_ptr<Idx>(),
-            incsr_col_idx.data_ptr<Idx>(),
-            incsr_reltypes_or_relptr.data_ptr<Idx>(), incsr_num_rows_or_edges,
+            gdata, incsr_or_sep_coo_rowptr_or_indices.data_ptr<Idx>(),
+            incsr_or_sep_coo_col_idx.data_ptr<Idx>(),
+            incsr_or_sep_coo_reltypes_or_relptr.data_ptr<Idx>(),
+            incsr_or_sep_coo_num_rows_or_edges,
             /*no need when !CompactAsOfNode*/ nullptr,
             /*no need when !CompactAsOfNode*/ nullptr, num_relations);
   }

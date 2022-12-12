@@ -123,7 +123,7 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
       mLoopEnd = ceil_div<>(numARows, (int64_t)SHMEM_BLOCK_SIZE);
       mLoopInc = strideNumBlocksAlongRow;
     } else {
-      mLoopBeg = ceil_div<Idx>(num_A_cols, SHMEM_BLOCK_SIZE);
+      mLoopBeg = 0;
       mLoopEnd = ceil_div<Idx>(num_A_cols, SHMEM_BLOCK_SIZE);
       mLoopInc = 1;
     }
@@ -174,6 +174,12 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
                       (blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat)]
                   : 0.0f;
         } else {
+          // printf("blockRow %d blockFeat %d thIdxRow %d thIdxFeat %d AloadFlag
+          // %d BloadFlag %d \n", blockRow, blockFeat, thIdxRow, thIdxFeat,
+          // (thIdxRow + blockRow * SHMEM_BLOCK_SIZE < numARows &&
+          //      m * SHMEM_BLOCK_SIZE + thIdxFeat < num_A_cols), (m *
+          //      SHMEM_BLOCK_SIZE + thIdxRow < num_A_cols && blockFeat *
+          //      SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols));
           As[thIdxRow][thIdxFeat] =
               (thIdxRow + blockRow * SHMEM_BLOCK_SIZE < numARows &&
                m * SHMEM_BLOCK_SIZE + thIdxFeat < num_A_cols)
@@ -297,6 +303,8 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
         bool WriteCInRangeFlag =
             blockRow * SHMEM_BLOCK_SIZE + thIdxRow < num_A_cols &&
             blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols;
+        // printf("blockRow %d blockFeat %d thIdxRow %d thIdxFeat %d CWriteFlag
+        // %d \n", blockRow, blockFeat, thIdxRow, thIdxFeat, WriteCInRangeFlag);
         if constexpr (DoInnerProductSwitch <= 1) {
           if (WriteCInRangeFlag) {
             // NB: this indexing scheme works for both cases whether num_head is
@@ -329,59 +337,57 @@ __device__ __forceinline__ void _simplified_basic_MatMulKernel(
         //         num_heads, idx_relation, mLoopBeg, mLoopEnd, Cvalue);
         //   }
         // }
-        if constexpr (DoInnerProductSwitch <= 1) {
-          if (WriteCInRangeFlag) {
-            // print GetRowMajorElement arguments
-            // if constexpr (!OuterProductFlag && !GatherAFlag &&
-            // !AdvancedGatherAFlag && !GatherBFlag && !AdvancedGatherBFlag &&
-            // ScatterCFlag && !AdvancedScatterCFlag && AtomicUpdateFlag)
-            // if (ScatterCFlag && !AdvancedScatterCFlag)
-            // printf("C %p C_scatter_list %p unique_srcs_and_dests_rel_ptr %p "
-            //        "unique_srcs_and_dests_node_indices %p idx_relation %ld "
-            //        "idxRow %ld scatter_list[idxRow] %ld idxFeat %ld idx_head
-            //        %ld num_heads %ld " "num_B_cols %ld, numARows %ld\n", C,
-            //        C_scatter_list, unique_srcs_and_dests_rel_ptr,
-            //        unique_srcs_and_dests_node_indices, idx_relation,
-            //        thIdxRow + blockRow * BLOCK_SIZE, C_scatter_list[thIdxRow
-            //        + blockRow * BLOCK_SIZE], blockFeat * BLOCK_SIZE +
-            //        thIdxFeat, idx_head, num_heads, num_B_cols, numARows);
 
+        if (WriteCInRangeFlag) {
+          // print GetRowMajorElement arguments
+          // if constexpr (!OuterProductFlag && !GatherAFlag &&
+          // !AdvancedGatherAFlag && !GatherBFlag && !AdvancedGatherBFlag &&
+          // ScatterCFlag && !AdvancedScatterCFlag && AtomicUpdateFlag)
+          // if (ScatterCFlag && !AdvancedScatterCFlag)
+          // printf("C %p C_scatter_list %p unique_srcs_and_dests_rel_ptr %p "
+          //        "unique_srcs_and_dests_node_indices %p idx_relation %ld "
+          //        "idxRow %ld scatter_list[idxRow] %ld idxFeat %ld idx_head
+          //        %ld num_heads %ld " "num_B_cols %ld, numARows %ld\n", C,
+          //        C_scatter_list, unique_srcs_and_dests_rel_ptr,
+          //        unique_srcs_and_dests_node_indices, idx_relation,
+          //        thIdxRow + blockRow * BLOCK_SIZE, C_scatter_list[thIdxRow
+          //        + blockRow * BLOCK_SIZE], blockFeat * BLOCK_SIZE +
+          //        thIdxFeat, idx_head, num_heads, num_B_cols, numARows);
+          if constexpr (DoInnerProductSwitch <= 1) {
             atomicAdd(&C[C_scatter_list[thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
                                         blockRowJobEntryBeg] *
                              num_B_cols * num_heads +
                          idx_head * num_B_cols + blockFeat * SHMEM_BLOCK_SIZE +
                          thIdxFeat],
                       Cvalue);
-
-            if constexpr (DoInnerProductSwitch > 0) {
-              // TODO: we may hide the global mem read latency by moving input
-              // node feat load ahead at the cost of more shmem (copy async) or
-              // more registers use
-              atomicAdd(&inner_product[inner_product_term_gather_list
-                                               [thIdxRow +
-                                                blockRow * SHMEM_BLOCK_SIZE +
-                                                blockRowJobEntryBeg] *
-                                           num_heads +
-                                       idx_head],
-                        Cvalue *
-                            input_node_feat_for_inner_product
-                                [C_scatter_list[thIdxRow +
-                                                blockRow * SHMEM_BLOCK_SIZE +
-                                                blockRowJobEntryBeg] *
-                                     num_B_cols * num_heads +
-                                 idx_head * num_B_cols +
-                                 blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat]);
-            }
-            // atomicAdd(&GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
-            //                               AdvancedScatterCFlag>(
-            //               C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
-            //               unique_srcs_and_dests_node_indices, idx_relation,
-            //               thIdxRow + blockRow * BLOCK_SIZE +
-            //               blockRowJobEntryBeg, C_num_head_one_flag ? 0 :
-            //               idx_head, blockFeat * BLOCK_SIZE + thIdxFeat,
-            //               C_num_head_one_flag ? 1 : num_heads, num_B_cols),
-            //           Cvalue);
           }
+          if constexpr (DoInnerProductSwitch > 0) {
+            // TODO: we may hide the global mem read latency by moving input
+            // node feat load ahead at the cost of more shmem (copy async) or
+            // more registers use
+            atomicAdd(
+                &inner_product[inner_product_term_gather_list
+                                       [thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
+                                        blockRowJobEntryBeg] *
+                                   num_heads +
+                               idx_head],
+                Cvalue *
+                    input_node_feat_for_inner_product
+                        [C_scatter_list[thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
+                                        blockRowJobEntryBeg] *
+                             num_B_cols * num_heads +
+                         idx_head * num_B_cols + blockFeat * SHMEM_BLOCK_SIZE +
+                         thIdxFeat]);
+          }
+          // atomicAdd(&GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
+          //                               AdvancedScatterCFlag>(
+          //               C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
+          //               unique_srcs_and_dests_node_indices, idx_relation,
+          //               thIdxRow + blockRow * BLOCK_SIZE +
+          //               blockRowJobEntryBeg, C_num_head_one_flag ? 0 :
+          //               idx_head, blockFeat * BLOCK_SIZE + thIdxFeat,
+          //               C_num_head_one_flag ? 1 : num_heads, num_B_cols),
+          //           Cvalue);
         }
       }
     }
@@ -452,7 +458,7 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
-                                 false, false, 1, false, false>(
+                                 false, false, 1, true, false>(
       delta_linear_projected_node_feat,
       &weights_transposed[idx_relation * delta_output_dim * delta_input_dim],
       delta_node_feat_input, edge_norm, grad_edge_norm,
@@ -567,9 +573,9 @@ __global__ void HET_HGTFusedAttnScoreFwProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  // NB: should be mode 2 since we need to output inner product for bck prop use
+  // NB: should be mode 1 since we need to output inner product for bck prop use
   _simplified_basic_MatMulKernel<COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx, IdxPtr,
-                                 true, false, 2, false, true>(
+                                 true, false, 1, false, true>(
       applied_klinear_node_features,
       &attn_score_weight[idx_relation * num_heads * fw_output_dim_per_head *
                          fw_input_dim_per_head],
