@@ -586,7 +586,7 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
 
 template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
           typename IdxPtr>
-__global__ void __launch_bounds__(256, 3) HET_HGTFusedAttnScoreFwProp(
+__global__ void __launch_bounds__(64, 12) HET_HGTFusedAttnScoreFwProp(
     float* applied_klinear_node_features, float* applied_qlinear_node_features,
     float* attn_score_weight, float* attn_score_inner_product,
     float* unnormalized_attn_score, IdxPtr separate_coo_row_idx,

@@ -101,7 +101,7 @@ void full_graph_hetero_attention_ops(
   // we need to implement a fused kernel based on W*t via RGNN relational_matmul
   // and RGNN inner_product
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  constexpr int THREADING_BLOCK_SIZE = 16;
+  constexpr int THREADING_BLOCK_SIZE = 8;
   constexpr bool COARSEN_FACTOR_2_FLAG = true;
   constexpr int WORK_BLOCK_SIZE =
       COARSEN_FACTOR_2_FLAG ? (THREADING_BLOCK_SIZE * 2) : THREADING_BLOCK_SIZE;
@@ -196,7 +196,7 @@ void full_graph_hetero_attention_ops(
   const int64_t num_fw_output_dim = attn_score_weight_transposed.size(2);
   int64_t num_edges = separate_coo_eids.numel();
   int grid_dim_y =
-      std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE), (int64_t)4096);
+      std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE), (int64_t)32768);
   at::Tensor separate_coo_relptrs_cpu_contiguous =
       separate_coo_relptrs.cpu().contiguous();
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
