@@ -121,7 +121,9 @@ def HET_RGNN_train_full_graph(
     node_embed_layer.train()
     node_embed_layer.requires_grad_(True)
     node_embed = node_embed_layer()
-    # scripted_model = torch.jit.trace(model,  node_embed)
+    # scripted_model = torch.jit.trace(model.eval(),  node_embed)
+    # scripted_model = torch.jit.trace(torch.jit.script_if_tracing(model.eval()),  node_embed)
+    # scripted_model = torch.jit.optimize_for_inference(scripted_model)
     for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
