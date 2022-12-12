@@ -315,7 +315,7 @@ class RgcnLayer1SeparateCoo(th.autograd.Function):
         ) = ctx.saved_tensors
         grad_x = th.zeros_like(x)
         grad_weight = th.zeros_like(weight)
-        K.backward_rgcn_layer1_csr(
+        K.backward_rgcn_layer1_separate_coo(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,

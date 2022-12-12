@@ -794,7 +794,7 @@ template <
     bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
     typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void HET_RGNNFeatCompactFWPropSingleSided(
+__global__ void __launch_bounds__(256, 3) HET_RGNNFeatCompactFWPropSingleSided(
     float* node_feat_input, float* weight, float* node_feat_per_edge,
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, IdxPtr separate_coo_relptrs,

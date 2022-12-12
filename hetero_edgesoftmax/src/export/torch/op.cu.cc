@@ -71,6 +71,7 @@ TORCH_LIBRARY(torch_hetero_edgesoftmax, m) {
         RGCN::FwProp::IntegratedCSR::Layer1HybridAssignmentImpl);
   m.def("backward_rgcn_layer1_csr_hybrid_assign",
         RGCN::BckProp::IntegratedCSR::Layer1HybridAssignmentImpl);
+  m.def("backward_rgcn_layer1_separate_coo", RGCN::BckProp::Layer1_SeparateCOO);
   m.def("rgcn_layer1_separate_coo", RGCN::FwProp::Layer1_SeparateCOO);
   // RGCN COO Declaration
   m.def("rgcn_layer1_coo", RGCN::FwProp::IntegratedCOO::Layer1Impl);

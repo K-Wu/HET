@@ -168,7 +168,7 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   const int64_t num_heads = 1;
 
-  assert(weights_transposed.size(1) == 1 && "assertion n_head == 1 failed");
+  assert(weights.size(1) == 1 && "assertion n_head == 1 failed");
   const int64_t num_input_dim = weights.size(2);
   const int64_t num_output_dim = weights.size(3);  // weight shape (num_ntypes,
                                                    // in_feat, out_feat)
