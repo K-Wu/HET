@@ -69,7 +69,7 @@ class _simplified_basic_MatMulKernel<
     IdxPtr A_gather_list;
     IdxPtr C_scatter_list;
     IdxPtr B_gather_list;
-    IdxPtr inner_product_term_gather_list;
+    IdxPtr inner_product_term_scatter_list;
     if constexpr (OuterProductFlag) {
       // A is input feature, B is gradient output feature
       A_gather_list = separate_coo_row_idx;
@@ -80,9 +80,9 @@ class _simplified_basic_MatMulKernel<
     }
     if constexpr (DoInnerProductSwitch > 0) {
       if constexpr (InnerProductGatherListNodeInsteadOfEdge) {
-        inner_product_term_gather_list = separate_coo_col_idx;
+        inner_product_term_scatter_list = separate_coo_col_idx;
       } else {
-        inner_product_term_gather_list = separate_coo_eids;
+        inner_product_term_scatter_list = separate_coo_eids;
       }
     }
     // Idx blockRow = blockIdx.y - blockIdxAlongRowBeg;
@@ -479,7 +479,7 @@ class _simplified_basic_MatMulKernel<
               // TODO: we may hide the global mem read latency by moving input
               // node feat load ahead at the cost of more shmem (copy async) or
               // more registers use
-              atomicAdd(&inner_product[inner_product_term_gather_list
+              atomicAdd(&inner_product[inner_product_term_scatter_list
                                                [thIdxRow +
                                                 blockRow * SHMEM_BLOCK_SIZE +
                                                 blockRowJobEntryBeg] *
