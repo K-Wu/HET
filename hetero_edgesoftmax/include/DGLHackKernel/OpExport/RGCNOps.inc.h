@@ -23,10 +23,14 @@ void Layer1_SeparateCOO(at::Tensor& separate_coo_relptrs,
                         at::Tensor& node_feat_input, at::Tensor& weights,
                         at::Tensor& edge_norm, at::Tensor& node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  constexpr int THREADING_BLOCK_SIZE = 16;
-  constexpr bool COARSEN_FACTOR_2_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE =
-      COARSEN_FACTOR_2_FLAG ? (THREADING_BLOCK_SIZE * 2) : THREADING_BLOCK_SIZE;
+  constexpr int WORK_BLOCK_SIZE = 32;
+  constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
+
+  constexpr bool COARSEN_FACTOR_2_FLAG_Y = true;
+  constexpr int THREADING_BLOCK_SIZE_X =
+      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+  constexpr int THREADING_BLOCK_SIZE_Y =
+      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = 1;
   const int64_t num_input_dim = weights.size(1);
@@ -57,9 +61,10 @@ void Layer1_SeparateCOO(at::Tensor& separate_coo_relptrs,
   // NB: my shmem sgemm matmul scheme
   const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, 1);
-  const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
-  HET_RGCNMatmulNoScatterGatherListFwProp<
-      COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*>
+  const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
+  HET_RGCNMatmulNoScatterGatherListFwProp<COARSEN_FACTOR_2_FLAG_X,
+                                          COARSEN_FACTOR_2_FLAG_Y,
+                                          WORK_BLOCK_SIZE, int64_t, int64_t*>
       <<<nblks, nthrs, 0, stream>>>(
           node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
           node_feat_output.data_ptr<float>(), edge_norm.data_ptr<float>(),
@@ -194,10 +199,13 @@ void Layer1_SeparateCOO(at::Tensor& separate_coo_relptrs,
          "this is a mere copy of the fw prop procedure. bck prop wrapper not "
          "implemented yet");
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  constexpr int THREADING_BLOCK_SIZE = 16;
-  constexpr bool COARSEN_FACTOR_2_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE =
-      COARSEN_FACTOR_2_FLAG ? (THREADING_BLOCK_SIZE * 2) : THREADING_BLOCK_SIZE;
+  constexpr int WORK_BLOCK_SIZE = 32;
+  constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
+  constexpr bool COARSEN_FACTOR_2_FLAG_Y = true;
+  constexpr int THREADING_BLOCK_SIZE_X =
+      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+  constexpr int THREADING_BLOCK_SIZE_Y =
+      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = 1;
   const int64_t num_input_dim = weights.size(1);
@@ -228,9 +236,10 @@ void Layer1_SeparateCOO(at::Tensor& separate_coo_relptrs,
   // NB: my shmem sgemm matmul scheme
   const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, 1);
-  const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
-  HET_RGCNMatmulNoScatterGatherListFwProp<
-      COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*>
+  const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
+  HET_RGCNMatmulNoScatterGatherListFwProp<COARSEN_FACTOR_2_FLAG_X,
+                                          COARSEN_FACTOR_2_FLAG_Y,
+                                          WORK_BLOCK_SIZE, int64_t, int64_t*>
       <<<nblks, nthrs, 0, stream>>>(
           node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
           node_feat_output.data_ptr<float>(), edge_norm.data_ptr<float>(),

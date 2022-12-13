@@ -8,7 +8,7 @@
 #include "DGLHackKernel/HGT/HGTForwardExperimental.cu.h"
 #include "DGLHackKernel/HGT/HGTForwardKernels.cu.h"
 #include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.h"
-#include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
+// #include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
 #include "EdgeSoftmax_1/EdgeSoftmaxCSR.h"
 
 // TODO: add torch tensor version of HGTForwardImpl from

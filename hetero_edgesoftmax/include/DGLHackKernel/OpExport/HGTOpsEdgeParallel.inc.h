@@ -38,10 +38,14 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
     at::Tensor& node_feat_input, at::Tensor& weights, at::Tensor& edge_norm,
     /*at::Tensor& relation_pri, */ at::Tensor& node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  constexpr int THREADING_BLOCK_SIZE = 16;
-  constexpr bool COARSEN_FACTOR_2_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE =
-      COARSEN_FACTOR_2_FLAG ? (THREADING_BLOCK_SIZE * 2) : THREADING_BLOCK_SIZE;
+
+  constexpr int WORK_BLOCK_SIZE = 32;
+  constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
+  constexpr bool COARSEN_FACTOR_2_FLAG_Y = true;
+  constexpr int THREADING_BLOCK_SIZE_X =
+      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+  constexpr int THREADING_BLOCK_SIZE_Y =
+      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = weights.size(1);
   const int64_t num_input_dim = weights.size(2);
@@ -72,20 +76,20 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
   // NB: my shmem sgemm matmul scheme
   const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, num_heads);
-  const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
+  const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
   HET_HGTMessageGenerationAndAccumulationFwProp<
-      COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*>
-      <<<nblks, nthrs, 0, stream>>>(
-          node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
-          node_feat_output.data_ptr<float>(),
-          edge_norm.data_ptr<float>(),  // relation_pri.data_ptr<float>(),
-          separate_coo_row_idx.data_ptr<int64_t>(),
-          separate_coo_col_idx.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations, num_input_dim, num_output_dim, num_heads);
+      COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
+      int64_t, int64_t*><<<nblks, nthrs, 0, stream>>>(
+      node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
+      node_feat_output.data_ptr<float>(),
+      edge_norm.data_ptr<float>(),  // relation_pri.data_ptr<float>(),
+      separate_coo_row_idx.data_ptr<int64_t>(),
+      separate_coo_col_idx.data_ptr<int64_t>(),
+      separate_coo_eids.data_ptr<int64_t>(),
+      separate_coo_relptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+      num_relations, num_input_dim, num_output_dim, num_heads);
 }
 
 // based on
@@ -101,10 +105,14 @@ void full_graph_hetero_attention_ops(
   // we need to implement a fused kernel based on W*t via RGNN relational_matmul
   // and RGNN inner_product
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  constexpr int THREADING_BLOCK_SIZE = 8;
-  constexpr bool COARSEN_FACTOR_2_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE =
-      COARSEN_FACTOR_2_FLAG ? (THREADING_BLOCK_SIZE * 2) : THREADING_BLOCK_SIZE;
+
+  constexpr int WORK_BLOCK_SIZE = 16;
+  constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
+  constexpr bool COARSEN_FACTOR_2_FLAG_Y = true;
+  constexpr int THREADING_BLOCK_SIZE_X =
+      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+  constexpr int THREADING_BLOCK_SIZE_Y =
+      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
 
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = attn_score_weight.size(1);
@@ -136,22 +144,23 @@ void full_graph_hetero_attention_ops(
   // NB: my shmem sgemm matmul scheme
   const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, num_heads);
-  const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
+  const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
 
-  HET_HGTFusedAttnScoreFwProp<COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE,
-                              int64_t, int64_t*><<<nblks, nthrs, 0, stream>>>(
-      applied_klinear_node_features.data_ptr<float>(),
-      applied_qlinear_node_features.data_ptr<float>(),
-      attn_score_weight.data_ptr<float>(),
-      attn_score_inner_product.data_ptr<float>(),
-      unnormalized_attn_score.data_ptr<float>(),
-      separate_coo_row_idx.data_ptr<int64_t>(),
-      separate_coo_col_idx.data_ptr<int64_t>(),
-      separate_coo_eids.data_ptr<int64_t>(),
-      separate_coo_relptrs.data_ptr<int64_t>(),
-      thrust::raw_pointer_cast(
-          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-      num_relations, num_input_dim, num_output_dim, num_heads);
+  HET_HGTFusedAttnScoreFwProp<COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y,
+                              WORK_BLOCK_SIZE, int64_t, int64_t*>
+      <<<nblks, nthrs, 0, stream>>>(
+          applied_klinear_node_features.data_ptr<float>(),
+          applied_qlinear_node_features.data_ptr<float>(),
+          attn_score_weight.data_ptr<float>(),
+          attn_score_inner_product.data_ptr<float>(),
+          unnormalized_attn_score.data_ptr<float>(),
+          separate_coo_row_idx.data_ptr<int64_t>(),
+          separate_coo_col_idx.data_ptr<int64_t>(),
+          separate_coo_eids.data_ptr<int64_t>(),
+          separate_coo_relptrs.data_ptr<int64_t>(),
+          thrust::raw_pointer_cast(
+              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+          num_relations, num_input_dim, num_output_dim, num_heads);
 }
 }  // namespace EdgeParallel
 }  // namespace SeparateCOO
@@ -185,10 +194,13 @@ void full_graph_hetero_attention_ops(
   // inner_product and back prop of W*t via RGNN relational_matmul
 
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  constexpr int THREADING_BLOCK_SIZE = 16;
-  constexpr bool COARSEN_FACTOR_2_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE =
-      COARSEN_FACTOR_2_FLAG ? (THREADING_BLOCK_SIZE * 2) : THREADING_BLOCK_SIZE;
+  constexpr int WORK_BLOCK_SIZE = 32;
+  constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
+  constexpr bool COARSEN_FACTOR_2_FLAG_Y = true;
+  constexpr int THREADING_BLOCK_SIZE_X =
+      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+  constexpr int THREADING_BLOCK_SIZE_Y =
+      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
 
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = attn_score_weight_transposed.size(1);
@@ -229,15 +241,16 @@ void full_graph_hetero_attention_ops(
       ceil_div<>(num_fw_output_dim, (long)WORK_BLOCK_SIZE),
       ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE),
       num_heads * grid_dim_y);
-  const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
+  const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
 
   // delta_k = delta_inner_product*weight_transposed =
   // delta_attn_score*q*weight_transposed
 
   // delta_weight=delta_inner_product*k=delta_attn_score*q*k
 
-  HET_HGTFusedAttnScoreDeltaKVectBckProp<
-      COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*>
+  HET_HGTFusedAttnScoreDeltaKVectBckProp<COARSEN_FACTOR_2_FLAG_X,
+                                         COARSEN_FACTOR_2_FLAG_Y,
+                                         WORK_BLOCK_SIZE, int64_t, int64_t*>
       <<<nblks, nthrs, 0, stream>>>(
           applied_qlinear_node_features.data_ptr<float>(),
           attn_score_weight_transposed.data_ptr<float>(),
@@ -249,8 +262,9 @@ void full_graph_hetero_attention_ops(
           thrust::raw_pointer_cast(
               dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
           num_relations, num_fw_input_dim, num_fw_output_dim, num_heads);
-  HET_HGTFusedAttnScoreDeltaWeightBckProp<
-      COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*>
+  HET_HGTFusedAttnScoreDeltaWeightBckProp<COARSEN_FACTOR_2_FLAG_X,
+                                          COARSEN_FACTOR_2_FLAG_Y,
+                                          WORK_BLOCK_SIZE, int64_t, int64_t*>
       <<<nblks_outer_product, nthrs, 0, stream>>>(
           applied_klinear_node_features.data_ptr<float>(),
           applied_qlinear_node_features.data_ptr<float>(),
@@ -309,10 +323,13 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
     at::Tensor& grad_node_feat_input, at::Tensor& grad_weights,
     at::Tensor& grad_edge_norm, at::Tensor& grad_node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  constexpr int THREADING_BLOCK_SIZE = 16;
-  constexpr bool COARSEN_FACTOR_2_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE =
-      COARSEN_FACTOR_2_FLAG ? (THREADING_BLOCK_SIZE * 2) : THREADING_BLOCK_SIZE;
+  constexpr int WORK_BLOCK_SIZE = 32;
+  constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
+  constexpr bool COARSEN_FACTOR_2_FLAG_Y = true;
+  constexpr int THREADING_BLOCK_SIZE_X =
+      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+  constexpr int THREADING_BLOCK_SIZE_Y =
+      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
 
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = weights_transposed.size(1);
@@ -348,35 +365,34 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
   const dim3 nblks_outer_product(
       ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
       ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), num_heads * grid_dim_y);
-  const dim3 nthrs(THREADING_BLOCK_SIZE, THREADING_BLOCK_SIZE);
+  const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
 
   HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp<
-      COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*>
-      <<<nblks, nthrs, 0, stream>>>(
-          grad_node_feat_output.data_ptr<float>(),
-          weights_transposed.data_ptr<float>(),
-          grad_node_feat_input.data_ptr<float>(), edge_norm.data_ptr<float>(),
-          grad_edge_norm.data_ptr<float>(),
-          separate_coo_row_idx.data_ptr<int64_t>(),
-          separate_coo_col_idx.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations, num_output_dim, num_input_dim, num_heads);
+      COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
+      int64_t, int64_t*><<<nblks, nthrs, 0, stream>>>(
+      grad_node_feat_output.data_ptr<float>(),
+      weights_transposed.data_ptr<float>(),
+      grad_node_feat_input.data_ptr<float>(), edge_norm.data_ptr<float>(),
+      grad_edge_norm.data_ptr<float>(),
+      separate_coo_row_idx.data_ptr<int64_t>(),
+      separate_coo_col_idx.data_ptr<int64_t>(),
+      separate_coo_eids.data_ptr<int64_t>(),
+      separate_coo_relptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+      num_relations, num_output_dim, num_input_dim, num_heads);
   HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp<
-      COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, int64_t, int64_t*>
-      <<<nblks_outer_product, nthrs, 0, stream>>>(
-          node_feat_input.data_ptr<float>(),
-          grad_node_feat_output.data_ptr<float>(),
-          grad_weights.data_ptr<float>(), edge_norm.data_ptr<float>(),
-          separate_coo_row_idx.data_ptr<int64_t>(),
-          separate_coo_col_idx.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations, num_input_dim, num_output_dim, num_heads);
+      COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
+      int64_t, int64_t*><<<nblks_outer_product, nthrs, 0, stream>>>(
+      node_feat_input.data_ptr<float>(),
+      grad_node_feat_output.data_ptr<float>(), grad_weights.data_ptr<float>(),
+      edge_norm.data_ptr<float>(), separate_coo_row_idx.data_ptr<int64_t>(),
+      separate_coo_col_idx.data_ptr<int64_t>(),
+      separate_coo_eids.data_ptr<int64_t>(),
+      separate_coo_relptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+      num_relations, num_input_dim, num_output_dim, num_heads);
 }
 
 }  // namespace EdgeParallel

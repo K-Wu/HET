@@ -4,14 +4,16 @@
 #include "my_shmem_sgemm_func_rgcn_hgt_functor.cu.h"
 #include "utils.cu.h"
 
-template <bool COARSEN_FACTOR_2_FLAG, int THREADING_BLOCK_SIZE, typename Idx,
-          typename IdxPtr, bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
+template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
+          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr,
+          bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
           int DoInnerProductSwitch,
           bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag>
 class _simplified_basic_MatMulKernel<
-    false, COARSEN_FACTOR_2_FLAG, THREADING_BLOCK_SIZE, Idx, IdxPtr,
-    HGT_INSTEAD_OF_RGCN_FLAG, OuterProductFlag, DoInnerProductSwitch,
-    InnerProductGatherListNodeInsteadOfEdge, NoEdgeNormFlag> {
+    false, COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE,
+    Idx, IdxPtr, HGT_INSTEAD_OF_RGCN_FLAG, OuterProductFlag,
+    DoInnerProductSwitch, InnerProductGatherListNodeInsteadOfEdge,
+    NoEdgeNormFlag> {
  public:
   // vanilla tiled shmem gemm code from
   // http://www.shodor.org/media/content//petascale/materials/UPModules/matrixMultiplication/moduleDocument.pdf
@@ -52,12 +54,17 @@ class _simplified_basic_MatMulKernel<
     // if constexpr(!DoHalfGradNormFlag){
     //   assert(inner_product == nullptr);
     // }
+
+    constexpr int COARSEN_DIVISOR_FACTOR =
+        (COARSEN_FACTOR_2_FLAG_X ? 2 : 1) * (COARSEN_FACTOR_2_FLAG_Y ? 2 : 1);
     if constexpr (!HGT_INSTEAD_OF_RGCN_FLAG) {
       // assuming this case is RGCN and there is no multiple head
       assert((blockDim.z == 1));
     }  // otherwise assuming HGT
-    constexpr int SHMEM_BLOCK_SIZE =
-        COARSEN_FACTOR_2_FLAG ? THREADING_BLOCK_SIZE * 2 : THREADING_BLOCK_SIZE;
+    constexpr bool THREADING_BLOCK_SIZE_X =
+        COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE;
+    constexpr bool THREADING_BLOCK_SIZE_Y =
+        COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE;
     Idx idx_head = blockIdx.z;
     IdxPtr A_gather_list;
     IdxPtr C_scatter_list;
@@ -105,14 +112,25 @@ class _simplified_basic_MatMulKernel<
       // BLOCK_SIZE]; Each thread computes one element of Csub by accumulating
       // results into Cvalue
       float Cvalue = 0.0f;
-      float Cvalue_1 = 0.0f;
-      float Cvalue_2 = 0.0f;
-      float Cvalue_3 = 0.0f;
+      float Cvalue_1;
+      float Cvalue_2;
+      float Cvalue_3;
+      if constexpr (COARSEN_FACTOR_2_FLAG_X || COARSEN_FACTOR_2_FLAG_Y) {
+        Cvalue_1 = 0.0f;
+      }
+      if constexpr (COARSEN_FACTOR_2_FLAG_X && COARSEN_FACTOR_2_FLAG_Y) {
+        Cvalue_2 = 0.0f;
+        Cvalue_3 = 0.0f;
+      }
+      float InnerProductTerm;
+      float InnerProductTerm_1;
+      float InnerProductTerm_2;
+      float InnerProductTerm_3;
 
       // Thread row and column within Csub
       Idx thIdxRow_initial = threadIdx.y;
       Idx thIdxFeat_initial = threadIdx.x;
-      if constexpr (COARSEN_FACTOR_2_FLAG) {
+      if constexpr (COARSEN_FACTOR_2_FLAG_X || COARSEN_FACTOR_2_FLAG_Y) {
         Idx thIdx = threadIdx.y * blockDim.x + threadIdx.x;
         thIdxRow_initial = thIdx / SHMEM_BLOCK_SIZE;
         thIdxFeat_initial = thIdx % SHMEM_BLOCK_SIZE;
@@ -121,6 +139,71 @@ class _simplified_basic_MatMulKernel<
       // required to compute Csub
       // Multiply each pair of sub-matrices together
       // and accumulate the results
+
+      // load inner product term in advance
+      if constexpr (DoInnerProductSwitch > 0) {
+        Idx thIdxRow =
+            thIdxRow_initial + 0 * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR);
+        Idx thIdxFeat = thIdxFeat_initial;
+        bool WriteCInRangeFlag =
+            thIdxRow + blockRow * SHMEM_BLOCK_SIZE < numARows &&
+            blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols;
+        InnerProductTerm =
+            WriteCInRangeFlag
+                ? input_node_feat_for_inner_product
+                      [C_scatter_list[thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
+                                      blockRowJobEntryBeg] *
+                           num_B_cols * num_heads +
+                       idx_head * num_B_cols + blockFeat * SHMEM_BLOCK_SIZE +
+                       thIdxFeat]
+                : 0.0f;
+        if constexpr (COARSEN_FACTOR_2_FLAG_X || COARSEN_FACTOR_2_FLAG_Y) {
+          thIdxRow = thIdxRow_initial +
+                     1 * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR);
+          WriteCInRangeFlag =
+              thIdxRow + blockRow * SHMEM_BLOCK_SIZE < numARows &&
+              blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols;
+          InnerProductTerm_1 =
+              WriteCInRangeFlag
+                  ? input_node_feat_for_inner_product
+                        [C_scatter_list[thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
+                                        blockRowJobEntryBeg] *
+                             num_B_cols * num_heads +
+                         idx_head * num_B_cols + blockFeat * SHMEM_BLOCK_SIZE +
+                         thIdxFeat]
+                  : 0.0f;
+        }
+        if constexpr (COARSEN_FACTOR_2_FLAG_X && COARSEN_FACTOR_2_FLAG_Y) {
+          thIdxRow = thIdxRow_initial +
+                     2 * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR);
+          WriteCInRangeFlag =
+              thIdxRow + blockRow * SHMEM_BLOCK_SIZE < numARows &&
+              blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols;
+          InnerProductTerm_2 =
+              WriteCInRangeFlag
+                  ? input_node_feat_for_inner_product
+                        [C_scatter_list[thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
+                                        blockRowJobEntryBeg] *
+                             num_B_cols * num_heads +
+                         idx_head * num_B_cols + blockFeat * SHMEM_BLOCK_SIZE +
+                         thIdxFeat]
+                  : 0.0f;
+          thIdxRow = thIdxRow_initial +
+                     3 * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR);
+          WriteCInRangeFlag =
+              thIdxRow + blockRow * SHMEM_BLOCK_SIZE < numARows &&
+              blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols;
+          InnerProductTerm_3 =
+              WriteCInRangeFlag
+                  ? input_node_feat_for_inner_product
+                        [C_scatter_list[thIdxRow + blockRow * SHMEM_BLOCK_SIZE +
+                                        blockRowJobEntryBeg] *
+                             num_B_cols * num_heads +
+                         idx_head * num_B_cols + blockFeat * SHMEM_BLOCK_SIZE +
+                         thIdxFeat]
+                  : 0.0f;
+        }
+      }
 
       Idx mLoopBeg, mLoopEnd, mLoopInc;
       if constexpr (OuterProductFlag) {
@@ -145,10 +228,11 @@ class _simplified_basic_MatMulKernel<
 
         // Get sub-matrix Asub of A
         // Asub = &A[blockRow * BLOCK_SIZE * num_A_cols + m * BLOCK_SIZE];
-        for (Idx loadLoopIdx = 0; loadLoopIdx < (COARSEN_FACTOR_2_FLAG ? 4 : 1);
+        for (Idx loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR;
              loadLoopIdx++) {
           Idx thIdxRow =
-              thIdxRow_initial + loadLoopIdx * (SHMEM_BLOCK_SIZE / 4);
+              thIdxRow_initial +
+              loadLoopIdx * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR);
           Idx thIdxFeat = thIdxFeat_initial;
           if constexpr (OuterProductFlag) {
             As[thIdxFeat][thIdxRow] =
@@ -267,12 +351,17 @@ class _simplified_basic_MatMulKernel<
         // Multiply Asub and Bsub together
         for (int e = 0; e < SHMEM_BLOCK_SIZE; ++e) {
           Cvalue += As[thIdxRow_initial][e] * Bs[e][thIdxFeat_initial];
-          if constexpr (COARSEN_FACTOR_2_FLAG) {
-            Cvalue_1 += As[thIdxRow_initial + 1 * (SHMEM_BLOCK_SIZE / 4)][e] *
+          if constexpr (COARSEN_FACTOR_2_FLAG_X || COARSEN_FACTOR_2_FLAG_Y) {
+            Cvalue_1 += As[thIdxRow_initial +
+                           1 * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR)][e] *
                         Bs[e][thIdxFeat_initial];
-            Cvalue_2 += As[thIdxRow_initial + 2 * (SHMEM_BLOCK_SIZE / 4)][e] *
+          }
+          if constexpr (COARSEN_FACTOR_2_FLAG_X && COARSEN_FACTOR_2_FLAG_Y) {
+            Cvalue_2 += As[thIdxRow_initial +
+                           2 * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR)][e] *
                         Bs[e][thIdxFeat_initial];
-            Cvalue_3 += As[thIdxRow_initial + 3 * (SHMEM_BLOCK_SIZE / 4)][e] *
+            Cvalue_3 += As[thIdxRow_initial +
+                           3 * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR)][e] *
                         Bs[e][thIdxFeat_initial];
           }
         }
@@ -295,17 +384,28 @@ class _simplified_basic_MatMulKernel<
 
       // Write Csub to device memory
       // Each thread writes one element
-      for (Idx storeLoopIdx = 0; storeLoopIdx < (COARSEN_FACTOR_2_FLAG ? 4 : 1);
+      for (Idx storeLoopIdx = 0; storeLoopIdx < COARSEN_DIVISOR_FACTOR;
            storeLoopIdx++) {
-        Idx thIdxRow = thIdxRow_initial + storeLoopIdx * (SHMEM_BLOCK_SIZE / 4);
+        Idx thIdxRow =
+            thIdxRow_initial +
+            storeLoopIdx * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR);
         Idx thIdxFeat = thIdxFeat_initial;
-        if constexpr (COARSEN_FACTOR_2_FLAG) {
+        if constexpr (COARSEN_FACTOR_2_FLAG_X || COARSEN_FACTOR_2_FLAG_Y) {
           if (storeLoopIdx == 1) {
             Cvalue = Cvalue_1;
+            if constexpr (DoInnerProductSwitch > 0) {
+              InnerProductTerm = InnerProductTerm_1;
+            }
           } else if (storeLoopIdx == 2) {
             Cvalue = Cvalue_2;
+            if constexpr (DoInnerProductSwitch > 0) {
+              InnerProductTerm = InnerProductTerm_2;
+            }
           } else if (storeLoopIdx == 3) {
             Cvalue = Cvalue_3;
+            if constexpr (DoInnerProductSwitch > 0) {
+              InnerProductTerm = InnerProductTerm_3;
+            }
           }
         }
         if constexpr (OuterProductFlag) {
@@ -384,14 +484,7 @@ class _simplified_basic_MatMulKernel<
                                                 blockRowJobEntryBeg] *
                                            num_heads +
                                        idx_head],
-                        Cvalue *
-                            input_node_feat_for_inner_product
-                                [C_scatter_list[thIdxRow +
-                                                blockRow * SHMEM_BLOCK_SIZE +
-                                                blockRowJobEntryBeg] *
-                                     num_B_cols * num_heads +
-                                 idx_head * num_B_cols +
-                                 blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat]);
+                        Cvalue * InnerProductTerm);
             }
             // atomicAdd(&GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
             //                               AdvancedScatterCFlag>(
@@ -409,8 +502,8 @@ class _simplified_basic_MatMulKernel<
   }
 };
 
-template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
-          typename IdxPtr>
+template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
+          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void __launch_bounds__(256, 3)
     HET_RGCNMatmulNoScatterGatherListFwProp(
         float* node_feat_input, float* weights,
@@ -422,23 +515,25 @@ __global__ void __launch_bounds__(256, 3)
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx,
-                                 IdxPtr, false, false, 0, false, false>::
-      exec_function(
-          node_feat_input, &weights[idx_relation * input_dim * output_dim],
-          linear_projected_node_feat, edge_norm, nullptr, nullptr,
-          separate_coo_row_idx, separate_coo_col_idx, separate_coo_eids,
-          idx_relation,
-          separate_coo_rel_ptrs[idx_relation + 1] -
-              separate_coo_rel_ptrs[idx_relation],
-          accum_num_blocks_per_relation[idx_relation],
-          (accum_num_blocks_per_relation[idx_relation + 1] -
-           accum_num_blocks_per_relation[idx_relation]),
-          separate_coo_rel_ptrs[idx_relation], input_dim, output_dim, 1);
+  _simplified_basic_MatMulKernel<
+      false, COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE,
+      Idx, IdxPtr, false, false, 0, false,
+      false>::exec_function(node_feat_input,
+                            &weights[idx_relation * input_dim * output_dim],
+                            linear_projected_node_feat, edge_norm, nullptr,
+                            nullptr, separate_coo_row_idx, separate_coo_col_idx,
+                            separate_coo_eids, idx_relation,
+                            separate_coo_rel_ptrs[idx_relation + 1] -
+                                separate_coo_rel_ptrs[idx_relation],
+                            accum_num_blocks_per_relation[idx_relation],
+                            (accum_num_blocks_per_relation[idx_relation + 1] -
+                             accum_num_blocks_per_relation[idx_relation]),
+                            separate_coo_rel_ptrs[idx_relation], input_dim,
+                            output_dim, 1);
 }
 
-template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
-          typename IdxPtr>
+template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
+          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
     float* node_feat_input, float* delta_linear_projected_node_feat,
     float* delta_weights, float* edge_norm, IdxPtr separate_coo_row_idx,
@@ -448,7 +543,8 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx,
+  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
+                                 COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, false, false, 0, false, false>::
       exec_function(
           node_feat_input, delta_linear_projected_node_feat,
@@ -464,8 +560,8 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
           delta_input_dim, 1);
 }
 
-template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
-          typename IdxPtr>
+template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
+          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
     float* delta_linear_projected_node_feat, float* weights_transposed,
     float* delta_node_feat_input, float* edge_norm, float* grad_edge_norm,
@@ -476,7 +572,8 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx,
+  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
+                                 COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, false, false, 1, true, false>::
       exec_function(delta_linear_projected_node_feat,
                     &weights_transposed[idx_relation * delta_output_dim *
@@ -496,8 +593,8 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
 // delta weight: A feat_input, B delta_feat_out, C delta_weight,
 // delta in: A delta_feat_out, B weight_transposed, C delta_feat_in,
 
-template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
-          typename IdxPtr>
+template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
+          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void __launch_bounds__(256, 3)
     HET_HGTMessageGenerationAndAccumulationFwProp(
         float* node_feat_input, float* weights,
@@ -509,7 +606,8 @@ __global__ void __launch_bounds__(256, 3)
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx,
+  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
+                                 COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, true, false, 0, false, false>::
       exec_function(node_feat_input,
                     &weights[idx_relation * num_heads * input_dim * output_dim],
@@ -525,8 +623,8 @@ __global__ void __launch_bounds__(256, 3)
                     num_heads);
 }
 
-template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
-          typename IdxPtr>
+template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
+          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp(
     float* node_feat_input, float* delta_linear_projected_node_feat,
     float* delta_weights, float* edge_norm, IdxPtr separate_coo_row_idx,
@@ -538,24 +636,26 @@ __global__ void HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx,
-                                 IdxPtr, true, true, 0, false, false>::
-      exec_function(node_feat_input, delta_linear_projected_node_feat,
-                    &delta_weights[idx_relation * num_heads * input_dim *
-                                   delta_output_dim],
-                    edge_norm, nullptr, nullptr, separate_coo_row_idx,
-                    separate_coo_col_idx, separate_coo_eids, idx_relation,
-                    separate_coo_rel_ptrs[idx_relation + 1] -
-                        separate_coo_rel_ptrs[idx_relation],
-                    accum_num_blocks_per_relation[idx_relation],
-                    (accum_num_blocks_per_relation[idx_relation + 1] -
-                     accum_num_blocks_per_relation[idx_relation]),
-                    separate_coo_rel_ptrs[idx_relation], input_dim,
-                    delta_output_dim, num_heads);
+  _simplified_basic_MatMulKernel<
+      false, COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE,
+      Idx, IdxPtr, true, true, 0, false,
+      false>::exec_function(node_feat_input, delta_linear_projected_node_feat,
+                            &delta_weights[idx_relation * num_heads *
+                                           input_dim * delta_output_dim],
+                            edge_norm, nullptr, nullptr, separate_coo_row_idx,
+                            separate_coo_col_idx, separate_coo_eids,
+                            idx_relation,
+                            separate_coo_rel_ptrs[idx_relation + 1] -
+                                separate_coo_rel_ptrs[idx_relation],
+                            accum_num_blocks_per_relation[idx_relation],
+                            (accum_num_blocks_per_relation[idx_relation + 1] -
+                             accum_num_blocks_per_relation[idx_relation]),
+                            separate_coo_rel_ptrs[idx_relation], input_dim,
+                            delta_output_dim, num_heads);
 }
 
-template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
-          typename IdxPtr>
+template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
+          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void
 HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
     float* delta_linear_projected_node_feat, float* weights_transposed,
@@ -567,7 +667,8 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx,
+  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
+                                 COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, true, false, 1, false, false>::
       exec_function(delta_linear_projected_node_feat,
                     &weights_transposed[idx_relation * num_heads *
@@ -584,9 +685,9 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
                     delta_input_dim, num_heads);
 }
 
-template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
-          typename IdxPtr>
-__global__ void __launch_bounds__(64, 12) HET_HGTFusedAttnScoreFwProp(
+template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
+          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
+__global__ void __launch_bounds__(64) HET_HGTFusedAttnScoreFwProp(
     float* applied_klinear_node_features, float* applied_qlinear_node_features,
     float* attn_score_weight, float* attn_score_inner_product,
     float* unnormalized_attn_score, IdxPtr separate_coo_row_idx,
@@ -598,7 +699,8 @@ __global__ void __launch_bounds__(64, 12) HET_HGTFusedAttnScoreFwProp(
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   // NB: should be mode 1 since we need to output inner product for bck prop use
-  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx,
+  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
+                                 COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, true, false, 1, false, true>::
       exec_function(
           applied_klinear_node_features,
@@ -618,8 +720,8 @@ __global__ void __launch_bounds__(64, 12) HET_HGTFusedAttnScoreFwProp(
 
 // delta_k = delta_inner_product*weight_transposed =
 // delta_attn_score*q*weight_transposed
-template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
-          typename IdxPtr>
+template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
+          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void HET_HGTFusedAttnScoreDeltaKVectBckProp(
     float* applied_qlinear_node_features, float* attn_score_weight_transposed,
     float* delta_applied_klinear_node_features, float* grad_attn_score,
@@ -632,7 +734,8 @@ __global__ void HET_HGTFusedAttnScoreDeltaKVectBckProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx,
+  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
+                                 COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, true, false, 0, false, false>::
       exec_function(applied_qlinear_node_features,
                     &attn_score_weight_transposed[idx_relation * num_heads *
@@ -651,8 +754,8 @@ __global__ void HET_HGTFusedAttnScoreDeltaKVectBckProp(
 }
 
 // delta_weight=delta_attn_score*inner_product_transposed
-template <bool COARSEN_FACTOR_2_FLAG, int BLOCK_SIZE, typename Idx,
-          typename IdxPtr>
+template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
+          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void HET_HGTFusedAttnScoreDeltaWeightBckProp(
     float* applied_klinear_node_features, float* applied_qlinear_node_features,
     float* attn_score_weight, float* grad_attn_score,
@@ -665,7 +768,8 @@ __global__ void HET_HGTFusedAttnScoreDeltaWeightBckProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG, BLOCK_SIZE, Idx,
+  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
+                                 COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, true, true, 0, false, false>::
       exec_function(
           applied_klinear_node_features, applied_qlinear_node_features,
