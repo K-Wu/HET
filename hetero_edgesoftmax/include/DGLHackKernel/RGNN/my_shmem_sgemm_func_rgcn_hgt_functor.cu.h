@@ -15,7 +15,7 @@ class _simplified_basic_MatMulKernel {
       float* input_node_feat_for_inner_product, IdxPtr separate_coo_row_idx,
       IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids, Idx idx_relation,
       Idx numARows, Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
-      Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, Idx num_heads) {
+      Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, int num_heads) {
     assert(0 && "not implemented");
     // CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(DOUBLE_BUFFER_FLAG&&DOUBLE_BUFFER_FLAG,
     // "only partial specialized version should be called");
@@ -55,7 +55,7 @@ class _simplified_basic_MatMulKernel<
       float* input_node_feat_for_inner_product, IdxPtr separate_coo_row_idx,
       IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids, Idx idx_relation,
       Idx numARows, Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
-      Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, Idx num_heads) {
+      Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, int num_heads) {
     // num_B_cols is output_dim//num_heads as forward propagation weight,
     // output_dim//num_heads as backward propagation weight, and in_feat_dim as
     // features or delta features. num_A_cols is input_dim as forward

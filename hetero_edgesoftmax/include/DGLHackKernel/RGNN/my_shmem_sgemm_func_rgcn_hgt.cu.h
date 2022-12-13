@@ -37,7 +37,7 @@ class _simplified_basic_MatMulKernel<
       float* input_node_feat_for_inner_product, IdxPtr separate_coo_row_idx,
       IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids, Idx idx_relation,
       Idx numARows, Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
-      Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, Idx num_heads) {
+      Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, int num_heads) {
     // num_B_cols is output_dim//num_heads as forward propagation weight,
     // output_dim//num_heads as backward propagation weight, and in_feat_dim as
     // features or delta features. num_A_cols is input_dim as forward
@@ -65,7 +65,9 @@ class _simplified_basic_MatMulKernel<
         COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE;
     constexpr bool THREADING_BLOCK_SIZE_Y =
         COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE;
-    Idx idx_head = blockIdx.z % num_heads;
+    // TODO: use int for blockIdx threadIdx related variables
+    // NB: this scheme does not support num_heads > int_max
+    int idx_head = blockIdx.z % num_heads;
     IdxPtr A_gather_list;
     IdxPtr C_scatter_list;
     IdxPtr B_gather_list;
@@ -86,10 +88,10 @@ class _simplified_basic_MatMulKernel<
       }
     }
     // Idx blockRow = blockIdx.y - blockIdxAlongRowBeg;
-    Idx blockFeat = blockIdx.x;  // when OuterProductFlag==True, it is in [0,
+    int blockFeat = blockIdx.x;  // when OuterProductFlag==True, it is in [0,
                                  // output_dim//num_heads)
 
-    Idx blockRowLoopBeg, blockRowLoopEnd, blockRowLoopInc;
+    int blockRowLoopBeg, blockRowLoopEnd, blockRowLoopInc;
     if constexpr (OuterProductFlag) {
       blockRowLoopBeg =
           blockIdx.y;  // [0, input_dim) // check my_shmem_sgemm_func.cu.h NB on
@@ -103,7 +105,7 @@ class _simplified_basic_MatMulKernel<
       blockRowLoopInc = strideNumBlocksAlongRow;
     }
 
-    for (Idx blockRow = blockRowLoopBeg; blockRow < blockRowLoopEnd;
+    for (int blockRow = blockRowLoopBeg; blockRow < blockRowLoopEnd;
          blockRow += blockRowLoopInc) {
       // NB: blockTask == blockIdx.x / ceil_div( num_B_cols, BLOCK_SIZE)
 
@@ -128,10 +130,10 @@ class _simplified_basic_MatMulKernel<
       float InnerProductTerm_3;
 
       // Thread row and column within Csub
-      Idx thIdxRow_initial = threadIdx.y;
-      Idx thIdxFeat_initial = threadIdx.x;
+      int thIdxRow_initial = threadIdx.y;
+      int thIdxFeat_initial = threadIdx.x;
       if constexpr (COARSEN_FACTOR_2_FLAG_X || COARSEN_FACTOR_2_FLAG_Y) {
-        Idx thIdx = threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x;
+        int thIdx = threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x;
         thIdxRow_initial = thIdx / SHMEM_BLOCK_SIZE;
         thIdxFeat_initial = thIdx % SHMEM_BLOCK_SIZE;
       }
@@ -142,9 +144,9 @@ class _simplified_basic_MatMulKernel<
 
       // load inner product term in advance
       if constexpr (DoInnerProductSwitch > 0) {
-        Idx thIdxRow =
+        int thIdxRow =
             thIdxRow_initial + 0 * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR);
-        Idx thIdxFeat = thIdxFeat_initial;
+        int thIdxFeat = thIdxFeat_initial;
         bool WriteCInRangeFlag =
             thIdxRow + blockRow * SHMEM_BLOCK_SIZE < numARows &&
             blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols;
@@ -205,18 +207,18 @@ class _simplified_basic_MatMulKernel<
         }
       }
 
-      Idx mLoopBeg, mLoopEnd, mLoopInc;
+      int mLoopBeg, mLoopEnd, mLoopInc;
       if constexpr (OuterProductFlag) {
-        Idx blockAssignmentIdx = blockIdx.z / num_heads;
+        int blockAssignmentIdx = blockIdx.z / num_heads;
         mLoopBeg = blockAssignmentIdx - blockIdxAlongRowBeg;
-        mLoopEnd = ceil_div<>(numARows, (int64_t)SHMEM_BLOCK_SIZE);
+        mLoopEnd = ceil_div<>(numARows, (Idx)SHMEM_BLOCK_SIZE);
         mLoopInc = strideNumBlocksAlongRow;
       } else {
         mLoopBeg = 0;
         mLoopEnd = ceil_div<Idx>(num_A_cols, SHMEM_BLOCK_SIZE);
         mLoopInc = 1;
       }
-      for (Idx m = mLoopBeg; m < mLoopEnd; m += mLoopInc) {
+      for (int m = mLoopBeg; m < mLoopEnd; m += mLoopInc) {
         // Shared memory used to store Asub and Bsub respectively
         __shared__ float As[SHMEM_BLOCK_SIZE][SHMEM_BLOCK_SIZE];
         __shared__ float Bs[SHMEM_BLOCK_SIZE][SHMEM_BLOCK_SIZE];
@@ -228,12 +230,12 @@ class _simplified_basic_MatMulKernel<
 
         // Get sub-matrix Asub of A
         // Asub = &A[blockRow * BLOCK_SIZE * num_A_cols + m * BLOCK_SIZE];
-        for (Idx loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR;
+        for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR;
              loadLoopIdx++) {
-          Idx thIdxRow =
+          int thIdxRow =
               thIdxRow_initial +
               loadLoopIdx * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR);
-          Idx thIdxFeat = thIdxFeat_initial;
+          int thIdxFeat = thIdxFeat_initial;
           if constexpr (OuterProductFlag) {
             As[thIdxFeat][thIdxRow] =
                 (thIdxRow + (m)*SHMEM_BLOCK_SIZE + blockRowJobEntryBeg <
@@ -384,12 +386,12 @@ class _simplified_basic_MatMulKernel<
 
       // Write Csub to device memory
       // Each thread writes one element
-      for (Idx storeLoopIdx = 0; storeLoopIdx < COARSEN_DIVISOR_FACTOR;
+      for (int storeLoopIdx = 0; storeLoopIdx < COARSEN_DIVISOR_FACTOR;
            storeLoopIdx++) {
-        Idx thIdxRow =
+        int thIdxRow =
             thIdxRow_initial +
             storeLoopIdx * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR);
-        Idx thIdxFeat = thIdxFeat_initial;
+        int thIdxFeat = thIdxFeat_initial;
         if constexpr (COARSEN_FACTOR_2_FLAG_X || COARSEN_FACTOR_2_FLAG_Y) {
           if (storeLoopIdx == 1) {
             Cvalue = Cvalue_1;
@@ -603,7 +605,7 @@ __global__ void __launch_bounds__(256, 3)
         /*float* relation_pri, */ IdxPtr separate_coo_row_idx,
         IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
         IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
-        Idx num_relations, Idx input_dim, Idx output_dim, Idx num_heads) {
+        Idx num_relations, Idx input_dim, Idx output_dim, int num_heads) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -631,7 +633,7 @@ __global__ void HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp(
     float* delta_weights, float* edge_norm, IdxPtr separate_coo_row_idx,
     IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
     IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
-    Idx num_relations, Idx input_dim, Idx delta_output_dim, Idx num_heads) {
+    Idx num_relations, Idx input_dim, Idx delta_output_dim, int num_heads) {
   // TODO: block assignment scheme might be different when OuterProductFlag ==
   // True
   Idx idx_block_assignment = blockIdx.y;
@@ -664,7 +666,7 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
     IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
     IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
     int* accum_num_blocks_per_relation, Idx num_relations, Idx delta_output_dim,
-    Idx delta_input_dim, Idx num_heads) {
+    Idx delta_input_dim, int num_heads) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -695,7 +697,7 @@ __global__ void HET_HGTFusedAttnScoreFwProp(
     IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
     IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
     Idx num_relations, Idx fw_input_dim_per_head, Idx fw_output_dim_per_head,
-    Idx num_heads) {
+    int num_heads) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -729,7 +731,7 @@ __global__ void HET_HGTFusedAttnScoreDeltaKVectBckProp(
     IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
     IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
     int* accum_num_blocks_per_relation, Idx num_relations,
-    Idx fw_input_dim_per_head, Idx fw_output_dim_per_head, Idx num_heads) {
+    Idx fw_input_dim_per_head, Idx fw_output_dim_per_head, int num_heads) {
   // edge_norm is delta_attn_score
 
   Idx idx_block_assignment = blockIdx.y;
@@ -763,7 +765,7 @@ __global__ void HET_HGTFusedAttnScoreDeltaWeightBckProp(
     IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
     IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
     int* accum_num_blocks_per_relation, Idx num_relations,
-    Idx fw_input_dim_per_head, Idx fw_output_dim_per_head, Idx num_heads) {
+    Idx fw_input_dim_per_head, Idx fw_output_dim_per_head, int num_heads) {
   // edge_norm is delta_attn_score
 
   Idx idx_block_assignment = blockIdx.y;
