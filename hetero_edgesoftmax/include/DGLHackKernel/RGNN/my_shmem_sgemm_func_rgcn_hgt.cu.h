@@ -65,7 +65,7 @@ class _simplified_basic_MatMulKernel<
         COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE;
     constexpr bool THREADING_BLOCK_SIZE_Y =
         COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE;
-    Idx idx_head = blockIdx.z;
+    Idx idx_head = blockIdx.z % num_heads;
     IdxPtr A_gather_list;
     IdxPtr C_scatter_list;
     IdxPtr B_gather_list;
