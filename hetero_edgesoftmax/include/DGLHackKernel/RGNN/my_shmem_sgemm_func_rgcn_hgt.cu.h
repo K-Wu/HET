@@ -306,12 +306,16 @@ class _simplified_basic_MatMulKernel<
             // NB: this indexing scheme works for both cases whether num_head is
             // 1
 
+            // In this case, B is weight and therefore the indexing scheme is
+            // different, i.e., [num_heads, num_B_rows_feat, num_B_cols_feat]
+            // instead of [num_nodes|edges, num_heads, num_feats]
+            // FIXME: the n_head term in the following indexing scheme may not
+            // be correct.
             Bs[thIdxRow][thIdxFeat] =
                 (m * SHMEM_BLOCK_SIZE + thIdxRow < num_A_cols &&
                  blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols)
-                    ? B[(m * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols *
-                            num_heads +
-                        idx_head * num_B_cols +
+                    ? B[(m * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols +
+                        idx_head * num_B_cols * num_A_cols +
                         (blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat)]
                     : 0.0f;
           }
