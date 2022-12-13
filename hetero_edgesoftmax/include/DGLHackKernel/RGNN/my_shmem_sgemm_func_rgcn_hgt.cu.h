@@ -32,7 +32,7 @@ class _simplified_basic_MatMulKernel<
   // calculation DoInnerProductSwitch 0: no inner product, 1: do inner product,
   // 2: do inner product and do no C inner_product is grad_edge_norm or
   // unnormalized_attn_score
-  __device__ __forceinline__ static void exec_function(
+  __device__ __forceinline__ static void execute_function(
       float* A, float* B, float* C, float* edge_norm, float* inner_product,
       float* input_node_feat_for_inner_product, IdxPtr separate_coo_row_idx,
       IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids, Idx idx_relation,
@@ -518,21 +518,20 @@ __global__ void __launch_bounds__(256, 3)
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _simplified_basic_MatMulKernel<
-      false, COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE,
-      Idx, IdxPtr, false, false, 0, false,
-      false>::exec_function(node_feat_input,
-                            &weights[idx_relation * input_dim * output_dim],
-                            linear_projected_node_feat, edge_norm, nullptr,
-                            nullptr, separate_coo_row_idx, separate_coo_col_idx,
-                            separate_coo_eids, idx_relation,
-                            separate_coo_rel_ptrs[idx_relation + 1] -
-                                separate_coo_rel_ptrs[idx_relation],
-                            accum_num_blocks_per_relation[idx_relation],
-                            (accum_num_blocks_per_relation[idx_relation + 1] -
-                             accum_num_blocks_per_relation[idx_relation]),
-                            separate_coo_rel_ptrs[idx_relation], input_dim,
-                            output_dim, 1);
+  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
+                                 COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
+                                 IdxPtr, false, false, 0, false, false>::
+      execute_function(
+          node_feat_input, &weights[idx_relation * input_dim * output_dim],
+          linear_projected_node_feat, edge_norm, nullptr, nullptr,
+          separate_coo_row_idx, separate_coo_col_idx, separate_coo_eids,
+          idx_relation,
+          separate_coo_rel_ptrs[idx_relation + 1] -
+              separate_coo_rel_ptrs[idx_relation],
+          accum_num_blocks_per_relation[idx_relation],
+          (accum_num_blocks_per_relation[idx_relation + 1] -
+           accum_num_blocks_per_relation[idx_relation]),
+          separate_coo_rel_ptrs[idx_relation], input_dim, output_dim, 1);
 }
 
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
@@ -549,7 +548,7 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
                                  COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, false, false, 0, false, false>::
-      exec_function(
+      execute_function(
           node_feat_input, delta_linear_projected_node_feat,
           &delta_weights[idx_relation * delta_output_dim * delta_input_dim],
           edge_norm, nullptr, nullptr, separate_coo_row_idx,
@@ -578,19 +577,19 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
                                  COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, false, false, 1, true, false>::
-      exec_function(delta_linear_projected_node_feat,
-                    &weights_transposed[idx_relation * delta_output_dim *
-                                        delta_input_dim],
-                    delta_node_feat_input, edge_norm, grad_edge_norm,
-                    input_node_feat_for_grad_norm, separate_coo_row_idx,
-                    separate_coo_col_idx, separate_coo_eids, idx_relation,
-                    separate_coo_rel_ptrs[idx_relation + 1] -
-                        separate_coo_rel_ptrs[idx_relation],
-                    accum_num_blocks_per_relation[idx_relation],
-                    (accum_num_blocks_per_relation[idx_relation + 1] -
-                     accum_num_blocks_per_relation[idx_relation]),
-                    separate_coo_rel_ptrs[idx_relation], delta_output_dim,
-                    delta_input_dim, 1);
+      execute_function(delta_linear_projected_node_feat,
+                       &weights_transposed[idx_relation * delta_output_dim *
+                                           delta_input_dim],
+                       delta_node_feat_input, edge_norm, grad_edge_norm,
+                       input_node_feat_for_grad_norm, separate_coo_row_idx,
+                       separate_coo_col_idx, separate_coo_eids, idx_relation,
+                       separate_coo_rel_ptrs[idx_relation + 1] -
+                           separate_coo_rel_ptrs[idx_relation],
+                       accum_num_blocks_per_relation[idx_relation],
+                       (accum_num_blocks_per_relation[idx_relation + 1] -
+                        accum_num_blocks_per_relation[idx_relation]),
+                       separate_coo_rel_ptrs[idx_relation], delta_output_dim,
+                       delta_input_dim, 1);
 }
 
 // delta weight: A feat_input, B delta_feat_out, C delta_weight,
@@ -612,18 +611,19 @@ __global__ void __launch_bounds__(256, 3)
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
                                  COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, true, false, 0, false, false>::
-      exec_function(node_feat_input,
-                    &weights[idx_relation * num_heads * input_dim * output_dim],
-                    linear_projected_node_feat, edge_norm, nullptr, nullptr,
-                    separate_coo_row_idx, separate_coo_col_idx,
-                    separate_coo_eids, idx_relation,
-                    separate_coo_rel_ptrs[idx_relation + 1] -
-                        separate_coo_rel_ptrs[idx_relation],
-                    accum_num_blocks_per_relation[idx_relation],
-                    (accum_num_blocks_per_relation[idx_relation + 1] -
-                     accum_num_blocks_per_relation[idx_relation]),
-                    separate_coo_rel_ptrs[idx_relation], input_dim, output_dim,
-                    num_heads);
+      execute_function(
+          node_feat_input,
+          &weights[idx_relation * num_heads * input_dim * output_dim],
+          linear_projected_node_feat, edge_norm, nullptr, nullptr,
+          separate_coo_row_idx, separate_coo_col_idx, separate_coo_eids,
+          idx_relation,
+          separate_coo_rel_ptrs[idx_relation + 1] -
+              separate_coo_rel_ptrs[idx_relation],
+          accum_num_blocks_per_relation[idx_relation],
+          (accum_num_blocks_per_relation[idx_relation + 1] -
+           accum_num_blocks_per_relation[idx_relation]),
+          separate_coo_rel_ptrs[idx_relation], input_dim, output_dim,
+          num_heads);
 }
 
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
@@ -639,22 +639,21 @@ __global__ void HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _simplified_basic_MatMulKernel<
-      false, COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE,
-      Idx, IdxPtr, true, true, 0, false,
-      false>::exec_function(node_feat_input, delta_linear_projected_node_feat,
-                            &delta_weights[idx_relation * num_heads *
-                                           input_dim * delta_output_dim],
-                            edge_norm, nullptr, nullptr, separate_coo_row_idx,
-                            separate_coo_col_idx, separate_coo_eids,
-                            idx_relation,
-                            separate_coo_rel_ptrs[idx_relation + 1] -
-                                separate_coo_rel_ptrs[idx_relation],
-                            accum_num_blocks_per_relation[idx_relation],
-                            (accum_num_blocks_per_relation[idx_relation + 1] -
-                             accum_num_blocks_per_relation[idx_relation]),
-                            separate_coo_rel_ptrs[idx_relation], input_dim,
-                            delta_output_dim, num_heads);
+  _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
+                                 COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
+                                 IdxPtr, true, true, 0, false, false>::
+      execute_function(node_feat_input, delta_linear_projected_node_feat,
+                       &delta_weights[idx_relation * num_heads * input_dim *
+                                      delta_output_dim],
+                       edge_norm, nullptr, nullptr, separate_coo_row_idx,
+                       separate_coo_col_idx, separate_coo_eids, idx_relation,
+                       separate_coo_rel_ptrs[idx_relation + 1] -
+                           separate_coo_rel_ptrs[idx_relation],
+                       accum_num_blocks_per_relation[idx_relation],
+                       (accum_num_blocks_per_relation[idx_relation + 1] -
+                        accum_num_blocks_per_relation[idx_relation]),
+                       separate_coo_rel_ptrs[idx_relation], input_dim,
+                       delta_output_dim, num_heads);
 }
 
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
@@ -673,19 +672,19 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
                                  COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, true, false, 1, false, false>::
-      exec_function(delta_linear_projected_node_feat,
-                    &weights_transposed[idx_relation * num_heads *
-                                        delta_output_dim * delta_input_dim],
-                    delta_node_feat_input, edge_norm, grad_edge_norm, nullptr,
-                    separate_coo_row_idx, separate_coo_col_idx,
-                    separate_coo_eids, idx_relation,
-                    separate_coo_rel_ptrs[idx_relation + 1] -
-                        separate_coo_rel_ptrs[idx_relation],
-                    accum_num_blocks_per_relation[idx_relation],
-                    (accum_num_blocks_per_relation[idx_relation + 1] -
-                     accum_num_blocks_per_relation[idx_relation]),
-                    separate_coo_rel_ptrs[idx_relation], delta_output_dim,
-                    delta_input_dim, num_heads);
+      execute_function(delta_linear_projected_node_feat,
+                       &weights_transposed[idx_relation * num_heads *
+                                           delta_output_dim * delta_input_dim],
+                       delta_node_feat_input, edge_norm, grad_edge_norm,
+                       nullptr, separate_coo_row_idx, separate_coo_col_idx,
+                       separate_coo_eids, idx_relation,
+                       separate_coo_rel_ptrs[idx_relation + 1] -
+                           separate_coo_rel_ptrs[idx_relation],
+                       accum_num_blocks_per_relation[idx_relation],
+                       (accum_num_blocks_per_relation[idx_relation + 1] -
+                        accum_num_blocks_per_relation[idx_relation]),
+                       separate_coo_rel_ptrs[idx_relation], delta_output_dim,
+                       delta_input_dim, num_heads);
 }
 
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
@@ -705,7 +704,7 @@ __global__ void HET_HGTFusedAttnScoreFwProp(
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
                                  COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, true, false, 1, false, true>::
-      exec_function(
+      execute_function(
           applied_klinear_node_features,
           &attn_score_weight[idx_relation * num_heads * fw_output_dim_per_head *
                              fw_input_dim_per_head],
@@ -740,20 +739,21 @@ __global__ void HET_HGTFusedAttnScoreDeltaKVectBckProp(
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
                                  COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, true, false, 0, false, false>::
-      exec_function(applied_qlinear_node_features,
-                    &attn_score_weight_transposed[idx_relation * num_heads *
-                                                  fw_output_dim_per_head *
-                                                  fw_input_dim_per_head],
-                    delta_applied_klinear_node_features, grad_attn_score,
-                    nullptr, nullptr, separate_coo_row_idx,
-                    separate_coo_col_idx, separate_coo_eids, idx_relation,
-                    separate_coo_rel_ptrs[idx_relation + 1] -
-                        separate_coo_rel_ptrs[idx_relation],
-                    accum_num_blocks_per_relation[idx_relation],
-                    (accum_num_blocks_per_relation[idx_relation + 1] -
-                     accum_num_blocks_per_relation[idx_relation]),
-                    separate_coo_rel_ptrs[idx_relation], fw_output_dim_per_head,
-                    fw_input_dim_per_head, num_heads);
+      execute_function(applied_qlinear_node_features,
+                       &attn_score_weight_transposed[idx_relation * num_heads *
+                                                     fw_output_dim_per_head *
+                                                     fw_input_dim_per_head],
+                       delta_applied_klinear_node_features, grad_attn_score,
+                       nullptr, nullptr, separate_coo_row_idx,
+                       separate_coo_col_idx, separate_coo_eids, idx_relation,
+                       separate_coo_rel_ptrs[idx_relation + 1] -
+                           separate_coo_rel_ptrs[idx_relation],
+                       accum_num_blocks_per_relation[idx_relation],
+                       (accum_num_blocks_per_relation[idx_relation + 1] -
+                        accum_num_blocks_per_relation[idx_relation]),
+                       separate_coo_rel_ptrs[idx_relation],
+                       fw_output_dim_per_head, fw_input_dim_per_head,
+                       num_heads);
 }
 
 // delta_weight=delta_attn_score*inner_product_transposed
@@ -774,7 +774,7 @@ __global__ void HET_HGTFusedAttnScoreDeltaWeightBckProp(
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
                                  COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, true, true, 0, false, false>::
-      exec_function(
+      execute_function(
           applied_klinear_node_features, applied_qlinear_node_features,
           &attn_score_weight[idx_relation * num_heads * fw_output_dim_per_head *
                              fw_input_dim_per_head],

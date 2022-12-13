@@ -10,7 +10,7 @@ template <bool DOUBLE_BUFFER_FLAG, bool COARSEN_FACTOR_2_FLAG_X,
           bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag>
 class _simplified_basic_MatMulKernel {
  public:
-  __device__ __forceinline__ static void exec_function(
+  __device__ __forceinline__ static void execute_function(
       float* A, float* B, float* C, float* edge_norm, float* inner_product,
       float* input_node_feat_for_inner_product, IdxPtr separate_coo_row_idx,
       IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids, Idx idx_relation,
@@ -50,7 +50,7 @@ class _simplified_basic_MatMulKernel<
   // calculation DoInnerProductSwitch 0: no inner product, 1: do inner product,
   // 2: do inner product and do no C inner_product is grad_edge_norm or
   // unnormalized_attn_score
-  __device__ __forceinline__ static void exec_function(
+  __device__ __forceinline__ static void execute_function(
       float* A, float* B, float* C, float* edge_norm, float* inner_product,
       float* input_node_feat_for_inner_product, IdxPtr separate_coo_row_idx,
       IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids, Idx idx_relation,
