@@ -131,7 +131,7 @@ class _simplified_basic_MatMulKernel<
       Idx thIdxRow_initial = threadIdx.y;
       Idx thIdxFeat_initial = threadIdx.x;
       if constexpr (COARSEN_FACTOR_2_FLAG_X || COARSEN_FACTOR_2_FLAG_Y) {
-        Idx thIdx = threadIdx.y * blockDim.x + threadIdx.x;
+        Idx thIdx = threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x;
         thIdxRow_initial = thIdx / SHMEM_BLOCK_SIZE;
         thIdxFeat_initial = thIdx % SHMEM_BLOCK_SIZE;
       }
@@ -474,6 +474,7 @@ class _simplified_basic_MatMulKernel<
                      thIdxFeat],
                   Cvalue);
             }
+            // TODO: warp-level reduction here
             if constexpr (DoInnerProductSwitch > 0) {
               // TODO: we may hide the global mem read latency by moving input
               // node feat load ahead at the cost of more shmem (copy async) or
@@ -687,7 +688,7 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
 
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(64) HET_HGTFusedAttnScoreFwProp(
+__global__ void HET_HGTFusedAttnScoreFwProp(
     float* applied_klinear_node_features, float* applied_qlinear_node_features,
     float* attn_score_weight, float* attn_score_inner_product,
     float* unnormalized_attn_score, IdxPtr separate_coo_row_idx,

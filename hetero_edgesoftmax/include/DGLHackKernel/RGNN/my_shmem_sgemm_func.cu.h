@@ -143,7 +143,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
     Idx thIdxFeat_initial = threadIdx.x;
     if constexpr (COARSEN_FACTOR_2_FLAG_X || COARSEN_FACTOR_2_FLAG_Y) {
       // redo the thread indexing
-      Idx thIdx = threadIdx.y * blockDim.x + threadIdx.x;
+      Idx thIdx = threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x;
       thIdxRow_initial = thIdx / SHMEM_BLOCK_SIZE;
       thIdxFeat_initial = thIdx % SHMEM_BLOCK_SIZE;
     }
