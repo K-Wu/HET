@@ -61,9 +61,9 @@ class _simplified_basic_MatMulKernel<
       // assuming this case is RGCN and there is no multiple head
       assert((blockDim.z == 1));
     }  // otherwise assuming HGT
-    constexpr bool THREADING_BLOCK_SIZE_X =
+    constexpr int THREADING_BLOCK_SIZE_X =
         COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE;
-    constexpr bool THREADING_BLOCK_SIZE_Y =
+    constexpr int THREADING_BLOCK_SIZE_Y =
         COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE;
     // TODO: use int for blockIdx threadIdx related variables
     // NB: this scheme does not support num_heads > int_max
@@ -421,18 +421,20 @@ class _simplified_basic_MatMulKernel<
           // printf("blockRow %d blockFeat %d thIdxRow %d thIdxFeat %d
           // CWriteFlag %d \n", blockRow, blockFeat, thIdxRow, thIdxFeat,
           // WriteCInRangeFlag);
-          if constexpr (DoInnerProductSwitch <= 1) {
-            if (WriteCInRangeFlag) {
-              // NB: this indexing scheme works for both cases whether num_head
-              // is
-              // 1
-              atomicAdd(
-                  &C[idx_head * num_A_cols /*A is transposed in the fly*/ *
-                         num_B_cols +
-                     (blockRow * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols +
-                     blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat],
-                  Cvalue);
-            }
+          if constexpr (DoInnerProductSwitch > 0) {
+            CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                (DoInnerProductSwitch > 0) && OuterProductFlag,
+                "DoInnerProductSwitch > 0 && OuterProductFlag");
+          }
+          if (WriteCInRangeFlag) {
+            // NB: this indexing scheme works for both cases whether num_head
+            // is
+            // 1
+            atomicAdd(&C[idx_head * num_A_cols /*A is transposed in the fly*/ *
+                             num_B_cols +
+                         (blockRow * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols +
+                         blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat],
+                      Cvalue);
           }
         } else {
           bool WriteCInRangeFlag =
@@ -455,7 +457,34 @@ class _simplified_basic_MatMulKernel<
           //         num_heads, idx_relation, mLoopBeg, mLoopEnd, Cvalue);
           //   }
           // }
-
+          // if constexpr (DoInnerProductSwitch>0){
+          //     if(threadIdx.x%16==0){
+          //     if (WriteCInRangeFlag){
+          //       printf("row_id %d, col_id %d, Cvalue %f, InnerProductTerm %f,
+          //       Write True, SHMEM %d, thIdxRow %d, thIdxFeat %d, threadIdx.x
+          //       %d, threadIdx.y %d\n", (int) thIdxRow +
+          //                                       blockRow * SHMEM_BLOCK_SIZE +
+          //                                       (int) blockRowJobEntryBeg,
+          //                                       (int) blockFeat *
+          //                                       SHMEM_BLOCK_SIZE +
+          //            thIdxFeat,(float)Cvalue, (float)InnerProductTerm,
+          //            SHMEM_BLOCK_SIZE, thIdxRow, thIdxFeat, threadIdx.x,
+          //            threadIdx.y);
+          //     }
+          //     else{
+          //       printf("row_id %d, col_id %d, Cvalue %f, InnerProductTerm %f,
+          //       Write False, SHMEM %d, thIdxRow %d, thIdxFeat %d, threadIdx.x
+          //       %d, threadIdx.y %d\n",  (int) thIdxRow +
+          //                                       blockRow * SHMEM_BLOCK_SIZE +
+          //       (int) blockRowJobEntryBeg,  (int) blockFeat *
+          //       SHMEM_BLOCK_SIZE +
+          //            thIdxFeat,(float)Cvalue, (float)InnerProductTerm,
+          //            SHMEM_BLOCK_SIZE, thIdxRow, thIdxFeat, threadIdx.x,
+          //            threadIdx.y);
+          //     }
+          //     }
+          //   __syncwarp();
+          // }
           if (WriteCInRangeFlag) {
             // print GetRowMajorElement arguments
             // if constexpr (!OuterProductFlag && !GatherAFlag &&
@@ -485,13 +514,31 @@ class _simplified_basic_MatMulKernel<
               // TODO: we may hide the global mem read latency by moving input
               // node feat load ahead at the cost of more shmem (copy async) or
               // more registers use
-              atomicAdd(&inner_product[inner_product_term_scatter_list
-                                               [thIdxRow +
-                                                blockRow * SHMEM_BLOCK_SIZE +
-                                                blockRowJobEntryBeg] *
-                                           num_heads +
-                                       idx_head],
-                        Cvalue * InnerProductTerm);
+
+              // atomicAdd(&inner_product[inner_product_term_scatter_list
+              //                                  [thIdxRow +
+              //                                   blockRow * SHMEM_BLOCK_SIZE +
+              //                                   blockRowJobEntryBeg] *
+              //                              num_heads +
+              //                          idx_head],
+              //           Cvalue * InnerProductTerm);
+
+              unsigned int mask_size =
+                  32 > SHMEM_BLOCK_SIZE ? SHMEM_BLOCK_SIZE : 32;
+              unsigned int mask = ((1ULL) << mask_size) - 1;
+              float product_sum = Cvalue * InnerProductTerm;
+              for (int offset = mask_size / 2; offset > 0; offset /= 2) {
+                product_sum += __shfl_xor_sync(mask, product_sum, offset);
+              }
+              if (threadIdx.x % mask_size == 0) {
+                atomicAdd(&inner_product[inner_product_term_scatter_list
+                                                 [thIdxRow +
+                                                  blockRow * SHMEM_BLOCK_SIZE +
+                                                  blockRowJobEntryBeg] *
+                                             num_heads +
+                                         idx_head],
+                          product_sum);
+              }
             }
             // atomicAdd(&GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
             //                               AdvancedScatterCFlag>(
@@ -693,7 +740,7 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
 
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
-__global__ void HET_HGTFusedAttnScoreFwProp(
+__global__ void __launch_bounds__(256, 3) HET_HGTFusedAttnScoreFwProp(
     float* applied_klinear_node_features, float* applied_qlinear_node_features,
     float* attn_score_weight, float* attn_score_inner_product,
     float* unnormalized_attn_score, IdxPtr separate_coo_row_idx,

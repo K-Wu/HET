@@ -106,8 +106,8 @@ void full_graph_hetero_attention_ops(
   // and RGNN inner_product
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
 
-  constexpr int WORK_BLOCK_SIZE = 16;
-  constexpr bool COARSEN_FACTOR_2_FLAG_X = false;
+  constexpr int WORK_BLOCK_SIZE = 32;
+  constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
   constexpr bool COARSEN_FACTOR_2_FLAG_Y = true;
   constexpr int THREADING_BLOCK_SIZE_X =
       COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
