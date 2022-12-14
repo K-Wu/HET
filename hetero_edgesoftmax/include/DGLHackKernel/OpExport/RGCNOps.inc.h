@@ -188,16 +188,13 @@ void Layer1HybridAssignmentImpl(at::Tensor& csr_rowptr, at::Tensor& csr_col_idx,
 }  // namespace IntegratedCSR
 }  // namespace FwProp
 namespace BckProp {
-void Layer1_SeparateCOO(at::Tensor& separate_coo_relptrs,
-                        at::Tensor& separate_coo_eids,
-                        at::Tensor& separate_coo_row_idx,
-                        at::Tensor& separate_coo_col_idx,
-                        at::Tensor& node_feat_input, at::Tensor& weights,
-                        at::Tensor& edge_norm, at::Tensor& node_feat_output) {
-  // TODO: implement this
-  assert(0 &&
-         "this is a mere copy of the fw prop procedure. bck prop wrapper not "
-         "implemented yet");
+void Layer1_SeparateCOO(
+    at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_eids,
+    at::Tensor& separate_coo_row_idx, at::Tensor& separate_coo_col_idx,
+    at::Tensor& node_feat_input, at::Tensor& weights_transposed,
+    at::Tensor& edge_norm, at::Tensor& grad_edge_norm,
+    at::Tensor& delta_node_feat_input, at::Tensor& delta_node_feat_output,
+    at::Tensor& delta_weights) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   constexpr int WORK_BLOCK_SIZE = 32;
   constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
@@ -208,8 +205,8 @@ void Layer1_SeparateCOO(at::Tensor& separate_coo_relptrs,
       COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = 1;
-  const int64_t num_input_dim = weights.size(1);
-  const int64_t num_output_dim = weights.size(2);
+  const int64_t num_fw_input_dim = weights_transposed.size(2);
+  const int64_t num_fw_output_dim = weights_transposed.size(1);
   int64_t num_edges = separate_coo_eids.numel();
   int grid_dim_y =
       std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE), (int64_t)32768);
@@ -234,22 +231,40 @@ void Layer1_SeparateCOO(at::Tensor& separate_coo_relptrs,
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
           num_blocks_assignment_for_all_prev_relation_vect.end());
   // NB: my shmem sgemm matmul scheme
-  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
+  const dim3 nblks(ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, 1);
+  const dim3 nblks_outer_product(
+      ceil_div<>(num_fw_output_dim, (long)WORK_BLOCK_SIZE),
+      ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE),
+      num_heads * grid_dim_y);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
-  HET_RGCNMatmulNoScatterGatherListFwProp<COARSEN_FACTOR_2_FLAG_X,
-                                          COARSEN_FACTOR_2_FLAG_Y,
-                                          WORK_BLOCK_SIZE, int64_t, int64_t*>
-      <<<nblks, nthrs, 0, stream>>>(
-          node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
-          node_feat_output.data_ptr<float>(), edge_norm.data_ptr<float>(),
-          separate_coo_row_idx.data_ptr<int64_t>(),
-          separate_coo_col_idx.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations, num_input_dim, num_output_dim);
+
+  HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp<
+      COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
+      int64_t, int64_t*><<<nblks, nthrs, 0, stream>>>(
+      node_feat_input.data_ptr<float>(),
+      delta_node_feat_output.data_ptr<float>(), delta_weights.data_ptr<float>(),
+      edge_norm.data_ptr<float>(), separate_coo_row_idx.data_ptr<int64_t>(),
+      separate_coo_col_idx.data_ptr<int64_t>(),
+      separate_coo_eids.data_ptr<int64_t>(),
+      separate_coo_relptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+      num_relations, num_fw_output_dim, num_fw_input_dim);
+  HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp<
+      COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
+      int64_t, int64_t*><<<nblks_outer_product, nthrs, 0, stream>>>(
+      delta_node_feat_output.data_ptr<float>(),
+      weights_transposed.data_ptr<float>(),
+      delta_node_feat_input.data_ptr<float>(), edge_norm.data_ptr<float>(),
+      grad_edge_norm.data_ptr<float>(), node_feat_input.data_ptr<float>(),
+      separate_coo_row_idx.data_ptr<int64_t>(),
+      separate_coo_col_idx.data_ptr<int64_t>(),
+      separate_coo_eids.data_ptr<int64_t>(),
+      separate_coo_relptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+      num_relations, num_fw_output_dim, num_fw_input_dim);
 }
 
 namespace IntegratedCSR {

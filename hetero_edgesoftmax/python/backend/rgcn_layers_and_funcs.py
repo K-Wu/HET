@@ -315,19 +315,34 @@ class RgcnLayer1SeparateCoo(th.autograd.Function):
         ) = ctx.saved_tensors
         grad_x = th.zeros_like(x)
         grad_weight = th.zeros_like(weight)
+        grad_norm = th.zeros_like(norm)
         K.backward_rgcn_layer1_separate_coo(
-            outcsr_row_ptr,
-            outcsr_col_idx,
-            outcsr_eids,
-            outcsr_reltypes,
+            separate_coo_rel_ptr,
+            separate_coo_eids,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
             x,
-            weight,
+            th.transpose(weight, 1, 2).contiguous(),
             norm,
-            gradout,
+            grad_norm,
             grad_x,
+            gradout,
             grad_weight,
         )
-        return None, None, None, None, None, None, None, None, grad_x, None, None, None
+        return (
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            grad_x,
+            grad_weight,
+            grad_norm,
+            None,
+        )
 
 
 def rgcn_layer1_separate_coo(
