@@ -70,9 +70,9 @@ class FusedGat(th.autograd.Function):
             ret,
         ) = ctx.saved_tensors
         slope = ctx.slope
-        grad_el = th.zeros_like(el)
-        grad_er = th.zeros_like(er)
-        grad_feat_src = th.zeros_like(feat_src)
+        grad_el = th.zeros_like(el, memory_format=th.contiguous_format)
+        grad_er = th.zeros_like(er, memory_format=th.contiguous_format)
+        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
 
         K.backward_fused_gat_csr(
             outcsr_row_ptr,
@@ -112,8 +112,8 @@ def fused_gat(graph, feat_src, el, er, slope):
     incsr_dict = graph.get_in_csr()
     outcsr_dict = graph.get_out_csr()
     exp = el.new_empty([incsr_dict["col_idx"].numel()] + list(el.size()[1:]))
-    s = th.empty_like(el)
-    ret = th.empty_like(feat_src)
+    s = th.empty_like(el, memory_format=th.contiguous_format)
+    ret = th.empty_like(feat_src, memory_format=th.contiguous_format)
     return FusedGat.apply(
         incsr_dict["row_ptr"],
         incsr_dict["col_idx"],

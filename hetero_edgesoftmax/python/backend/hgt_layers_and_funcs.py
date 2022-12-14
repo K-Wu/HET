@@ -105,7 +105,7 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             separate_coo_eids,
             separate_coo_relptrs,
             attn_score_weight,
-            th.transpose(attn_score_weight, 2, 3, memory_format=th.contiguous_format),
+            th.transpose(attn_score_weight, 2, 3).contiguous(),
             applied_klinear_node_features,
             applied_qlinear_node_features,
             attn_score_inner_product,
@@ -309,7 +309,7 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             # mu,
             new_h,
         )
-
+        # FIXME: why are elements in edgesoftmax_sum_per_node all integers?
         ctx.save_for_backward(
             incsr_row_ptr,
             incsr_col_idx,
@@ -373,17 +373,15 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
         )
         grad_mu = th.zeros_like(mu, memory_format=th.contiguous_format)
 
-        K.hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo(
+        K.backward_hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo(
             separate_coo_relptrs,
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,
             inputs,
-            gradout,
             th.transpose(message_generation_weights, 2, 3).contiguous(),
             normalized_attn_score,
             new_h,
-            grad_input,
             grad_input,
             grad_message_generation_weight,
             grad_normalized_attn_score,
@@ -403,24 +401,9 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             grad_mu,
         )
 
-        return (
-            False,
-            False,
-            False,
-            False,
-            False,
-            False,
-            False,
-            False,
-            grad_message_generation_weight,
-            grad_input,
-            grad_unnormalized_attn_score,
-            False,
-            grad_mu,
-            False,
-            False,
-            False,
-        )
+        # fmt: off
+        return None,None,None,None,None,None,None,None,grad_message_generation_weight,grad_input,grad_unnormalized_attn_score,None,grad_mu,None,None,None
+        # fmt: on
 
 
 def hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
@@ -448,14 +431,14 @@ def hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
         dtype=relation_meg_weight.dtype,
         device=relation_meg_weight.device,
         requires_grad=True,
-    )
+    ).contiguous()
 
     edgesoftmax_sum_per_node = th.zeros(
         graph.get_num_nodes(),
         mu.size(1),
         dtype=relation_meg_weight.dtype,
         device=relation_meg_weight.device,
-    )
+    ).contiguous()
 
     mu_softmax_applied_unnormalized_attn_score = th.zeros_like(
         unnormalized_attn_score, memory_format=th.contiguous_format
@@ -640,7 +623,7 @@ def hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
         mu.size(1),
         dtype=message_per_edge.dtype,
         device=message_per_edge.device,
-    )
+    ).contiguous()
     new_h = th.zeros(
         graph.get_num_nodes(),
         message_per_edge.size(1),
@@ -648,7 +631,7 @@ def hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
         dtype=message_per_edge.dtype,
         device=message_per_edge.device,
         requires_grad=True,
-    )
+    ).contiguous()
 
     # return new_h
 

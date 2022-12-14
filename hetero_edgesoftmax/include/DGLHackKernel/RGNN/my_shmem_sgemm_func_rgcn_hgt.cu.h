@@ -598,7 +598,7 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
                                  COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
-                                 IdxPtr, false, false, 0, false, false>::
+                                 IdxPtr, false, true, 0, false, false>::
       execute_function(
           node_feat_input, delta_linear_projected_node_feat,
           &delta_weights[idx_relation * delta_output_dim * delta_input_dim],
@@ -677,6 +677,7 @@ __global__ void __launch_bounds__(256, 3)
           num_heads);
 }
 
+// FIXME: no coarsening for delta weight
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp(
@@ -712,11 +713,12 @@ template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
 __global__ void
 HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
     float* delta_linear_projected_node_feat, float* weights_transposed,
-    float* delta_node_feat_input, float* edge_norm, float* grad_edge_norm,
-    IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
-    IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
-    int* accum_num_blocks_per_relation, Idx num_relations, Idx delta_output_dim,
-    Idx delta_input_dim, int num_heads) {
+    float* delta_node_feat_input, float* node_feat_input, float* edge_norm,
+    float* grad_edge_norm, IdxPtr separate_coo_row_idx,
+    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
+    IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
+    Idx num_relations, Idx delta_output_dim, Idx delta_input_dim,
+    int num_heads) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -727,8 +729,8 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
                        &weights_transposed[idx_relation * num_heads *
                                            delta_output_dim * delta_input_dim],
                        delta_node_feat_input, edge_norm, grad_edge_norm,
-                       nullptr, separate_coo_row_idx, separate_coo_col_idx,
-                       separate_coo_eids, idx_relation,
+                       node_feat_input, separate_coo_row_idx,
+                       separate_coo_col_idx, separate_coo_eids, idx_relation,
                        separate_coo_rel_ptrs[idx_relation + 1] -
                            separate_coo_rel_ptrs[idx_relation],
                        accum_num_blocks_per_relation[idx_relation],

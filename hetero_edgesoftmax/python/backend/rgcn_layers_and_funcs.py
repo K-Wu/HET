@@ -56,7 +56,7 @@ class RgcnFirstLayerCSR(th.autograd.Function):
             norm,
         ) = ctx.saved_tensors
         print(weight.numel())
-        grad_weight = th.zeros_like(weight)
+        grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
         K.backward_rgcn_layer0_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
@@ -159,8 +159,8 @@ class RgcnSecondLayerCSR(th.autograd.Function):
             norm,
             x,
         ) = ctx.saved_tensors
-        grad_x = th.zeros_like(x)
-        grad_weight = th.zeros_like(weight)
+        grad_x = th.zeros_like(x, memory_format=th.contiguous_format)
+        grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
         K.backward_rgcn_layer1_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
@@ -238,8 +238,8 @@ class RgcnSecondLayerCSRHybridAssign(th.autograd.Function):
             x,
         ) = ctx.saved_tensors
         num_blocks_on_node_backward = ctx.num_blocks_on_node_backward
-        grad_x = th.zeros_like(x)
-        grad_weight = th.zeros_like(weight)
+        grad_x = th.zeros_like(x, memory_format=th.contiguous_format)
+        grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
         K.backward_rgcn_layer1_csr_hybrid_assign(
             outcsr_row_ptr,
             outcsr_col_idx,
@@ -313,9 +313,9 @@ class RgcnLayer1SeparateCoo(th.autograd.Function):
             norm,
             x,
         ) = ctx.saved_tensors
-        grad_x = th.zeros_like(x)
-        grad_weight = th.zeros_like(weight)
-        grad_norm = th.zeros_like(norm)
+        grad_x = th.zeros_like(x, memory_format=th.contiguous_format)
+        grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
+        grad_norm = th.zeros_like(norm, memory_format=th.contiguous_format)
         K.backward_rgcn_layer1_separate_coo(
             separate_coo_rel_ptr,
             separate_coo_eids,
@@ -363,7 +363,7 @@ def rgcn_layer1_separate_coo(
         dtype=weight.dtype,
         device=weight.device,
         requires_grad=True,
-    )
+    ).contiguous()
     outcsr_row_ptr = outcsr_dict["row_ptr"]
     outcsr_col_idx = outcsr_dict["col_idx"]
     outcsr_eids = outcsr_dict["eids"]
@@ -408,7 +408,7 @@ def rgcn_layer1_csr(
         dtype=weight.dtype,
         device=weight.device,
         requires_grad=True,
-    )
+    ).contiguous()
     if hybrid_assign_flag:
         return RgcnSecondLayerCSRHybridAssign.apply(
             incsr_row_ptr,
