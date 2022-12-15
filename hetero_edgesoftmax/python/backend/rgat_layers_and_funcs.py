@@ -119,7 +119,7 @@ def relational_fused_gat_csr(graph, feat_src, el, er, slope):
     outcsr_dict = graph.get_out_csr()
     separate_unique_node_indices = graph.get_separate_unique_node_indices()
     exp = el.new_empty(
-        [incsr_dict["col_idx"].numel()] + list(el.size()[1:])
+        [graph.get_num_edges()] + list(el.size()[1:])
     )  # [num_edges, num_heads]
     s = el.new_empty(
         [graph.get_num_nodes()] + [el.size()[1]]
@@ -263,9 +263,7 @@ def relational_fused_gat_compact_as_of_node(
     separate_unique_node_indices = g.get_separate_unique_node_indices()
     incsr_dict = g.get_in_csr()
     outcsr_dict = g.get_out_csr()
-    exp = el_compact.new_empty(
-        [incsr_dict["col_idx"].numel()] + list(el_compact.size()[1:])
-    )
+    exp = el_compact.new_empty([g.get_num_edges()] + list(el_compact.size()[1:]))
     s = el_compact.new_empty([g.get_num_nodes()] + list(el_compact.size()[1:]))
     ret = th.empty(
         [g.get_num_nodes()] + list(feat_compact.size()[1:]),
