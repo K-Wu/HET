@@ -33,22 +33,26 @@ def get_single_layer_model(args, mydglgraph):
     return model
 
 
-def main(args):
+def RGCNSingleLayer_main(args):
+    if args.sparse_format == "separate_coo":
+        mydgl_graph_format = "csr"
+    else:
+        mydgl_graph_format = args.sparse_format
+        assert args.sparse_format == "coo" or args.sparse_format == "csr"
     g = utils.RGNN_get_mydgl_graph(
         args.dataset,
         args.sort_by_src,
         args.sort_by_etype,
         args.reindex_eid,
-        args.sparse_format,
+        mydgl_graph_format
+        # args.sparse_format,
     )
     model = get_single_layer_model(args, g)
-    if args.sparse_format == "coo":
-        num_nodes = int(th.max(g["original"]["row_idx"]))
-    else:
-        assert args.sparse_format == "csr"
-        num_nodes = g["original"]["row_ptr"].numel() - 1
     num_nodes = g.get_num_nodes()
     feats = th.randn(num_nodes, args.n_infeat, requires_grad=True)
+    if args.sparse_format == "separate_coo":
+        g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
+        g.generate_separate_coo_adj_for_each_etype(transposed_flag=False)
     RGCN_main_procedure(args, g, model, feats)
 
 
@@ -57,4 +61,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
     args.bfs_level = 1 + 1  # num_layers + 1 pruning used nodes for memory
-    main(args)
+    RGCNSingleLayer_main(args)

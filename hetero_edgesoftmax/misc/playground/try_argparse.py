@@ -21,3 +21,5 @@ if __name__ == "__main__":
     print(vars(args))
     print(args.sort_by_src)
     print(vars(args)["sort_by_src"])
+    args.sort_by_src = True
+    args.sort_by_src = False

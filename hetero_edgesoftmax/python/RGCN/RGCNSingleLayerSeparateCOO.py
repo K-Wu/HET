@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-from . import (
-    HET_EGLRGCNSingleLayerModel,
-    RGCN_main_procedure,
-    create_RGCN_parser,
-)
+from . import create_RGCN_parser, RGCNSingleLayer_main
 from .. import utils
 import torch as th
 import torch.nn.functional as F
 
 
-def get_single_layer_separate_coo_model(args, mydglgraph):
+def _deprecated_get_single_layer_separate_coo_model(args, mydglgraph):
+    from . import HET_EGLRGCNSingleLayerModel
+
     num_rels = int(mydglgraph["original"]["rel_types"].max().item()) + 1
     num_edges = mydglgraph["original"]["rel_types"].numel()
     num_classes = args.num_classes
@@ -33,7 +31,10 @@ def get_single_layer_separate_coo_model(args, mydglgraph):
     return model
 
 
-def main(args):
+# TODO: remove redundant code compared with RGCNSingleLayer.py
+def _deprecated_main(args):
+    from . import RGCN_main_procedure
+
     g = utils.RGNN_get_mydgl_graph(
         args.dataset,
         args.sort_by_src,
@@ -41,12 +42,7 @@ def main(args):
         args.reindex_eid,
         args.sparse_format,
     )
-    model = get_single_layer_separate_coo_model(args, g)
-    if args.sparse_format == "coo":
-        num_nodes = int(th.max(g["original"]["row_idx"]))
-    else:
-        assert args.sparse_format == "csr"
-        num_nodes = g["original"]["row_ptr"].numel() - 1
+    model = _deprecated_get_single_layer_separate_coo_model(args, g)
     num_nodes = g.get_num_nodes()
     feats = th.randn(num_nodes, args.n_infeat, requires_grad=True)
 
@@ -58,6 +54,7 @@ def main(args):
 if __name__ == "__main__":
     parser = create_RGCN_parser(RGCN_single_layer_flag=True)
     args = parser.parse_args()
+    args.sparse_format = "separate_coo"
     print(args)
     args.bfs_level = 1 + 1  # num_layers + 1 pruning used nodes for memory
-    main(args)
+    RGCNSingleLayer_main(args)

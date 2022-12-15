@@ -4,3 +4,4 @@ from .RGCN import (
     RGCN_main_procedure,
     create_RGCN_parser,
 )
+from .RGCNSingleLayer import RGCNSingleLayer_main

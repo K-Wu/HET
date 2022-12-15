@@ -430,7 +430,7 @@ def main(args):
         args.sparse_format,
     )
     model = get_model(args, g)
-    num_nodes = g["original"]["row_ptr"].numel() - 1
+    num_nodes = g.get_num_nodes()
     # since the nodes are featureless, the input feature is then the node id.
     feats = torch.arange(num_nodes)
 
@@ -556,78 +556,6 @@ def RGCN_main_procedure(args, g, model, feats):
     )
     # output we need
     print("^^^{:6f}^^^{:6f}".format(Used_memory, avg_run_time))
-
-
-def _deprecated_create_RGCN_parser(RGCN_single_layer_flag: bool):
-    parser = argparse.ArgumentParser(description="RGCN")
-    parser.add_argument("--dropout", type=float, default=0, help="dropout probability")
-    if RGCN_single_layer_flag:
-        parser.add_argument(
-            "--n_infeat", type=int, default=16, help="number of hidden units"
-        )
-    else:
-        parser.add_argument(
-            "--hidden_size", type=int, default=16, help="number of hidden units"
-        )
-    parser.add_argument("--gpu", type=int, default=0, help="gpu")
-    parser.add_argument("--lr", type=float, default=1e-2, help="learning rate")
-    parser.add_argument(
-        "--num_bases",
-        type=int,
-        default=-1,
-        help="number of filter weight matrices, default: -1 [use all]",
-    )
-    if not RGCN_single_layer_flag:
-        parser.add_argument(
-            "--num_layers", type=int, default=2, help="number of propagation rounds"
-        )
-    parser.add_argument(
-        "-e", "--n_epochs", type=int, default=50, help="number of training epochs"
-    )
-    parser.add_argument(
-        "--sparse_format",
-        type=str,
-        default="csr",
-        help="sparse format",
-        choices=["coo", "csr"],  # noqa: E501
-    )
-    parser.add_argument(
-        "-d", "--dataset", type=str, required=True, help="dataset to use"
-    )
-    parser.add_argument("--sort_by_src", action="store_true", help="sort by src")
-    parser.add_argument("--sort_by_etype", action="store_true", help="sort by etype")
-    parser.add_argument("--l2norm", type=float, default=0, help="l2 norm coef")
-    parser.add_argument(
-        "--relabel",
-        default=False,
-        action="store_true",
-        help="remove untouched nodes and relabel",
-    )
-    parser.add_argument(
-        "--use-self-loop",
-        default=False,
-        action="store_true",
-        help="include self feature as a special relation",
-    )
-    parser.add_argument(
-        "--verbose",
-        default=False,
-        action="store_true",
-        help="print out training information",
-    )
-    parser.add_argument(
-        "--reindex_eid",
-        action="store_true",
-        help="use new eid after sorting rather than load referential eids",
-    )
-    parser.add_argument("--train_size", type=int, default=256)
-    parser.add_argument("--test_size", type=int, default=64)
-    parser.add_argument("--num_classes", type=int, default=4)
-    fp = parser.add_mutually_exclusive_group(required=False)
-    fp.add_argument("--validation", dest="validation", action="store_true")
-    fp.add_argument("--testing", dest="validation", action="store_false")
-    parser.set_defaults(validation=True)
-    return parser
 
 
 def create_RGCN_parser(RGCN_single_layer_flag):
