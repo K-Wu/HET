@@ -355,11 +355,9 @@ def rgcn_layer1_separate_coo(
     weight,
     norm,
 ):
-    incsr_dict = graph.get_in_csr()
     outcsr_dict = graph.get_out_csr()
-    incsr_row_ptr = incsr_dict["row_ptr"]
     ret = th.zeros(
-        (incsr_row_ptr.numel() - 1, weight.size(2)),
+        (graph.get_num_nodes(), weight.size(2)),
         dtype=weight.dtype,
         device=weight.device,
         requires_grad=True,

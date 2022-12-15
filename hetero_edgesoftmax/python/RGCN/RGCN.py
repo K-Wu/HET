@@ -443,11 +443,7 @@ def RGCN_main_procedure(args, g, model, feats):
     # mutag len(labels) == 23644, num_nodes == 23644, num_relations == 47, num_edges == 172098, len(train_idx) == 272, len(test_idx) == 68, num_classes = 2
     # bgs len(labels) == 333845, num_nodes == 333845, num_relations == 207, num_edges == 2166243, len(train_idx) == 117, len(test_idx) == 29, num_classes = 2
     # num_nodes = g["original"]["row_ptr"].numel() - 1
-    if args.sparse_format == "coo":
-        num_nodes = g.get_num_nodes()
-    else:
-        assert args.sparse_format == "csr"
-        num_nodes = g["original"]["row_ptr"].numel() - 1
+    num_nodes = g.get_num_nodes()
     # num_rels = int(g["original"]["rel_types"].max().item()) + 1
     num_classes = args.num_classes
     labels = np.random.randint(0, num_classes, num_nodes)
