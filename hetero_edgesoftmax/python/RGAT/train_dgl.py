@@ -98,7 +98,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
 
     # loading data
     if dgl_model_flag:
-        if args.dataset != "mag":
+        if args.dataset != "mag" or not args.use_real_labels_and_features:
             g, _ = utils.graphiler_load_data(args.dataset, to_homo=False)
         else:
             (
@@ -124,7 +124,11 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
     if not args.use_real_labels_and_features:
         num_classes = args.num_classes
         if dgl_model_flag:
-            labels = th.randint(0, args.num_classes, labels.shape)
+            # labels = th.randint(0, args.num_classes, labels.shape)
+            print(
+                "WARNING: assuming node classification in RGAT_main_procedure(dgl_model_flag == False)"
+            )
+            labels = th.randint(0, args.num_classes, [g.num_nodes(t) for t in g.ntypes])
         else:
             print(
                 "WARNING: assuming node classification in RGAT_main_procedure(dgl_model_flag == False)"
@@ -188,9 +192,9 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
                 RGNN_train_full_graph(
                     model,
                     embed_layer,
+                    optimizer,
                     labels,
                     # device,
-                    optimizer,
                     args,
                 )
             else:
