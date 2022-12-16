@@ -5,9 +5,8 @@ from .scripted_mydgl_graph import *
 
 from .mydgl_graph import *
 from .loaders_from_npy import *
-from .graphiler_datasets import *
+from .graphiler_datasets_loader import *
 from .coo_sorters import *
-from .graphiler_bench import *
 from .graph_synthesizers import *
 from .graph_sampler import *
 from .mydglgraph_converters import *

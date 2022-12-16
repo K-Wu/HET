@@ -5,18 +5,19 @@ import sys
 import nvtx
 import torch
 from .. import utils
+from .. import utils_lite
 
 print('WARNING: setting up device via utils.graphiler_setup_device(device="cuda:0")')
-device = utils.graphiler_setup_device(device="cuda:0")
+device = utils_lite.graphiler_setup_device(device="cuda:0")
 
 
 def profile(dataset, feat_dim, repeat=1000):
     print("benchmarking on: " + dataset)
-    g, _ = utils.graphiler_load_data(dataset, feat_dim)
-    g_hetero, _ = utils.graphiler_load_data(dataset, feat_dim, to_homo=False)
+    g, _ = utils_lite.graphiler_load_data(dataset, feat_dim)
+    g_hetero, _ = utils_lite.graphiler_load_data(dataset, feat_dim, to_homo=False)
     # features = features.to(device)
 
-    @empty_cache
+    @utils_lite.empty_cache
     def run(g_hetero, features):
         with nvtx.annotate("dgl-slice", color="purple"):
             g_hetero = g_hetero.to(device)
@@ -30,12 +31,12 @@ def profile(dataset, feat_dim, repeat=1000):
                 node_dict,
                 edge_dict,
                 feat_dim,
-                utils.GRAPHILER_DEFAULT_DIM,
-                utils.GRAPHILER_DEFAULT_DIM,
+                utils_lite.GRAPHILER_DEFAULT_DIM,
+                utils_lite.GRAPHILER_DEFAULT_DIM,
             ).to(device)
             net_hetero.eval()
             with torch.no_grad():
-                utils.graphiler_bench(
+                utils_lite.graphiler_bench(
                     net=net_hetero,
                     net_params=(g_hetero, g_hetero.ndata["h"]),
                     tag="1-DGL-slice",
@@ -52,8 +53,8 @@ if __name__ == "__main__":
         exit()
     if sys.argv[1] == "all":
         # log = {}
-        for d in utils.GRAPHILER_HETERO_DATASET:
-            profile(d, utils.GRAPHILER_DEFAULT_DIM, repeat=1000)
+        for d in utils_lite.GRAPHILER_HETERO_DATASET:
+            profile(d, utils_lite.GRAPHILER_DEFAULT_DIM, repeat=1000)
         # pd.DataFrame(log).to_pickle("output/HGT.pkl")
     elif sys.argv[1] == "breakdown":
         print("ERROR: ablation study not implemented yet!")

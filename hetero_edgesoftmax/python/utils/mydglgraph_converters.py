@@ -4,7 +4,7 @@ from .loaders_from_npy import *
 import torch as th
 from ..utils_lite import sparse_matrix_converters
 from . import mydgl_graph
-from . import graphiler_datasets
+from . import graphiler_datasets_loader
 import numpy as np
 
 
@@ -84,9 +84,9 @@ def RGNN_get_mydgl_graph(
     #         infidel_sort_flag=False,
     #     )
     #     # graph_dict = fetch_ogbnmag_graph_dict()
-    elif dataset in graphiler_datasets.GRAPHILER_DATASET:
+    elif dataset in graphiler_datasets_loader.GRAPHILER_DATASET:
         print("RGNN_get_mydgl_graph lopading graphiler dataset")
-        g, ntype_offsets = graphiler_datasets.graphiler_load_data_as_mydgl_graph(
+        g, ntype_offsets = graphiler_datasets_loader.graphiler_load_data_as_mydgl_graph(
             dataset, True
         )
         edge_srcs, edge_dsts, edge_etypes, edge_referential_eids = (
