@@ -39,7 +39,7 @@ def RGCNSingleLayer_main(args):
     else:
         mydgl_graph_format = args.sparse_format
         assert args.sparse_format == "coo" or args.sparse_format == "csr"
-    g = utils.RGNN_get_mydgl_graph(
+    g, canonical_etype_idx_tuples = utils.RGNN_get_mydgl_graph(
         args.dataset,
         args.sort_by_src,
         args.sort_by_etype,

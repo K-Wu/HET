@@ -23,7 +23,11 @@ DGL_DATASETS = [
 # Datasets that keep absolute node index: None if ignoring graph with only one edge type/ node type
 def test_load_dataset(name, dataset_originally_homo_flag):
     print(name)
-    dataset, ntype_offsets = utils.graphiler_load_data_as_mydgl_graph(
+    (
+        dataset,
+        ntype_offsets,
+        canonical_etype_idx_tuples,
+    ) = utils.graphiler_load_data_as_mydgl_graph(
         name, to_homo=True, dataset_originally_homo_flag=dataset_originally_homo_flag
     )
     scripted_dataset = dataset.to_script_object()
@@ -34,6 +38,7 @@ def test_load_dataset(name, dataset_originally_homo_flag):
         dataset.get_num_nodes(),
         dataset.get_num_edges(),
     )
+    print(canonical_etype_idx_tuples)
     pass
 
 
@@ -44,5 +49,5 @@ def test_load_all_and_print_num_etypes():
 
 if __name__ == "__main__":
     # test_load_dataset("bgs")
-    test_load_dataset("fb15k", dataset_originally_homo_flag=False)
-    # test_load_all_and_print_num_etypes()
+    # test_load_dataset("fb15k", dataset_originally_homo_flag=False)
+    test_load_all_and_print_num_etypes()

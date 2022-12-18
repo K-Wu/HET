@@ -125,24 +125,40 @@ def graphiler_load_data(name, to_homo: bool = True):  # feat_dim=GRAPHILER_DEFAU
     # node_feats = torch.rand([sum(g.number_of_nodes(ntype) for ntype in g), feat_dim])
 
     ntype_offsets = None
+    canonical_etypes_id_tuple = []
+
+    # if name in GRAPHILER_HETERO_DATASET:
+    # if name == "fb15k":
+    #     if not to_homo:
+    #         print("WARNING: fb15k is already a homogeneous graph though to_homo is False in # graphiler_load_data()")
+    #     # g is already dgl homograph class type
+    #     g.edata["_TYPE"] = g.edata["etype"]
+    #     g.ndata["_TYPE"] = g.ndata["ntype"]
     if name in GRAPHILER_HETERO_DATASET:
-        # if name == "fb15k":
-        #     if not to_homo:
-        #         print("WARNING: fb15k is already a homogeneous graph though to_homo is False in # graphiler_load_data()")
-        #     # g is already dgl homograph class type
-        #     g.edata["_TYPE"] = g.edata["etype"]
-        #     g.ndata["_TYPE"] = g.ndata["ntype"]
+        ntype_dict = dict(zip(g.ntypes, range(len(g.ntypes))))
+        etype_dict = dict(zip(g.etypes, range(len(g.etypes))))
+        for src_type, etype, dst_type in g.canonical_etypes:
+            canonical_etypes_id_tuple.append(
+                (ntype_dict[src_type], etype_dict[etype], ntype_dict[dst_type])
+            )
+
+        # g = dgl.to_homogeneous(g)
+        g_homo, ntype_count, _etype_count = dgl.to_homogeneous(g, return_count=True)
+        ntype_offsets = np.cumsum([0] + ntype_count).tolist()
+        # print(name, ntype_count, etype_count)
         if to_homo:
-            # g = dgl.to_homogeneous(g)
-            g, ntype_count, _ = dgl.to_homogeneous(g, return_count=True)
-            ntype_offsets = np.cumsum([0] + ntype_count).tolist()
-            # print(name, ntype_count, etype_count)
+            g = g_homo
+    else:
+        # homogeneous graph dataset
+        canonical_etypes_id_tuple.append((0, 0, 0))
     if ntype_offsets is None:
         ntype_offsets = [0, g.number_of_nodes()]
+
     # print(len(g.etypes))
     return (
         g,
-        ntype_offsets
+        ntype_offsets,
+        canonical_etypes_id_tuple
         # node_feats,
         # g.etypes,
     )  # returning etype for [HeteroGraphConv](https://docs.dgl.ai/en/0.8.x/generated/dgl.nn.pytorch.HeteroGraphConv.html) use.

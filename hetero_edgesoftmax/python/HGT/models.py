@@ -19,9 +19,12 @@ class HET_HGTLayerHetero(nn.Module):
         in_dim,
         out_dim,
         mydglgraph,
+        src_node_type_per_canonical_edge_type,
+        dst_node_type_per_canonical_edge_type,
         n_heads=1,
         dropout=0.2,
         use_norm=False,
+        multiply_among_weights_first_flag=False,
         hgt_fused_attn_score_flag=False,
         compact_as_of_node_flag=False,
         fused_message_mean_aggregation_flag=False,
@@ -38,18 +41,46 @@ class HET_HGTLayerHetero(nn.Module):
         self.num_ntypes = mydglgraph.get_num_ntypes()  # len(self.node_dict)
         self.num_relations = mydglgraph.get_num_rels()  # len(self.edge_dict)
 
+        self.multiply_among_weights_first_flag = multiply_among_weights_first_flag
+
         self.n_heads = n_heads
         self.d_k = out_dim // n_heads
         self.sqrt_dk = math.sqrt(self.d_k)
         self.att = None
 
+        self.src_node_type_per_canonical_edge_type = (
+            src_node_type_per_canonical_edge_type
+        )
+        self.dst_node_type_per_canonical_edge_type = (
+            dst_node_type_per_canonical_edge_type
+        )
+
         # self.k_linears = nn.ModuleList()
         # self.q_linears = nn.ModuleList()
         # self.v_linears = nn.ModuleList()
         # self.a_linears = nn.ModuleList()
-        self.k_linears = nn.Parameter(torch.Tensor(self.num_ntypes, 1, in_dim, out_dim))
-        self.q_linears = nn.Parameter(torch.Tensor(self.num_ntypes, 1, in_dim, out_dim))
-        self.v_linears = nn.Parameter(torch.Tensor(self.num_ntypes, 1, in_dim, out_dim))
+        if self.multiply_among_weights_first_flag:
+            # this is a varient of the original weights where first the view is changed from (self.num_ntypes, 1, in_dim, out_dim) to (self.num_ntypes, in_dim, self.n_heads, self.d_k) and then a transposition is applied
+            self.k_linears = nn.Parameter(
+                torch.Tensor(self.num_ntypes, self.n_heads, in_dim, self.d_k)
+            )
+            self.q_linears = nn.Parameter(
+                torch.Tensor(self.num_ntypes, self.n_heads, in_dim, self.d_k)
+            )
+            self.v_linears = nn.Parameter(
+                torch.Tensor(self.num_ntypes, self.n_heads, in_dim, self.d_k)
+            )
+        else:
+            self.k_linears = nn.Parameter(
+                torch.Tensor(self.num_ntypes, 1, in_dim, out_dim)
+            )
+            self.q_linears = nn.Parameter(
+                torch.Tensor(self.num_ntypes, 1, in_dim, out_dim)
+            )
+            self.v_linears = nn.Parameter(
+                torch.Tensor(self.num_ntypes, 1, in_dim, out_dim)
+            )
+
         self.a_linears = nn.Parameter(
             torch.Tensor(self.num_ntypes, 1, out_dim, out_dim)
         )
@@ -95,21 +126,52 @@ class HET_HGTLayerHetero(nn.Module):
         # G is MyDGLGraph, h is node features with shape (num_nodes, in_dim).
         # We assume h is made up of one continuous memory region, where each node type occupies one continuous subregion.
 
-        k = B.rgnn_relational_matmul_no_scatter_gather_list(
-            G.get_original_node_type_offsets(), self.k_linears, h
-        ).view(-1, self.n_heads, self.d_k)
-        q = B.rgnn_relational_matmul_no_scatter_gather_list(
-            G.get_original_node_type_offsets(), self.q_linears, h
-        ).view(-1, self.n_heads, self.d_k)
-        v = B.rgnn_relational_matmul_no_scatter_gather_list(
-            G.get_original_node_type_offsets(), self.v_linears, h
-        ).view(-1, self.n_heads, self.d_k)
+        if self.multiply_among_weights_first_flag:
+            k_per_canonical_etype = torch.index_select(
+                self.k_linears, 0, self.src_node_type_per_canonical_edge_type
+            )
+            q_per_canonical_etype = torch.index_select(
+                self.q_linears, 0, self.dst_node_type_per_canonical_edge_type
+            )
+            v_per_canonical_etype = torch.index_select(
+                self.v_linears, 0, self.dst_node_type_per_canonical_edge_type
+            )
+            k_relation_att_q_product = torch.bmm(
+                k_per_canonical_etype.view(-1, self.in_dim, self.d_k),
+                self.relation_att.view(-1, self.d_k, self.d_k),
+            ).view(-1, self.n_heads, self.in_dim, self.d_k)
+            k_relation_att_q_product = torch.bmm(
+                k_relation_att_q_product.view(-1, self.in_dim, self.d_k),
+                q_per_canonical_etype.view(-1, self.d_k, self.d_k),
+            ).view(-1, self.n_heads, self.in_dim, self.in_dim)
+            relation_msg_v_product = torch.bmm(
+                self.relation_msg.view(-1, self.d_k, self.d_k),
+                v_per_canonical_etype.view(-1, self.d_k, self.d_k),
+            ).view(-1, self.n_heads, self.in_dim, self.d_k)
+
+            relation_att_weight = k_relation_att_q_product
+            relation_msg_weight = relation_msg_v_product
+            k = h
+            q = h
+            v = h
+        else:
+            relation_att_weight = self.relation_att
+            relation_msg_weight = self.relation_msg
+            k = B.rgnn_relational_matmul_no_scatter_gather_list(
+                G.get_original_node_type_offsets(), self.k_linears, h
+            ).view(-1, self.n_heads, self.d_k)
+            q = B.rgnn_relational_matmul_no_scatter_gather_list(
+                G.get_original_node_type_offsets(), self.q_linears, h
+            ).view(-1, self.n_heads, self.d_k)
+            v = B.rgnn_relational_matmul_no_scatter_gather_list(
+                G.get_original_node_type_offsets(), self.v_linears, h
+            ).view(-1, self.n_heads, self.d_k)
 
         # TODO: implement multiply weight first
         # if self.multiply_among_weights_first_flag:
         if self.hgt_fused_attn_score_flag:
             attn_score = B.hgt_full_graph_hetero_attention_ops_coo(
-                G, self.relation_att, k, q
+                G, relation_att_weight, k, q
             )  # shape (num_edges, n_heads)
         else:
             if self.compact_as_of_node_flag:
@@ -123,7 +185,7 @@ class HET_HGTLayerHetero(nn.Module):
                         separate_coo_original_dict["rel_ptr"],
                         separate_coo_original_dict["col_idx"],
                         separate_coo_original_dict["eids"],
-                        self.relation_att,
+                        relation_att_weight,
                         q,
                         False,
                     )
@@ -144,7 +206,7 @@ class HET_HGTLayerHetero(nn.Module):
                     separate_coo_original_dict["rel_ptr"],
                     separate_coo_original_dict["col_idx"],
                     separate_coo_original_dict["eids"],
-                    self.relation_att,
+                    relation_att_weight,
                     q,
                     False,
                 )
@@ -168,7 +230,7 @@ class HET_HGTLayerHetero(nn.Module):
                 separate_coo_original_dict["row_idx"],
                 separate_coo_original_dict["col_idx"],
                 separate_coo_original_dict["eids"],
-                self.relation_msg,
+                relation_msg_weight,
                 v,
                 G,
                 (self.relation_pri / self.sqrt_dk),
@@ -180,7 +242,7 @@ class HET_HGTLayerHetero(nn.Module):
                 separate_coo_original_dict["rel_ptr"],
                 separate_coo_original_dict["row_idx"],
                 separate_coo_original_dict["eids"],
-                self.relation_msg,
+                relation_msg_weight,
                 v,
                 False,
             )  # shape (num_edges, n_heads, d_k)
@@ -209,8 +271,11 @@ class HET_HGT_DGLHetero(nn.Module):
         mydglgraph,
         in_dim,
         out_dim,
+        src_node_type_per_canonical_edge_type: torch.Tensor,
+        dst_node_type_per_canonical_edge_type: torch.Tensor,
         n_heads=1,
         dropout=0.2,
+        multiply_among_weights_first_flag=False,
         hgt_fused_attn_score_flag=False,
         compact_as_of_node_flag=False,
         fused_message_mean_aggregation_flag=False,
@@ -225,8 +290,11 @@ class HET_HGT_DGLHetero(nn.Module):
             in_dim,
             out_dim,
             mydglgraph,
+            src_node_type_per_canonical_edge_type,
+            dst_node_type_per_canonical_edge_type,
             n_heads=n_heads,
             dropout=dropout,
+            multiply_among_weights_first_flag=multiply_among_weights_first_flag,
             hgt_fused_attn_score_flag=hgt_fused_attn_score_flag,
             compact_as_of_node_flag=compact_as_of_node_flag,
             fused_message_mean_aggregation_flag=fused_message_mean_aggregation_flag,
@@ -238,6 +306,14 @@ class HET_HGT_DGLHetero(nn.Module):
     def reset_parameters(self):
         self.layer0.reset_parameters()
         # self.layer1.reset_parameters()
+
+    def const_to(self, device):
+        self.layer0.src_node_type_per_canonical_edge_type = (
+            self.layer0.src_node_type_per_canonical_edge_type.to(device)
+        )
+        self.layer0.dst_node_type_per_canonical_edge_type = (
+            self.layer0.dst_node_type_per_canonical_edge_type.to(device)
+        )
 
     def forward(self, h):
         h = self.layer0(self.mydglgraph, h)

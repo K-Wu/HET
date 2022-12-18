@@ -99,7 +99,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
     # loading data
     if dgl_model_flag:
         if args.dataset != "mag" or not args.use_real_labels_and_features:
-            g, _ = utils.graphiler_load_data(args.dataset, to_homo=False)
+            g, _, _2 = utils.graphiler_load_data(args.dataset, to_homo=False)
         else:
             (
                 g,
@@ -109,7 +109,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
                 train_loader,
             ) = legacy_data_loader._legacy_RGAT_prepare_mag_data(args)
     else:
-        g = utils.RGNN_get_mydgl_graph(
+        g, canonical_etype_idx_tuples = utils.RGNN_get_mydgl_graph(
             args.dataset,
             args.sort_by_src,
             args.sort_by_etype,

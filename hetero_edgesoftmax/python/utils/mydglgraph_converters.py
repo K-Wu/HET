@@ -40,6 +40,9 @@ def RGNN_get_mydgl_graph(
             infidel_sort_flag=False,
         )
         ntype_offsets = [0, 14541]
+        canonical_etype_idx_tuples = []
+        for idx_etype in range(int(max(edge_etypes)) + 1):
+            canonical_etype_idx_tuples.append((0, idx_etype, 0))
         # dglgraph = fetch_fb15k237_dglgraph()
     elif dataset == "wikikg2":
         print("WARNING - loading wikikg2. Currently we only support a few dataset.")
@@ -63,6 +66,9 @@ def RGNN_get_mydgl_graph(
             infidel_sort_flag=False,
         )
         ntype_offsets = [0, 2500604]  # there is only one node type
+        canonical_etype_idx_tuples = []
+        for idx_etype in range(int(max(edge_etypes)) + 1):
+            canonical_etype_idx_tuples.append((0, idx_etype, 0))
         # graph_dict = fetch_wikikg2_graph_dict()
     # elif dataset == "mag":
     #     print("WARNING - loading mag. Currently we only support a few dataset.")
@@ -86,9 +92,11 @@ def RGNN_get_mydgl_graph(
     #     # graph_dict = fetch_ogbnmag_graph_dict()
     elif dataset in graphiler_datasets_loader.GRAPHILER_DATASET:
         print("RGNN_get_mydgl_graph lopading graphiler dataset")
-        g, ntype_offsets = graphiler_datasets_loader.graphiler_load_data_as_mydgl_graph(
-            dataset, True
-        )
+        (
+            g,
+            ntype_offsets,
+            canonical_etype_idx_tuples,
+        ) = graphiler_datasets_loader.graphiler_load_data_as_mydgl_graph(dataset, True)
         edge_srcs, edge_dsts, edge_etypes, edge_referential_eids = (
             g["original"]["row_idx"],
             g["original"]["col_idx"],
@@ -215,7 +223,7 @@ def RGNN_get_mydgl_graph(
         raise NotImplementedError("sparse format not supported")
     # g.import_metadata_from_dgl_heterograph(dglgraph)
     g["original"]["node_type_offsets"] = th.LongTensor(ntype_offsets)
-    return g
+    return g, canonical_etype_idx_tuples
 
 
 def convert_mydgl_graph_csr_to_coo(g):

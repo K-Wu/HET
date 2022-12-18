@@ -21,6 +21,9 @@ def HGT_parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fused_message_mean_aggregation_flag", action="store_true", default=True
     )
+    parser.add_argument(
+        "--multiply_among_weights_first_flag", action="store_true", default=False
+    )
     args = parser.parse_args()
     return args
 
@@ -53,7 +56,10 @@ def HGT_get_model(g: dgl.DGLGraph, num_classes, hypermeters):
 
 
 def HGT_get_our_model(
-    g: utils.MyDGLGraph, num_classes, args: argparse.Namespace
+    g: utils.MyDGLGraph,
+    canonical_etype_idx_tuples,
+    num_classes,
+    args: argparse.Namespace,
 ) -> tuple[HET_RelGraphEmbed, HET_HGT_DGLHetero]:
     embed_layer = HET_RelGraphEmbed(g, args.n_infeat, exclude=[])
     model = HET_HGT_DGLHetero(
@@ -61,8 +67,19 @@ def HGT_get_our_model(
         args.n_infeat,
         # args.n_hidden,
         num_classes,
+        torch.tensor(
+            list(zip(*canonical_etype_idx_tuples))[0],
+            dtype=torch.long,
+            requires_grad=False,
+        ),
+        torch.tensor(
+            list(zip(*canonical_etype_idx_tuples))[2],
+            dtype=torch.long,
+            requires_grad=False,
+        ),
         n_heads=args.n_head,
         dropout=args.dropout,
+        multiply_among_weights_first_flag=args.multiply_among_weights_first_flag,
         hgt_fused_attn_score_flag=args.hgt_fused_attn_score_flag,
         compact_as_of_node_flag=args.compact_as_of_node_flag,
         fused_message_mean_aggregation_flag=args.fused_message_mean_aggregation_flag,
@@ -79,9 +96,9 @@ def HGT_get_our_model(
 def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
 
     if dgl_model_flag:
-        g, _ = utils.graphiler_load_data(args.dataset, to_homo=False)
+        g, _, _2 = utils.graphiler_load_data(args.dataset, to_homo=False)
     else:
-        g = utils.RGNN_get_mydgl_graph(
+        g, canonical_etype_idx_tuples = utils.RGNN_get_mydgl_graph(
             args.dataset,
             args.sort_by_src,
             args.sort_by_etype,
@@ -113,7 +130,9 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         # int(g["original"]["col_idx"].max()) + 1,
         # )
         # print(g["original"]["row_ptr"].numel() - 1)
-        embed_layer, model = HGT_get_our_model(g, num_classes, args)
+        embed_layer, model = HGT_get_our_model(
+            g, canonical_etype_idx_tuples, num_classes, args
+        )
         # TODO: only certain design choices call for this. Add an option to choose.
 
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
@@ -144,6 +163,7 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         g = g.to(device)
     embed_layer = embed_layer.to(device)
     model = model.to(device)
+    model.const_to(device)
     labels = labels.to(device)
     for run in range(args.runs):
         embed_layer.reset_parameters()
