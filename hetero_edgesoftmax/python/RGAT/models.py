@@ -176,7 +176,7 @@ class HET_RelationalAttLayer(nn.Module):
                 er_compact = er_compact.sum(dim=-1)
             else:
                 separate_unique_node_idx = g.get_separate_unique_node_indices()
-                # TODO: separate feat_compact_src and feat_compact_dst
+                # NB: no need to distinguish feat_compact_src and feat_compact_dst because in our case all datasets are added with inverse edges
                 feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
                     separate_unique_node_idx["rel_ptr"],
                     separate_unique_node_idx["node_idx"],
@@ -185,8 +185,19 @@ class HET_RelationalAttLayer(nn.Module):
                     True,
                 )
                 # FIXME: the following two lines should be implemented with relational_inner_product_compact_and_weight
-                el_compact = (feat_compact * self.attn_l).sum(dim=-1).unsqueeze(-1)
-                er_compact = (feat_compact * self.attn_r).sum(dim=-1).unsqueeze(-1)
+                # el_compact = (feat_compact * self.attn_l).sum(dim=-1).unsqueeze(-1)
+                # er_compact = (feat_compact * self.attn_r).sum(dim=-1).unsqueeze(-1)
+                el_compact = B.rgnn_relational_matmul_no_scatter_gather_list(
+                    separate_unique_node_idx["rel_ptr"],
+                    self.attn_l.unsqueeze(-1),
+                    feat_compact,
+                )
+                er_compact = B.rgnn_relational_matmul_no_scatter_gather_list(
+                    separate_unique_node_idx["rel_ptr"],
+                    self.attn_r.unsqueeze(-1),
+                    feat_compact,
+                )
+
             h = B.relational_fused_gat_compact_as_of_node(
                 g, feat_compact, el_compact, er_compact, self.leaky_relu_slope
             )
