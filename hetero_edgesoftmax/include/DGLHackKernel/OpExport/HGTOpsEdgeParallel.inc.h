@@ -66,9 +66,10 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
               num_relations + 1);
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
 
-  thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
-      num_blocks_assignment_for_same_relation_vect.begin(),
-      num_blocks_assignment_for_same_relation_vect.end());
+  //   thrust::device_vector<int>
+  //   dev_num_blocks_assignment_for_same_relation_vect(
+  //       num_blocks_assignment_for_same_relation_vect.begin(),
+  //       num_blocks_assignment_for_same_relation_vect.end());
   thrust::device_vector<int>
       dev_num_blocks_assignment_for_all_prev_relation_vect(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
@@ -134,9 +135,10 @@ void full_graph_hetero_attention_ops(
               num_relations + 1);
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
 
-  thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
-      num_blocks_assignment_for_same_relation_vect.begin(),
-      num_blocks_assignment_for_same_relation_vect.end());
+  //   thrust::device_vector<int>
+  //   dev_num_blocks_assignment_for_same_relation_vect(
+  //       num_blocks_assignment_for_same_relation_vect.begin(),
+  //       num_blocks_assignment_for_same_relation_vect.end());
   thrust::device_vector<int>
       dev_num_blocks_assignment_for_all_prev_relation_vect(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
@@ -185,11 +187,12 @@ void full_graph_hetero_attention_ops(
     at::Tensor& incsr_eids, at::Tensor& incsr_reltypes,
     at::Tensor& separate_coo_row_idx, at::Tensor& separate_coo_col_idx,
     at::Tensor& separate_coo_eids, at::Tensor& separate_coo_relptrs,
-    at::Tensor& attn_score_weight, at::Tensor& attn_score_weight_transposed,
+    at::Tensor& grad_attn_score_weight,
+    at::Tensor& attn_score_weight_transposed,
     at::Tensor& applied_klinear_node_features,
     at::Tensor& applied_qlinear_node_features,
     at::Tensor& attn_score_inner_product, at::Tensor& grad_unnorm_attn_score,
-    at::Tensor& grad_attn_weight, at::Tensor& grad_k, at::Tensor& grad_q) {
+    at::Tensor& grad_k, at::Tensor& grad_q) {
   // we need to implement a fused kernel based on back prop of RGNN
   // inner_product and back prop of W*t via RGNN relational_matmul
 
@@ -222,9 +225,10 @@ void full_graph_hetero_attention_ops(
               num_relations + 1);
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
 
-  thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
-      num_blocks_assignment_for_same_relation_vect.begin(),
-      num_blocks_assignment_for_same_relation_vect.end());
+  //   thrust::device_vector<int>
+  //   dev_num_blocks_assignment_for_same_relation_vect(
+  //       num_blocks_assignment_for_same_relation_vect.begin(),
+  //       num_blocks_assignment_for_same_relation_vect.end());
   thrust::device_vector<int>
       dev_num_blocks_assignment_for_all_prev_relation_vect(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
@@ -268,7 +272,7 @@ void full_graph_hetero_attention_ops(
       <<<nblks_outer_product, nthrs, 0, stream>>>(
           applied_klinear_node_features.data_ptr<float>(),
           applied_qlinear_node_features.data_ptr<float>(),
-          attn_score_weight.data_ptr<float>(),
+          grad_attn_score_weight.data_ptr<float>(),
           grad_unnorm_attn_score.data_ptr<float>(),
           separate_coo_row_idx.data_ptr<int64_t>(),
           separate_coo_col_idx.data_ptr<int64_t>(),
@@ -351,9 +355,10 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
               num_relations + 1);
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
 
-  thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
-      num_blocks_assignment_for_same_relation_vect.begin(),
-      num_blocks_assignment_for_same_relation_vect.end());
+  //   thrust::device_vector<int>
+  //   dev_num_blocks_assignment_for_same_relation_vect(
+  //       num_blocks_assignment_for_same_relation_vect.begin(),
+  //       num_blocks_assignment_for_same_relation_vect.end());
   thrust::device_vector<int>
       dev_num_blocks_assignment_for_all_prev_relation_vect(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),

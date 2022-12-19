@@ -238,7 +238,7 @@ class _simplified_basic_MatMulKernel<
           int thIdxFeat = thIdxFeat_initial;
           if constexpr (OuterProductFlag) {
             As[thIdxFeat][thIdxRow] =
-                (thIdxRow + (m)*SHMEM_BLOCK_SIZE + blockRowJobEntryBeg <
+                (thIdxRow + (m)*SHMEM_BLOCK_SIZE <  // + blockRowJobEntryBeg <
                      numARows &&
                  blockRow * SHMEM_BLOCK_SIZE + thIdxFeat < num_A_cols)
                     ? A[A_gather_list[thIdxRow + (m)*SHMEM_BLOCK_SIZE +
@@ -256,7 +256,7 @@ class _simplified_basic_MatMulKernel<
                                       idx_head])
                     : 0.0f;
             Bs[thIdxRow][thIdxFeat] =
-                ((m)*SHMEM_BLOCK_SIZE + thIdxRow + blockRowJobEntryBeg <
+                ((m)*SHMEM_BLOCK_SIZE + thIdxRow <  //+ blockRowJobEntryBeg <
                      numARows &&
                  blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols)
                     ? B[B_gather_list[(m)*SHMEM_BLOCK_SIZE + thIdxRow +
@@ -418,9 +418,10 @@ class _simplified_basic_MatMulKernel<
           bool WriteCInRangeFlag =
               blockRow * SHMEM_BLOCK_SIZE + thIdxRow < num_A_cols &&
               blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols;
-          // printf("blockRow %d blockFeat %d thIdxRow %d thIdxFeat %d
-          // CWriteFlag %d \n", blockRow, blockFeat, thIdxRow, thIdxFeat,
-          // WriteCInRangeFlag);
+
+          // printf("idx_relation %d blockRow %d blockFeat %d thIdxRow %d
+          // thIdxFeat %d CWriteFlag %d \n", idx_relation, blockRow, blockFeat,
+          // thIdxRow, thIdxFeat, WriteCInRangeFlag);
           if constexpr (DoInnerProductSwitch > 0) {
             CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
                 (DoInnerProductSwitch > 0) && OuterProductFlag,
@@ -814,23 +815,28 @@ template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
 __global__ void HET_HGTFusedAttnScoreDeltaWeightBckProp(
     float* applied_klinear_node_features, float* applied_qlinear_node_features,
-    float* attn_score_weight, float* grad_attn_score,
+    float* grad_attn_score_weight, float* grad_attn_score,
     IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
     IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
     int* accum_num_blocks_per_relation, Idx num_relations,
     Idx fw_input_dim_per_head, Idx fw_output_dim_per_head, int num_heads) {
   // edge_norm is delta_attn_score
-
-  Idx idx_block_assignment = blockIdx.z / num_heads;
-  Idx idx_relation = binary_search<int, int*>(
+  // TODO: use int instead for idx_block_assignment and idx_relation
+  int idx_block_assignment = blockIdx.z / num_heads;
+  int idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  // if (threadIdx.x == 0 && threadIdx.y == 0){
+  //     printf("idx_relation=%d, idx_block_z=%d, num_relations=%d\n",
+  //     idx_relation, blockIdx.z , num_relations);
+  //   }
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
                                  COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
                                  IdxPtr, true, true, 0, false, false>::
       execute_function(
           applied_klinear_node_features, applied_qlinear_node_features,
-          &attn_score_weight[idx_relation * num_heads * fw_output_dim_per_head *
-                             fw_input_dim_per_head],
+          &grad_attn_score_weight[idx_relation * num_heads *
+                                  fw_output_dim_per_head *
+                                  fw_input_dim_per_head],
           grad_attn_score, nullptr, nullptr, separate_coo_row_idx,
           separate_coo_col_idx, separate_coo_eids, idx_relation,
           separate_coo_rel_ptrs[idx_relation + 1] -

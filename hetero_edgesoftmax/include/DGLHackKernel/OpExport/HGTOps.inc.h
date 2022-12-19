@@ -409,8 +409,8 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
   int nblks_y = std::min(incsr_row_ptr.numel() - 1, MAX_NBLKS);
   const dim3 nthrs(nthrs_x, nthrs_y);
   const dim3 nblks(nblks_x, nblks_y);
-  HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel<Idx, DType, false,
-                                                            true>
+  HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel<Idx, DType, true,
+                                                            false>
       <<<nblks, nthrs, 0, stream>>>(
           gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
           incsr_reltypes.data_ptr<Idx>(), incsr_row_ptr.numel() - 1,

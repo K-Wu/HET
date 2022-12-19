@@ -85,7 +85,7 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             attn_score_weight,
             unnormalized_attn_score,
         ) = ctx.saved_tensors
-        print(attn_score_weight.numel())
+        # print(attn_score_weight.numel())
         grad_attn_weight = th.zeros_like(
             attn_score_weight, memory_format=th.contiguous_format
         )
@@ -104,16 +104,16 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             separate_coo_col_idx,
             separate_coo_eids,
             separate_coo_relptrs,
-            attn_score_weight,
+            grad_attn_weight,
             th.transpose(attn_score_weight, 2, 3).contiguous(),
             applied_klinear_node_features,
             applied_qlinear_node_features,
             attn_score_inner_product,
             grad_unnorm_attn_score,
-            grad_attn_weight,
             grad_k,
             grad_q,
         )
+        # print(grad_attn_weight)
         # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
         # fmt: off
         return  None, None, None, None, None, None, None, None,  grad_k, grad_q, grad_attn_weight
@@ -329,6 +329,8 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             normalized_attn_score,
             new_h,
         )
+        # print(normalized_attn_score)
+        # print(mu)
         return new_h
 
     # mere fusing of the original rgnn_relational_matmul and hgt_full_graph_edge_softmax_and_mean_aggregation_csr for now
@@ -385,7 +387,7 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             grad_input,
             grad_message_generation_weight,
             grad_normalized_attn_score,
-            gradout,
+            gradout.contiguous(),
         )
 
         K.backward_hgt_full_graph_enorm_to_unnormalized_attn_score_csr(
@@ -400,7 +402,11 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             grad_unnormalized_attn_score,
             grad_mu,
         )
-
+        # print(grad_message_generation_weight)
+        # print(grad_input)
+        # print(grad_normalized_attn_score)
+        # print(grad_unnormalized_attn_score)
+        # print(grad_mu)
         # fmt: off
         return None,None,None,None,None,None,None,None,grad_message_generation_weight,grad_input,grad_unnormalized_attn_score,None,grad_mu,None,None,None
         # fmt: on
@@ -551,7 +557,6 @@ class HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR(th.autograd.Functio
             message_per_edge,
             new_h,
         ) = ctx.saved_tensors
-
         grad_message = th.zeros_like(
             message_per_edge, memory_format=th.contiguous_format
         )

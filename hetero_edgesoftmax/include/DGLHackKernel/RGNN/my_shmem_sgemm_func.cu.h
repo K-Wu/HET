@@ -193,7 +193,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
           // Get sub-matrix Asub of A
           // Asub = &A[m * BLOCK_SIZE * num_A_cols + blockRow * BLOCK_SIZE];
           As[thIdxFeat][thIdxRow] =
-              (thIdxRow + (m)*SHMEM_BLOCK_SIZE + blockRowJobEntryBeg <
+              (thIdxRow + (m)*SHMEM_BLOCK_SIZE <  //+ blockRowJobEntryBeg <
                    numARows &&
                blockRow * SHMEM_BLOCK_SIZE + thIdxFeat < num_A_cols)
                   ? GetRowMajorElement<Idx, IdxPtr, GatherAFlag,
@@ -206,7 +206,7 @@ __device__ __forceinline__ void _basic_MatMulKernel(
                   : 0.0f;
 
           Bs[thIdxRow][thIdxFeat] =
-              ((m)*SHMEM_BLOCK_SIZE + thIdxRow + blockRowJobEntryBeg <
+              ((m)*SHMEM_BLOCK_SIZE + thIdxRow <  //+ blockRowJobEntryBeg <
                    numARows &&
                blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat < num_B_cols &&
                idx_head < num_heads)

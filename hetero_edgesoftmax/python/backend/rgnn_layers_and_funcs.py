@@ -138,13 +138,13 @@ def rgnn_relational_matmul(
         dtype=weights.dtype,
         device=weights.device,
         requires_grad=True,
-    )
+    ).contiguous()
     if separate_coo_node_indices.data_ptr() == separate_coo_eids.data_ptr():
         return RgnnRelationalMatmulACScatterGatherListIdentical.apply(
             separate_coo_relptrs,
             separate_coo_eids,
-            weights,
-            inputs,
+            weights.contiguous(),
+            inputs.contiguous(),
             ret,
             input_num_head_one_flag,
         )
@@ -155,8 +155,8 @@ def rgnn_relational_matmul(
             separate_coo_eids,
             # unique_srcs_and_dests_rel_ptr,
             # unique_srcs_and_dests_node_indices,
-            weights,
-            inputs,
+            weights.contiguous(),
+            inputs.contiguous(),
             ret,
             input_num_head_one_flag,
         )
@@ -571,6 +571,8 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
             grad_left_edge_data,
             grad_right_node_vectors,
         )
+        print(grad_left_edge_data)
+        print(grad_right_node_vectors)
         # fmt: off
         return None, None, None, grad_left_edge_data, grad_right_node_vectors, None
         # fmt: on
