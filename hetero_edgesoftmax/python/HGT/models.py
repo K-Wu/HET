@@ -136,24 +136,25 @@ class HET_HGTLayerHetero(nn.Module):
             v_per_canonical_etype = torch.index_select(
                 self.v_linears, 0, self.dst_node_type_per_canonical_edge_type
             )
+            # fixme: the view api does not do transpose
             k_relation_att_q_product = torch.bmm(
                 k_per_canonical_etype.view(-1, self.in_dim, self.d_k),
                 self.relation_att.view(-1, self.d_k, self.d_k),
             ).view(-1, self.n_heads, self.in_dim, self.d_k)
             k_relation_att_q_product = torch.bmm(
                 k_relation_att_q_product.view(-1, self.in_dim, self.d_k),
-                q_per_canonical_etype.view(-1, self.d_k, self.d_k),
+                q_per_canonical_etype.view(-1, self.in_dim, self.d_k).transpose(1, 2),
             ).view(-1, self.n_heads, self.in_dim, self.in_dim)
             relation_msg_v_product = torch.bmm(
                 self.relation_msg.view(-1, self.d_k, self.d_k),
                 v_per_canonical_etype.view(-1, self.d_k, self.d_k),
             ).view(-1, self.n_heads, self.in_dim, self.d_k)
 
-            relation_att_weight = k_relation_att_q_product
-            relation_msg_weight = relation_msg_v_product
-            k = h
-            q = h
-            v = h
+            relation_att_weight = k_relation_att_q_product.contiguous()
+            relation_msg_weight = relation_msg_v_product.contiguous()
+            k = h.unsqueeze(1).repeat(1, self.n_heads, 1).contiguous()
+            q = k
+            v = k
         else:
             relation_att_weight = self.relation_att
             relation_msg_weight = self.relation_msg
