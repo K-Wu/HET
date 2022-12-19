@@ -593,7 +593,7 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
     IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
     IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
     Idx num_relations, Idx delta_output_dim, Idx delta_input_dim) {
-  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_block_assignment = blockIdx.z;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
@@ -688,7 +688,7 @@ __global__ void HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp(
     Idx num_relations, Idx input_dim, Idx delta_output_dim, int num_heads) {
   // TODO: block assignment scheme might be different when OuterProductFlag ==
   // True
-  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
@@ -821,7 +821,7 @@ __global__ void HET_HGTFusedAttnScoreDeltaWeightBckProp(
     Idx fw_input_dim_per_head, Idx fw_output_dim_per_head, int num_heads) {
   // edge_norm is delta_attn_score
 
-  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,

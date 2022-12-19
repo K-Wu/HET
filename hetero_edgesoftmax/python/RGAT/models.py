@@ -58,6 +58,7 @@ class HET_RelationalAttLayer(nn.Module):
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.num_rels = num_rels
+        self.n_heads = n_heads
         self.bias = bias
         self.activation = activation
         self.self_loop = self_loop
@@ -241,16 +242,20 @@ class HET_RelationalAttLayer(nn.Module):
                 #    product_of_conv_weights_attn_r, (-1, self.n_heads, self.in_feat)
                 # )
                 separate_coo_original_dict = g.get_separate_coo_original()
-                product_of_conv_weights_attn_r = (
-                    self.conv_weights * self.attn_r.unsqueeze(2)
-                )
+                product_of_conv_weights_attn_r = th.bmm(
+                    self.conv_weights.view(
+                        -1, self.in_feat, self.out_feat // self.n_heads
+                    ),
+                    self.attn_r.view(-1, self.out_feat // self.n_heads, 1),
+                ).view(-1, self.n_heads, self.in_feat, 1)
+
                 er = B.rgnn_relational_matmul(
                     separate_coo_original_dict["rel_ptr"],
-                    separate_coo_original_dict["eids"],
+                    separate_coo_original_dict["col_idx"],
                     separate_coo_original_dict["eids"],
                     product_of_conv_weights_attn_r,
                     inputs,
-                    True,
+                    False,
                 )
             else:
                 separate_coo_original_dict = g.get_separate_coo_original()

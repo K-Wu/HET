@@ -91,7 +91,7 @@ def RGNN_get_mydgl_graph(
     #     )
     #     # graph_dict = fetch_ogbnmag_graph_dict()
     elif dataset in graphiler_datasets_loader.GRAPHILER_DATASET:
-        print("RGNN_get_mydgl_graph lopading graphiler dataset")
+        print("RGNN_get_mydgl_graph loading graphiler dataset")
         (
             g,
             ntype_offsets,

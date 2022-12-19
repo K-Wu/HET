@@ -375,9 +375,9 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
       COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
       int64_t, int64_t*><<<nblks, nthrs, 0, stream>>>(
       grad_node_feat_output.data_ptr<float>(),
-      weights_transposed.data_ptr<float>(), node_feat_input.data_ptr<float>(),
-      grad_node_feat_input.data_ptr<float>(), edge_norm.data_ptr<float>(),
-      grad_edge_norm.data_ptr<float>(),
+      weights_transposed.data_ptr<float>(),
+      grad_node_feat_input.data_ptr<float>(), node_feat_input.data_ptr<float>(),
+      edge_norm.data_ptr<float>(), grad_edge_norm.data_ptr<float>(),
       separate_coo_row_idx.data_ptr<int64_t>(),
       separate_coo_col_idx.data_ptr<int64_t>(),
       separate_coo_eids.data_ptr<int64_t>(),
