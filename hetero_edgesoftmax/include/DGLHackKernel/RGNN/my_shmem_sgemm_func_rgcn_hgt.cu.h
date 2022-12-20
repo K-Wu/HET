@@ -431,6 +431,7 @@ class _simplified_basic_MatMulKernel<
             // NB: this indexing scheme works for both cases whether num_head
             // is
             // 1
+
             atomicAdd(&C[idx_head * num_A_cols /*A is transposed in the fly*/ *
                              num_B_cols +
                          (blockRow * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols +
@@ -510,7 +511,7 @@ class _simplified_basic_MatMulKernel<
                      thIdxFeat],
                   Cvalue);
             }
-            // TODO: warp-level reduction here
+            // NB: warp-level reduction here
             if constexpr (DoInnerProductSwitch > 0) {
               // TODO: we may hide the global mem read latency by moving input
               // node feat load ahead at the cost of more shmem (copy async) or
