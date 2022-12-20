@@ -100,6 +100,8 @@ def HET_RGNN_train_with_sampler(
     raise NotImplementedError("HET_RGNN_train_with_sampler not implemented yet")
 
 
+# with open("abc.json", 'w') as fd:
+#     json.dump(a,fd)
 def HET_RGNN_train_full_graph(
     g,
     model,
@@ -233,6 +235,32 @@ def HET_RGNN_train_full_graph(
             (torch.cuda.memory_allocated() - memory_offset) / 1024 / 1024
         )
     )
+
+    # write to file
+    import json
+
+    with open(args.logfilename, "a") as fd:
+        json.dump(
+            {
+                "dataset": args.dataset,
+                "mean_forward_time": np.mean(forward_time[len(forward_time) // 4 :]),
+                "mean_backward_time": np.mean(backward_time[len(backward_time) // 4 :]),
+                "mean_training_time": np.mean(training_time[len(training_time) // 4 :]),
+                "forward_time": forward_time,
+                "backward_time": backward_time,
+                "training_time": training_time,
+                "max_memory_usage (mb)": (torch.cuda.max_memory_allocated())
+                / 1024
+                / 1024,
+                "intermediate_memory_usage (mb)": (
+                    torch.cuda.memory_allocated() - memory_offset
+                )
+                / 1024
+                / 1024,
+            },
+            fd,
+        )
+        fd.write("\n")
 
     return  # logger
 
@@ -384,12 +412,13 @@ def RGNN_train_with_sampler(
 # TODO: implement logging to json and run all datasets
 
 # TODO: Use conditional arguments to get a clearer structure of arguments as explained in https://stackoverflow.com/questions/9505898/conditional-command-line-arguments-in-python-using-argparse
-def add_generic_RGNN_args(parser, filtered_args={}):
+def add_generic_RGNN_args(parser, default_logfilename, filtered_args={}):
     if len(filtered_args) > 0:
         print(
             "WARNING: add_generic_RGNN_args is called with these following removed arguments: ",
             filtered_args,
         )
+    parser.add_argument("--logfilename", type=str, default=default_savefilename)
     # DGL
     if not "dataset" in filtered_args:
         parser.add_argument("-d", "--dataset", type=str, default="mag", help="dataset")

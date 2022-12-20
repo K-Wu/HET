@@ -25,7 +25,7 @@ from ..RGNNUtils import *
 
 def RGAT_parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="RGAT")
-    add_generic_RGNN_args(parser, {})
+    add_generic_RGNN_args(parser, "RGAT.json", {})
     parser.add_argument("--multiply_among_weights_first_flag", action="store_true")
     args = parser.parse_args()
     return args

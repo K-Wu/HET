@@ -11,7 +11,7 @@ from .models_dgl import *
 
 def HGT_parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="HGT")
-    add_generic_RGNN_args(parser, {})
+    add_generic_RGNN_args(parser, "HGT.json", {})
     # parser.add_argument(
     #    "--n_hidden", type=int, default=64, help="number of hidden units"
     # )

@@ -581,16 +581,46 @@ def RGCN_main_procedure(args, g, model, feats):
     # output we need
     print("^^^{:6f}^^^{:6f}".format(Used_memory, avg_run_time))
 
+    # write to file
+    import json
+
+    with open(args.logfilename, "a") as fd:
+        json.dump(
+            {
+                "dataset": args.dataset,
+                "mean_forward_time": np.mean(forward_time[len(forward_time) // 4 :]),
+                "mean_backward_time": np.mean(backward_time[len(backward_time) // 4 :]),
+                "mean_training_time": np.mean(training_time[len(training_time) // 4 :]),
+                "forward_time": forward_time,
+                "backward_time": backward_time,
+                "training_time": training_time,
+                "max_memory_usage (mb)": (torch.cuda.max_memory_allocated())
+                / 1024
+                / 1024,
+                "intermediate_memory_usage (mb)": (
+                    torch.cuda.memory_allocated() - memory_offset
+                )
+                / 1024
+                / 1024,
+            },
+            fd,
+        )
+        fd.write("\n")
+
 
 def create_RGCN_parser(RGCN_single_layer_flag):
     parser = argparse.ArgumentParser(description="RGCN")
+
     if RGCN_single_layer_flag:
         add_generic_RGNN_args(
-            parser, {"use-self-loop", "runs", "use_real_labels_and_features"}
+            parser,
+            "RGCN.json",
+            {"use-self-loop", "runs", "use_real_labels_and_features"},
         )
     else:
         add_generic_RGNN_args(
             parser,
+            "RGCN.json",
             {
                 "use-self-loop",
                 "runs",
