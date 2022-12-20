@@ -418,7 +418,7 @@ def add_generic_RGNN_args(parser, default_logfilename, filtered_args={}):
             "WARNING: add_generic_RGNN_args is called with these following removed arguments: ",
             filtered_args,
         )
-    parser.add_argument("--logfilename", type=str, default=default_savefilename)
+    parser.add_argument("--logfilename", type=str, default=default_logfilename)
     # DGL
     if not "dataset" in filtered_args:
         parser.add_argument("-d", "--dataset", type=str, default="mag", help="dataset")
