@@ -223,9 +223,10 @@ void Layer1_SeparateCOO(
               num_relations + 1);
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
 
-  thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
-      num_blocks_assignment_for_same_relation_vect.begin(),
-      num_blocks_assignment_for_same_relation_vect.end());
+  //   thrust::device_vector<int>
+  //   dev_num_blocks_assignment_for_same_relation_vect(
+  //       num_blocks_assignment_for_same_relation_vect.begin(),
+  //       num_blocks_assignment_for_same_relation_vect.end());
   thrust::device_vector<int>
       dev_num_blocks_assignment_for_all_prev_relation_vect(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
@@ -233,10 +234,6 @@ void Layer1_SeparateCOO(
   // NB: my shmem sgemm matmul scheme
   const dim3 nblks(ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, 1);
-  const dim3 nblks_outer_product(
-      ceil_div<>(num_fw_output_dim, (long)WORK_BLOCK_SIZE),
-      ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE),
-      num_heads * grid_dim_y);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
 
   HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp<
@@ -251,9 +248,48 @@ void Layer1_SeparateCOO(
       thrust::raw_pointer_cast(
           dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
       num_relations, num_fw_output_dim, num_fw_input_dim);
+
+  constexpr int WORK_BLOCK_SIZE_OUTPROD = 32;
+  constexpr bool COARSEN_FACTOR_2_FLAG_X_OUTPROD = true;
+  constexpr bool COARSEN_FACTOR_2_FLAG_Y_OUTPROD = true;
+  constexpr int THREADING_BLOCK_SIZE_X_OUTPROD =
+      COARSEN_FACTOR_2_FLAG_X_OUTPROD ? WORK_BLOCK_SIZE_OUTPROD / 2
+                                      : WORK_BLOCK_SIZE_OUTPROD;
+  constexpr int THREADING_BLOCK_SIZE_Y_OUTPROD =
+      COARSEN_FACTOR_2_FLAG_Y_OUTPROD ? WORK_BLOCK_SIZE_OUTPROD / 2
+                                      : WORK_BLOCK_SIZE_OUTPROD;
+  int grid_dim_y_outprod = std::min(
+      ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_OUTPROD), (int64_t)32768);
+  std::vector<int> num_blocks_assignment_for_same_relation_vect_outprod,
+      num_blocks_assignment_for_all_prev_relation_vect_outprod;
+  std::tie(num_blocks_assignment_for_same_relation_vect_outprod,
+           num_blocks_assignment_for_all_prev_relation_vect_outprod) =
+      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
+          grid_dim_y_outprod, num_relations, WORK_BLOCK_SIZE_OUTPROD,
+          separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
+          separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
+              num_relations + 1);
+  grid_dim_y_outprod =
+      num_blocks_assignment_for_all_prev_relation_vect_outprod.back();
+
+  //   thrust::device_vector<int>
+  //   dev_num_blocks_assignment_for_same_relation_vect_outprod(
+  //       num_blocks_assignment_for_same_relation_vect_outprod.begin(),
+  //       num_blocks_assignment_for_same_relation_vect_outprod.end());
+  thrust::device_vector<int>
+      dev_num_blocks_assignment_for_all_prev_relation_vect_outprod(
+          num_blocks_assignment_for_all_prev_relation_vect_outprod.begin(),
+          num_blocks_assignment_for_all_prev_relation_vect_outprod.end());
+  const dim3 nblks_outer_product(
+      ceil_div<>(num_fw_output_dim, (long)WORK_BLOCK_SIZE_OUTPROD),
+      ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE_OUTPROD),
+      num_heads * grid_dim_y_outprod);
+  const dim3 nthrs_outer_product(THREADING_BLOCK_SIZE_X_OUTPROD,
+                                 THREADING_BLOCK_SIZE_Y_OUTPROD);
   HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp<
-      COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-      int64_t, int64_t*><<<nblks_outer_product, nthrs, 0, stream>>>(
+      COARSEN_FACTOR_2_FLAG_X_OUTPROD, COARSEN_FACTOR_2_FLAG_Y_OUTPROD,
+      WORK_BLOCK_SIZE_OUTPROD, int64_t,
+      int64_t*><<<nblks_outer_product, nthrs_outer_product, 0, stream>>>(
       delta_node_feat_output.data_ptr<float>(),
       weights_transposed.data_ptr<float>(),
       delta_node_feat_input.data_ptr<float>(), edge_norm.data_ptr<float>(),
@@ -263,7 +299,7 @@ void Layer1_SeparateCOO(
       separate_coo_eids.data_ptr<int64_t>(),
       separate_coo_relptrs.data_ptr<int64_t>(),
       thrust::raw_pointer_cast(
-          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+          dev_num_blocks_assignment_for_all_prev_relation_vect_outprod.data()),
       num_relations, num_fw_output_dim, num_fw_input_dim);
 }
 

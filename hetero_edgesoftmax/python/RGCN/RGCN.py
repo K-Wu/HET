@@ -484,8 +484,9 @@ def RGCN_main_procedure(args, g, model, feats):
     print("start training...")
     forward_time = []
     backward_time = []
+    training_time = []
     model.train()
-    train_labels = labels[train_idx]
+    # train_labels = labels[train_idx]
     train_idx = list(train_idx)
     for epoch in range(args.n_epochs):
         optimizer.zero_grad()
@@ -494,7 +495,7 @@ def RGCN_main_procedure(args, g, model, feats):
         logits = model(g, feats, edge_norm)
         torch.cuda.synchronize()
         tb = time.time()
-        train_logits = logits[train_idx]
+        # train_logits = logits[train_idx]
         ta = time.time()
         # loss = F.cross_entropy(train_logits, train_labels)
         loss = F.cross_entropy(logits, labels)
@@ -507,6 +508,7 @@ def RGCN_main_procedure(args, g, model, feats):
         if epoch >= 3:
             forward_time.append(tb - t0)
             backward_time.append(t2 - t1)
+            training_time.append(t2 - t0)
             if args.verbose:
                 print(
                     "Epoch {:05d} | Train Forward Time(s) {:.4f} (our kernel {:.4f} cross entropy {:.4f}) | Backward Time(s) {:.4f}".format(
@@ -547,6 +549,11 @@ def RGCN_main_procedure(args, g, model, feats):
     print(
         "Mean backward time: {:4f} ms".format(
             np.mean(backward_time[len(backward_time) // 4 :]) * 1000
+        )
+    )
+    print(
+        "Mean training time: {:4f} ms".format(
+            np.mean(training_time[len(training_time) // 4 :]) * 1000
         )
     )
 

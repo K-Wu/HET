@@ -588,12 +588,13 @@ __global__ void __launch_bounds__(256, 3)
 
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
-__global__ void HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
-    float* node_feat_input, float* delta_linear_projected_node_feat,
-    float* delta_weights, float* edge_norm, IdxPtr separate_coo_row_idx,
-    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
-    IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
-    Idx num_relations, Idx delta_output_dim, Idx delta_input_dim) {
+__global__ void __launch_bounds__(256, 3)
+    HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
+        float* node_feat_input, float* delta_linear_projected_node_feat,
+        float* delta_weights, float* edge_norm, IdxPtr separate_coo_row_idx,
+        IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
+        IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
+        Idx num_relations, Idx delta_output_dim, Idx delta_input_dim) {
   Idx idx_block_assignment = blockIdx.z;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -616,19 +617,20 @@ __global__ void HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
 
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
-__global__ void HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
-    float* delta_linear_projected_node_feat, float* weights_transposed,
-    float* delta_node_feat_input, float* edge_norm, float* grad_edge_norm,
-    float* input_node_feat_for_grad_norm, IdxPtr separate_coo_row_idx,
-    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
-    IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
-    Idx num_relations, Idx delta_output_dim, Idx delta_input_dim) {
+__global__ void __launch_bounds__(256, 3)
+    HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
+        float* delta_linear_projected_node_feat, float* weights_transposed,
+        float* delta_node_feat_input, float* edge_norm, float* grad_edge_norm,
+        float* input_node_feat_for_grad_norm, IdxPtr separate_coo_row_idx,
+        IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
+        IdxPtr separate_coo_rel_ptrs, int* accum_num_blocks_per_relation,
+        Idx num_relations, Idx delta_output_dim, Idx delta_input_dim) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<false, COARSEN_FACTOR_2_FLAG_X,
                                  COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE, Idx,
-                                 IdxPtr, false, false, 1, true, false>::
+                                 IdxPtr, false, false, 0, true, false>::
       execute_function(delta_linear_projected_node_feat,
                        &weights_transposed[idx_relation * delta_output_dim *
                                            delta_input_dim],

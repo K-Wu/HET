@@ -4,6 +4,8 @@ import torch as th
 import torch.nn.functional as F
 from torch import nn
 
+from torch.cuda import memory_allocated, max_memory_allocated, reset_peak_memory_stats
+
 # import torch.jit
 from .. import utils
 from .. import utils_lite
@@ -109,6 +111,7 @@ def HET_RGNN_train_full_graph(
     # training loop
     forward_time = []
     backward_time = []
+    training_time = []
     print("start training...")
     # node_embed = node_embed_layer()
     # model = torch.jit.trace(model, (g, node_embed))
@@ -181,9 +184,11 @@ def HET_RGNN_train_full_graph(
         print(
             f"Backward prop time: {backward_prop_start.elapsed_time(backward_prop_end)} ms"
         )
+        print(f"Total time: {forward_prop_start.elapsed_time(backward_prop_end)} ms")
         if epoch >= 3:
             forward_time.append(forward_prop_start.elapsed_time(forward_prop_end))
             backward_time.append(backward_prop_start.elapsed_time(backward_prop_end))
+            training_time.append(forward_prop_start.elapsed_time(backward_prop_end))
     #              f'Train: {100 * train_acc:.2f}%, '
     #              f'Valid: {100 * valid_acc:.2f}%, '
     #              f'Test: {100 * test_acc:.2f}%')
@@ -195,6 +200,11 @@ def HET_RGNN_train_full_graph(
     print(
         "Mean backward time: {:4f}".format(
             np.mean(backward_time[len(backward_time) // 4 :])
+        )
+    )
+    print(
+        "Mean training time: {:4f}".format(
+            np.mean(training_time[len(training_time) // 4 :])
         )
     )
     return  # logger

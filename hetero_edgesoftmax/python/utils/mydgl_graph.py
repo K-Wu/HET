@@ -256,6 +256,22 @@ class MyDGLGraph:
         ]
         return separate_coo_original
 
+    def get_separate_csr_original(self) -> Dict[str, torch.Tensor]:
+        separate_csr_original = dict()
+        separate_csr_original["rel_ptr"] = self.graph_data["separate"]["csr"][
+            "original"
+        ]["rel_ptr"]
+        separate_csr_original["row_ptr"] = self.graph_data["separate"]["csr"][
+            "original"
+        ]["row_ptr"]
+        separate_csr_original["col_idx"] = self.graph_data["separate"]["csr"][
+            "original"
+        ]["col_idx"]
+        separate_csr_original["eids"] = self.graph_data["separate"]["csr"]["original"][
+            "eids"
+        ]
+        return separate_csr_original
+
     def get_separate_unique_node_indices(self) -> Dict[str, torch.Tensor]:
         separate_unique_node_indices = dict()
         separate_unique_node_indices["rel_ptr"] = self.graph_data["separate"][
@@ -302,16 +318,27 @@ class MyDGLGraph:
             original_node_type_offsets = None
 
         if "separate" in self.graph_data:
-            if "coo" in self.graph_data["separate"]:
+            if (
+                "coo" in self.graph_data["separate"]
+                and "original" in self.graph_data["separate"]["coo"]
+            ):
                 separate_coo_original = self.get_separate_coo_original()
             else:
                 separate_coo_original = None
+            if (
+                "csr" in self.graph_data["separate"]
+                and "original" in self.graph_data["separate"]["csr"]
+            ):
+                separate_csr_original = self.get_separate_csr_original()
+            else:
+                separate_csr_original = None
             if "unique_node_idx" in self.graph_data["separate"]:
                 separate_unique_node_indices = self.get_separate_unique_node_indices()
             else:
                 separate_unique_node_indices = None
         else:
             separate_coo_original = None
+            separate_csr_original = None
             separate_unique_node_indices = None
 
         return utils.ScriptedMyDGLGraph(
@@ -328,6 +355,7 @@ class MyDGLGraph:
             original_node_type_offsets,
             separate_unique_node_indices,
             separate_coo_original,
+            separate_csr_original,
         )
 
     @torch.no_grad()

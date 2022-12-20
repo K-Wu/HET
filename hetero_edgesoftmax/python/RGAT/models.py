@@ -145,12 +145,18 @@ class HET_RelationalAttLayer(nn.Module):
             #     g["separate"]["unique_node_idx"]["rel_ptr"],g["separate"]["unique_node_idx"]["node_idx"], self.conv_weight, inputs
             # )
             if self.multiply_among_weights_first_flag:
-                product_of_conv_weights_attn_r = (
-                    self.conv_weights * self.attn_r.unsqueeze(2)
-                )
-                product_of_conv_weights_attn_l = (
-                    self.conv_weights * self.attn_l.unsqueeze(2)
-                )
+                product_of_conv_weights_attn_r = th.bmm(
+                    self.conv_weights.view(
+                        -1, self.in_feat, self.out_feat // self.n_heads
+                    ),
+                    self.attn_r.view(-1, self.out_feat // self.n_heads, 1),
+                ).view(-1, self.n_heads, self.in_feat, 1)
+                product_of_conv_weights_attn_l = th.bmm(
+                    self.conv_weights.view(
+                        -1, self.in_feat, self.out_feat // self.n_heads
+                    ),
+                    self.attn_l.view(-1, self.out_feat // self.n_heads, 1),
+                ).view(-1, self.n_heads, self.in_feat, 1)
                 separate_unique_node_idx = g.get_separate_unique_node_indices()
                 feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
                     separate_unique_node_idx["rel_ptr"],
@@ -173,8 +179,6 @@ class HET_RelationalAttLayer(nn.Module):
                     inputs,
                     True,
                 )
-                el_compact = el_compact.sum(dim=-1)
-                er_compact = er_compact.sum(dim=-1)
             else:
                 separate_unique_node_idx = g.get_separate_unique_node_indices()
                 # NB: no need to distinguish feat_compact_src and feat_compact_dst because in our case all datasets are added with inverse edges

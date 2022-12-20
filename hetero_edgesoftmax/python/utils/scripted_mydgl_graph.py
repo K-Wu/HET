@@ -32,6 +32,7 @@ class ScriptedMyDGLGraph(object):
         original_node_type_offsets: Union[None, torch.Tensor],
         separate_unique_node_indices: Union[None, Dict[str, torch.Tensor]],
         separate_coo_original: Union[None, Dict[str, torch.Tensor]],
+        separate_csr_original: Union[None, Dict[str, torch.Tensor]],
     ):
         # self.graph_data = dict()
         self.num_nodes = num_nodes
@@ -47,6 +48,7 @@ class ScriptedMyDGLGraph(object):
         self.original_node_type_offsets = original_node_type_offsets
         self.separate_unique_node_indices = separate_unique_node_indices
         self.separate_coo_original = separate_coo_original
+        self.separate_csr_original = separate_csr_original
 
     def get_num_nodes(self) -> int:
         return self.num_nodes
@@ -138,5 +140,15 @@ class ScriptedMyDGLGraph(object):
         # G["separate"]["coo"]["original"]["eids"],
 
         result = self.separate_coo_original
+        assert result is not None
+        return result
+
+    def get_separate_csr_original(self) -> Dict[str, torch.Tensor]:
+        # G["separate"]["csr"]["original"]["rel_ptr"],
+        # G["separate"]["csr"]["original"]["row_ptr"],
+        # G["separate"]["csr"]["original"]["col_idx"],
+        # G["separate"]["csr"]["original"]["eids"],
+
+        result = self.separate_csr_original
         assert result is not None
         return result

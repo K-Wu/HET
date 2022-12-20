@@ -168,8 +168,6 @@ class HET_HGTLayerHetero(nn.Module):
                 G.get_original_node_type_offsets(), self.v_linears, h
             ).view(-1, self.n_heads, self.d_k)
 
-        # TODO: implement multiply weight first
-        # if self.multiply_among_weights_first_flag:
         if self.hgt_fused_attn_score_flag:
             attn_score = B.hgt_full_graph_hetero_attention_ops_coo(
                 G, relation_att_weight, k, q
