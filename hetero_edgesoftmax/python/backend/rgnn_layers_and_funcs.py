@@ -571,6 +571,7 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
             grad_left_edge_data,
             grad_right_node_vectors,
         )
+        # FIXME: check if there is bug here
         print(grad_left_edge_data)
         print(grad_right_node_vectors)
         # fmt: off

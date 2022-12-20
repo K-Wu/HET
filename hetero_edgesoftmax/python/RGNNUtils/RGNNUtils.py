@@ -127,6 +127,22 @@ def HET_RGNN_train_full_graph(
     # scripted_model = torch.jit.trace(model.eval(),  node_embed)
     # scripted_model = torch.jit.trace(torch.jit.script_if_tracing(model.eval()),  node_embed)
     # scripted_model = torch.jit.optimize_for_inference(scripted_model)
+
+    # warm up
+    for epoch in range(5):
+        model.train()
+        model.requires_grad_(True)
+        # node_embed_layer.eval()
+        node_embed_layer.train()
+        node_embed_layer.requires_grad_(True)
+        optimizer.zero_grad()
+        logits = model(node_embed)
+        y_hat = logits.log_softmax(dim=-1)
+        loss = F.nll_loss(y_hat, labels)
+    torch.cuda.synchronize()
+    memory_offset = torch.cuda.memory_allocated()
+    reset_peak_memory_stats()
+
     for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
@@ -136,7 +152,7 @@ def HET_RGNN_train_full_graph(
         # node_embed_layer.eval()
         node_embed_layer.train()
         node_embed_layer.requires_grad_(True)
-        total_loss = 0
+        # total_loss = 0
 
         # emb = extract_embed(node_embed, input_nodes)
         # emb = node_embed
@@ -170,7 +186,7 @@ def HET_RGNN_train_full_graph(
         th.cuda.synchronize()
 
         # FIXME: should be # edges when training full graph
-        total_loss += loss.item() * args.batch_size
+        # total_loss += loss.item() * args.batch_size
 
         # result = test(g, model, node_embed, labels, device, split_idx, args)
         # logger.add_result(run, result)
@@ -207,6 +223,17 @@ def HET_RGNN_train_full_graph(
             np.mean(training_time[len(training_time) // 4 :])
         )
     )
+    print(
+        "max memory usage: {:4f}".format(
+            (torch.cuda.max_memory_allocated()) / 1024 / 1024
+        )
+    )
+    print(
+        "intermediate memory usage: {:4f}".format(
+            (torch.cuda.memory_allocated() - memory_offset) / 1024 / 1024
+        )
+    )
+
     return  # logger
 
 
@@ -353,6 +380,8 @@ def RGNN_train_with_sampler(
 
     return  # logger
 
+
+# TODO: implement logging to json and run all datasets
 
 # TODO: Use conditional arguments to get a clearer structure of arguments as explained in https://stackoverflow.com/questions/9505898/conditional-command-line-arguments-in-python-using-argparse
 def add_generic_RGNN_args(parser, filtered_args={}):

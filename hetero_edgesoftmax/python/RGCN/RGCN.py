@@ -24,6 +24,7 @@ from .. import utils
 from .. import utils_lite
 from ..RGNNUtils import *
 
+
 # from functools import partial
 
 
@@ -488,6 +489,18 @@ def RGCN_main_procedure(args, g, model, feats):
     model.train()
     # train_labels = labels[train_idx]
     train_idx = list(train_idx)
+
+    # warm up
+    for epoch in range(5):
+        optimizer.zero_grad()
+        logits = model(g, feats, edge_norm)
+        loss = F.cross_entropy(logits, labels)
+        loss.backward()
+        optimizer.step()
+    torch.cuda.synchronize()
+    memory_offset = torch.cuda.memory_allocated()
+    reset_peak_memory_stats()
+
     for epoch in range(args.n_epochs):
         optimizer.zero_grad()
         torch.cuda.synchronize()
@@ -505,16 +518,16 @@ def RGCN_main_procedure(args, g, model, feats):
         optimizer.step()
         torch.cuda.synchronize()
         t2 = time.time()
-        if epoch >= 3:
-            forward_time.append(tb - t0)
-            backward_time.append(t2 - t1)
-            training_time.append(t2 - t0)
-            if args.verbose:
-                print(
-                    "Epoch {:05d} | Train Forward Time(s) {:.4f} (our kernel {:.4f} cross entropy {:.4f}) | Backward Time(s) {:.4f}".format(
-                        epoch, forward_time[-1], (tb - t0), (t1 - ta), backward_time[-1]
-                    )
+        # if epoch >= 3:
+        forward_time.append(tb - t0)
+        backward_time.append(t2 - t1)
+        training_time.append(t2 - t0)
+        if args.verbose:
+            print(
+                "Epoch {:05d} | Train Forward Time(s) {:.4f} (our kernel {:.4f} cross entropy {:.4f}) | Backward Time(s) {:.4f}".format(
+                    epoch, forward_time[-1], (tb - t0), (t1 - ta), backward_time[-1]
                 )
+            )
         train_acc = torch.sum(
             logits[train_idx].argmax(dim=1) == labels[train_idx]
         ).item() / len(train_idx)
@@ -528,7 +541,11 @@ def RGCN_main_procedure(args, g, model, feats):
                     train_acc, loss.item(), val_acc, val_loss.item()
                 )
             )
-    print("max memory allocated", torch.cuda.max_memory_allocated())
+    print("max memory allocated (MB) ", torch.cuda.max_memory_allocated() / 1024 / 1024)
+    print(
+        "intermediate memory allocated (MB) ",
+        (torch.cuda.max_memory_allocated() - memory_offset) / 1024 / 1024,
+    )
 
     model.eval()
     logits = model.forward(g, feats, edge_norm)
@@ -637,4 +654,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
     args.bfs_level = args.num_layers + 1  # pruning used nodes for memory
-    main(args)
+    if args.dataset == "all":
+        for dataset in utils_lite.GRAPHILER_HETERO_DATASET:
+            args.dataset = dataset
+            main(args)
+    else:
+        main(args)

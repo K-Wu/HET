@@ -5,6 +5,7 @@ from . import (
     create_RGCN_parser,
 )
 from .. import utils
+from .. import utils_lite
 import torch as th
 import torch.nn.functional as F
 
@@ -61,4 +62,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
     args.bfs_level = 1 + 1  # num_layers + 1 pruning used nodes for memory
-    RGCNSingleLayer_main(args)
+    if args.dataset == "all":
+        for dataset in utils_lite.GRAPHILER_HETERO_DATASET:
+            args.dataset = dataset
+            print(f"Training on {dataset}")
+            RGCNSingleLayer_main(args)
+    else:
+        RGCNSingleLayer_main(args)
