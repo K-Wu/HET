@@ -402,7 +402,7 @@ def rgcn_layer1_csr(
     outcsr_eids = outcsr_dict["eids"]
     outcsr_reltypes = outcsr_dict["rel_types"]
     ret = th.zeros(
-        (incsr_row_ptr.numel() - 1, weight.size(2)),
+        (graph.get_num_nodes(), weight.size(2)),
         dtype=weight.dtype,
         device=weight.device,
         requires_grad=True,
