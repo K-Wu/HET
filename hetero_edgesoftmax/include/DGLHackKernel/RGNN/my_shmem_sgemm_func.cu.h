@@ -774,11 +774,17 @@ __global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
       delta_input_dim, num_heads);
 }
 
-// NB: In the following functions, separate_coo_relptrs and
-// separate_coo_node_indices are used as gather/scatter list and work assignment
-// offset pointers, instead of the unique_srcs_and_dests pair in the above
-// functions. blockDim.y == ceil_div(A_col_row_idx_gather_list.size(),
-// BLOCK_SIZE)
+// TODO: remove this function
+// NB: SingleEnded compact matmul is a mal-purposed API because the additional
+// knowledge of separate coo node index does not help reduce the computation,
+// i.e., the number of entries to be output. The current indexing scheme in the
+// implementation is a mixture of compact and per-edge schemes.  Additionally,
+// datasets we are dealing with are all added with reverse edges. So it is even
+// meaningless to create two unique node indices list. NB: In the following
+// functions, separate_coo_relptrs and separate_coo_node_indices are used as
+// gather/scatter list and work assignment offset pointers, instead of the
+// unique_srcs_and_dests pair in the above functions. blockDim.y ==
+// ceil_div(A_col_row_idx_gather_list.size(), BLOCK_SIZE)
 template <
     bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
     int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr,

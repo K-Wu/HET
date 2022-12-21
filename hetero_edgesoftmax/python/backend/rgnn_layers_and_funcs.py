@@ -308,77 +308,77 @@ def rgnn_relational_matmul_compact_as_of_node(
     )
 
 
-class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
-    @staticmethod
-    def forward(
-        ctx,
-        unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_idx,
-        separate_coo_rel_ptr,
-        separate_coo_node_indices,
-        separate_coo_eids,
-        weight,
-        node_feat,
-        ret,
-        input_num_head_one_flag,
-    ):
-        node_feat = node_feat.contiguous()
-        ctx.save_for_backward(
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
-            separate_coo_rel_ptr,
-            separate_coo_node_indices,
-            separate_coo_eids,
-            weight,
-            node_feat,
-            ret,
-        )
-        ctx.input_num_head_one_flag = input_num_head_one_flag
-        K.rgnn_relational_matmul_compact_as_of_node_single_ended(
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
-            separate_coo_rel_ptr,
-            separate_coo_node_indices,
-            separate_coo_eids,
-            weight,
-            node_feat,
-            ret,
-            input_num_head_one_flag,
-        )
-        return ret
+# class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
+#     @staticmethod
+#     def forward(
+#         ctx,
+#         unique_srcs_and_dests_rel_ptr,
+#         unique_srcs_and_dests_node_idx,
+#         separate_coo_rel_ptr,
+#         separate_coo_node_indices,
+#         separate_coo_eids,
+#         weight,
+#         node_feat,
+#         ret,
+#         input_num_head_one_flag,
+#     ):
+#         node_feat = node_feat.contiguous()
+#         ctx.save_for_backward(
+#             unique_srcs_and_dests_rel_ptr,
+#             unique_srcs_and_dests_node_idx,
+#             separate_coo_rel_ptr,
+#             separate_coo_node_indices,
+#             separate_coo_eids,
+#             weight,
+#             node_feat,
+#             ret,
+#         )
+#         ctx.input_num_head_one_flag = input_num_head_one_flag
+#         K.rgnn_relational_matmul_compact_as_of_node_single_ended(
+#             unique_srcs_and_dests_rel_ptr,
+#             unique_srcs_and_dests_node_idx,
+#             separate_coo_rel_ptr,
+#             separate_coo_node_indices,
+#             separate_coo_eids,
+#             weight,
+#             node_feat,
+#             ret,
+#             input_num_head_one_flag,
+#         )
+#         return ret
 
-    @staticmethod
-    def backward(ctx, gradout):
-        (
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
-            separate_coo_rel_ptr,
-            separate_coo_node_indices,
-            separate_coo_eids,
-            weight,
-            node_feat,
-            ret,
-        ) = ctx.saved_tensors
-        input_num_head_one_flag = ctx.input_num_head_one_flag
-        grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
-        grad_node_feat = th.zeros_like(node_feat, memory_format=th.contiguous_format)
-        K.backward_rgnn_relational_matmul_compact_as_of_node_single_ended(
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
-            separate_coo_rel_ptr,
-            separate_coo_node_indices,
-            separate_coo_eids,
-            th.transpose(weight, 2, 3).contiguous(),
-            node_feat,
-            ret,
-            gradout.contiguous(),
-            grad_weight,
-            grad_node_feat,
-            input_num_head_one_flag,
-        )
-        # fmt: off
-        return None, None, None, None, None,  grad_weight, grad_node_feat, None, None
-        # fmt: on
+#     @staticmethod
+#     def backward(ctx, gradout):
+#         (
+#             unique_srcs_and_dests_rel_ptr,
+#             unique_srcs_and_dests_node_idx,
+#             separate_coo_rel_ptr,
+#             separate_coo_node_indices,
+#             separate_coo_eids,
+#             weight,
+#             node_feat,
+#             ret,
+#         ) = ctx.saved_tensors
+#         input_num_head_one_flag = ctx.input_num_head_one_flag
+#         grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
+#         grad_node_feat = th.zeros_like(node_feat, memory_format=th.contiguous_format)
+#         K.backward_rgnn_relational_matmul_compact_as_of_node_single_ended(
+#             unique_srcs_and_dests_rel_ptr,
+#             unique_srcs_and_dests_node_idx,
+#             separate_coo_rel_ptr,
+#             separate_coo_node_indices,
+#             separate_coo_eids,
+#             th.transpose(weight, 2, 3).contiguous(),
+#             node_feat,
+#             ret,
+#             gradout.contiguous(),
+#             grad_weight,
+#             grad_node_feat,
+#             input_num_head_one_flag,
+#         )
+#         # fmt: off
+#         return None, None, None, None, None,  grad_weight, grad_node_feat, None, None
+#         # fmt: on
 
 
 def rgnn_relational_matmul_compact_as_of_node_single_ended(
@@ -391,6 +391,9 @@ def rgnn_relational_matmul_compact_as_of_node_single_ended(
     node_feat,
     input_num_head_one_flag,
 ):
+    raise ZeroDivisionError(
+        "SingleEnded compact matmul is a mal-purposed API because the additional knowledge of separate coo node index does not help reduce the computation, i.e., the number of entries to be output. The current indexing scheme in the implementation is a mixture of compact and per-edge schemes.  Additionally, datasets we are dealing with are all added with reverse edges. So it is even meaningless to create two unique node indices list."
+    )
     ret = th.empty(
         [separate_coo_rel_ptr[-1], weight.size(1), weight.size(3)],
         dtype=weight.dtype,

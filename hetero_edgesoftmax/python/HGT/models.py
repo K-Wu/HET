@@ -177,17 +177,15 @@ class HET_HGTLayerHetero(nn.Module):
                 separate_coo_original_dict = G.get_separate_coo_original()
                 separate_unique_node_indices_dict = G.get_separate_unique_node_indices()
                 # TODO: implement single-sided matmul for compact_as_of_node_flag
-                attn_weight_dst_product_compact = (
-                    B.rgnn_relational_matmul_compact_as_of_node_single_ended(
-                        separate_unique_node_indices_dict["rel_ptr"],
-                        separate_unique_node_indices_dict["node_idx"],
-                        separate_coo_original_dict["rel_ptr"],
-                        separate_coo_original_dict["col_idx"],
-                        separate_coo_original_dict["eids"],
-                        relation_att_weight,
-                        q,
-                        False,
-                    )
+                attn_weight_dst_product_compact = B.rgnn_relational_matmul_compact_as_of_node(
+                    separate_unique_node_indices_dict["rel_ptr"],
+                    separate_unique_node_indices_dict["node_idx"],
+                    # separate_coo_original_dict["rel_ptr"],
+                    # separate_coo_original_dict["col_idx"],
+                    # separate_coo_original_dict["eids"],
+                    relation_att_weight,
+                    q,
+                    False,
                 )
                 attn_score = B.rgnn_inner_product_node_compact_and_node(
                     separate_unique_node_indices_dict["rel_ptr"],

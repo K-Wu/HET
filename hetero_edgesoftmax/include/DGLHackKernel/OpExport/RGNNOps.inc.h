@@ -13,6 +13,7 @@ namespace HET {
 namespace TorchExport {
 namespace RGNN {
 namespace FwProp {
+// TODO: remove the unused SingleSidedCompactAsOfNodeFlag and its logic
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int WORK_BLOCK_SIZE, bool CompactAsOfNodeFlag,
           bool SingleSidedCompactAsOfNodeFlag,
@@ -284,25 +285,25 @@ void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
   }
 }
 
-void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices,
-    at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_node_indices,
-    at::Tensor& separate_coo_eids, at::Tensor& weight, at::Tensor& node_feat,
-    at::Tensor& ret, bool InputNumHeadOneFlag) {
-  at::Tensor dummy_tensor;
-  if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<true, true, 32, true, true, false, true>(
-        separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
-        unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-        weight, node_feat, ret);
-  } else {
-    _RelationalMatMul_separatecoo<true, true, 32, true, true, false, false>(
-        separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
-        unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-        weight, node_feat, ret);
-  }
-}
+// void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
+//     at::Tensor& unique_srcs_and_dests_rel_ptr,
+//     at::Tensor& unique_srcs_and_dests_node_indices,
+//     at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_node_indices,
+//     at::Tensor& separate_coo_eids, at::Tensor& weight, at::Tensor& node_feat,
+//     at::Tensor& ret, bool InputNumHeadOneFlag) {
+//   at::Tensor dummy_tensor;
+//   if (InputNumHeadOneFlag) {
+//     _RelationalMatMul_separatecoo<true, true, 32, true, true, false, true>(
+//         separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
+//         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+//         weight, node_feat, ret);
+//   } else {
+//     _RelationalMatMul_separatecoo<true, true, 32, true, true, false, false>(
+//         separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
+//         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+//         weight, node_feat, ret);
+//   }
+// }
 
 // NB: We may refer to (edge parallel version)
 // HET_HGTExpermentalEdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel
@@ -787,29 +788,29 @@ void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
   }
 }
 
-void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices,
-    at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_node_indices,
-    at::Tensor& separate_coo_eids, at::Tensor& weight_transposed,
-    at::Tensor& node_feat, at::Tensor& ret, at::Tensor& gradout,
-    at::Tensor& grad_weights, at::Tensor& grad_node_feat,
-    bool InputNumHeadOneFlag) {
-  at::Tensor dummy_tensor;
-  if (InputNumHeadOneFlag) {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, true, true, false,
-                                          true>(
-        separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
-        unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-        weight_transposed, node_feat, gradout, grad_node_feat, grad_weights);
-  } else {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, true, true, false,
-                                          false>(
-        separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
-        unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-        weight_transposed, node_feat, gradout, grad_node_feat, grad_weights);
-  }
-}
+// void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
+//     at::Tensor& unique_srcs_and_dests_rel_ptr,
+//     at::Tensor& unique_srcs_and_dests_node_indices,
+//     at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_node_indices,
+//     at::Tensor& separate_coo_eids, at::Tensor& weight_transposed,
+//     at::Tensor& node_feat, at::Tensor& ret, at::Tensor& gradout,
+//     at::Tensor& grad_weights, at::Tensor& grad_node_feat,
+//     bool InputNumHeadOneFlag) {
+//   at::Tensor dummy_tensor;
+//   if (InputNumHeadOneFlag) {
+//     _BackwardRelationalMatMul_separatecoo<true, true, 32, true, true, false,
+//                                           true>(
+//         separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
+//         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+//         weight_transposed, node_feat, gradout, grad_node_feat, grad_weights);
+//   } else {
+//     _BackwardRelationalMatMul_separatecoo<true, true, 32, true, true, false,
+//                                           false>(
+//         separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
+//         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+//         weight_transposed, node_feat, gradout, grad_node_feat, grad_weights);
+//   }
+// }
 
 // NB: We may rely on HGTCompactAsOfNodesEdgeAttentionSecondStage in
 // [[hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTForwardKernels.cu.h]]
@@ -1069,61 +1070,25 @@ TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
         RGNN::BckProp::RelationalMatMulCompactAsOfNode_unique_rel_node_indices);
   m.def("rgnn_relational_matmul_compact_as_of_node",
         RGNN::FwProp::RelationalMatMulCompactAsOfNode_unique_rel_node_indices);
-  m.def(
-      "rgnn_relational_matmul_compact_as_of_node_single_ended",
-      RGNN::FwProp::
-          RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices);  // args: unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_idx, separate_coo_rel_ptr, separate_coo_node_indices, weight, node_feat, ret,
-  m.def(
-      "backward_rgnn_relational_matmul_compact_as_of_node_single_ended",
-      RGNN::BckProp::
-          RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices);  // args: unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_idx, separate_coo_rel_ptr, separate_coo_node_indices, weight_transposed, node_feat, ret, gradout, grad_weight, grad_node_feat
+  //   m.def(
+  //       "rgnn_relational_matmul_compact_as_of_node_single_ended",
+  //       RGNN::FwProp::
+  //           RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices);
+  //   m.def(
+  //       "backward_rgnn_relational_matmul_compact_as_of_node_single_ended",
+  //       RGNN::BckProp::
+  //           RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices);
   m.def("rgnn_relational_matmul_no_scatter_gather_list",
         RGNN::FwProp::RelationalMatmulNoScatterGatherList);
   m.def("backward_rgnn_relational_matmul_no_scatter_gather_list",
         RGNN::BckProp::RelationalMatmulNoScatterGatherList);
   // RGNN innerproduct
-  m.def(
-      "rgnn_inner_product_node_compact_and_node",
-      RGNN::FwProp::
-          inner_product_node_compact_and_node_separatecoo);  // args:
-                                                             // unique_srcs_and_dests_rel_ptr,
-                                                             // unique_srcs_and_dests_node_idx,
-                                                             // separate_coo_rel_ptr,
-                                                             // separate_coo_eids,
-                                                             // separate_coo_node_indices,
-                                                             // left_node_compact_data,
-                                                             // right_node_vectors,
-                                                             // ret,
-  m.def(
-      "backward_rgnn_inner_product_node_compact_and_node",
-      RGNN::BckProp::
-          inner_product_node_compact_and_node_separatecoo);  // args:
-                                                             // unique_srcs_and_dests_rel_ptr,
-                                                             // unique_srcs_and_dests_node_idx,
-                                                             // separate_coo_rel_ptr,
-                                                             // separate_coo_eids,
-                                                             // separate_coo_node_indices,
-                                                             // left_node_compact_data,
-                                                             // right_node_vectors,
-                                                             // ret,
-                                                             // gradout,
-                                                             // grad_left_node_compact_data,
-                                                             // grad_right_node_vectors
-  m.def(
-      "rgnn_inner_product_edge_and_node",
-      RGNN::FwProp::
-          inner_product_edge_and_node_separatecoo);  // args: separate_coo_eids,
-                                                     // separate_coo_node_indices,
-                                                     // left_edge_data,
-                                                     // right_node_vectors, ret,
-  m.def(
-      "backward_rgnn_inner_product_edge_and_node",
-      RGNN::BckProp::
-          inner_product_edge_and_node_separatecoo);  // args:
-                                                     // separate_coo_eids,separate_coo_node_indices,
-                                                     // left_edge_data,
-                                                     // right_node_vectors,
-                                                     // ret, gradout,
-                                                     // grad_left_edge_data,
-                                                     // grad_right_node_vectors,
+  m.def("rgnn_inner_product_node_compact_and_node",
+        RGNN::FwProp::inner_product_node_compact_and_node_separatecoo);
+  m.def("backward_rgnn_inner_product_node_compact_and_node",
+        RGNN::BckProp::inner_product_node_compact_and_node_separatecoo);
+  m.def("rgnn_inner_product_edge_and_node",
+        RGNN::FwProp::inner_product_edge_and_node_separatecoo);
+  m.def("backward_rgnn_inner_product_edge_and_node",
+        RGNN::BckProp::inner_product_edge_and_node_separatecoo);
 }

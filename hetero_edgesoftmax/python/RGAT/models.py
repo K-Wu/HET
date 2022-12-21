@@ -203,9 +203,14 @@ class HET_RelationalAttLayer(nn.Module):
                     feat_compact,
                 )
 
-            h = B.relational_fused_gat_compact_as_of_node(
-                g, feat_compact, el_compact, er_compact, self.leaky_relu_slope
-            )
+            if True:  # TODO: use a flag to switch this
+                h = B.relational_fused_gat_compact_as_of_node_separate_coo(
+                    g, feat_compact, el_compact, er_compact, self.leaky_relu_slope
+                )
+            else:
+                h = B.relational_fused_gat_compact_as_of_node(
+                    g, feat_compact, el_compact, er_compact, self.leaky_relu_slope
+                )
 
         else:
             separate_coo_original_dict = g.get_separate_coo_original()
