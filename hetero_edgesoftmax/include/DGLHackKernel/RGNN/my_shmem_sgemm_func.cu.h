@@ -774,49 +774,18 @@ __global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
       delta_input_dim, num_heads);
 }
 
-// TODO: remove this function
 // NB: SingleEnded compact matmul is a mal-purposed API because the additional
 // knowledge of separate coo node index does not help reduce the computation,
 // i.e., the number of entries to be output. The current indexing scheme in the
 // implementation is a mixture of compact and per-edge schemes.  Additionally,
 // datasets we are dealing with are all added with reverse edges. So it is even
-// meaningless to create two unique node indices list. NB: In the following
+// meaningless to create two unique node indices list.
+
+// NB: In the following
 // functions, separate_coo_relptrs and separate_coo_node_indices are used as
 // gather/scatter list and work assignment offset pointers, instead of the
 // unique_srcs_and_dests pair in the above functions. blockDim.y ==
 // ceil_div(A_col_row_idx_gather_list.size(), BLOCK_SIZE)
-template <
-    bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-    int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr,
-    bool C_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void HET_RGNNDeltaNodeFeatInputCompactBWPropSingleSided(
-    float* delta_feat_compact, float* weight_transpose,
-    float* delta_node_feat_input, IdxPtr unique_srcs_and_dests_rel_ptr,
-    IdxPtr unique_srcs_and_dests_node_indices, IdxPtr separate_coo_relptrs,
-    IdxPtr separate_coo_node_indices, Idx num_edges,
-    Idx delta_output_per_head_dim, Idx delta_input_dim, int num_heads,
-    int* accum_num_blocks_per_relation, Idx num_relations) {
-  Idx idx_block_assignment = blockIdx.y;
-  Idx idx_relation = binary_search<int, int*>(
-      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y,
-                      WORK_BLOCK_SIZE, false, false, false, false, false, true,
-                      false, true, Idx, IdxPtr, false, false,
-                      C_num_head_one_flag>(
-      delta_feat_compact,
-      &weight_transpose[idx_relation * (C_num_head_one_flag ? num_heads : 1) *
-                        delta_output_per_head_dim * delta_input_dim],
-      delta_node_feat_input, separate_coo_node_indices, nullptr,
-      separate_coo_node_indices, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_indices, idx_relation,
-      separate_coo_relptrs[idx_relation + 1] -
-          separate_coo_relptrs[idx_relation],
-      accum_num_blocks_per_relation[idx_relation],
-      (accum_num_blocks_per_relation[idx_relation + 1] -
-       accum_num_blocks_per_relation[idx_relation]),
-      separate_coo_relptrs[idx_relation], delta_output_per_head_dim,
-      delta_input_dim, num_heads);
-}
 
 template <
     bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
@@ -849,37 +818,4 @@ __global__ void __launch_bounds__(256, 3) HET_RGNNFeatCompactFWPropSingleSided(
        accum_num_blocks_per_relation[idx_relation]),
       separate_coo_relptrs[idx_relation], input_dim, output_per_head_dim,
       num_heads);
-}
-
-template <
-    bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-    int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr,
-    bool B_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void HET_RGNNDeltaWeightCompactBWPropSingleSided(
-    float* delta_feat_compact, float* feat_input, float* delta_weight,
-    IdxPtr unique_srcs_and_dests_rel_ptr,
-    IdxPtr unique_srcs_and_dests_node_indices, IdxPtr separate_coo_relptrs,
-    IdxPtr separate_coo_node_indices, Idx num_edges, Idx A_delta_input_dim,
-    Idx B_delta_output_per_head_dim, int num_heads,
-    int* accum_num_blocks_per_relation, Idx num_relations) {
-  Idx idx_block_assignment = blockIdx.z / num_heads;
-  Idx idx_relation = binary_search<int, int*>(
-      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y,
-                      WORK_BLOCK_SIZE, true, true, false, true, true, false,
-                      false, true, Idx, IdxPtr, false, B_num_head_one_flag,
-                      false>(
-      feat_input, delta_feat_compact,
-      &delta_weight[idx_relation * (B_num_head_one_flag ? num_heads : 1) *
-                    B_delta_output_per_head_dim * A_delta_input_dim],
-      separate_coo_node_indices, separate_coo_node_indices, nullptr,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-      idx_relation,
-      separate_coo_relptrs[idx_relation + 1] -
-          separate_coo_relptrs[idx_relation],
-      accum_num_blocks_per_relation[idx_relation],
-      (accum_num_blocks_per_relation[idx_relation + 1] -
-       accum_num_blocks_per_relation[idx_relation]),
-      separate_coo_relptrs[idx_relation], A_delta_input_dim,
-      B_delta_output_per_head_dim, num_heads);
 }

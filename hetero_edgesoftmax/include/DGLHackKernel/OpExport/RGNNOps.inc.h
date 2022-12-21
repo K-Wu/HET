@@ -16,7 +16,6 @@ namespace FwProp {
 // TODO: remove the unused SingleSidedCompactAsOfNodeFlag and its logic
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int WORK_BLOCK_SIZE, bool CompactAsOfNodeFlag,
-          bool SingleSidedCompactAsOfNodeFlag,
           bool ACGatherScatterListIdenticalFlag, bool InputNumHeadOneFlag>
 void _RelationalMatMul_separatecoo(
     at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
@@ -38,13 +37,8 @@ void _RelationalMatMul_separatecoo(
       COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
   constexpr int THREADING_BLOCK_SIZE_Y =
       COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  if constexpr (SingleSidedCompactAsOfNodeFlag) {
-    CONSTEXPR_TRUE_CLAUSE_STATIC_ASSERT(
-        SingleSidedCompactAsOfNodeFlag, CompactAsOfNodeFlag,
-        "SingleSidedCompactAsOfNodeFlag requires CompactAsOfNodeFlag");
-  }
 
-  if constexpr (CompactAsOfNodeFlag && !SingleSidedCompactAsOfNodeFlag) {
+  if constexpr (CompactAsOfNodeFlag) {
     num_edges = unique_srcs_and_dests_node_indices.numel();
   } else {
     num_edges = separate_coo_eids.numel();
@@ -56,7 +50,7 @@ void _RelationalMatMul_separatecoo(
                         // due to relationship with very few workloads
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
       num_blocks_assignment_for_all_prev_relation_vect;
-  if constexpr (CompactAsOfNodeFlag && !SingleSidedCompactAsOfNodeFlag) {
+  if constexpr (CompactAsOfNodeFlag) {
     at::Tensor unique_srcs_and_dests_rel_ptr_cpu_contiguous =
         unique_srcs_and_dests_rel_ptr.cpu().contiguous();
     std::tie(num_blocks_assignment_for_same_relation_vect,
@@ -99,36 +93,17 @@ void _RelationalMatMul_separatecoo(
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
     // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
     //           << " nblks.z: " << nblks.z << std::endl;
-    if constexpr (!SingleSidedCompactAsOfNodeFlag) {
-      HET_RGNNFeatCompactFWProp<COARSEN_FACTOR_2_FLAG_X,
-                                COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-                                int64_t, int64_t*, InputNumHeadOneFlag>
-          <<<nblks, nthrs, 0, stream>>>(
-              node_feat.data_ptr<float>(), weights.data_ptr<float>(),
-              ret.data_ptr<float>(),
-              unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
-              unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
-              num_input_dim, num_output_per_head_dim, num_heads,
-              thrust::raw_pointer_cast(
-                  dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-              num_relations);
-
-    } else {
-      HET_RGNNFeatCompactFWPropSingleSided<
-          COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-          int64_t, int64_t*, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
-          node_feat.data_ptr<float>(), weights.data_ptr<float>(),
-          ret.data_ptr<float>(),
-          unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
-          unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          separate_coo_node_indices.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(), num_input_dim,
-          num_output_per_head_dim, num_heads,
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations);
-    }
+    HET_RGNNFeatCompactFWProp<COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y,
+                              WORK_BLOCK_SIZE, int64_t, int64_t*,
+                              InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+        node_feat.data_ptr<float>(), weights.data_ptr<float>(),
+        ret.data_ptr<float>(),
+        unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
+        unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_input_dim,
+        num_output_per_head_dim, num_heads,
+        thrust::raw_pointer_cast(
+            dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+        num_relations);
 
   } else {
     // NB: my shmem sgemm matmul scheme
@@ -243,11 +218,11 @@ void RelationalMatMul_separatecoo(at::Tensor& separate_coo_relptrs,
                                   at::Tensor& ret, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<true, true, 32, false, false, false, true>(
+    _RelationalMatMul_separatecoo<true, true, 32, false, false, true>(
         separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
         dummy_tensor, dummy_tensor, weights, node_feat, ret);
   } else {
-    _RelationalMatMul_separatecoo<true, true, 32, false, false, false, false>(
+    _RelationalMatMul_separatecoo<true, true, 32, false, false, false>(
         separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
         dummy_tensor, dummy_tensor, weights, node_feat, ret);
   }
@@ -259,11 +234,11 @@ void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<true, true, 32, false, false, true, true>(
+    _RelationalMatMul_separatecoo<true, true, 32, false, true, true>(
         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
         dummy_tensor, weights, node_feat, ret);
   } else {
-    _RelationalMatMul_separatecoo<true, true, 32, false, false, true, false>(
+    _RelationalMatMul_separatecoo<true, true, 32, false, true, false>(
         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
         dummy_tensor, weights, node_feat, ret);
   }
@@ -275,11 +250,11 @@ void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
     at::Tensor& node_feat, at::Tensor& ret, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<true, true, 32, true, false, false, true>(
+    _RelationalMatMul_separatecoo<true, true, 32, true, false, true>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weight, node_feat, ret);
   } else {
-    _RelationalMatMul_separatecoo<true, true, 32, true, false, false, false>(
+    _RelationalMatMul_separatecoo<true, true, 32, true, false, false>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weight, node_feat, ret);
   }
@@ -490,7 +465,6 @@ void inner_product_edge_and_node_separatecoo(
 namespace BckProp {
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int WORK_BLOCK_SIZE, bool CompactAsOfNodeFlag,
-          bool SingleSidedCompactAsOfNodeFlag,
           bool ACGatherScatterListIdenticalFlag, bool InputNumHeadOneFlag>
 void _BackwardRelationalMatMul_separatecoo(
     at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
@@ -520,13 +494,8 @@ void _BackwardRelationalMatMul_separatecoo(
   assert(gradout.is_contiguous());
   assert(grad_node_feat.is_contiguous());
   assert(grad_weights.is_contiguous());
-  if constexpr (SingleSidedCompactAsOfNodeFlag) {
-    CONSTEXPR_TRUE_CLAUSE_STATIC_ASSERT(
-        SingleSidedCompactAsOfNodeFlag, CompactAsOfNodeFlag,
-        "SingleSidedCompactAsOfNodeFlag requires CompactAsOfNodeFlag");
-  }
 
-  if constexpr (CompactAsOfNodeFlag && !SingleSidedCompactAsOfNodeFlag) {
+  if constexpr (CompactAsOfNodeFlag) {
     num_edges = unique_srcs_and_dests_node_indices.numel();
   } else {
     num_edges = separate_coo_eids.numel();
@@ -538,7 +507,7 @@ void _BackwardRelationalMatMul_separatecoo(
                        // due to relationship with very few workloads
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
       num_blocks_assignment_for_all_prev_relation_vect;
-  if constexpr (CompactAsOfNodeFlag && !SingleSidedCompactAsOfNodeFlag) {
+  if constexpr (CompactAsOfNodeFlag) {
     at::Tensor unique_srcs_and_dests_rel_ptr_cpu_contiguous =
         unique_srcs_and_dests_rel_ptr.cpu().contiguous();
     std::tie(num_blocks_assignment_for_same_relation_vect,
@@ -597,63 +566,33 @@ void _BackwardRelationalMatMul_separatecoo(
 
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
     // NB: #head of node_feat is 1 when InputNumHeadOneFlag is true
-    if constexpr (!SingleSidedCompactAsOfNodeFlag) {
-      // cuda_err_chk(cudaGetLastError());
-      std::cout << gradout.numel() << std::endl;
-      HET_RGNNDeltaNodeFeatInputCompactBWProp<
-          COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-          int64_t, int64_t*, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
-          gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
-          grad_node_feat.data_ptr<float>(),
-          unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
-          unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_edges,
-          num_output_per_head_dim, num_input_dim, num_heads,
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations);
-      // cuda_err_chk(cudaGetLastError());
-      HET_RGNNDeltaWeightCompactBWProp<COARSEN_FACTOR_2_FLAG_X,
-                                       COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-                                       int64_t, int64_t*, InputNumHeadOneFlag>
-          <<<nblks_outer_product, nthrs, 0, stream>>>(
-              gradout.data_ptr<float>(), node_feat.data_ptr<float>(),
-              grad_weights.data_ptr<float>(),
-              unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
-              unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_edges,
-              num_input_dim, num_output_per_head_dim, num_heads,
-              thrust::raw_pointer_cast(
-                  dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-              num_relations);
-      // cuda_err_chk(cudaGetLastError());
-    } else {
-      HET_RGNNDeltaNodeFeatInputCompactBWPropSingleSided<
-          COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-          int64_t, int64_t*, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
-          gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
-          grad_node_feat.data_ptr<float>(),
-          unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
-          unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(), num_edges,
-          num_output_per_head_dim, num_input_dim, num_heads,
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations);
-      HET_RGNNDeltaWeightCompactBWPropSingleSided<
-          COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-          int64_t, int64_t*, InputNumHeadOneFlag>
-          <<<nblks_outer_product, nthrs, 0, stream>>>(
-              gradout.data_ptr<float>(), node_feat.data_ptr<float>(),
-              grad_weights.data_ptr<float>(),
-              unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
-              unique_srcs_and_dests_node_indices.data_ptr<int64_t>(),
-              separate_coo_relptrs.data_ptr<int64_t>(),
-              separate_coo_eids.data_ptr<int64_t>(), num_edges, num_input_dim,
-              num_output_per_head_dim, num_heads,
-              thrust::raw_pointer_cast(
-                  dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-              num_relations);
-    }
+    // cuda_err_chk(cudaGetLastError());
+    std::cout << gradout.numel() << std::endl;
+    HET_RGNNDeltaNodeFeatInputCompactBWProp<
+        COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
+        int64_t, int64_t*, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+        gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
+        grad_node_feat.data_ptr<float>(),
+        unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
+        unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_edges,
+        num_output_per_head_dim, num_input_dim, num_heads,
+        thrust::raw_pointer_cast(
+            dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+        num_relations);
+    // cuda_err_chk(cudaGetLastError());
+    HET_RGNNDeltaWeightCompactBWProp<COARSEN_FACTOR_2_FLAG_X,
+                                     COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
+                                     int64_t, int64_t*, InputNumHeadOneFlag>
+        <<<nblks_outer_product, nthrs, 0, stream>>>(
+            gradout.data_ptr<float>(), node_feat.data_ptr<float>(),
+            grad_weights.data_ptr<float>(),
+            unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
+            unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_edges,
+            num_input_dim, num_output_per_head_dim, num_heads,
+            thrust::raw_pointer_cast(
+                dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+            num_relations);
+    // cuda_err_chk(cudaGetLastError());
   } else {
     // NB: my shmem sgemm matmul scheme
     const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE),
@@ -732,14 +671,12 @@ void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, true, false, false,
-                                          true>(
+    _BackwardRelationalMatMul_separatecoo<true, true, 32, true, false, true>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weights_transposed, node_feat,
         gradout, grad_node_feat, grad_weights);
   } else {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, true, false, false,
-                                          false>(
+    _BackwardRelationalMatMul_separatecoo<true, true, 32, true, false, false>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weights_transposed, node_feat,
         gradout, grad_node_feat, grad_weights);
@@ -753,14 +690,12 @@ void RelationalMatMul_separatecoo(
     at::Tensor& grad_weights, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false, false,
-                                          true>(
+    _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false, true>(
         separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
         dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
         grad_node_feat, grad_weights);
   } else {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false, false,
-                                          false>(
+    _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false, false>(
         separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
         dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
         grad_node_feat, grad_weights);
@@ -774,14 +709,12 @@ void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false, true,
-                                          true>(
+    _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true, true>(
         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
         dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
         grad_weights);
   } else {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false, true,
-                                          false>(
+    _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true, false>(
         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
         dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
         grad_weights);
