@@ -293,7 +293,7 @@ def rgnn_relational_matmul_compact_as_of_node(
     input_num_head_one_flag,
 ):
     ret = th.zeros(
-        [unique_srcs_and_dests_rel_ptr[-1], weight.size(1), weight.size(3)],
+        (int(unique_srcs_and_dests_rel_ptr[-1]), weight.size(1), weight.size(3)),
         dtype=weight.dtype,
         device=weight.device,
         requires_grad=True,
