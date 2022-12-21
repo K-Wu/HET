@@ -156,3 +156,11 @@ void Layer1BackwardImpl(
 }  // namespace RGCN
 }  // namespace TorchExport
 }  // namespace HET
+
+using namespace HET::TorchExport;
+TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
+  // RGCN COO Declaration
+  m.def("rgcn_layer1_coo", RGCN::FwProp::IntegratedCOO::Layer1Impl);
+  m.def("backward_rgcn_layer1_coo",
+        RGCN::BckProp::IntegratedCOO::Layer1BackwardImpl);
+}

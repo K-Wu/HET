@@ -99,3 +99,12 @@ torch::Dict<std::string, int64_t> test_argument_takein(
   result.insert("flag", flag);
   return result;
 }
+
+TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
+  // Utility and debugging functions
+  m.def("build_debug_info", build_debug_info);
+  m.def("try_get_schedule_by_relations", try_get_schedule_by_relations);
+  m.def("biops_tensor_info", biops_tensor_info);
+  m.def("tensor_info", tensor_info);
+  m.def("test_argument_takein", test_argument_takein);
+}

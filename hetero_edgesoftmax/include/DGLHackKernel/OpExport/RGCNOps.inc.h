@@ -464,3 +464,26 @@ void Layer1HybridAssignmentImpl(
 }  // namespace RGCN
 }  // namespace TorchExport
 }  // namespace HET
+
+using namespace HET::TorchExport;
+TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
+  // RGCN separate coo (edge parallel) declaration
+  m.def("backward_rgcn_layer1_separate_coo", RGCN::BckProp::Layer1_SeparateCOO);
+  m.def("rgcn_layer1_separate_coo", RGCN::FwProp::Layer1_SeparateCOO);
+
+  // RGCN CSR Declaration
+  m.def("rgcn_layer0_csr", RGCN::FwProp::IntegratedCSR::Layer0Impl);
+  m.def("backward_rgcn_layer0_csr", RGCN::BckProp::IntegratedCSR::Layer0Impl);
+  m.def("rgcn_layer1_csr", RGCN::FwProp::IntegratedCSR::Layer1Impl);
+  m.def("backward_rgcn_layer1_csr", RGCN::BckProp::IntegratedCSR::Layer1Impl);
+  // FIXME: hybrid assign layer 0 is unused. Apply it in python backend
+  // submodule
+  m.def("rgcn_layer0_csr_hybrid_assign",
+        RGCN::FwProp::IntegratedCSR::Layer0HybridAssignmentImpl);
+  m.def("backward_rgcn_layer0_csr_hybrid_assign",
+        RGCN::BckProp::IntegratedCSR::Layer0HybridAssignmentImpl);
+  m.def("rgcn_layer1_csr_hybrid_assign",
+        RGCN::FwProp::IntegratedCSR::Layer1HybridAssignmentImpl);
+  m.def("backward_rgcn_layer1_csr_hybrid_assign",
+        RGCN::BckProp::IntegratedCSR::Layer1HybridAssignmentImpl);
+}

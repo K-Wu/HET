@@ -336,3 +336,16 @@ std::vector<at::Tensor> transpose_csr(at::Tensor& csr_rowptr,
                                     transposed_reltypes, transposed_eids};
   return result;
 }
+
+TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
+  // Data Converters
+  m.def("transpose_csr", transpose_csr);
+  m.def("convert_integrated_csr_to_separate_csr",
+        convert_integrated_csr_to_separate_csr);
+  m.def("convert_integrated_csr_to_separate_coo",
+        convert_integrated_csr_to_separate_coo);
+  m.def("convert_integrated_coo_to_separate_csr",
+        convert_integrated_coo_to_separate_csr);
+  m.def("convert_integrated_coo_to_separate_coo",
+        convert_integrated_coo_to_separate_coo);
+}

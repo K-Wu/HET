@@ -1051,3 +1051,79 @@ void RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
 }  // namespace RGNN
 }  // namespace TorchExport
 }  // namespace HET
+
+using namespace HET::TorchExport;
+TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
+  // kernels for generic hetero-gnn use declaration
+  // RGNN Relational GEMM
+  m.def("rgnn_relational_matmul", RGNN::FwProp::RelationalMatMul_separatecoo);
+  m.def("backward_rgnn_relational_matmul",
+        RGNN::BckProp::RelationalMatMul_separatecoo);
+  m.def(
+      "rgnn_relational_matmul_ac_gather_scatter_list_identical",
+      RGNN::FwProp::RelationalMatMul_ACGatherScatterListIdentical_separatecoo);
+  m.def(
+      "backward_rgnn_relational_matmul_ac_gather_scatter_list_identical",
+      RGNN::BckProp::RelationalMatMul_ACGatherScatterListIdentical_separatecoo);
+  m.def("backward_rgnn_relational_matmul_compact_as_of_node",
+        RGNN::BckProp::RelationalMatMulCompactAsOfNode_unique_rel_node_indices);
+  m.def("rgnn_relational_matmul_compact_as_of_node",
+        RGNN::FwProp::RelationalMatMulCompactAsOfNode_unique_rel_node_indices);
+  m.def(
+      "rgnn_relational_matmul_compact_as_of_node_single_ended",
+      RGNN::FwProp::
+          RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices);  // args: unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_idx, separate_coo_rel_ptr, separate_coo_node_indices, weight, node_feat, ret,
+  m.def(
+      "backward_rgnn_relational_matmul_compact_as_of_node_single_ended",
+      RGNN::BckProp::
+          RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices);  // args: unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_idx, separate_coo_rel_ptr, separate_coo_node_indices, weight_transposed, node_feat, ret, gradout, grad_weight, grad_node_feat
+  m.def("rgnn_relational_matmul_no_scatter_gather_list",
+        RGNN::FwProp::RelationalMatmulNoScatterGatherList);
+  m.def("backward_rgnn_relational_matmul_no_scatter_gather_list",
+        RGNN::BckProp::RelationalMatmulNoScatterGatherList);
+  // RGNN innerproduct
+  m.def(
+      "rgnn_inner_product_node_compact_and_node",
+      RGNN::FwProp::
+          inner_product_node_compact_and_node_separatecoo);  // args:
+                                                             // unique_srcs_and_dests_rel_ptr,
+                                                             // unique_srcs_and_dests_node_idx,
+                                                             // separate_coo_rel_ptr,
+                                                             // separate_coo_eids,
+                                                             // separate_coo_node_indices,
+                                                             // left_node_compact_data,
+                                                             // right_node_vectors,
+                                                             // ret,
+  m.def(
+      "backward_rgnn_inner_product_node_compact_and_node",
+      RGNN::BckProp::
+          inner_product_node_compact_and_node_separatecoo);  // args:
+                                                             // unique_srcs_and_dests_rel_ptr,
+                                                             // unique_srcs_and_dests_node_idx,
+                                                             // separate_coo_rel_ptr,
+                                                             // separate_coo_eids,
+                                                             // separate_coo_node_indices,
+                                                             // left_node_compact_data,
+                                                             // right_node_vectors,
+                                                             // ret,
+                                                             // gradout,
+                                                             // grad_left_node_compact_data,
+                                                             // grad_right_node_vectors
+  m.def(
+      "rgnn_inner_product_edge_and_node",
+      RGNN::FwProp::
+          inner_product_edge_and_node_separatecoo);  // args: separate_coo_eids,
+                                                     // separate_coo_node_indices,
+                                                     // left_edge_data,
+                                                     // right_node_vectors, ret,
+  m.def(
+      "backward_rgnn_inner_product_edge_and_node",
+      RGNN::BckProp::
+          inner_product_edge_and_node_separatecoo);  // args:
+                                                     // separate_coo_eids,separate_coo_node_indices,
+                                                     // left_edge_data,
+                                                     // right_node_vectors,
+                                                     // ret, gradout,
+                                                     // grad_left_edge_data,
+                                                     // grad_right_node_vectors,
+}

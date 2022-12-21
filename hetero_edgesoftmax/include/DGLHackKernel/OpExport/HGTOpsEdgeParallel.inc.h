@@ -419,3 +419,26 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
 }  // namespace HGT
 }  // namespace TorchExport
 }  // namespace HET
+
+using namespace HET::TorchExport;
+TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
+  m.def(
+      "backward_hgt_full_graph_hetero_attention_ops_coo",
+      HGT::BckProp::SeparateCOO::EdgeParallel::full_graph_hetero_attention_ops);
+  m.def(
+      "hgt_full_graph_hetero_attention_ops_coo",
+      HGT::FwProp::SeparateCOO::EdgeParallel::full_graph_hetero_attention_ops);
+
+  m.def("hgt_full_graph_edge_softmax_ops_separate_coo",
+        HGT::FwProp::SeparateCOO::EdgeParallel::full_graph_edge_softmax_ops);
+
+  m.def("hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo",
+        HGT::FwProp::SeparateCOO::EdgeParallel::
+            FullGraphFusedMessageCalcAndMeanAggregation);
+
+  m.def(
+      "backward_hgt_full_graph_fused_message_calc_and_mean_aggregation_"
+      "separate_coo",
+      HGT::BckProp::SeparateCOO::EdgeParallel::
+          FullGraphFusedMessageCalcAndMeanAggregation);
+}

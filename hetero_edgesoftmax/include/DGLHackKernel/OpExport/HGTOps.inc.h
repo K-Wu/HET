@@ -728,3 +728,20 @@ void full_graph_edge_softmax_ops(
 }  // namespace HGT
 }  // namespace TorchExport
 }  // namespace HET
+
+using namespace HET::TorchExport;
+TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
+  // HGT CSR Declaration
+  m.def("backward_hgt_full_graph_message_mean_aggregation_csr",
+        HGT::BckProp::IntegratedCSR::full_graph_message_mean_aggregation);
+  m.def("hgt_full_graph_message_mean_aggregation_csr",
+        HGT::FwProp::IntegratedCSR::full_graph_message_mean_aggregation);
+  m.def("hgt_full_graph_edge_softmax_ops_csr",
+        HGT::FwProp::IntegratedCSR::full_graph_edge_softmax_ops);
+  m.def("backward_hgt_full_graph_edge_softmax_ops_csr",
+        HGT::BckProp::IntegratedCSR::full_graph_edge_softmax_ops);
+  m.def("backward_hgt_full_graph_enorm_to_unnormalized_attn_score_csr",
+        HGT::BckProp::IntegratedCSR::
+            full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore<int64_t,
+                                                                  float>);
+}
