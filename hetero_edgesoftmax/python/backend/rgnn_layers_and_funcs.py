@@ -195,7 +195,7 @@ class RgnnRelationalMatmulNoScatterGatherList(th.autograd.Function):
         K.backward_rgnn_relational_matmul_no_scatter_gather_list(
             ntype_offset_ptrs,
             th.transpose(weights, 2, 3).contiguous(),
-            node_feat_output,
+            inputs,
             gradout.contiguous(),
             grad_weight,
             grad_input,
