@@ -288,9 +288,14 @@ class HET_RelationalAttLayer(nn.Module):
             # print("max eids", g["separate"]["coo"]["original"]["eids"].max())
             # print("max eids", g["original"]["eids"].max())
 
-            h = B.relational_fused_gat_csr(
-                g, feat_src_per_edge, el, er, self.leaky_relu_slope
-            )
+            if True:  # TODO: use a flag to switch this
+                h = B.relational_fused_gat_separate_coo(
+                    g, feat_src_per_edge, el, er, self.leaky_relu_slope
+                )
+            else:
+                h = B.relational_fused_gat_csr(
+                    g, feat_src_per_edge, el, er, self.leaky_relu_slope
+                )
 
         # hs = self.conv(g, inputs_src)
 

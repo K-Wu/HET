@@ -5,6 +5,92 @@ import torch as th
 from ..kernels import K
 
 
+class RelationalFusedGatSeparateCOO(th.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        separate_coo_eids,
+        separate_coo_rel_ptrs,
+        separate_coo_row_idx,
+        separate_coo_col_idx,
+        feat_src,
+        el,
+        er,
+        s,
+        exp,
+        ret,
+        slope,
+    ):
+        ctx.save_for_backward(
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            feat_src,
+            el,
+            er,
+            s,
+            exp,
+            ret,
+        )
+        ctx.slope = slope
+        K.relational_fused_gat_kernel_separate_coo(
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            feat_src,
+            el,
+            er,
+            s,
+            exp,
+            ret,
+            slope,
+        )
+        return ret
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            feat_src,
+            el,
+            er,
+            s,
+            exp,
+            ret,
+        ) = ctx.saved_tensors
+        slope = ctx.slope
+        grad_el = th.zeros_like(el, memory_format=th.contiguous_format)
+        grad_er = th.zeros_like(er, memory_format=th.contiguous_format)
+        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
+
+        K.backward_relational_fused_gat_separate_coo(
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            feat_src,
+            el,
+            er,
+            s,
+            exp,
+            ret,
+            gradout,
+            grad_feat_src,
+            grad_el,
+            grad_er,
+            slope,
+        )
+        # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
+        # fmt: off
+        return None, None, None, None, grad_feat_src, grad_el, grad_er, None, None, None, None,
+        # fmt: on
+
+
 class RelationalFusedGatCSR(th.autograd.Function):
     @staticmethod
     def forward(
@@ -285,6 +371,33 @@ def relational_fused_gat_compact_as_of_node(
         feat_compact,
         el_compact,
         er_compact,
+        s,
+        exp,
+        ret,
+        negative_slope,
+    )
+
+
+def relational_fused_gat_separate_coo(g, feat, el, er, negative_slope):
+    separate_coo_dict = g.get_separate_coo_original()
+
+    exp = el.new_empty([g.get_num_edges()] + list(el.size()[1:]))
+    s = el.new_empty([g.get_num_nodes()] + list(el.size()[1:]))
+
+    ret = th.empty(
+        [g.get_num_nodes()] + list(feat.size()[1:]),
+        dtype=feat.dtype,
+        device=feat.device,
+        memory_format=th.contiguous_format,
+    )
+    return RelationalFusedGatSeparateCOO.apply(
+        separate_coo_dict["eids"],
+        separate_coo_dict["rel_ptr"],
+        separate_coo_dict["row_idx"],
+        separate_coo_dict["col_idx"],
+        feat,
+        el,
+        er,
         s,
         exp,
         ret,
