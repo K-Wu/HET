@@ -6,6 +6,7 @@ build**/
 cmake-build**/
 *.log
 *.ncu-rep
+*.nsys-rep
 *.do_not_use
 *.cubin
 *.pyc
