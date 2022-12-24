@@ -1,0 +1,2 @@
+def ArgumentParser():
+    return None
