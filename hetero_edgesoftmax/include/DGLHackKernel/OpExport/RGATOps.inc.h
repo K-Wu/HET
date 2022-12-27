@@ -56,7 +56,9 @@ void _RelationalFusedGATKernel(
     // Configure kernel launch parameters.
     // NB: Type 1 schedule addresses that we can safely reshape (nthrs_x,
     // nthrs_y) to assign more y dimension to rows as usually n_head is smaller
-    // than 32 NB: updated to Type 1 Schedule:
+    // than 32
+
+    // NB: updated to Type 1 Schedule:
     // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
     // head -> blockIdx.x * blockDim.x + threadIdx.x;
     // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
@@ -108,7 +110,7 @@ void _RelationalFusedGATKernel(
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
     // TODO: we can safely reshape (nthrs_x, nthrs_y) to assign more y dimension
     // to edges as usually n_head is smaller than 32
-    // TODO: Type 1 Schedule:
+    // NB: updated to Type 1 Schedule:
     // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
     // head -> blockIdx.x * blockDim.x + threadIdx.x;
     // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
