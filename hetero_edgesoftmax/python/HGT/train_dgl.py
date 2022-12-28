@@ -116,16 +116,16 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
             labels = th.randint(0, args.num_classes, labels.shape)
         else:
             print(
-                "WARNING: assuming node classification in RGAT_main_procedure(dgl_model_flag == False)"
+                "WARNING: assuming node classification in HGT_main_procedure(dgl_model_flag == False)"
             )
             labels = th.randint(0, args.num_classes, [g.get_num_nodes()])
 
     # creating model and data loader
     if dgl_model_flag:
-        print("Using DGL RGAT model")
+        print("Using DGL HGT model")
         embed_layer, model = HGT_get_model(g, num_classes, args)
     else:
-        print("Using our RGAT model")
+        print("Using our HGT model")
         # print(
         # int(g["original"]["col_idx"].max()) + 1,
         # )
