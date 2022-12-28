@@ -10,6 +10,8 @@ from torch.cuda import memory_allocated, max_memory_allocated, reset_peak_memory
 from .. import utils
 from .. import utils_lite
 
+import nvtx
+
 from dgl.heterograph import DGLBlock
 import argparse
 import numpy as np
@@ -114,7 +116,6 @@ def HET_RGNN_train_full_graph(
     forward_time = []
     backward_time = []
     training_time = []
-    print("start training...")
     # node_embed = node_embed_layer()
     # model = torch.jit.trace(model, (g, node_embed))
     # th.cuda.empty_cache()
@@ -131,24 +132,35 @@ def HET_RGNN_train_full_graph(
     # scripted_model = torch.jit.optimize_for_inference(scripted_model)
 
     # warm up
-    for epoch in range(5):
-        model.train()
-        model.requires_grad_(True)
-        # node_embed_layer.eval()
-        node_embed_layer.train()
-        node_embed_layer.requires_grad_(True)
-        optimizer.zero_grad()
-        logits = model(node_embed)
-        y_hat = logits.log_softmax(dim=-1)
-        loss = F.nll_loss(y_hat, labels)
+    if not args.no_warm_up:
+        for epoch in range(5):
+            model.train()
+            model.requires_grad_(True)
+            # node_embed_layer.eval()
+            node_embed_layer.train()
+            node_embed_layer.requires_grad_(True)
+            optimizer.zero_grad()
+            logits = model(node_embed)
+            y_hat = logits.log_softmax(dim=-1)
+            loss = F.nll_loss(y_hat, labels)
     torch.cuda.synchronize()
     memory_offset = torch.cuda.memory_allocated()
     reset_peak_memory_stats()
-
+    print("start training...")
+    #
+    # with torch.cuda.profiler.profile():
+    #    with torch.autograd.profiler.emit_nvtx():
+    #        with nvtx.annotate("training"):
     for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
         # model.eval()
+        import contextlib
+
+        # use a null context manager
+        # with contextlib.nullcontext() as cm:
+
+        # nvtx.push_range("training", domain="my_domain")
         model.train()
         model.requires_grad_(True)
         # node_embed_layer.eval()
@@ -186,6 +198,7 @@ def HET_RGNN_train_full_graph(
         optimizer.step()
         backward_prop_end.record()
         th.cuda.synchronize()
+        # nvtx.pop_range()
 
         # FIXME: should be # edges when training full graph
         # total_loss += loss.item() * args.batch_size
@@ -473,6 +486,8 @@ def add_generic_RGNN_args(parser, default_logfilename, filtered_args={}):
         parser.add_argument("--num_layers", type=int, default=1)
     if not "compact_as_of_node_flag" in filtered_args:
         parser.add_argument("--compact_as_of_node_flag", action="store_true")
+    if not "no_warm_up" in filtered_args:
+        parser.add_argument("--no_warm_up", action="store_true")
     # OGB
     if not "runs" in filtered_args:
         parser.add_argument("--runs", type=int, default=1)

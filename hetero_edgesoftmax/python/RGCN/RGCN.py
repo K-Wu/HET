@@ -17,6 +17,8 @@ import time
 import torch
 import torch.nn.functional as F
 
+import nvtx
+
 # from dgl import DGLGraph
 # from dgl.contrib.data import load_data
 from .. import backend as B
@@ -481,8 +483,6 @@ def RGCN_main_procedure(args, g, model, feats):
         model.parameters(), lr=args.lr, weight_decay=args.l2norm
     )
 
-    # training loop
-    print("start training...")
     forward_time = []
     backward_time = []
     training_time = []
@@ -491,17 +491,23 @@ def RGCN_main_procedure(args, g, model, feats):
     train_idx = list(train_idx)
 
     # warm up
-    for epoch in range(5):
-        optimizer.zero_grad()
-        logits = model(g, feats, edge_norm)
-        loss = F.cross_entropy(logits, labels)
-        loss.backward()
-        optimizer.step()
+    if not args.no_warm_up:
+        for epoch in range(5):
+            optimizer.zero_grad()
+            logits = model(g, feats, edge_norm)
+            loss = F.cross_entropy(logits, labels)
+            loss.backward()
+            optimizer.step()
     torch.cuda.synchronize()
     memory_offset = torch.cuda.memory_allocated()
     reset_peak_memory_stats()
 
+    # training loop
+    print("start training...")
     for epoch in range(args.n_epochs):
+        # with nvtx.annotate("training"):
+        # with torch.cuda.profiler.profile():
+        # nvtx.push_range("training", domain="my_domain")
         optimizer.zero_grad()
         torch.cuda.synchronize()
         t0 = time.time()
@@ -518,6 +524,7 @@ def RGCN_main_procedure(args, g, model, feats):
         optimizer.step()
         torch.cuda.synchronize()
         t2 = time.time()
+        # nvtx.pop_range()
         # if epoch >= 3:
         forward_time.append(tb - t0)
         backward_time.append(t2 - t1)
