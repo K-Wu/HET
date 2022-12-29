@@ -573,10 +573,10 @@ __global__ void HET_RGNNFeatCompactFWProp(
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int*>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y,
-                      WORK_BLOCK_SIZE, false, true, false, false, false, true,
-                      true, false, Idx, IdxPtr, A_num_head_one_flag, false,
-                      false>(
+  _basic_MatMulKernel<
+      COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE, false,
+      true, false, false, false, false,  // NB: no need to scatter C
+      false, false, Idx, IdxPtr, A_num_head_one_flag, false, false>(
       node_feat_input,
       &weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) * input_dim *
               output_per_head_dim],
@@ -786,36 +786,3 @@ __global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
 // gather/scatter list and work assignment offset pointers, instead of the
 // unique_srcs_and_dests pair in the above functions. blockDim.y ==
 // ceil_div(A_col_row_idx_gather_list.size(), BLOCK_SIZE)
-
-template <
-    bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-    int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr,
-    bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
-__global__ void __launch_bounds__(256, 3) HET_RGNNFeatCompactFWPropSingleSided(
-    float* node_feat_input, float* weight, float* node_feat_per_edge,
-    IdxPtr unique_srcs_and_dests_rel_ptr,
-    IdxPtr unique_srcs_and_dests_node_indices, IdxPtr separate_coo_relptrs,
-    IdxPtr separate_coo_node_indices, IdxPtr separate_coo_eids, Idx input_dim,
-    Idx output_per_head_dim, int num_heads, int* accum_num_blocks_per_relation,
-    Idx num_relations) {
-  Idx idx_block_assignment = blockIdx.y;
-  Idx idx_relation = binary_search<int, int*>(
-      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y,
-                      WORK_BLOCK_SIZE, false, true, false, false, false, true,
-                      true, false, Idx, IdxPtr, A_num_head_one_flag, false,
-                      false>(
-      node_feat_input,
-      &weight[idx_relation * (A_num_head_one_flag ? num_heads : 1) * input_dim *
-              output_per_head_dim],
-      node_feat_per_edge, separate_coo_node_indices, nullptr, separate_coo_eids,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-      idx_relation,
-      separate_coo_relptrs[idx_relation + 1] -
-          separate_coo_relptrs[idx_relation],
-      accum_num_blocks_per_relation[idx_relation],
-      (accum_num_blocks_per_relation[idx_relation + 1] -
-       accum_num_blocks_per_relation[idx_relation]),
-      separate_coo_relptrs[idx_relation], input_dim, output_per_head_dim,
-      num_heads);
-}
