@@ -26,11 +26,11 @@ GRAPHILER_HETERO_DATASET = [
     "aifb",
     "mutag",
     "bgs",
-    "biokg",
     "am",
-    "wikikg2",
     "mag",
+    "wikikg2",
     "fb15k",
+    "biokg",
 ]
 
 GRAPHILER_DATASET = GRAPHILER_HOMO_DATASET.keys() | set(GRAPHILER_HETERO_DATASET)

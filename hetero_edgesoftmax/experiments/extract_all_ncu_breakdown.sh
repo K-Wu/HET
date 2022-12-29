@@ -2,7 +2,7 @@ declare -a MODELS=("HGT.train" "RGAT.train")
 # ("HGT.train" "RGAT.train" "RGCN.RGCNSingleLayer")
 declare -a CompactFlag=("--compact_as_of_node_flag" "")
 declare -a MulFlag=("--multiply_among_weights_first_flag" "")
-declare -a Datasets=("aifb" "mutag" "bgs" "biokg" "am" "wikikg2" "mag" "fb15k")
+declare -a Datasets=("aifb" "mutag" "bgs" "am" "mag" "wikikg2" "fb15k" "biokg")
 # --print-details=header 
 for m in ${MODELS[@]}
 do
