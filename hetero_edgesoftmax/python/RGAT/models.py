@@ -51,6 +51,7 @@ class HET_RelationalAttLayer(nn.Module):
         self_loop: bool = False,
         compact_as_of_node_flag: bool = False,
         multiply_among_weights_first_flag: bool = False,
+        gat_edge_parallel_flag: bool = False,
         dropout=0.5,
         leaky_relu_slope=0.2,
     ):
@@ -64,6 +65,7 @@ class HET_RelationalAttLayer(nn.Module):
         self.self_loop = self_loop
         self.compact_as_of_node_flag = compact_as_of_node_flag
         self.multiply_among_weights_first_flag = multiply_among_weights_first_flag
+        self.gat_edge_parallel_flag = gat_edge_parallel_flag
         self.leaky_relu_slope = leaky_relu_slope
 
         assert (
@@ -203,7 +205,7 @@ class HET_RelationalAttLayer(nn.Module):
                     feat_compact,
                 )
 
-            if True:  # TODO: use a flag to switch this
+            if self.gat_edge_parallel_flag:  # NB: use a flag to switch this
                 h = B.relational_fused_gat_compact_as_of_node_separate_coo(
                     g, feat_compact, el_compact, er_compact, self.leaky_relu_slope
                 )
@@ -293,7 +295,7 @@ class HET_RelationalAttLayer(nn.Module):
             # print("max eids", g["separate"]["coo"]["original"]["eids"].max())
             # print("max eids", g["original"]["eids"].max())
 
-            if True:  # TODO: use a flag to switch this
+            if self.gat_edge_parallel_flag:  # NB: use a flag to switch this
                 h = B.relational_fused_gat_separate_coo(
                     g, feat_src_per_edge, el, er, self.leaky_relu_slope
                 )
@@ -353,6 +355,7 @@ class HET_RelationalGATEncoder(nn.Module):
         last_layer_act: bool = False,
         compact_as_of_node_flag: bool = False,
         multiply_among_weights_first_flag: bool = False,
+        gat_edge_parallel_flag: bool = False,
     ):
         super(HET_RelationalGATEncoder, self).__init__()
         self.mydglgraph = mydglgraph
@@ -367,6 +370,7 @@ class HET_RelationalGATEncoder(nn.Module):
         self.last_layer_act = last_layer_act
         self.compact_as_of_node_flag = compact_as_of_node_flag
         self.multiply_among_weights_first_flag = multiply_among_weights_first_flag
+        self.gat_edge_parallel_flag = gat_edge_parallel_flag
         self.init_encoder()
 
     def init_encoder(self):
@@ -385,6 +389,7 @@ class HET_RelationalGATEncoder(nn.Module):
                     dropout=self.dropout,
                     compact_as_of_node_flag=self.compact_as_of_node_flag,
                     multiply_among_weights_first_flag=self.multiply_among_weights_first_flag,
+                    gat_edge_parallel_flag=self.gat_edge_parallel_flag,
                 )
             )
         # h2o
@@ -398,6 +403,7 @@ class HET_RelationalGATEncoder(nn.Module):
                 self_loop=self.use_self_loop,
                 compact_as_of_node_flag=self.compact_as_of_node_flag,
                 multiply_among_weights_first_flag=self.multiply_among_weights_first_flag,
+                gat_edge_parallel_flag=self.gat_edge_parallel_flag,
             )
         )
 
