@@ -15,6 +15,7 @@ do
                 c=${CompactFlag[$c_idx]}
                 mf=${MulFlag[$mf_idx]}
                 nv-nsight-cu-cli --csv --section regex:Speed --import "$m.$d.$mf.$c.ncu-rep" >"$m.$d.$mf.$c.log" 2>&1
+                nv-nsight-cu-cli --csv --details --import "$m.$d.$mf.$c.ncu-rep" | grep Roofline >"$m.$d.$mf.$c.roofline.log" 2>&1
             done
         done
     done
@@ -23,4 +24,5 @@ done
 for d in ${Datasets[@]}
 do
     nv-nsight-cu-cli --csv --section regex:Speed --import "RGCNSingleLayer.$d.ncu-rep" >"RGCNSingleLayer.$d.log" 2>&1
+    nv-nsight-cu-cli --csv --details --import "RGCNSingleLayer.$d.ncu-rep" | grep Roofline >"RGCNSingleLayer.$d.roofline.log" 2>&1
 done

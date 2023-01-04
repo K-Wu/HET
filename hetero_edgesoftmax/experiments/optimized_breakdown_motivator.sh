@@ -1,0 +1,5 @@
+# nsys profile --force-overwrite true -o mutag_rgat_lin_op_fused python -m python.RGAT.train -d mutag --num_layers 1 --multiply_among_weights_first_flag --full_graph_training --num_classes 64 --n_infeat 64 -e 1
+# nsys profile --force-overwrite true -o fb15k_rgat_lin_op_fused python -m python.RGAT.train -d fb15k --num_layers 1 --multiply_among_weights_first_flag --full_graph_training --num_classes 64 --n_infeat 64 -e 1
+
+nsys profile --force-overwrite true -o mutag_hgt_lin_op_fused python -m python.HGT.train -d mutag --num_layers 1 --multiply_among_weights_first_flag --full_graph_training --num_classes 64 --n_infeat 64 -e 1
+nsys profile --force-overwrite true -o fb15k_hgt_lin_op_fused python -m python.HGT.train -d fb15k --num_layers 1 --multiply_among_weights_first_flag --full_graph_training --num_classes 64 --n_infeat 64 -e 1
