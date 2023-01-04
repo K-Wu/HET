@@ -3,7 +3,7 @@
 
 template <typename Idx, typename DType, int ELL_logical_width,
           int ELL_physical_width>
-__global__ void HET_RgcnLayer1BackwardMyHYBKernelImpl(
+__global__ void HET_Seastar_RgcnLayer1BackwardMyHYBKernelImpl(
     const Idx* ellcolidx_data, const Idx* ellreltype_data,
     const Idx* elleids_data, Idx* ranges, Idx* dst_ids, Idx* eids, Idx* types,
     DType* hidden, DType* weight, DType* norm, DType* grad_out,

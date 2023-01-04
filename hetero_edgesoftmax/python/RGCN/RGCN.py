@@ -145,12 +145,12 @@ class HET_EglRelGraphConv(nn.Module):
             if self.layer_type == 0:
                 if self.hybrid_assign_flag:
                     raise NotImplementedError
-                node_repr = B.rgcn_layer0_csr(
+                node_repr = B.seastar_rgcn_layer0_csr(
                     g, weight, norm
                 )  # NB: this line uses my own rgcn_layer0
                 # print('output of layer 0', node_repr)
             else:
-                node_repr = B.rgcn_layer1_csr(
+                node_repr = B.seastar_rgcn_layer1_csr(
                     g,
                     x,
                     weight,
@@ -168,7 +168,7 @@ class HET_EglRelGraphConv(nn.Module):
             else:
                 if self.hybrid_assign_flag:
                     raise NotImplementedError
-                node_repr = B.rgcn_layer1_coo(g, x, weight, norm)
+                node_repr = B.seastar_rgcn_layer1_coo(g, x, weight, norm)
         # torch.cuda.synchronize()
         # t3 = time.time()
         # print('output of layer 1', node_repr)

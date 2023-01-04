@@ -7,7 +7,7 @@
 // hetero_edgesoftmax/python/<model name>/.*.py
 // NB: This contains wrapper versions for python api export originally
 // implemented at
-// [[hetero_edgesoftmax/include/DGLHackKernel/RGCN/RGCNKernels.cu.h]].
+// [[hetero_edgesoftmax/include/DGLHackKernel/RGCN/SeastarRGCNKernels.cu.h]].
 // Please update accordingly whenever there is update.
 #include <c10/cuda/CUDAException.h>
 #include <c10/cuda/CUDAStream.h>
@@ -28,7 +28,6 @@
 #include "DGLHackKernel/OpExport/HGTOps.inc.h"
 #include "DGLHackKernel/OpExport/HGTOpsEdgeParallel.inc.h"
 #include "DGLHackKernel/OpExport/RGATOps.inc.h"
-#include "DGLHackKernel/OpExport/RGCNCOOOps.inc.h"
 #include "DGLHackKernel/OpExport/RGCNOps.inc.h"
 #include "DGLHackKernel/OpExport/RGNNOps.inc.h"
 #include "DGLHackKernel/OpExport/UtilityAndPlayground.inc.h"

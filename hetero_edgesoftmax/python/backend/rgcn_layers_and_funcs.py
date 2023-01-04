@@ -7,7 +7,114 @@ import torch as th
 from ..kernels import K
 
 
-class RgcnFirstLayerCSR(th.autograd.Function):
+class SeastarRgcnSecondLayerCOO(th.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        in_row_idx,
+        in_col_idx,
+        in_eids,
+        in_reltypes,
+        out_row_idx,
+        out_col_idx,
+        out_eids,
+        out_reltypes,
+        x,
+        weight,
+        norm,
+        ret,
+    ):
+        ctx.save_for_backward(
+            in_row_idx,
+            in_col_idx,
+            in_eids,
+            in_reltypes,
+            out_row_idx,
+            out_col_idx,
+            out_eids,
+            out_reltypes,
+            weight,
+            norm,
+            x,
+        )
+        K.seastar_rgcn_layer1_coo(
+            in_row_idx,
+            in_col_idx,
+            in_eids,
+            in_reltypes,
+            x,
+            weight,
+            norm,
+            ret,
+        )
+        return ret
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            in_row_idx,
+            in_col_idx,
+            in_eids,
+            in_reltypes,
+            out_row_idx,
+            out_col_idx,
+            out_eids,
+            out_reltypes,
+            weight,
+            norm,
+            x,
+        ) = ctx.saved_tensors
+        grad_x = th.zeros_like(x, memory_format=th.contiguous_format)
+        grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
+        K.seastar_backward_rgcn_layer1_coo(
+            out_row_idx,
+            out_col_idx,
+            out_eids,
+            out_reltypes,
+            x,
+            weight,
+            norm,
+            gradout,
+            grad_x,
+            grad_weight,
+        )
+        return None, None, None, None, None, None, None, None, grad_x, None, None, None
+
+
+def seastar_rgcn_layer1_coo(graph, x, weight, norm):
+    incsr_dict = graph.get_in_csr()
+    outcsr_dict = graph.get_out_csr()
+    in_row_idx = incsr_dict["row_idx"]
+    in_col_idx = incsr_dict["col_idx"]
+    in_eids = incsr_dict["eids"]
+    in_reltypes = incsr_dict["rel_types"]
+    out_row_idx = outcsr_dict["row_idx"]
+    out_col_idx = outcsr_dict["col_idx"]
+    out_eids = outcsr_dict["eids"]
+    transposed_reltypes = outcsr_dict["rel_types"]
+    ret = th.zeros(
+        (graph.get_num_nodes(), weight.size(2)),
+        dtype=weight.dtype,
+        device=weight.device,
+        requires_grad=True,
+    ).contiguous()
+    return SeastarRgcnSecondLayerCOO.apply(
+        in_row_idx,
+        in_col_idx,
+        in_eids,
+        in_reltypes,
+        out_row_idx,
+        out_col_idx,
+        out_eids,
+        transposed_reltypes,
+        x,
+        weight,
+        norm,
+        ret,
+    )
+
+
+class SeastarRgcnFirstLayerCSR(th.autograd.Function):
     @staticmethod
     def forward(
         ctx,
@@ -36,7 +143,7 @@ class RgcnFirstLayerCSR(th.autograd.Function):
             weight,
             norm,
         )
-        K.rgcn_layer0_csr(
+        K.seastar_rgcn_layer0_csr(
             incsr_row_ptr, incsr_col_idx, incsr_eids, incsr_reltypes, weight, norm, ret
         )
         return ret
@@ -57,7 +164,7 @@ class RgcnFirstLayerCSR(th.autograd.Function):
         ) = ctx.saved_tensors
         # print(weight.numel())
         grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
-        K.backward_rgcn_layer0_csr(
+        K.seastar_backward_rgcn_layer0_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,
@@ -69,7 +176,7 @@ class RgcnFirstLayerCSR(th.autograd.Function):
         return None, None, None, None, None, None, None, None, grad_weight, None, None
 
 
-def rgcn_layer0_csr(graph, weight, norm):
+def seastar_rgcn_layer0_csr(graph, weight, norm):
     # NB: notice that in rgcn, in-adjacency list is used and therefore, we input the transposed adj list to forward propagation, and the original to backward propagation.
     incsr_dict = graph.get_in_csr()
     outcsr_dict = graph.get_out_csr()
@@ -87,7 +194,7 @@ def rgcn_layer0_csr(graph, weight, norm):
         device=weight.device,
         requires_grad=True,
     )
-    return RgcnFirstLayerCSR.apply(
+    return SeastarRgcnFirstLayerCSR.apply(
         incsr_row_ptr,
         incsr_col_idx,
         incsr_eids,
@@ -102,7 +209,7 @@ def rgcn_layer0_csr(graph, weight, norm):
     )
 
 
-class RgcnSecondLayerCSR(th.autograd.Function):
+class SeastarRgcnSecondLayerCSR(th.autograd.Function):
     @staticmethod
     def forward(
         ctx,
@@ -132,7 +239,7 @@ class RgcnSecondLayerCSR(th.autograd.Function):
             norm,
             x,
         )
-        K.rgcn_layer1_csr(
+        K.seastar_rgcn_layer1_csr(
             incsr_row_ptr,
             incsr_col_idx,
             incsr_eids,
@@ -161,7 +268,7 @@ class RgcnSecondLayerCSR(th.autograd.Function):
         ) = ctx.saved_tensors
         grad_x = th.zeros_like(x, memory_format=th.contiguous_format)
         grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
-        K.backward_rgcn_layer1_csr(
+        K.seastar_backward_rgcn_layer1_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,
@@ -209,7 +316,7 @@ class RgcnSecondLayerCSRHybridAssign(th.autograd.Function):
             x,
         )
         ctx.num_blocks_on_node_backward = num_blocks_on_node_backward
-        K.rgcn_layer1_csr_hybrid_assign(
+        K.seastar_rgcn_layer1_csr_hybrid_assign(
             incsr_row_ptr,
             incsr_col_idx,
             incsr_eids,
@@ -240,7 +347,7 @@ class RgcnSecondLayerCSRHybridAssign(th.autograd.Function):
         num_blocks_on_node_backward = ctx.num_blocks_on_node_backward
         grad_x = th.zeros_like(x, memory_format=th.contiguous_format)
         grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
-        K.backward_rgcn_layer1_csr_hybrid_assign(
+        K.seastar_backward_rgcn_layer1_csr_hybrid_assign(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,
@@ -382,7 +489,7 @@ def rgcn_layer1_separate_coo(
     )
 
 
-def rgcn_layer1_csr(
+def seastar_rgcn_layer1_csr(
     graph,
     x,
     weight,
@@ -426,7 +533,7 @@ def rgcn_layer1_csr(
         )
 
     else:
-        return RgcnSecondLayerCSR.apply(
+        return SeastarRgcnSecondLayerCSR.apply(
             incsr_row_ptr,
             incsr_col_idx,
             incsr_eids,
