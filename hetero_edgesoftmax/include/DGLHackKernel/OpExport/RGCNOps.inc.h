@@ -5,6 +5,8 @@
 #include <torch/extension.h>
 #include <torch/library.h>
 
+#include "DGLHackKernel/RGCN/RGCNBackwardKernelsEdgeParallel.cu.h"
+#include "DGLHackKernel/RGCN/RGCNKernelsEdgeParallel.cu.h"
 #include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
 
@@ -16,6 +18,49 @@ namespace HET {
 namespace TorchExport {
 namespace RGCN {
 namespace FwProp {
+template <typename Idx, typename DType>
+void Layer1_NodeMeanAggregation_CompactAsOfNode_SeparateCOO(
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
+    at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
+    at::Tensor& enorm, at::Tensor& ret) {
+  const Idx MAX_NBLKS = 65535;
+  const Idx MAX_NTHRS = 1024;
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
+  RGCNData<Idx, DType> gdata;
+
+  gdata.feat_src_xlen = SeastarComputeXLength<>(feat_src);
+  gdata.feat_src = feat_src.data_ptr<DType>();
+  gdata.enorm = enorm.data_ptr<DType>();
+  gdata.ret = ret.data_ptr<DType>();
+  // separate coo
+  gdata.eids = separate_coo_eids.data_ptr<Idx>();
+  int64_t num_edges = separate_coo_row_indices.numel();
+  int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
+  // adapted from launch configuration of
+  // HET_gatSumProdZipDivKernel_relational_separate_coo in
+  // [[hetero_edgesoftmax/python/backend/rgcn_layers_and_funcs.py]] NB: updated
+  // to Type 2 Schedule:
+  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // head -> threadIdx.y
+  // node -> blockIdx.y
+  // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
+  int nthrs_y = SeastarFindNumThreads(/*num_heads*/ 1, 64);
+  int nthrs_x = SeastarFindNumThreads(gdata.feat_src_xlen / /*num_heads*/ 1,
+                                      MAX_NTHRS / nthrs_y);
+  int nblks_x = 1;
+  int nblks_y = std::min(num_edges, MAX_NBLKS);
+  const dim3 nthrs2(nthrs_x, nthrs_y);
+  const dim3 nblks2(nblks_x, nblks_y);
+  HET_rgcnNodeMeanAggregation_edge_parallel<Idx, DType, true>
+      <<<nblks2, nthrs2, 0, stream>>>(
+          gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
+          separate_coo_row_indices.data_ptr<Idx>(),
+          separate_coo_col_indices.data_ptr<Idx>(), num_edges,
+          unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
+}
 void Layer1_SeparateCOO(at::Tensor& separate_coo_relptrs,
                         at::Tensor& separate_coo_eids,
                         at::Tensor& separate_coo_row_idx,
@@ -244,6 +289,53 @@ void Layer1Impl(at::Tensor& coo_row_idx, at::Tensor& coo_col_idx,
 }  // namespace IntegratedCOO
 }  // namespace FwProp
 namespace BckProp {
+template <typename Idx, typename DType>
+void Layer1_NodeMeanAggregation_CompactAsOfNode_SeparateCOO(
+    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
+    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
+    at::Tensor& unique_srcs_and_dests_rel_ptr,
+    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
+    at::Tensor& enorm, at::Tensor& ret, at::Tensor& gradout,
+    at::Tensor& grad_feat_src) {
+  // adapted from launch configuration of
+  // HET_fusedGatBackwardGradFeatSrc_relational_separate_coo in
+  // [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/RGATOps.inc.h]]
+  // separate coo
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
+  const Idx MAX_NBLKS = 65535;
+  const Idx MAX_NTHRS = 1024;
+  BackwardRGCNData<Idx, DType> gdata;
+  gdata.feat_src_xlen = SeastarComputeXLength<>(feat_src);
+  gdata.feat_src = feat_src.data_ptr<DType>();
+  gdata.enorm = enorm.data_ptr<DType>();
+  gdata.ret = ret.data_ptr<DType>();
+  gdata.eids = separate_coo_eids.data_ptr<Idx>();
+  gdata.grad_out = gradout.data_ptr<DType>();
+  gdata.grad_feat_src = grad_feat_src.data_ptr<DType>();
+  int64_t num_edges = separate_coo_row_indices.numel();
+  int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
+
+  // NB: updated to Type 2 Schedule:
+  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // head -> threadIdx.y
+  // node -> blockIdx.y
+  // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
+  int nthrs_y = SeastarFindNumThreads(1 /*gdata.num_heads*/, 64);
+  int nthrs_x = SeastarFindNumThreads(
+      gdata.feat_src_xlen / 1 /*gdata.num_heads*/, MAX_NTHRS / nthrs_y);
+  int nblks_x = 1;
+  int nblks_y = std::min(num_edges, MAX_NBLKS);
+  const dim3 nthrs(nthrs_x, nthrs_y);
+  const dim3 nblks(nblks_x, nblks_y);
+
+  HET_rgcnBackwardNodeMeanAggregation_edge_parallel<Idx, DType, true>
+      <<<nblks, nthrs, 0, stream>>>(
+          gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
+          separate_coo_row_indices.data_ptr<Idx>(),
+          separate_coo_col_indices.data_ptr<Idx>(), num_edges,
+          unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
+}
 void Layer1_SeparateCOO(
     at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_eids,
     at::Tensor& separate_coo_row_idx, at::Tensor& separate_coo_col_idx,
@@ -619,6 +711,13 @@ void Layer1BackwardImpl(
 
 using namespace HET::TorchExport;
 TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
+  // RGCN edge parallel mean aggregation declaration
+  m.def("backward_rgcn_node_mean_aggregation_compact_as_of_node_separate_coo",
+        RGCN::BckProp::Layer1_NodeMeanAggregation_CompactAsOfNode_SeparateCOO<
+            int64_t, float>);
+  m.def("rgcn_node_mean_aggregation_compact_as_of_node_separate_coo",
+        RGCN::FwProp::Layer1_NodeMeanAggregation_CompactAsOfNode_SeparateCOO<
+            int64_t, float>);
   // RGCN separate coo (edge parallel) declaration
   m.def("backward_rgcn_layer1_separate_coo", RGCN::BckProp::Layer1_SeparateCOO);
   m.def("rgcn_layer1_separate_coo", RGCN::FwProp::Layer1_SeparateCOO);

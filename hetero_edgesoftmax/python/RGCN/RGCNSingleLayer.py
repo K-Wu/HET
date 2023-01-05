@@ -30,6 +30,7 @@ def get_single_layer_model(args, mydglgraph):
         hybrid_assign_flag=args.hybrid_assign_flag,
         num_blocks_on_node_forward=args.num_blocks_on_node_forward,
         num_blocks_on_node_backward=args.num_blocks_on_node_backward,
+        compact_as_of_node_flag=args.compact_as_of_node_flag,
     )
     return model
 
@@ -54,6 +55,8 @@ def RGCNSingleLayer_main(args):
     if args.sparse_format == "separate_coo":
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=False)
+        if args.compact_as_of_node_flag:
+            g.get_separate_node_idx_for_each_etype()
     RGCN_main_procedure(args, g, model, feats)
 
 

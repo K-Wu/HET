@@ -547,3 +547,98 @@ def seastar_rgcn_layer1_csr(
             norm,
             ret,
         )
+
+
+class RGCNNodeMeanAggregationCompactAsOfNodeSeparateCOO(th.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        separate_coo_eids,
+        separate_coo_rel_ptrs,
+        separate_coo_row_idx,
+        separate_coo_col_idx,
+        separate_unique_node_idx_rel_ptr,
+        separate_unique_node_idx_node_idx,
+        feat_src,
+        enorm,
+        ret,
+    ):
+        ctx.save_for_backward(
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_unique_node_idx_rel_ptr,
+            separate_unique_node_idx_node_idx,
+            feat_src,
+            enorm,
+            ret,
+        )
+        K.rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_unique_node_idx_rel_ptr,
+            separate_unique_node_idx_node_idx,
+            feat_src,
+            enorm,
+            ret,
+        )
+        return ret
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_unique_node_idx_rel_ptr,
+            separate_unique_node_idx_node_idx,
+            feat_src,
+            enorm,
+            ret,
+        ) = ctx.saved_tensors
+        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
+
+        K.backward_rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_unique_node_idx_rel_ptr,
+            separate_unique_node_idx_node_idx,
+            feat_src,
+            enorm,
+            ret,
+            gradout,
+            grad_feat_src,
+        )
+        # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
+        # fmt: off
+        return None, None, None, None, None, None, grad_feat_src, None, None
+        # fmt: on
+
+
+def rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(g, feat_compact, enorm):
+    separate_coo_dict = g.get_separate_coo_original()
+    separate_unique_node_idx = g.get_separate_unique_node_indices()
+
+    ret = th.empty(
+        [g.get_num_nodes()] + list(feat_compact.size()[1:]),
+        dtype=feat_compact.dtype,
+        device=feat_compact.device,
+        memory_format=th.contiguous_format,
+    )
+    return RGCNNodeMeanAggregationCompactAsOfNodeSeparateCOO.apply(
+        separate_coo_dict["eids"],
+        separate_coo_dict["rel_ptr"],
+        separate_coo_dict["row_idx"],
+        separate_coo_dict["col_idx"],
+        separate_unique_node_idx["rel_ptr"],
+        separate_unique_node_idx["node_idx"],
+        feat_compact,
+        enorm,
+        ret,
+    )

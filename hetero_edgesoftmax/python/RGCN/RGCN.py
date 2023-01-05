@@ -55,12 +55,15 @@ class HET_EglRelGraphConv(nn.Module):
         hybrid_assign_flag=False,
         num_blocks_on_node_forward=-1,
         num_blocks_on_node_backward=-1,
+        compact_as_of_node_flag=False,
     ):
         super(HET_EglRelGraphConv, self).__init__()
         self.hybrid_assign_flag = hybrid_assign_flag
         self.num_blocks_on_node_forward = num_blocks_on_node_forward
         self.num_blocks_on_node_backward = num_blocks_on_node_backward
-
+        self.compact_as_of_node_flag = compact_as_of_node_flag
+        if self.compact_as_of_node_flag:
+            raise NotImplementedError("compact_as_of_node_flag not implemented yet")
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.num_rels = num_rels
@@ -186,7 +189,7 @@ class HET_EglRelGraphConv(nn.Module):
         return node_repr
 
 
-class HET_EglRelGraphConv_SeparateCOO(nn.Module):
+class HET_EglRelGraphConv_EdgeParallel(nn.Module):
     @utils_lite.warn_default_arguments
     def __init__(
         self,
@@ -199,15 +202,18 @@ class HET_EglRelGraphConv_SeparateCOO(nn.Module):
         bias=True,
         activation=None,
         self_loop=False,
+        compact_as_of_node_flag=False,
         dropout=0.0,
         layer_type=0,
     ):
-        super(HET_EglRelGraphConv_SeparateCOO, self).__init__()
-
+        super(HET_EglRelGraphConv_EdgeParallel, self).__init__()
+        if self_loop:
+            raise NotImplementedError
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.num_rels = num_rels
         self.regularizer = regularizer
+        self.compact_as_of_node_flag = compact_as_of_node_flag
         self.num_bases = num_bases
         if (
             self.num_bases is None
@@ -221,6 +227,7 @@ class HET_EglRelGraphConv_SeparateCOO(nn.Module):
 
         if regularizer == "basis":
             # add basis weights
+
             self.weight = nn.Parameter(
                 th.Tensor(self.num_bases, self.in_feat, self.out_feat)
             )
@@ -279,6 +286,10 @@ class HET_EglRelGraphConv_SeparateCOO(nn.Module):
             # print('new weight size:', weight.size())
         else:
             weight = self.weight
+
+        if self.compact_as_of_node_flag:
+            weight = weight.unsqueeze(1)
+
         # torch.cuda.synchronize()
         # print('bbb',th.cuda.memory_allocated(),th.cuda.max_memory_allocated())
         # t2 = time.time()
@@ -286,17 +297,33 @@ class HET_EglRelGraphConv_SeparateCOO(nn.Module):
         if self.layer_type == 0:
             raise NotImplementedError
         else:
-            separate_coo_original_dict = g.get_separate_coo_original()
-            node_repr = B.rgcn_layer1_separate_coo(
-                separate_coo_original_dict["rel_ptr"],
-                separate_coo_original_dict["eids"],
-                separate_coo_original_dict["row_idx"],
-                separate_coo_original_dict["col_idx"],
-                g,
-                x,
-                weight,
-                norm,
-            )  # NB: this line uses my own rgcn_layer1
+            if self.compact_as_of_node_flag:
+                separate_unique_node_idx = g.get_separate_unique_node_indices()
+                feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
+                    separate_unique_node_idx["rel_ptr"],
+                    separate_unique_node_idx["node_idx"],
+                    weight,
+                    x,
+                    True,
+                )
+                feat_compact = feat_compact.squeeze(1)
+                node_repr = (
+                    B.rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(
+                        g, feat_compact, norm
+                    )
+                )
+            else:
+                separate_coo_original_dict = g.get_separate_coo_original()
+                node_repr = B.rgcn_layer1_separate_coo(
+                    separate_coo_original_dict["rel_ptr"],
+                    separate_coo_original_dict["eids"],
+                    separate_coo_original_dict["row_idx"],
+                    separate_coo_original_dict["col_idx"],
+                    g,
+                    x,
+                    weight,
+                    norm,
+                )  # NB: this line uses my own rgcn_layer1
 
         # torch.cuda.synchronize()
         # t3 = time.time()
@@ -330,10 +357,11 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
         hybrid_assign_flag,
         num_blocks_on_node_forward,
         num_blocks_on_node_backward,
+        compact_as_of_node_flag,
     ):
         super(HET_EGLRGCNSingleLayerModel, self).__init__()
         if sparse_format == "separate_coo":
-            self.layer2 = HET_EglRelGraphConv_SeparateCOO(
+            self.layer2 = HET_EglRelGraphConv_EdgeParallel(
                 n_infeat,
                 out_dim,
                 num_rels,
@@ -342,6 +370,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
                 dropout=dropout,
                 activation=activation,
                 layer_type=1,
+                compact_as_of_node_flag=compact_as_of_node_flag,
             )
         else:
             self.layer2 = HET_EglRelGraphConv(
@@ -354,6 +383,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
                 dropout=dropout,
                 activation=activation,
                 layer_type=1,
+                compact_as_of_node_flag=compact_as_of_node_flag,
             )
 
     def forward(self, g, feats, edge_norm):
