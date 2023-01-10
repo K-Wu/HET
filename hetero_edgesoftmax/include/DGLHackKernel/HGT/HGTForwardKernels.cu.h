@@ -314,8 +314,8 @@ __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
             }
             if constexpr (CompactAsOfNodeFlag) {
               feat_src_entry_id = find_relational_compact_as_of_node_index(
-                  etype, src_vid, unique_srcs_and_dests_node_indices,
-                  unique_srcs_and_dests_rel_ptr);
+                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
+                  unique_srcs_and_dests_node_indices);
 
             } else {
               // NB: we need to use edge_id instead of eidx here
@@ -531,8 +531,8 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
                   "should be non-reachable not implemented");
             }
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                etype, src_id, unique_srcs_and_dests_node_indices,
-                unique_srcs_and_dests_rel_ptr);
+                etype, src_id, unique_srcs_and_dests_rel_ptr,
+                unique_srcs_and_dests_node_indices);
             feat_off_src = src_vid_relational * num_heads + feat_idx;
           } else {
             feat_off_src = src_id * num_heads + feat_idx;
@@ -684,8 +684,8 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
                 "should be non-reachable not implemented");
           }
           Idx src_vid_relational = find_relational_compact_as_of_node_index(
-              etype, src_id, unique_srcs_and_dests_node_indices,
-              unique_srcs_and_dests_rel_ptr);
+              etype, src_id, unique_srcs_and_dests_rel_ptr,
+              unique_srcs_and_dests_node_indices);
           feat_off_src = src_vid_relational * num_heads + feat_idx;
         } else {
           feat_off_src = src_id * num_heads + feat_idx;

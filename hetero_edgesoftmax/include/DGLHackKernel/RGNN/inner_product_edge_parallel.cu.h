@@ -40,8 +40,8 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
             }
 
             feat_src_entry_id = find_relational_compact_as_of_node_index(
-                etype, src_vid, unique_srcs_and_dests_node_indices,
-                unique_srcs_and_dests_rel_ptr);
+                etype, src_vid, unique_srcs_and_dests_rel_ptr,
+                unique_srcs_and_dests_node_indices);
 
           } else {
             // NB: we need to use edge_id instead of eidx here
