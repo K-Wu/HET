@@ -310,7 +310,7 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
                 node_repr = (
                     B.rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(
                         g, feat_compact, norm
-                    )
+                    )  # TODO: use single side instead without need to modify kernel
                 )
             else:
                 separate_coo_original_dict = g.get_separate_coo_original()

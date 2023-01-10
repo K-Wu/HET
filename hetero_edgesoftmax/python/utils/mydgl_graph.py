@@ -282,6 +282,22 @@ class MyDGLGraph:
         ]["node_idx"]
         return separate_unique_node_indices
 
+    def get_separate_unique_node_indices_single_sided(self) -> Dict[str, torch.Tensor]:
+        separate_unique_node_indices_single_sided = dict()
+        separate_unique_node_indices_single_sided["node_idx_row"] = self.graph_data[
+            "separate"
+        ]["unique_node_idx_single_sided"]["node_idx_row"]
+        separate_unique_node_indices_single_sided["rel_ptr_row"] = self.graph_data[
+            "separate"
+        ]["unique_node_idx_single_sided"]["rel_ptr_row"]
+        separate_unique_node_indices_single_sided["node_idx_col"] = self.graph_data[
+            "separate"
+        ]["unique_node_idx_single_sided"]["node_idx_col"]
+        separate_unique_node_indices_single_sided["rel_ptr_col"] = self.graph_data[
+            "separate"
+        ]["unique_node_idx_single_sided"]["rel_ptr_col"]
+        return separate_unique_node_indices_single_sided
+
     def to_script_object(self) -> utils.ScriptedMyDGLGraph:
         num_nodes = self.get_num_nodes()
         num_ntypes = self.get_num_ntypes()
@@ -336,10 +352,17 @@ class MyDGLGraph:
                 separate_unique_node_indices = self.get_separate_unique_node_indices()
             else:
                 separate_unique_node_indices = None
+            if "unique_node_idx_single_sided" in self.graph_data["separate"]:
+                separate_unique_node_indices_single_sided = (
+                    self.get_separate_unique_node_indices_single_sided()
+                )
+            else:
+                separate_unique_node_indices_single_sided = None
         else:
             separate_coo_original = None
             separate_csr_original = None
             separate_unique_node_indices = None
+            separate_unique_node_indices_single_sided = None
 
         return utils.ScriptedMyDGLGraph(
             num_nodes,
@@ -354,6 +377,7 @@ class MyDGLGraph:
             out_csr,
             original_node_type_offsets,
             separate_unique_node_indices,
+            separate_unique_node_indices_single_sided,
             separate_coo_original,
             separate_csr_original,
         )
@@ -575,6 +599,72 @@ class MyDGLGraph:
             self.generate_separate_coo_adj_for_each_etype(transposed_flag)
         else:
             raise NotImplementedError()
+
+    @torch.no_grad()
+    def get_separate_node_idx_single_sided_for_each_etype(self):
+        if (
+            "separate" not in self.graph_data
+            or "coo" not in self.graph_data["separate"]
+        ):
+            raise ValueError(
+                "separate coo graph data not found, please generate it first"
+            )
+        result_node_idx_col = []
+        result_rel_ptr_col = [0]
+        result_node_idx_row = []
+        result_rel_ptr_row = [0]
+        for idx_relation in range(self.get_num_rels()):
+            node_idx_for_curr_relation_col = torch.unique(
+                self.graph_data["separate"]["coo"]["original"]["col_idx"][
+                    self.graph_data["separate"]["coo"]["original"]["rel_ptr"][
+                        idx_relation
+                    ] : self.graph_data["separate"]["coo"]["original"]["rel_ptr"][
+                        idx_relation + 1
+                    ]
+                ]
+            )
+            node_idx_for_curr_relation_row = torch.unique(
+                self.graph_data["separate"]["coo"]["original"]["row_idx"][
+                    self.graph_data["separate"]["coo"]["original"]["rel_ptr"][
+                        idx_relation
+                    ] : self.graph_data["separate"]["coo"]["original"]["rel_ptr"][
+                        idx_relation + 1
+                    ]
+                ]
+            )
+
+            result_node_idx_col.append(node_idx_for_curr_relation_col)
+            result_rel_ptr_col.append(
+                (result_rel_ptr_col[-1] + node_idx_for_curr_relation_col.shape[0])
+            )
+
+            result_node_idx_row.append(node_idx_for_curr_relation_row)
+            result_rel_ptr_row.append(
+                (result_rel_ptr_row[-1] + node_idx_for_curr_relation_row.shape[0])
+            )
+
+        result_node_idx_row = torch.concat(result_node_idx_row)
+        result_node_idx_col = torch.concat(result_node_idx_col)
+        result_rel_ptr_col = torch.tensor(result_rel_ptr_col, dtype=torch.int64)
+        result_rel_ptr_row = torch.tensor(result_rel_ptr_row, dtype=torch.int64)
+
+        if "unique_node_idx_single_sided" in self.graph_data["separate"]:
+            print(
+                "WARNING: unique_node_idx_single_sided already exists, will be overwritten"
+            )
+        self.graph_data["separate"]["unique_node_idx_single_sided"] = dict()
+        self.graph_data["separate"]["unique_node_idx_single_sided"][
+            "node_idx_row"
+        ] = result_node_idx_row
+        self.graph_data["separate"]["unique_node_idx_single_sided"][
+            "rel_ptr_row"
+        ] = result_rel_ptr_row
+        self.graph_data["separate"]["unique_node_idx_single_sided"][
+            "node_idx_col"
+        ] = result_node_idx_col
+        self.graph_data["separate"]["unique_node_idx_single_sided"][
+            "rel_ptr_col"
+        ] = result_rel_ptr_col
 
     @torch.no_grad()
     def get_separate_node_idx_for_each_etype(self):

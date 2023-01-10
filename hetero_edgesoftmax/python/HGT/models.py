@@ -11,6 +11,8 @@ import torch.jit
 from .. import backend as B
 from .. import utils_lite
 
+# import nvtx
+
 
 class HET_HGTLayerHetero(nn.Module):
     @utils_lite.warn_default_arguments
@@ -125,8 +127,9 @@ class HET_HGTLayerHetero(nn.Module):
     def forward(self, G, h):
         # G is MyDGLGraph, h is node features with shape (num_nodes, in_dim).
         # We assume h is made up of one continuous memory region, where each node type occupies one continuous subregion.
-
+        # with nvtx.annotate("forward", color="purple"):
         if self.multiply_among_weights_first_flag:
+            # with nvtx.annotate("hector_op_category = weight mm", color="cyan"):
             k_per_canonical_etype = torch.index_select(
                 self.k_linears, 0, self.src_node_type_per_canonical_edge_type
             )
@@ -176,6 +179,8 @@ class HET_HGTLayerHetero(nn.Module):
             if self.compact_as_of_node_flag:
                 separate_coo_original_dict = G.get_separate_coo_original()
                 separate_unique_node_indices_dict = G.get_separate_unique_node_indices()
+                # separate_unique_node_indices_dict_single_sided = G.get_separate_unique_node_indices_single_sided()
+
                 # NB: the todo here to implement single-sided matmul for compact_as_of_node_flag does not make sense
                 attn_weight_dst_product_compact = B.rgnn_relational_matmul_compact_as_of_node(
                     separate_unique_node_indices_dict["rel_ptr"],
@@ -186,7 +191,7 @@ class HET_HGTLayerHetero(nn.Module):
                     relation_att_weight,
                     q,
                     False,
-                )
+                )  # TODO: use single side instead without need to modify kernel
                 attn_score = B.rgnn_inner_product_node_compact_and_node(
                     separate_unique_node_indices_dict["rel_ptr"],
                     separate_unique_node_indices_dict["node_idx"],
@@ -196,9 +201,10 @@ class HET_HGTLayerHetero(nn.Module):
                     separate_coo_original_dict["col_idx"],
                     attn_weight_dst_product_compact,
                     k,
-                )
+                )  # TODO: use single side instead without need to modify kernel
             else:
                 separate_coo_original_dict = G.get_separate_coo_original()
+                # with nvtx.annotate("hector_op_category = edgewise mm", color="cyan"):
                 attn_weight_dst_product_per_edge = B.rgnn_relational_matmul(
                     separate_coo_original_dict["rel_ptr"],
                     separate_coo_original_dict["col_idx"],
@@ -207,6 +213,7 @@ class HET_HGTLayerHetero(nn.Module):
                     q,
                     False,
                 )
+                # with nvtx.annotate("hector_op_category = edgewise elementwise", color="cyan"):
                 attn_score = B.rgnn_inner_product_edge_and_node(
                     separate_coo_original_dict["eids"],
                     separate_coo_original_dict["row_idx"],
@@ -252,6 +259,7 @@ class HET_HGTLayerHetero(nn.Module):
                 # g["separate"]["unique_node_idx"]["node_idx"],
             )  # shape (num_nodes, n_heads, d_k)
 
+        # with nvtx.annotate("hector_op_category = nodewise mm", color="cyan"):
         new_h = B.rgnn_relational_matmul_no_scatter_gather_list(
             G.get_original_node_type_offsets(),
             (torch.sigmoid(self.skip) * self.a_linears),

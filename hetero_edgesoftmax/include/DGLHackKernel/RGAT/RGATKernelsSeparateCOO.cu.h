@@ -5,12 +5,14 @@
 // edge-centric schedule cf. HET_gatSumProdZipDivKernel in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag, bool FullCartesianFlag>
+          bool RelationalFlag, bool FullCartesianFlag, bool DualUniqueNodeList>
 __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
     GatFusedData<Idx, DType> gdata, const Idx* etypes, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    const Idx* unique_srcs_and_dests_rel_ptr_col,
+    const Idx* unique_srcs_and_dests_node_indices,
+    const Idx* unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
   constexpr bool ETypeRelPtrFlag = true;
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
@@ -38,10 +40,9 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
             etype = etypes[eidx];
           }
           if constexpr (CompactAsOfNodeFlag) {
-            feat_src_entry_id = src_vid;
-            // sum_idx = find_relational_compact_as_of_node_index(
-            //     etype, dst_vid, unique_srcs_and_dests_node_indices,
-            //     unique_srcs_and_dests_rel_ptr);
+            feat_src_entry_id = find_relational_compact_as_of_node_index(
+                etype, src_vid, unique_srcs_and_dests_rel_ptr,
+                unique_srcs_and_dests_node_indices);
             if constexpr (FullCartesianFlag) {
               // NB: This is the case where we have the data stored in
               // (relation, node) but do not compress the (relation, node)
@@ -90,28 +91,34 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
   }
 }
 
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool DualUniqueNodeList>
 __global__ void HET_gatSumProdZipDivKernel_relational_separate_coo(
     GatFusedData<Idx, DType> gdata, const Idx* rel_ptrs, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    const Idx* unique_srcs_and_dests_rel_ptr_col,
+    const Idx* unique_srcs_and_dests_node_indices,
+    const Idx* unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
   _gatSumProdZipDivKernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag, true,
-                                        false>(
+                                        false, DualUniqueNodeList>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-      num_relations);
+      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_rel_ptr_col,
+      unique_srcs_and_dests_node_indices,
+      unique_srcs_and_dests_node_indices_col, num_relations);
 }
 
 // edge-centric schedule cf. HET_gatExpLeakyReluSumKernel in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag, bool FullCartesianFlag>
+          bool RelationalFlag, bool FullCartesianFlag, bool DualUniqueNodeList>
 __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
     GatFusedData<Idx, DType> gdata, const Idx* etypes, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    const Idx* unique_srcs_and_dests_rel_ptr_col,
+    const Idx* unique_srcs_and_dests_node_indices,
+    const Idx* unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
   constexpr bool ETypeRelPtrFlag = true;
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
@@ -150,11 +157,17 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
             etype = etypes[eidx];
           }
           Idx src_vid_relational = find_relational_compact_as_of_node_index(
-              etype, src_id, unique_srcs_and_dests_node_indices,
-              unique_srcs_and_dests_rel_ptr);
-          dst_vid_relational = find_relational_compact_as_of_node_index(
-              etype, dst_vid, unique_srcs_and_dests_node_indices,
-              unique_srcs_and_dests_rel_ptr);
+              etype, src_id, unique_srcs_and_dests_rel_ptr,
+              unique_srcs_and_dests_node_indices);
+          if constexpr (DualUniqueNodeList) {
+            dst_vid_relational = find_relational_compact_as_of_node_index(
+                etype, dst_vid, unique_srcs_and_dests_rel_ptr_col,
+                unique_srcs_and_dests_node_indices_col);
+          } else {
+            dst_vid_relational = find_relational_compact_as_of_node_index(
+                etype, dst_vid, unique_srcs_and_dests_rel_ptr,
+                unique_srcs_and_dests_node_indices);
+          }
           feat_off_src = src_vid_relational * num_heads + feat_idx;
           feat_off_dst = dst_vid_relational * num_heads + feat_idx;
           if constexpr (FullCartesianFlag) {
@@ -192,15 +205,19 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
   }
 }
 
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
+template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+          bool DualUniqueNodeList>
 __global__ void HET_gatExpLeakyReluSumKernel_relational_separate_coo(
     GatFusedData<Idx, DType> gdata, const Idx* rel_ptrs, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    const Idx* unique_srcs_and_dests_rel_ptr_col,
+    const Idx* unique_srcs_and_dests_node_indices,
+    const Idx* unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
   _gatExpLeakyReluSumKernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag, true,
-                                          false>(
+                                          false, DualUniqueNodeList>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-      num_relations);
+      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_rel_ptr_col,
+      unique_srcs_and_dests_node_indices,
+      unique_srcs_and_dests_node_indices_col, num_relations);
 }

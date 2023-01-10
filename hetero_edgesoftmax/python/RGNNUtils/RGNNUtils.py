@@ -151,6 +151,8 @@ def HET_RGNN_train_full_graph(
     # with torch.cuda.profiler.profile():
     #    with torch.autograd.profiler.emit_nvtx():
     #        with nvtx.annotate("training"):
+    # import nvtx
+
     for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
@@ -177,6 +179,7 @@ def HET_RGNN_train_full_graph(
 
         optimizer.zero_grad()
         th.cuda.synchronize()
+        # with nvtx.annotate("forward", color="purple"):
         forward_prop_start = th.cuda.Event(enable_timing=True)
         forward_prop_end = th.cuda.Event(enable_timing=True)
         forward_prop_start.record()

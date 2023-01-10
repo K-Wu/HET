@@ -2,6 +2,7 @@
 import scipy  # Weird bug in new pytorch when import scipy after import torch
 import torch as th
 
+# import nvtx
 from ..kernels import K
 
 
@@ -272,6 +273,7 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
         normalized_attn_score,
         new_h,
     ):
+        # with nvtx.annotate("hector_op_category = edge softmax", color="cyan"):
         K.hgt_full_graph_edge_softmax_ops_separate_coo(
             separate_coo_row_indices,
             separate_coo_col_indices,
@@ -295,7 +297,7 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
         #     mu_softmax_applied_unnormalized_attn_score,
         #     normalized_attn_score,
         # )
-
+        # with nvtx.annotate("hector_op_category = mm + weighted aggregation", color="cyan"):
         K.hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo(
             separate_coo_relptrs,
             separate_coo_eids,

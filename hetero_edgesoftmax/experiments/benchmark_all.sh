@@ -13,16 +13,17 @@ do
             for mf_idx in {0..1}
             do
                 # skip if c == 0
-                if [ $c_idx -eq 1 ]
-                then
-                    continue
-                fi
+                # if [ $c_idx -eq 1 ]
+                # then
+                #     continue
+                # fi
                 c=${CompactFlag[$c_idx]}
                 mf=${MulFlag[$mf_idx]}
                 # print command to the log file
                 echo "python -m python.$m -d $d --num_layers 1  --full_graph_training --num_classes 64 --n_infeat 64 $c $mf" >>"$m.$mf.$c.log"
                 python -m python.$m -d $d --num_layers 1  --full_graph_training --num_classes 64 --n_infeat 64 $c $mf >>"$m.$mf.$c.log" 2>&1
             done
+            python -m python.RGCN.RGCNSingleLayerSeparateCOO -d $d --num_layers 1  --full_graph_training --num_classes 64 --n_infeat 64 $c >>"RGCNSingleLayer.$c.log" 2>&1
         done
     done
 done

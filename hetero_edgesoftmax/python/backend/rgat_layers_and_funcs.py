@@ -91,6 +91,114 @@ class RelationalFusedGatSeparateCOO(th.autograd.Function):
         # fmt: on
 
 
+class RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeList(
+    th.autograd.Function
+):
+    @staticmethod
+    def forward(
+        ctx,
+        separate_coo_eids,
+        separate_coo_rel_ptrs,
+        separate_coo_row_idx,
+        separate_coo_col_idx,
+        separate_unique_node_idx_rel_ptr_row,
+        separate_unique_node_idx_node_idx_row,
+        separate_unique_node_idx_rel_ptr_col,
+        separate_unique_node_idx_node_idx_col,
+        feat_src,
+        el,
+        er,
+        s,
+        exp,
+        ret,
+        slope,
+    ):
+        ctx.save_for_backward(
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_unique_node_idx_rel_ptr_row,
+            separate_unique_node_idx_node_idx_row,
+            separate_unique_node_idx_rel_ptr_col,
+            separate_unique_node_idx_node_idx_col,
+            feat_src,
+            el,
+            er,
+            s,
+            exp,
+            ret,
+        )
+        ctx.slope = slope
+        K.relational_fused_gat_kernel_compact_as_of_node_separate_coo_dual_unique_node_list(
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_unique_node_idx_rel_ptr_row,
+            separate_unique_node_idx_node_idx_row,
+            separate_unique_node_idx_rel_ptr_col,
+            separate_unique_node_idx_node_idx_col,
+            feat_src,
+            el,
+            er,
+            s,
+            exp,
+            ret,
+            slope,
+        )
+        return ret
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_unique_node_idx_rel_ptr_row,
+            separate_unique_node_idx_node_idx_row,
+            separate_unique_node_idx_rel_ptr_col,
+            separate_unique_node_idx_node_idx_col,
+            feat_src,
+            el,
+            er,
+            s,
+            exp,
+            ret,
+        ) = ctx.saved_tensors
+        slope = ctx.slope
+        grad_el = th.zeros_like(el, memory_format=th.contiguous_format)
+        grad_er = th.zeros_like(er, memory_format=th.contiguous_format)
+        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
+
+        K.backward_relational_fused_gat_compact_as_of_node_separate_coo_dual_unique_node_list(
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_idx,
+            separate_coo_col_idx,
+            separate_unique_node_idx_rel_ptr_row,
+            separate_unique_node_idx_node_idx_row,
+            separate_unique_node_idx_rel_ptr_col,
+            separate_unique_node_idx_node_idx_col,
+            feat_src,
+            el,
+            er,
+            s,
+            exp,
+            ret,
+            gradout,
+            grad_feat_src,
+            grad_el,
+            grad_er,
+            slope,
+        )
+        # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
+        # fmt: off
+        return None, None, None, None, None, None,None, None, grad_feat_src, grad_el, grad_er, None, None, None, None,
+        # fmt: on
+
+
 class RelationalFusedGatCompactAsOfNodeSeparateCOO(th.autograd.Function):
     @staticmethod
     def forward(
@@ -494,6 +602,42 @@ def relational_fused_gat_separate_coo(g, feat, el, er, negative_slope):
         feat,
         el,
         er,
+        s,
+        exp,
+        ret,
+        negative_slope,
+    )
+
+
+def relational_fused_gat_compact_as_of_node_separate_coo_dual_unique_node_list(
+    g, feat_compact, el_compact, er_compact, negative_slope
+):
+    separate_coo_dict = g.get_separate_coo_original()
+    separate_unique_node_idx_single_sided = (
+        g.get_separate_unique_node_indices_single_sided()
+    )
+
+    exp = el_compact.new_empty([g.get_num_edges()] + list(el_compact.size()[1:]))
+    s = el_compact.new_empty([g.get_num_nodes()] + list(el_compact.size()[1:]))
+
+    ret = th.empty(
+        [g.get_num_nodes()] + list(feat_compact.size()[1:]),
+        dtype=feat_compact.dtype,
+        device=feat_compact.device,
+        memory_format=th.contiguous_format,
+    )
+    return RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeList.apply(
+        separate_coo_dict["eids"],
+        separate_coo_dict["rel_ptr"],
+        separate_coo_dict["row_idx"],
+        separate_coo_dict["col_idx"],
+        separate_unique_node_idx_single_sided["rel_ptr_row"],
+        separate_unique_node_idx_single_sided["node_idx_row"],
+        separate_unique_node_idx_single_sided["rel_ptr_col"],
+        separate_unique_node_idx_single_sided["node_idx_col"],
+        feat_compact,
+        el_compact,
+        er_compact,
         s,
         exp,
         ret,

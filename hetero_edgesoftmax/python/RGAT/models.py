@@ -6,6 +6,8 @@ from torch import nn
 import torch.nn.functional as F
 import dgl
 
+# import nvtx
+
 # import dgl.nn as dglnn
 from .. import backend as B
 from .. import utils_lite
@@ -129,7 +131,7 @@ class HET_RelationalAttLayer(nn.Module):
         dict[str, torch.Tensor]
             New node features for each node type.
         """
-
+        # with nvtx.annotate("forward", color="purple"):
         if myblock is not None:
             raise NotImplementedError("Block is not supported by us yet")
             inputs_src = inputs
@@ -160,63 +162,82 @@ class HET_RelationalAttLayer(nn.Module):
                     self.attn_l.view(-1, self.out_feat // self.n_heads, 1),
                 ).view(-1, self.n_heads, self.in_feat, 1)
                 separate_unique_node_idx = g.get_separate_unique_node_indices()
-                feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
+                # separate_unique_node_idx_single_sided = g.get_separate_unique_node_indices_single_sided()
+                feat_compact_src = B.rgnn_relational_matmul_compact_as_of_node(
                     separate_unique_node_idx["rel_ptr"],
                     separate_unique_node_idx["node_idx"],
                     self.conv_weights,
                     inputs,
-                    True,
-                )
+                    True,  # fixme: check if this is correct
+                )  # NB: use single side instead without need to modify kernel
                 el_compact = B.rgnn_relational_matmul_compact_as_of_node(
                     separate_unique_node_idx["rel_ptr"],
                     separate_unique_node_idx["node_idx"],
                     product_of_conv_weights_attn_l,
                     inputs,
                     True,
-                )
+                )  # NB: use single side instead without need to modify kernel
                 er_compact = B.rgnn_relational_matmul_compact_as_of_node(
                     separate_unique_node_idx["rel_ptr"],
                     separate_unique_node_idx["node_idx"],
                     product_of_conv_weights_attn_r,
                     inputs,
                     True,
-                )
+                )  # NB: use single side instead without need to modify kernel
             else:
                 separate_unique_node_idx = g.get_separate_unique_node_indices()
+                # separate_unique_node_idx_single_sided = g.get_separate_unique_node_indices_single_sided()
                 # NB: no need to distinguish feat_compact_src and feat_compact_dst because in our case all datasets are added with inverse edges
-                feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
+                feat_compact_src_and_dst = B.rgnn_relational_matmul_compact_as_of_node(
                     separate_unique_node_idx["rel_ptr"],
                     separate_unique_node_idx["node_idx"],
                     self.conv_weights,
                     inputs,
                     True,
-                )
+                )  # NB: use single side instead without need to modify kernel
+                # feat_compact_dst = B.rgnn_relational_matmul_compact_as_of_node(
+                #     separate_unique_node_idx["rel_ptr"],
+                #     separate_unique_node_idx["node_idx"],
+                #     self.conv_weights,
+                #     inputs,
+                #     True,
+                # ) # NB: use single side instead without need to modify kernel
                 # FIXME: the following two lines should be implemented with relational_inner_product_compact_and_weight
                 # el_compact = (feat_compact * self.attn_l).sum(dim=-1).unsqueeze(-1)
                 # er_compact = (feat_compact * self.attn_r).sum(dim=-1).unsqueeze(-1)
                 el_compact = B.rgnn_relational_matmul_no_scatter_gather_list(
                     separate_unique_node_idx["rel_ptr"],
                     self.attn_l.unsqueeze(-1),
-                    feat_compact,
-                )
+                    feat_compact_src_and_dst,
+                )  # NB: use single side instead without need to modify kernel
                 er_compact = B.rgnn_relational_matmul_no_scatter_gather_list(
                     separate_unique_node_idx["rel_ptr"],
                     self.attn_r.unsqueeze(-1),
-                    feat_compact,
-                )
+                    feat_compact_src_and_dst,
+                )  # NB: use single side instead without need to modify kernel
 
             if self.gat_edge_parallel_flag:  # NB: use a flag to switch this
                 h = B.relational_fused_gat_compact_as_of_node_separate_coo(
-                    g, feat_compact, el_compact, er_compact, self.leaky_relu_slope
-                )
+                    g,
+                    feat_compact_src_and_dst,
+                    el_compact,
+                    er_compact,
+                    self.leaky_relu_slope,
+                )  # NB: kernel modified to enalbe single side
             else:
+                # raise NotImplementedError("not implemented the singe side unique node idex")
                 h = B.relational_fused_gat_compact_as_of_node(
-                    g, feat_compact, el_compact, er_compact, self.leaky_relu_slope
-                )
+                    g,
+                    feat_compact_src_and_dst,
+                    el_compact,
+                    er_compact,
+                    self.leaky_relu_slope,
+                )  # TODO: need to modify kernel to enable single side
 
         else:
             separate_coo_original_dict = g.get_separate_coo_original()
             # print(th.argmin(g["separate"]["coo"]["original"]["eids"])) # 256546 rel_ptr [183, 184)
+            # with nvtx.annotate("hector_op_category = edgewise mm", color="cyan"):
             feat_src_per_edge = B.rgnn_relational_matmul(
                 separate_coo_original_dict["rel_ptr"],
                 separate_coo_original_dict["row_idx"],
@@ -227,6 +248,7 @@ class HET_RelationalAttLayer(nn.Module):
                 inputs,
                 True,
             )
+            # with nvtx.annotate("hector_op_category = edgewise inner prod", color="cyan"):
             el = B.rgnn_relational_matmul(
                 separate_coo_original_dict["rel_ptr"],
                 separate_coo_original_dict["eids"],
@@ -253,13 +275,14 @@ class HET_RelationalAttLayer(nn.Module):
                 #    product_of_conv_weights_attn_r, (-1, self.n_heads, self.in_feat)
                 # )
                 separate_coo_original_dict = g.get_separate_coo_original()
+                # with nvtx.annotate("hector_op_category = weight mm", color="cyan"):
                 product_of_conv_weights_attn_r = th.bmm(
                     self.conv_weights.view(
                         -1, self.in_feat, self.out_feat // self.n_heads
                     ),
                     self.attn_r.view(-1, self.out_feat // self.n_heads, 1),
                 ).view(-1, self.n_heads, self.in_feat, 1)
-
+                # with nvtx.annotate("hector_op_category = edgewise (lin op fused) mm", color="cyan"):
                 er = B.rgnn_relational_matmul(
                     separate_coo_original_dict["rel_ptr"],
                     separate_coo_original_dict["col_idx"],
@@ -294,7 +317,7 @@ class HET_RelationalAttLayer(nn.Module):
             # print("er", er.shape)
             # print("max eids", g["separate"]["coo"]["original"]["eids"].max())
             # print("max eids", g["original"]["eids"].max())
-
+            # with nvtx.annotate("hector_op_category = weighted aggregation", color="cyan"):
             if self.gat_edge_parallel_flag:  # NB: use a flag to switch this
                 h = B.relational_fused_gat_separate_coo(
                     g, feat_src_per_edge, el, er, self.leaky_relu_slope
@@ -308,7 +331,7 @@ class HET_RelationalAttLayer(nn.Module):
 
         # NB: let's leverage the built-in bias, activation and dropout here and only focus on SpMM/SDDMM in our kernel implementation.
         # NB: GATConv class also provides bias, activation and dropout but we can ignore them for now.
-
+        # with nvtx.annotate("hector_op_category = activation", color="cyan"):
         h = h.view(-1, self.out_feat)
         if self.self_loop:
             # print(inputs_dst.shape)
@@ -317,7 +340,8 @@ class HET_RelationalAttLayer(nn.Module):
             h = h + self.h_bias
         if self.activation:
             h = self.activation(h)
-        return self.dropout(h)
+        h = self.dropout(h)
+        return h
 
 
 class HET_RelationalGATEncoder(nn.Module):

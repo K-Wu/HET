@@ -153,6 +153,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=False)
         g.get_separate_node_idx_for_each_etype()
+        # g.get_separate_node_idx_single_sided_for_each_etype()
         if not args.full_graph_training:
             # need to prepare dgl graph for sampler
             g_dglgraph = g.get_dgl_graph()

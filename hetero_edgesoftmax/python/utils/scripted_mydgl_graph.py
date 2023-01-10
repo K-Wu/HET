@@ -31,6 +31,7 @@ class ScriptedMyDGLGraph(object):
         out_csr: Union[None, Dict[str, torch.Tensor]],
         original_node_type_offsets: Union[None, torch.Tensor],
         separate_unique_node_indices: Union[None, Dict[str, torch.Tensor]],
+        separate_unique_node_indices_single_sided: Union[None, Dict[str, torch.Tensor]],
         separate_coo_original: Union[None, Dict[str, torch.Tensor]],
         separate_csr_original: Union[None, Dict[str, torch.Tensor]],
     ):
@@ -47,6 +48,9 @@ class ScriptedMyDGLGraph(object):
         self.out_csr = out_csr
         self.original_node_type_offsets = original_node_type_offsets
         self.separate_unique_node_indices = separate_unique_node_indices
+        self.separate_unique_node_indices_single_sided = (
+            separate_unique_node_indices_single_sided
+        )
         self.separate_coo_original = separate_coo_original
         self.separate_csr_original = separate_csr_original
 
@@ -130,6 +134,13 @@ class ScriptedMyDGLGraph(object):
         # G["separate"]["unique_node_idx"]["rel_ptr"],
         # G["separate"]["unique_node_idx"]["node_idx"],
         result = self.separate_unique_node_indices
+        assert result is not None
+        return result
+
+    def get_separate_unique_node_indices_single_sided(self) -> Dict[str, torch.Tensor]:
+        # G["separate"]["unique_node_idx"]["rel_ptr"],
+        # G["separate"]["unique_node_idx"]["node_idx"],
+        result = self.separate_unique_node_indices_single_sided
         assert result is not None
         return result
 
