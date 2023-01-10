@@ -642,3 +642,30 @@ def rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(g, feat_compact, 
         enorm,
         ret,
     )
+
+
+def rgcn_node_mean_aggregation_compact_as_of_node_separate_coo_single_sided(
+    g, feat_compact_src, enorm
+):
+    separate_coo_dict = g.get_separate_coo_original()
+    separate_unique_node_idx_single_sided = (
+        g.get_separate_unique_node_indices_single_sided()
+    )
+
+    ret = th.empty(
+        [g.get_num_nodes()] + list(feat_compact_src.size()[1:]),
+        dtype=feat_compact_src.dtype,
+        device=feat_compact_src.device,
+        memory_format=th.contiguous_format,
+    )
+    return RGCNNodeMeanAggregationCompactAsOfNodeSeparateCOO.apply(
+        separate_coo_dict["eids"],
+        separate_coo_dict["rel_ptr"],
+        separate_coo_dict["row_idx"],
+        separate_coo_dict["col_idx"],
+        separate_unique_node_idx_single_sided["rel_ptr_row"],
+        separate_unique_node_idx_single_sided["node_idx_row"],
+        feat_compact_src,
+        enorm,
+        ret,
+    )

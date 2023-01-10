@@ -178,30 +178,32 @@ class HET_HGTLayerHetero(nn.Module):
         else:
             if self.compact_as_of_node_flag:
                 separate_coo_original_dict = G.get_separate_coo_original()
-                separate_unique_node_indices_dict = G.get_separate_unique_node_indices()
-                # separate_unique_node_indices_dict_single_sided = G.get_separate_unique_node_indices_single_sided()
+                # separate_unique_node_indices_dict = G.get_separate_unique_node_indices()
+                separate_unique_node_indices_dict_single_sided = (
+                    G.get_separate_unique_node_indices_single_sided()
+                )
 
                 # NB: the todo here to implement single-sided matmul for compact_as_of_node_flag does not make sense
                 attn_weight_dst_product_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_indices_dict["rel_ptr"],
-                    separate_unique_node_indices_dict["node_idx"],
+                    separate_unique_node_indices_dict_single_sided["rel_ptr_col"],
+                    separate_unique_node_indices_dict_single_sided["node_idx_col"],
                     # separate_coo_original_dict["rel_ptr"],
                     # separate_coo_original_dict["col_idx"],
                     # separate_coo_original_dict["eids"],
                     relation_att_weight,
                     q,
                     False,
-                )  # TODO: use single side instead without need to modify kernel
+                )  # NB: use single side instead without need to modify kernel
                 attn_score = B.rgnn_inner_product_node_compact_and_node(
-                    separate_unique_node_indices_dict["rel_ptr"],
-                    separate_unique_node_indices_dict["node_idx"],
+                    separate_unique_node_indices_dict_single_sided["rel_ptr_col"],
+                    separate_unique_node_indices_dict_single_sided["node_idx_col"],
                     separate_coo_original_dict["rel_ptr"],
                     separate_coo_original_dict["eids"],
                     separate_coo_original_dict["row_idx"],
                     separate_coo_original_dict["col_idx"],
                     attn_weight_dst_product_compact,
                     k,
-                )  # TODO: use single side instead without need to modify kernel
+                )  # NB: use single side instead without need to modify kernel
             else:
                 separate_coo_original_dict = G.get_separate_coo_original()
                 # with nvtx.annotate("hector_op_category = edgewise mm", color="cyan"):

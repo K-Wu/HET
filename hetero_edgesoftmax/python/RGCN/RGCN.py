@@ -298,20 +298,21 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
             raise NotImplementedError
         else:
             if self.compact_as_of_node_flag:
-                separate_unique_node_idx = g.get_separate_unique_node_indices()
-                feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_idx["rel_ptr"],
-                    separate_unique_node_idx["node_idx"],
+                # separate_unique_node_idx = g.get_separate_unique_node_indices()
+                separate_unique_node_idx_single_sided = (
+                    g.get_separate_unique_node_indices_single_sided()
+                )
+                feat_compact_src = B.rgnn_relational_matmul_compact_as_of_node(
+                    separate_unique_node_idx_single_sided["rel_ptr_row"],
+                    separate_unique_node_idx_single_sided["node_idx_row"],
                     weight,
                     x,
                     True,
                 )
-                feat_compact = feat_compact.squeeze(1)
-                node_repr = (
-                    B.rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(
-                        g, feat_compact, norm
-                    )  # TODO: use single side instead without need to modify kernel
-                )
+                feat_compact_src = feat_compact_src.squeeze(1)
+                node_repr = B.rgcn_node_mean_aggregation_compact_as_of_node_separate_coo_single_sided(
+                    g, feat_compact_src, norm
+                )  # NB: use single side instead without need to modify kernel
             else:
                 separate_coo_original_dict = g.get_separate_coo_original()
                 node_repr = B.rgcn_layer1_separate_coo(

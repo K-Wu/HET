@@ -161,74 +161,80 @@ class HET_RelationalAttLayer(nn.Module):
                     ),
                     self.attn_l.view(-1, self.out_feat // self.n_heads, 1),
                 ).view(-1, self.n_heads, self.in_feat, 1)
-                separate_unique_node_idx = g.get_separate_unique_node_indices()
-                # separate_unique_node_idx_single_sided = g.get_separate_unique_node_indices_single_sided()
-                feat_compact_src = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_idx["rel_ptr"],
-                    separate_unique_node_idx["node_idx"],
+                # separate_unique_node_idx = g.get_separate_unique_node_indices()
+                separate_unique_node_idx_single_sided = (
+                    g.get_separate_unique_node_indices_single_sided()
+                )
+                feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
+                    separate_unique_node_idx_single_sided["rel_ptr_row"],
+                    separate_unique_node_idx_single_sided["node_idx_row"],
                     self.conv_weights,
                     inputs,
                     True,  # fixme: check if this is correct
                 )  # NB: use single side instead without need to modify kernel
                 el_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_idx["rel_ptr"],
-                    separate_unique_node_idx["node_idx"],
+                    separate_unique_node_idx_single_sided["rel_ptr_row"],
+                    separate_unique_node_idx_single_sided["node_idx_row"],
                     product_of_conv_weights_attn_l,
                     inputs,
                     True,
                 )  # NB: use single side instead without need to modify kernel
                 er_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_idx["rel_ptr"],
-                    separate_unique_node_idx["node_idx"],
+                    separate_unique_node_idx_single_sided["rel_ptr_col"],
+                    separate_unique_node_idx_single_sided["node_idx_col"],
                     product_of_conv_weights_attn_r,
                     inputs,
                     True,
                 )  # NB: use single side instead without need to modify kernel
             else:
-                separate_unique_node_idx = g.get_separate_unique_node_indices()
-                # separate_unique_node_idx_single_sided = g.get_separate_unique_node_indices_single_sided()
+                # separate_unique_node_idx = g.get_separate_unique_node_indices()
+                separate_unique_node_idx_single_sided = (
+                    g.get_separate_unique_node_indices_single_sided()
+                )
                 # NB: no need to distinguish feat_compact_src and feat_compact_dst because in our case all datasets are added with inverse edges
-                feat_compact_src_and_dst = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_idx["rel_ptr"],
-                    separate_unique_node_idx["node_idx"],
+                feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
+                    separate_unique_node_idx_single_sided["rel_ptr_row"],
+                    separate_unique_node_idx_single_sided["node_idx_row"],
                     self.conv_weights,
                     inputs,
                     True,
                 )  # NB: use single side instead without need to modify kernel
-                # feat_compact_dst = B.rgnn_relational_matmul_compact_as_of_node(
-                #     separate_unique_node_idx["rel_ptr"],
-                #     separate_unique_node_idx["node_idx"],
-                #     self.conv_weights,
-                #     inputs,
-                #     True,
-                # ) # NB: use single side instead without need to modify kernel
+                feat_compact_dst = B.rgnn_relational_matmul_compact_as_of_node(
+                    separate_unique_node_idx_single_sided["rel_ptr_col"],
+                    separate_unique_node_idx_single_sided["node_idx_col"],
+                    self.conv_weights,
+                    inputs,
+                    True,
+                )  # NB: use single side instead without need to modify kernel
                 # FIXME: the following two lines should be implemented with relational_inner_product_compact_and_weight
                 # el_compact = (feat_compact * self.attn_l).sum(dim=-1).unsqueeze(-1)
                 # er_compact = (feat_compact * self.attn_r).sum(dim=-1).unsqueeze(-1)
                 el_compact = B.rgnn_relational_matmul_no_scatter_gather_list(
-                    separate_unique_node_idx["rel_ptr"],
+                    separate_unique_node_idx_single_sided["rel_ptr_row"],
                     self.attn_l.unsqueeze(-1),
-                    feat_compact_src_and_dst,
+                    feat_compact,
                 )  # NB: use single side instead without need to modify kernel
                 er_compact = B.rgnn_relational_matmul_no_scatter_gather_list(
-                    separate_unique_node_idx["rel_ptr"],
+                    separate_unique_node_idx_single_sided["rel_ptr_col"],
                     self.attn_r.unsqueeze(-1),
-                    feat_compact_src_and_dst,
+                    feat_compact_dst,
                 )  # NB: use single side instead without need to modify kernel
 
             if self.gat_edge_parallel_flag:  # NB: use a flag to switch this
-                h = B.relational_fused_gat_compact_as_of_node_separate_coo(
+                h = B.relational_fused_gat_compact_as_of_node_separate_coo_single_sided(
                     g,
-                    feat_compact_src_and_dst,
+                    feat_compact,
                     el_compact,
                     er_compact,
                     self.leaky_relu_slope,
                 )  # NB: kernel modified to enalbe single side
             else:
-                # raise NotImplementedError("not implemented the singe side unique node idex")
+                raise NotImplementedError(
+                    "not implemented the singe side unique node idex"
+                )
                 h = B.relational_fused_gat_compact_as_of_node(
                     g,
-                    feat_compact_src_and_dst,
+                    feat_compact,
                     el_compact,
                     er_compact,
                     self.leaky_relu_slope,
