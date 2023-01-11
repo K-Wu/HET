@@ -85,7 +85,9 @@ void _full_graph_edge_softmax_ops(
   int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
   int64_t incsr_or_sep_coo_num_rows_or_edges =
       incsr_or_sep_coo_rowptr_or_indices.numel() - 1;
-  int nblks_y = std::min(incsr_or_sep_coo_num_rows_or_edges, MAX_NBLKS);
+  int nblks_y =
+      std::min(ceil_div(incsr_or_sep_coo_num_rows_or_edges, (int64_t)nthrs_y),
+               MAX_NBLKS);
   const dim3 nblks(nblks_x, nblks_y);
   const dim3 nthrs(nthrs_x, nthrs_y);
 
@@ -406,7 +408,8 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
   int nthrs_y = 32;
   int nthrs_x = 1;
   int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
-  int nblks_y = std::min(incsr_row_ptr.numel() - 1, MAX_NBLKS);
+  int nblks_y = std::min(ceil_div(incsr_row_ptr.numel() - 1, (int64_t)nthrs_y),
+                         MAX_NBLKS);
   const dim3 nthrs(nthrs_x, nthrs_y);
   const dim3 nblks(nblks_x, nblks_y);
   HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel<Idx, DType, true,

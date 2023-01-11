@@ -69,7 +69,7 @@ void _FusedKernelImpl(at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
   int nthrs_y = 32;
   int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
   int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
-  int nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
+  int nblks_y = std::min(ceil_div(incsr_num_rows, (int64_t)nthrs_y), MAX_NBLKS);
 
   const dim3 nblks(nblks_x, nblks_y);
   const dim3 nthrs(nthrs_x, nthrs_y);
