@@ -1,7 +1,8 @@
 #pragma once
-#include "DGLHackKernel/DGLHackKernel.h"
-#include "DGLHackKernel/HGT/HGTPreprocessing.h"
-#include "EdgeAttention_4/EdgeAttentionCOO.h"
+//#include "DGLHackKernel/DGLHackKernel.h"
+#include <cuda_runtime.h>
+// #include "DGLHackKernel/HGT/HGTPreprocessing.h"
+// #include "EdgeAttention_4/EdgeAttentionCOO.h"
 #include "EdgeAttention_4/mysgemm_functor.cu.h"
 #include "utils.cu.h"
 

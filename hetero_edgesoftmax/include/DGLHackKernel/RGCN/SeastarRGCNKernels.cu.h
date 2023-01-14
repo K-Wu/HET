@@ -1,5 +1,7 @@
 #pragma once
-#include "DGLHackKernel/DGLHackKernel.h"
+// #include "DGLHackKernel/DGLHackKernel.h"
+#include <cuda_runtime.h>
+
 // NB: A wrapper version for python api export is implemented at
 // [[hetero_edgesoftmax/src/export/torch/op.cu.cc]]. Please update accordingly
 // whenever there is update.

@@ -1,6 +1,6 @@
 #pragma once
 #include <cuda_runtime.h>
-#include "cuda.h"
+// #include "cuda.h"
 #include "utils.cu.h"
 
 template <bool DOUBLE_BUFFER_FLAG, bool COARSEN_FACTOR_2_FLAG_X,

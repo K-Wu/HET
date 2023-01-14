@@ -1,6 +1,6 @@
 #pragma once
-#include "cuda.h"
-#include "cuda_runtime.h"
+// #include "cuda.h"
+#include <cuda_runtime.h>
 #include "utils.cu.h"
 
 template <bool scatter_col_flag, int OUT_DIM>

@@ -1,6 +1,6 @@
 #pragma once
 #include <cuda_runtime.h>
-#include "cuda.h"
+// #include "cuda.h"
 #include "utils.cu.h"
 
 template <bool GatherFlag, typename Idx, typename IdxPtr>

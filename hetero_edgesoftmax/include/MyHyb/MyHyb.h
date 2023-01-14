@@ -9,7 +9,7 @@
 #include <numeric>
 #include <optional>
 #include <set>
-#include "../hetero_edgesoftmax.h"
+// #include "../hetero_edgesoftmax.h"
 //#include <optional>
 
 #ifdef MyHyb_NONEXISTENT_ELEMENT

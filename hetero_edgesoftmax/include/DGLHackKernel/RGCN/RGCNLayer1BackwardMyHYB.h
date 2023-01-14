@@ -1,5 +1,6 @@
 #pragma once
-#include "DGLHackKernel/DGLHackKernel.h"
+//#include "DGLHackKernel/DGLHackKernel.h"
+#include <cuda_runtime.h>
 
 template <typename Idx, typename DType, int ELL_logical_width,
           int ELL_physical_width>

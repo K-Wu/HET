@@ -3,7 +3,7 @@
 #include <c10/cuda/CUDAStream.h>
 #include <torch/extension.h>
 #include <torch/library.h>
-#include "utils.cu.h"
+//#include "utils.cu.h"
 
 // TODO: we also needs to make sure the scheme here could handle cases involving
 // const volatile and rvalue

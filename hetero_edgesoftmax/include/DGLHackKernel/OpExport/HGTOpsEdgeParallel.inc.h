@@ -3,10 +3,10 @@
 #include <c10/cuda/CUDAStream.h>
 #include <torch/extension.h>
 #include <torch/library.h>
-#include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.h"
-#include "EdgeSoftmax_1/EdgeSoftmaxCSR.h"
+//#include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.h"
+//#include "EdgeSoftmax_1/EdgeSoftmaxCSR.h"
 
-#include "HGTOps.inc.h"
+//#include "HGTOps.inc.h"
 
 #include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"

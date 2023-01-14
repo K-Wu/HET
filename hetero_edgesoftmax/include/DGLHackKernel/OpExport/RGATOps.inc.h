@@ -7,10 +7,10 @@
 #include "DGLHackKernel/GAT/FusedGAT.cu.h"
 #include "DGLHackKernel/GAT/FusedGATBackward.cu.h"
 #include "DGLHackKernel/RGAT/RGATBackwardKernelsSeparateCOO.cu.h"
-#include "DGLHackKernel/RGAT/RGATBackwardKernelsSeparateCSR.cu.h"
+//#include "DGLHackKernel/RGAT/RGATBackwardKernelsSeparateCSR.cu.h"
 #include "DGLHackKernel/RGAT/RGATKernelsSeparateCOO.cu.h"
-#include "DGLHackKernel/RGAT/RGATKernelsSeparateCSR.cu.h"
-#include "GATOps.inc.h"
+//#include "DGLHackKernel/RGAT/RGATKernelsSeparateCSR.cu.h"
+//#include "GATOps.inc.h"
 
 namespace HET {
 namespace TorchExport {

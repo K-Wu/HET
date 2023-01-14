@@ -3,7 +3,7 @@
 #include <thrust/host_vector.h>
 #include <thrust/random.h>
 #include <vector>
-#include "DGLHackKernel/DGLHackKernel.h"
+//#include "DGLHackKernel/DGLHackKernel.h"
 
 namespace HET {
 namespace OpPrototyping {

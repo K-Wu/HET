@@ -1,5 +1,6 @@
 #pragma once
-#include "DGLHackKernel/DGLHackKernel.h"
+// #include "DGLHackKernel/DGLHackKernel.h"
+#include <cuda_runtime.h>
 #include "DGLHackKernel/GAT/FusedGATBackward.cu.h"
 
 // vertex centric schedule similar to HET_fusedGatBackwardGradElErFeatSrcFused

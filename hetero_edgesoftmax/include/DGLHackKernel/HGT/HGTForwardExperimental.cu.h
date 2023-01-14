@@ -1,5 +1,6 @@
 #pragma once
-#include "DGLHackKernel/DGLHackKernel.h"
+//#include "DGLHackKernel/DGLHackKernel.h"
+#include <cuda_runtime.h>
 #include "utils.cu.h"
 
 // In this experiment, the fused kernel 1) do fused intermediate vector and

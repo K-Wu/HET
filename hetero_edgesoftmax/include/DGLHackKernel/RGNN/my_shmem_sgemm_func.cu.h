@@ -1,6 +1,6 @@
 #pragma once
 #include <cuda_runtime.h>
-#include "cuda.h"
+// #include "cuda.h"
 #include "my_shmem_sgemm_func_functor.cu.h"
 #include "utils.cu.h"
 

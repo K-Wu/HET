@@ -1,5 +1,6 @@
 #pragma once
-#include "DGLHackKernel/DGLHackKernel.h"
+//#include "DGLHackKernel/DGLHackKernel.h"
+
 #include "DGLHackKernel/DGLHackUtils.h"
 #include "DGLHackKernel/GAT/FusedGAT.cu.h"
 #include "DGLHackKernel/GAT/FusedGATBackward.cu.h"

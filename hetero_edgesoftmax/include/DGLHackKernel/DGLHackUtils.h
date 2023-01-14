@@ -1,6 +1,5 @@
 #pragma once
 #include <assert.h>
-#include "DGLHackKernel/DGLHackKernel.h"
 #define CUDA_MAX_NUM_THREADS 1024
 
 inline int SeastarFindNumThreads(int dim,

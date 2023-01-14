@@ -1,5 +1,6 @@
 #pragma once
-#include "DGLHackKernel/DGLHackKernel.h"
+//#include "DGLHackKernel/DGLHackKernel.h"
+#include <cuda_runtime.h>
 #include "inner_product.cu.h"
 
 // adapted from _gatSumProdZipDivKernel in

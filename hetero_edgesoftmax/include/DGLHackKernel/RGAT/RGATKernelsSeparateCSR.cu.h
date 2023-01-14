@@ -1,5 +1,6 @@
 #pragma once
-#include "DGLHackKernel/DGLHackKernel.h"
+// #include "DGLHackKernel/DGLHackKernel.h"
+#include <cuda_runtime.h>
 #include "DGLHackKernel/GAT/FusedGAT.cu.h"
 
 // same vertex-centric schedule as HET_gatSumProdZipDivKernel in
