@@ -435,10 +435,10 @@ TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
   m.def("hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo",
         HGT::FwProp::SeparateCOO::EdgeParallel::
             FullGraphFusedMessageCalcAndMeanAggregation);
-
+  // clang-format off
   m.def(
-      "backward_hgt_full_graph_fused_message_calc_and_mean_aggregation_"
-      "separate_coo",
+      "backward_hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo",
       HGT::BckProp::SeparateCOO::EdgeParallel::
           FullGraphFusedMessageCalcAndMeanAggregation);
+  // clang-format on
 }

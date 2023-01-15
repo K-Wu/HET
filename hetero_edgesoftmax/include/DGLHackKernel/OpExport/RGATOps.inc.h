@@ -547,16 +547,16 @@ TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
         RGAT::FwProp::RelationalFusedGATKernel_edge_parallel_separatecoo);
   m.def("backward_relational_fused_gat_separate_coo",
         RGAT::BckProp::RelationalFusedGATKernel_edge_parallel_separatecoo);
+  // clang-format off
   m.def(
-      "relational_fused_gat_kernel_compact_as_of_node_separate_coo_dual_unique_"
-      "node_list",
+      "relational_fused_gat_kernel_compact_as_of_node_separate_coo_dual_unique_node_list",
       RGAT::FwProp::
           RelationalFusedGATKernelCompactAsOfNode_edge_parallel_separatecoo_dual_unique_node_list);
   m.def(
-      "backward_relational_fused_gat_compact_as_of_node_separate_coo_dual_"
-      "unique_node_list",
+      "backward_relational_fused_gat_compact_as_of_node_separate_coo_dual_unique_node_list",
       RGAT::BckProp::
           RelationalFusedGATKernelCompactAsOfNode_edge_parallel_separatecoo_dual_unique_node_list);
+  // clang-format on
   m.def("relational_fused_gat_kernel_compact_as_of_node_separate_coo",
         RGAT::FwProp::
             RelationalFusedGATKernelCompactAsOfNode_edge_parallel_separatecoo);
