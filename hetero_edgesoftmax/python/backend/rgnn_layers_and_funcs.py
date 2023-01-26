@@ -394,24 +394,6 @@ def rgnn_relational_matmul_compact_as_of_node_single_ended(
     raise ZeroDivisionError(
         "SingleEnded compact matmul is a mal-purposed API because the additional knowledge of separate coo node index does not help reduce the computation, i.e., the number of entries to be output. The current indexing scheme in the implementation is a mixture of compact and per-edge schemes.  Additionally, datasets we are dealing with are all added with reverse edges. So it is even meaningless to create two unique node indices list."
     )
-    ret = th.empty(
-        [separate_coo_rel_ptr[-1], weight.size(1), weight.size(3)],
-        dtype=weight.dtype,
-        device=weight.device,
-        requires_grad=True,
-        memory_format=th.contiguous_format,
-    )
-    return RgnnRelationalMatmulCompactAsOfNodeSingleEnded.apply(
-        unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices,
-        separate_coo_rel_ptr,
-        separate_coo_node_indices,
-        separate_coo_eids,
-        weight,
-        node_feat,
-        ret,
-        input_num_head_one_flag,
-    )
 
 
 class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):

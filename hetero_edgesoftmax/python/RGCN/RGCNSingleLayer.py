@@ -56,8 +56,8 @@ def RGCNSingleLayer_main(args):
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=False)
         if args.compact_as_of_node_flag:
-            g.get_separate_node_idx_for_each_etype()
-            g.get_separate_node_idx_single_sided_for_each_etype()
+            g.generate_separate_unique_node_idx_for_each_etype()
+            g.generate_get_separate_unique_node_idx_single_sided_for_each_etype()
             print(
                 "size of unique nodes",
                 g["separate"]["unique_node_idx"]["node_idx"].shape,

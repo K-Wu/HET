@@ -283,7 +283,67 @@ class SeastarRgcnSecondLayerCSR(th.autograd.Function):
         return None, None, None, None, None, None, None, None, grad_x, None, None, None
 
 
-class RgcnSecondLayerCSRHybridAssign(th.autograd.Function):
+def seastar_rgcn_layer1_csr(
+    graph,
+    x,
+    weight,
+    norm,
+    hybrid_assign_flag=False,
+    num_blocks_on_node_forward=None,
+    num_blocks_on_node_backward=None,
+):
+    incsr_dict = graph.get_in_csr()
+    outcsr_dict = graph.get_out_csr()
+    incsr_row_ptr = incsr_dict["row_ptr"]
+    incsr_col_idx = incsr_dict["col_idx"]
+    incsr_eids = incsr_dict["eids"]
+    incsr_reltypes = incsr_dict["rel_types"]
+    outcsr_row_ptr = outcsr_dict["row_ptr"]
+    outcsr_col_idx = outcsr_dict["col_idx"]
+    outcsr_eids = outcsr_dict["eids"]
+    outcsr_reltypes = outcsr_dict["rel_types"]
+    ret = th.zeros(
+        (graph.get_num_nodes(), weight.size(2)),
+        dtype=weight.dtype,
+        device=weight.device,
+        requires_grad=True,
+    ).contiguous()
+    if hybrid_assign_flag:
+        return SeastarRgcnSecondLayerCSRHybridAssign.apply(
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            outcsr_row_ptr,
+            outcsr_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            x,
+            weight,
+            norm,
+            ret,
+            num_blocks_on_node_forward,
+            num_blocks_on_node_backward,
+        )
+
+    else:
+        return SeastarRgcnSecondLayerCSR.apply(
+            incsr_row_ptr,
+            incsr_col_idx,
+            incsr_eids,
+            incsr_reltypes,
+            outcsr_row_ptr,
+            outcsr_col_idx,
+            outcsr_eids,
+            outcsr_reltypes,
+            x,
+            weight,
+            norm,
+            ret,
+        )
+
+
+class SeastarRgcnSecondLayerCSRHybridAssign(th.autograd.Function):
     @staticmethod
     def forward(
         ctx,
@@ -487,66 +547,6 @@ def rgcn_layer1_separate_coo(
         norm,
         ret,
     )
-
-
-def seastar_rgcn_layer1_csr(
-    graph,
-    x,
-    weight,
-    norm,
-    hybrid_assign_flag=False,
-    num_blocks_on_node_forward=None,
-    num_blocks_on_node_backward=None,
-):
-    incsr_dict = graph.get_in_csr()
-    outcsr_dict = graph.get_out_csr()
-    incsr_row_ptr = incsr_dict["row_ptr"]
-    incsr_col_idx = incsr_dict["col_idx"]
-    incsr_eids = incsr_dict["eids"]
-    incsr_reltypes = incsr_dict["rel_types"]
-    outcsr_row_ptr = outcsr_dict["row_ptr"]
-    outcsr_col_idx = outcsr_dict["col_idx"]
-    outcsr_eids = outcsr_dict["eids"]
-    outcsr_reltypes = outcsr_dict["rel_types"]
-    ret = th.zeros(
-        (graph.get_num_nodes(), weight.size(2)),
-        dtype=weight.dtype,
-        device=weight.device,
-        requires_grad=True,
-    ).contiguous()
-    if hybrid_assign_flag:
-        return RgcnSecondLayerCSRHybridAssign.apply(
-            incsr_row_ptr,
-            incsr_col_idx,
-            incsr_eids,
-            incsr_reltypes,
-            outcsr_row_ptr,
-            outcsr_col_idx,
-            outcsr_eids,
-            outcsr_reltypes,
-            x,
-            weight,
-            norm,
-            ret,
-            num_blocks_on_node_forward,
-            num_blocks_on_node_backward,
-        )
-
-    else:
-        return SeastarRgcnSecondLayerCSR.apply(
-            incsr_row_ptr,
-            incsr_col_idx,
-            incsr_eids,
-            incsr_reltypes,
-            outcsr_row_ptr,
-            outcsr_col_idx,
-            outcsr_eids,
-            outcsr_reltypes,
-            x,
-            weight,
-            norm,
-            ret,
-        )
 
 
 class RGCNNodeMeanAggregationCompactAsOfNodeSeparateCOO(th.autograd.Function):

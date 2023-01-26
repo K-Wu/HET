@@ -48,6 +48,8 @@ def test_load_all_and_print_num_etypes():
 
 
 if __name__ == "__main__":
+    print(locals())
+    print(globals())
     # test_load_dataset("bgs")
     # test_load_dataset("fb15k", dataset_originally_homo_flag=False)
     test_load_all_and_print_num_etypes()

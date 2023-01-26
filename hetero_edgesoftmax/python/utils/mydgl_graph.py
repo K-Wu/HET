@@ -4,6 +4,7 @@
 from ..kernels import K
 
 from .. import utils
+from .. import utils_lite
 import functools
 
 #    convert_integrated_csr_to_separate_csr,
@@ -472,27 +473,6 @@ class MyDGLGraph:
         ] = separate_csr_eids
 
     @torch.no_grad()
-    def _deprecated_get_ntype_dict(self):
-        if (
-            "legacy_metadata_from_dgl" in self.graph_data
-            and "node_dict" in self.graph_data["legacy_metadata_from_dgl"]
-        ):
-            return self.graph_data["legacy_metadata_from_dgl"]["node_dict"]
-        else:
-            return {0: 0}
-
-    @torch.no_grad()
-    def _deprecated_get_etype_dict(self):
-        if (
-            "legacy_metadata_from_dgl" in self.graph_data
-            and "edge_dict" in self.graph_data["legacy_metadata_from_dgl"]
-        ):
-            return self.graph_data["legacy_metadata_from_dgl"]["edge_dict"]
-        else:
-            num_rels = self.get_num_rels()
-            return {i: i for i in range(num_rels)}
-
-    @torch.no_grad()
     def generate_separate_coo_adj_for_each_etype(
         self, transposed_flag, rel_eid_sorted_flag=True
     ):
@@ -590,18 +570,7 @@ class MyDGLGraph:
         ] = separate_coo_eids
 
     @torch.no_grad()
-    def generate_separate_adj_for_each_etype(
-        self, separate_sparse_format, transposed_flag
-    ):
-        if separate_sparse_format == "csr":
-            self.generate_separate_csr_adj_for_each_etype(transposed_flag)
-        elif separate_sparse_format == "coo":
-            self.generate_separate_coo_adj_for_each_etype(transposed_flag)
-        else:
-            raise NotImplementedError()
-
-    @torch.no_grad()
-    def get_separate_node_idx_single_sided_for_each_etype(self):
+    def generate_get_separate_unique_node_idx_single_sided_for_each_etype(self):
         if (
             "separate" not in self.graph_data
             or "coo" not in self.graph_data["separate"]
@@ -609,44 +578,17 @@ class MyDGLGraph:
             raise ValueError(
                 "separate coo graph data not found, please generate it first"
             )
-        result_node_idx_col = []
-        result_rel_ptr_col = [0]
-        result_node_idx_row = []
-        result_rel_ptr_row = [0]
-        for idx_relation in range(self.get_num_rels()):
-            node_idx_for_curr_relation_col = torch.unique(
-                self.graph_data["separate"]["coo"]["original"]["col_idx"][
-                    self.graph_data["separate"]["coo"]["original"]["rel_ptr"][
-                        idx_relation
-                    ] : self.graph_data["separate"]["coo"]["original"]["rel_ptr"][
-                        idx_relation + 1
-                    ]
-                ]
-            )
-            node_idx_for_curr_relation_row = torch.unique(
-                self.graph_data["separate"]["coo"]["original"]["row_idx"][
-                    self.graph_data["separate"]["coo"]["original"]["rel_ptr"][
-                        idx_relation
-                    ] : self.graph_data["separate"]["coo"]["original"]["rel_ptr"][
-                        idx_relation + 1
-                    ]
-                ]
-            )
 
-            result_node_idx_col.append(node_idx_for_curr_relation_col)
-            result_rel_ptr_col.append(
-                (result_rel_ptr_col[-1] + node_idx_for_curr_relation_col.shape[0])
-            )
-
-            result_node_idx_row.append(node_idx_for_curr_relation_row)
-            result_rel_ptr_row.append(
-                (result_rel_ptr_row[-1] + node_idx_for_curr_relation_row.shape[0])
-            )
-
-        result_node_idx_row = torch.concat(result_node_idx_row)
-        result_node_idx_col = torch.concat(result_node_idx_col)
-        result_rel_ptr_col = torch.tensor(result_rel_ptr_col, dtype=torch.int64)
-        result_rel_ptr_row = torch.tensor(result_rel_ptr_row, dtype=torch.int64)
+        (
+            result_node_idx_row,
+            result_rel_ptr_row,
+            result_node_idx_col,
+            result_rel_ptr_col,
+        ) = utils_lite.generate_get_separate_unique_node_idx_single_sided_for_each_etype(
+            self.graph_data["separate"]["coo"]["original"]["rel_ptr"],
+            self.graph_data["separate"]["coo"]["original"]["row_idx"],
+            self.graph_data["separate"]["coo"]["original"]["col_idx"],
+        )
 
         if "unique_node_idx_single_sided" in self.graph_data["separate"]:
             print(
@@ -667,7 +609,7 @@ class MyDGLGraph:
         ] = result_rel_ptr_col
 
     @torch.no_grad()
-    def get_separate_node_idx_for_each_etype(self):
+    def generate_separate_unique_node_idx_for_each_etype(self):
         if (
             "separate" not in self.graph_data
             or "coo" not in self.graph_data["separate"]
@@ -675,41 +617,15 @@ class MyDGLGraph:
             raise ValueError(
                 "separate coo graph data not found, please generate it first"
             )
-        result_node_idx = []
-        result_rel_ptr = [0]
-        for idx_relation in range(self.get_num_rels()):
-            node_idx_for_curr_relation = torch.unique(
-                torch.concat(
-                    [
-                        self.graph_data["separate"]["coo"]["original"]["row_idx"][
-                            self.graph_data["separate"]["coo"]["original"]["rel_ptr"][
-                                idx_relation
-                            ] : self.graph_data["separate"]["coo"]["original"][
-                                "rel_ptr"
-                            ][
-                                idx_relation + 1
-                            ]
-                        ],
-                        self.graph_data["separate"]["coo"]["original"]["col_idx"][
-                            self.graph_data["separate"]["coo"]["original"]["rel_ptr"][
-                                idx_relation
-                            ] : self.graph_data["separate"]["coo"]["original"][
-                                "rel_ptr"
-                            ][
-                                idx_relation + 1
-                            ]
-                        ],
-                    ]
-                )
-            )
 
-            result_node_idx.append(node_idx_for_curr_relation)
-            result_rel_ptr.append(
-                (result_rel_ptr[-1] + node_idx_for_curr_relation.shape[0])
-            )
-
-        result_node_idx = torch.concat(result_node_idx)
-        result_rel_ptr = torch.tensor(result_rel_ptr, dtype=torch.int64)
+        (
+            result_node_idx,
+            result_rel_ptr,
+        ) = utils_lite.generate_separate_unique_node_idx_for_each_etype(
+            self.graph_data["separate"]["coo"]["original"]["rel_ptr"],
+            self.graph_data["separate"]["coo"]["original"]["row_idx"],
+            self.graph_data["separate"]["coo"]["original"]["col_idx"],
+        )
 
         if "unique_node_idx" in self.graph_data["separate"]:
             print("WARNING: unique_node_idx already exists, will be overwritten")

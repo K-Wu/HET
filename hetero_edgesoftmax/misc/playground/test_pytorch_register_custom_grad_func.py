@@ -5,11 +5,40 @@ import torch
 import math
 
 
+class DummyCtx:
+    def __init__(self):
+        self.saved_tensors = []
+        # self._saved_scalars = dict()
+
+    def save_for_backward(self, *args):
+        self.saved_tensors = args
+
+    # support to scalar saving e.g. ctx.a_scalar = 1
+    # def __setattr__(self, name, value):
+    #     if name == "saved_tensors":
+    #         self.__dict__[name] = value
+    #     elif name == "_saved_scalars":
+    #         # should only happen during __init__, otherwise return reserved name error
+    #         if type(value) != dict:
+    #             raise ValueError("Reserved name: _saved_scalars")
+    #         if name in self.__dict__:
+    #             raise ValueError("Reserved name: _saved_scalars")
+    #         self.__dict__[name] = value
+    #     else:
+    #         self.saved_scalars[name] = value
+
+    # def __getattr__(self, name):
+    #     if name == "saved_tensors":
+    #         return self.__dict__[name]
+    #     else:
+    #         return self.saved_scalars[name]
+
+
 class LegendrePolynomial3(torch.autograd.Function):
     """
     We can implement our own custom autograd Functions by subclassing
     torch.autograd.Function and implementing the forward and backward passes
-    which operate on Tensors.
+    which operate on Tensorssave
     """
 
     @staticmethod
@@ -23,6 +52,7 @@ class LegendrePolynomial3(torch.autograd.Function):
         inputs_to_save = torch.zeros_like(inputs)
         inputs_to_save[:] = inputs
         ctx.save_for_backward(inputs_to_save)
+        ctx.backward_cache = (inputs_to_save, inputs_to_save)
         return 0.5 * (5 * inputs**3 - 3 * inputs)
 
     @staticmethod
@@ -88,3 +118,23 @@ for t in range(2000):
 
 print(f"Result: y = {a.item()} + {b.item()} * P3({c.item()} + {d.item()} x)")
 # Result: y = -5.394172664097141e-09 + -2.208526849746704 * P3(1.367587154632588e-09 + 0.2554861009120941 x)
+
+
+def dummy_decorator(**kwargs):
+    def actual_decorator(func):
+        print("dummy_decorator triggered")
+        return func
+
+    return actual_decorator
+
+
+my_forward = dummy_decorator()(LegendrePolynomial3.forward)
+
+print(LegendrePolynomial3.forward(DummyCtx(), torch.tensor(0.5).unsqueeze(0)))
+print(LegendrePolynomial3.forward(DummyCtx(), torch.tensor(0.1).unsqueeze(0)))
+print(my_forward(DummyCtx(), torch.tensor(0.5).unsqueeze(0)))
+print(
+    dummy_decorator()(LegendrePolynomial3.forward)(
+        DummyCtx(), torch.tensor(0.1).unsqueeze(0)
+    )
+)

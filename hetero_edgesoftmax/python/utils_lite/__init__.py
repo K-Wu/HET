@@ -4,3 +4,4 @@ from .utils import *
 from .sparse_matrix_converters import *
 from .graphiler_datasets import *
 from .graphiler_bench import *
+from .mydgl_graph_methods import *
