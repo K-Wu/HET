@@ -2,6 +2,16 @@
 import torch
 
 
+def _convert_csr_to_coo(
+    original_row_ptrs: torch.Tensor,
+    original_col_idxes: torch.Tensor,
+):
+    row_idxes = torch.zeros(original_col_idxes.size(0), dtype=torch.long)
+    for i in range(original_row_ptrs.size(0) - 1):
+        row_idxes[original_row_ptrs[i] : original_row_ptrs[i + 1]] = i
+    return row_idxes
+
+
 def convert_csr_to_coo(
     original_row_ptrs: torch.Tensor,
     original_col_idxes: torch.Tensor,
@@ -9,9 +19,7 @@ def convert_csr_to_coo(
     original_reltypes: torch.Tensor,
 ):
 
-    row_idxes = torch.zeros(original_col_idxes.size(0), dtype=torch.long)
-    for i in range(original_row_ptrs.size(0) - 1):
-        row_idxes[original_row_ptrs[i] : original_row_ptrs[i + 1]] = i
+    row_idxes = _convert_csr_to_coo(original_row_ptrs, original_col_idxes)
     return row_idxes, original_col_idxes, original_eids, original_reltypes
 
 
@@ -125,3 +133,15 @@ def convert_integrated_coo_to_separate_coo(row_idx, col_idx, rel_types, eids):
         rel_ptr[sorted_rel_types[i] + 1] += 1
     rel_ptr = torch.cumsum(rel_ptr, dim=0)
     return rel_ptr, sorted_row_idx, sorted_col_idx, sorted_eids
+
+
+def calc_inverse_mapping_of_eids(separate_coo_eids):
+    inverse_separate_coo_eids = torch.zeros(
+        (separate_coo_eids.shape[0],),
+        dtype=torch.int64,
+        device=separate_coo_eids.device,
+    )
+    inverse_separate_coo_eids[separate_coo_eids] = torch.arange(
+        separate_coo_eids.shape[0], device=separate_coo_eids.device
+    )
+    return inverse_separate_coo_eids

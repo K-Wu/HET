@@ -581,7 +581,6 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
              feat_idx += blockDim.x * gridDim.x) {
           for (Idx eidx = start_off; eidx < end_off; ++eidx) {
             Idx src_id = *(column_indices + eidx);
-            Idx feat_off_src = -1;
             Idx edge_id = gdata.eids[eidx];
             if constexpr (OutputMuAppliedAttnScoreSwitch == 3) {
               gdata.normalized_attn_score[edge_id * num_heads + feat_idx] =
@@ -591,6 +590,35 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
                                                  feat_idx];
             } else {
               DType mu;
+              // fixed the feat_off_src undefined bug
+              // TODO: fix similar bugs in the other kernels
+              Idx feat_off_src = -1;
+
+              if constexpr (CompactAsOfNodeFlag) {
+                if constexpr (RelationalFlag) {
+                  // Idx etype = etypes[eidx];
+                  if constexpr (FullCartesianFlag) {
+                    // NB: This is the case where we have the data stored in
+                    // (relation, node) but do not compress the (relation, node)
+                    // matrix. It could be a case in subgraph where compressing
+                    // along the node dimension may not be worth it.
+                    CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+                        CompactAsOfNodeFlag && RelationalFlag &&
+                            FullCartesianFlag,
+                        "should be non-reachable not implemented");
+                  }
+                  Idx src_vid_relational =
+                      find_relational_compact_as_of_node_index(
+                          etype, src_id, unique_srcs_and_dests_rel_ptr,
+                          unique_srcs_and_dests_node_indices);
+                  feat_off_src = src_vid_relational * num_heads + feat_idx;
+                } else {
+                  feat_off_src = src_id * num_heads + feat_idx;
+                }
+              } else {
+                // per edge
+                feat_off_src = edge_id * num_heads + feat_idx;
+              }
               if constexpr (RelationalFlag) {
                 Idx etype;
                 if constexpr (ETypeRelPtrFlag) {
