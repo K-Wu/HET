@@ -1,6 +1,7 @@
 #pragma once
 #include <cooperative_groups.h>
 #include <cooperative_groups/memcpy_async.h>
+
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 namespace cg = cooperative_groups;
@@ -17,9 +18,12 @@ namespace cg = cooperative_groups;
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/random.h>
 #include <thrust/transform.h>
+#include <thrust/unique.h>
+
 #include <chrono>
 #include <npy.hpp>
 #include <vector>
+
 #include "utils.cu.h"
 
 template <typename Iterator>
