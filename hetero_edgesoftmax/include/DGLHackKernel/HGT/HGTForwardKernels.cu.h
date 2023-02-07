@@ -593,7 +593,8 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
               // fixed the feat_off_src undefined bug
               // TODO: fix similar bugs in the other kernels
               Idx feat_off_src = -1;
-
+              // TODO: etype == -1 only for passing the compilation, needs to define it
+	      Idx etype = -1;
               if constexpr (CompactAsOfNodeFlag) {
                 if constexpr (RelationalFlag) {
                   // Idx etype = etypes[eidx];
