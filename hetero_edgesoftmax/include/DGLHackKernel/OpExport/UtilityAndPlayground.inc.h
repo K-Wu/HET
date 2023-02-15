@@ -119,7 +119,8 @@ static void printTensor(at::Tensor &oneTensor) {
 }
 
 __global__ static void simplified_rectangular_basic_MatMulKernel(
-    float *A, float *B, float *C, int A_width, int A_height, int B_width) {
+    float *A, float *B, float *C, int A_width, int A_height, int B_width,
+    int B_height) {
   int bx = blockIdx.x;
   int by = blockIdx.y;
   int tx = threadIdx.x;
@@ -139,7 +140,7 @@ __global__ static void simplified_rectangular_basic_MatMulKernel(
 
     // Load matrix
     // For As
-    if (Row < C_height && q * SHMEM_BLOCK_SIZE + tx < C_width) {
+    if (Row < A_height && q * SHMEM_BLOCK_SIZE + tx < A_width) {
       // If in range, load the proper element
       As[ty][tx] = A[Row * A_width + q * SHMEM_BLOCK_SIZE + tx];
 
@@ -149,7 +150,7 @@ __global__ static void simplified_rectangular_basic_MatMulKernel(
     }
 
     // For Bs
-    if (q * SHMEM_BLOCK_SIZE + ty < C_height && Col < C_width) {
+    if (q * SHMEM_BLOCK_SIZE + ty < B_height && Col < B_width) {
       // If in range, load the proper element
       Bs[ty][tx] = B[(q * SHMEM_BLOCK_SIZE + ty) * B_width + Col];
 
@@ -237,7 +238,7 @@ static void rectangular_MatMul(at::Tensor &A, at::Tensor &B, at::Tensor &C) {
   // Run Kernel
   simplified_rectangular_basic_MatMulKernel<<<DimGrid, DimBlock>>>(
       Array_A_device, Array_B_device, Array_C_device, A_width, A_height,
-      B_width);
+      B_width, B_height);
 
   // Kernel Error Detection
   err = cudaDeviceSynchronize();
