@@ -5,7 +5,7 @@ import torch
 # TODO: return reverse_idx if needed
 @torch.no_grad()
 def generate_get_separate_unique_node_idx_single_sided_for_each_etype(
-    rel_ptr, row_idx, col_idx, get_inverse_idx=False
+    num_rels, rel_ptr, row_idx, col_idx, get_inverse_idx=False
 ):
     result_node_idx_row_reverse_idx = []
     result_node_idx_col_reverse_idx = []
@@ -13,7 +13,7 @@ def generate_get_separate_unique_node_idx_single_sided_for_each_etype(
     result_rel_ptr_col = [0]
     result_node_idx_row = []
     result_rel_ptr_row = [0]
-    for idx_relation in range(self.get_num_rels()):
+    for idx_relation in range(num_rels):
         node_idx_for_curr_relation_col = torch.unique(
             col_idx[rel_ptr[idx_relation] : rel_ptr[idx_relation + 1]],
             return_inverse=get_inverse_idx,
