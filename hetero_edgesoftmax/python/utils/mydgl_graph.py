@@ -625,6 +625,7 @@ class MyDGLGraph:
             result_rel_ptr,
             result_node_idx_reverse_idx,
         ) = utils_lite.generate_separate_unique_node_idx_for_each_etype(
+            self.get_num_rels(),
             self.graph_data["separate"]["coo"]["original"]["rel_ptr"],
             self.graph_data["separate"]["coo"]["original"]["row_idx"],
             self.graph_data["separate"]["coo"]["original"]["col_idx"],
