@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # adapted from graphiler/python/graphiler/utils/setup.py
 import numpy as np
+import dgl
+import torch
 from ogb.nodeproppred import DglNodePropPredDataset
 from ogb.linkproppred import DglLinkPropPredDataset
 
-import dgl
 from dgl.data.rdf import AIFBDataset, MUTAGDataset, BGSDataset, AMDataset
-import torch
 
 GRAPHILER_DEFAULT_DIM = 64
 # DGL_PATH = str(Path.home()) + "/.dgl/"
