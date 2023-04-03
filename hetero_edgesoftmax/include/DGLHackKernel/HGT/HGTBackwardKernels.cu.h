@@ -179,11 +179,6 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
     const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
     int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  // if constexpr (CompactAsOfNodeFlag) {
-  //   CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(CompactAsOfNodeFlag,
-  //                                     "not implemented yet");
-  // }
-
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   for (Idx src_vid = blockIdx.y * blockDim.y + threadIdx.y; src_vid < num_rows;
        src_vid += gridDim.y * blockDim.y) {
@@ -493,10 +488,6 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
     const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
     int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  if constexpr (CompactAsOfNodeFlag) {
-    CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(CompactAsOfNodeFlag,
-                                      "not implemented yet");
-  }
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -640,10 +631,6 @@ __global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
     const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  if constexpr (CompactAsOfNodeFlag) {
-    CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(CompactAsOfNodeFlag,
-                                      "not implemented yet");
-  }
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {

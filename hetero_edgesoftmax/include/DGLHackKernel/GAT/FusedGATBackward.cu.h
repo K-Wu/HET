@@ -287,10 +287,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
     const Idx* column_indices, const Idx* etypes, int64_t num_rows,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  if constexpr (!CompactAsOfNodeFlag) {
-    CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(CompactAsOfNodeFlag,
-                                       "not implemented yet");
-  }
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
