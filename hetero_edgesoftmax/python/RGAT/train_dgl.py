@@ -177,6 +177,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
     device = f"cuda:0" if th.cuda.is_available() else "cpu"
     if not dgl_model_flag:
         g = g.to(device)
+        g = g.contiguous()
     embed_layer = embed_layer.to(device)
     model = model.to(device)
     labels = labels.to(device)

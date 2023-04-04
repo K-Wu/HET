@@ -492,7 +492,6 @@ def RGCN_main_procedure(args, g, model, feats):
         val_idx = train_idx
 
     # edge type and normalization factor
-    edge_type = g["original"]["rel_types"]
     edge_norm = torch.rand(g["original"]["eids"].size())
     labels = torch.from_numpy(labels).view(-1).long()
 
@@ -500,9 +499,9 @@ def RGCN_main_procedure(args, g, model, feats):
     use_cuda = args.gpu >= 0 and torch.cuda.is_available()
     if use_cuda:
         torch.cuda.set_device(args.gpu)
-        g.cuda()
+        g.cuda().contiguous()
         feats = feats.cuda()
-        edge_type = edge_type.cuda()
+        edge_type = g["original"]["rel_types"]
         edge_norm = edge_norm.cuda()
         labels = labels.cuda()
 

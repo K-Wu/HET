@@ -136,6 +136,10 @@ class MyDGLGraph:
         self.apply_to_each_tensor(lambda x: x.cpu())
         return self
 
+    def contiguous(self):
+        self.apply_to_each_tensor(lambda x: x.contiguous())
+        return self
+
     def __setitem__(self, key, value):
         self.graph_data[key] = value
 
