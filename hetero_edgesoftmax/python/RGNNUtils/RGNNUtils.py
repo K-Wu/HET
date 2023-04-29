@@ -226,21 +226,27 @@ def HET_RGNN_train_full_graph(
     #              f'Train: {100 * train_acc:.2f}%, '
     #              f'Valid: {100 * valid_acc:.2f}%, '
     #              f'Test: {100 * test_acc:.2f}%')
-    print(
-        "Mean forward time: {:4f}".format(
-            np.mean(forward_time[len(forward_time) // 4 :])
+
+    if len(forward_time[len(forward_time) // 4 :]) == 0:
+        print(
+            "insufficient run to report mean time. skipping. (in the json it might show as nan)"
         )
-    )
-    print(
-        "Mean backward time: {:4f}".format(
-            np.mean(backward_time[len(backward_time) // 4 :])
+    else:
+        print(
+            "Mean forward time: {:4f}".format(
+                np.mean(forward_time[len(forward_time) // 4 :])
+            )
         )
-    )
-    print(
-        "Mean training time: {:4f}".format(
-            np.mean(training_time[len(training_time) // 4 :])
+        print(
+            "Mean backward time: {:4f}".format(
+                np.mean(backward_time[len(backward_time) // 4 :])
+            )
         )
-    )
+        print(
+            "Mean training time: {:4f}".format(
+                np.mean(training_time[len(training_time) // 4 :])
+            )
+        )
     print(
         "max memory usage: {:4f}".format(
             (torch.cuda.max_memory_allocated()) / 1024 / 1024

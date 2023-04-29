@@ -595,21 +595,26 @@ def RGCN_main_procedure(args, g, model, feats):
     )
     print()
 
-    print(
-        "Mean forward time: {:4f} ms".format(
-            np.mean(forward_time[len(forward_time) // 4 :]) * 1000
+    if len(forward_time[len(forward_time) // 4 :]) == 0:
+        print(
+            "insufficient run to report mean time. skipping. (in the json it might show as nan)"
         )
-    )
-    print(
-        "Mean backward time: {:4f} ms".format(
-            np.mean(backward_time[len(backward_time) // 4 :]) * 1000
+    else:
+        print(
+            "Mean forward time: {:4f} ms".format(
+                np.mean(forward_time[len(forward_time) // 4 :]) * 1000
+            )
         )
-    )
-    print(
-        "Mean training time: {:4f} ms".format(
-            np.mean(training_time[len(training_time) // 4 :]) * 1000
+        print(
+            "Mean backward time: {:4f} ms".format(
+                np.mean(backward_time[len(backward_time) // 4 :]) * 1000
+            )
         )
-    )
+        print(
+            "Mean training time: {:4f} ms".format(
+                np.mean(training_time[len(training_time) // 4 :]) * 1000
+            )
+        )
 
     Used_memory = torch.cuda.max_memory_allocated(0) / (1024**3)
     avg_run_time = np.mean(forward_time[len(forward_time) // 4 :]) + np.mean(
