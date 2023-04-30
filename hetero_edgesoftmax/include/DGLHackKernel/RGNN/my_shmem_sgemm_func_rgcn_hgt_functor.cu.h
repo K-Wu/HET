@@ -3,8 +3,9 @@
 // #include "cuda.h"
 #include "utils.cu.h"
 
-template <bool DOUBLE_BUFFER_FLAG, bool COARSEN_FACTOR_2_FLAG_X,
-          bool COARSEN_FACTOR_2_FLAG_Y, int SHMEM_BLOCK_SIZE, typename Idx,
+template <bool DOUBLE_BUFFER_FLAG, int THREAD_BLOCK_DIM_X,
+          int THREAD_BLOCK_DIM_Y, int SHMEM_BLOCK_SIZE_X,
+          int SHMEM_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_K, typename Idx,
           typename IdxPtr, bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
           int DoInnerProductSwitch,
           bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag>
@@ -22,16 +23,17 @@ class _simplified_basic_MatMulKernel {
   }
 };
 
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr,
+template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr,
           bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
           int DoInnerProductSwitch,
           bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag>
 class _simplified_basic_MatMulKernel<
-    true, COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE,
-    Idx, IdxPtr, HGT_INSTEAD_OF_RGCN_FLAG, OuterProductFlag,
-    DoInnerProductSwitch, InnerProductGatherListNodeInsteadOfEdge,
-    NoEdgeNormFlag> {
+    true, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, SHMEM_BLOCK_SIZE_X,
+    SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr,
+    HGT_INSTEAD_OF_RGCN_FLAG, OuterProductFlag, DoInnerProductSwitch,
+    InnerProductGatherListNodeInsteadOfEdge, NoEdgeNormFlag> {
  public:
   // vanilla tiled shmem gemm code from
   // http://www.shodor.org/media/content//petascale/materials/UPModules/matrixMultiplication/moduleDocument.pdf
@@ -73,7 +75,7 @@ class _simplified_basic_MatMulKernel<
     //   assert(inner_product == nullptr);
     // }
     CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-        COARSEN_FACTOR_2_FLAG_X && !COARSEN_FACTOR_2_FLAG_X,
+        HGT_INSTEAD_OF_RGCN_FLAG && !HGT_INSTEAD_OF_RGCN_FLAG,
         "double buffer version is obsolete and should be updated to align with "
         "the single buffer version");
   }

@@ -87,10 +87,7 @@ class _basic_MatMulKernel<
       // float* Csub = &C[blockRow * BLOCK_SIZE * num_B_cols + blockFeat *
       // BLOCK_SIZE]; Each thread computes one element of Csub by accumulating
       // results into Cvalue
-      float Cvalue = 0.0f;
-      float Cvalue_1 = 0.0f;
-      float Cvalue_2 = 0.0f;
-      float Cvalue_3 = 0.0f;
+      float Cvalue[COARSEN_DIVISOR_FACTOR] = {};
       // Thread row and column within Csub
       int thIdxRow_initial = threadIdx.y;
       int thIdxFeat_initial = threadIdx.x;
@@ -261,19 +258,14 @@ class _basic_MatMulKernel<
         __syncthreads();
         // Multiply Asub and Bsub together
         for (int e = 0; e < SHMEM_BLOCK_SIZE; ++e) {
-          Cvalue += As[thIdxRow_initial][e] * Bs[e][thIdxFeat_initial];
-          if constexpr (COARSEN_FACTOR_2_FLAG_X || COARSEN_FACTOR_2_FLAG_Y) {
-            Cvalue_1 += As[thIdxRow_initial +
-                           1 * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR)][e] *
-                        Bs[e][thIdxFeat_initial];
-          }
-          if constexpr (COARSEN_FACTOR_2_FLAG_X && COARSEN_FACTOR_2_FLAG_Y) {
-            Cvalue_2 += As[thIdxRow_initial +
-                           2 * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR)][e] *
-                        Bs[e][thIdxFeat_initial];
-            Cvalue_3 += As[thIdxRow_initial +
-                           3 * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR)][e] *
-                        Bs[e][thIdxFeat_initial];
+          for (int idx_coarsen_factor = 0;
+               idx_coarsen_factor < COARSEN_DIVISOR_FACTOR;
+               idx_coarsen_factor++) {
+            Cvalue[idx_coarsen_factor] +=
+                As[thIdxRow_initial +
+                   idx_coarsen_factor *
+                       (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR)][e] *
+                Bs[e][thIdxFeat_initial];
           }
         }
         // Synchronize to make sure that the preceding
@@ -290,15 +282,6 @@ class _basic_MatMulKernel<
             thIdxRow_initial +
             storeLoopIdx * (SHMEM_BLOCK_SIZE / COARSEN_DIVISOR_FACTOR);
         int thIdxFeat = thIdxFeat_initial;
-        if constexpr (COARSEN_FACTOR_2_FLAG_X || COARSEN_FACTOR_2_FLAG_Y) {
-          if (storeLoopIdx == 1) {
-            Cvalue = Cvalue_1;
-          } else if (storeLoopIdx == 2) {
-            Cvalue = Cvalue_2;
-          } else if (storeLoopIdx == 3) {
-            Cvalue = Cvalue_3;
-          }
-        }
         if constexpr (OuterProductFlag) {
           // C is weight instead of feature.
           bool WriteCInRangeFlag =
@@ -317,7 +300,7 @@ class _basic_MatMulKernel<
                        num_A_cols /*A is transposed in the fly*/ * num_B_cols +
                    (blockRow * SHMEM_BLOCK_SIZE + thIdxRow) * num_B_cols +
                    blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat],
-                Cvalue);
+                Cvalue[storeLoopIdx]);
           }
         } else {  //  !OuterProductFlag
 
@@ -370,7 +353,7 @@ class _basic_MatMulKernel<
                             C_num_head_one_flag ? 0 : idx_head,
                             blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat,
                             C_num_head_one_flag ? 1 : num_heads, num_B_cols),
-                        Cvalue);
+                        Cvalue[storeLoopIdx]);
             } else {  // !AtomicUpdateFlag
               GetRowMajorElement<Idx, IdxPtr, ScatterCFlag,
                                  AdvancedScatterCFlag>(
@@ -379,7 +362,8 @@ class _basic_MatMulKernel<
                   thIdxRow + blockRow * SHMEM_BLOCK_SIZE + blockRowJobEntryBeg,
                   C_num_head_one_flag ? 0 : idx_head,
                   blockFeat * SHMEM_BLOCK_SIZE + thIdxFeat,
-                  C_num_head_one_flag ? 1 : num_heads, num_B_cols) = Cvalue;
+                  C_num_head_one_flag ? 1 : num_heads, num_B_cols) =
+                  Cvalue[storeLoopIdx];
             }
           }
         }
