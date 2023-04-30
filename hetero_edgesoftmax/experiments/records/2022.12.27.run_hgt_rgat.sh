@@ -1,0 +1,2 @@
+python -m python.RGAT.train -d all --num_layers 1  --full_graph_training --num_classes 64 --n_infeat 64 --compact_as_of_node_flag >misc/artifacts/RGAT_ours_compact_as_of_node.txt 2>&1
+python -m python.HGT.train -d all --num_layers 1  --full_graph_training --num_classes 64 --n_infeat 64 --compact_as_of_node_flag >misc/artifacts/HGT_ours_compact_as_of_node.txt 2>&1
