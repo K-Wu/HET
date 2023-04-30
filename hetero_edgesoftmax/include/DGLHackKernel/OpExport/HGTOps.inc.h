@@ -7,6 +7,7 @@
 #include "DGLHackKernel/HGT/HGTBackwardKernels.cu.h"
 //#include "DGLHackKernel/HGT/HGTForwardExperimental.cu.h"
 #include "DGLHackKernel/HGT/HGTForwardKernels.cu.h"
+#include "ThreadingGridsBlocksSchedules.h"
 //#include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.h"
 // #include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
 //#include "EdgeSoftmax_1/EdgeSoftmaxCSR.h"
@@ -79,17 +80,20 @@ void _full_graph_edge_softmax_ops(
   // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
   // head -> blockIdx.x * blockDim.x + threadIdx.x;
   // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
-
-  int nthrs_x = 1;
-  int nthrs_y = 32;
-  int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
   int64_t incsr_or_sep_coo_num_rows_or_edges =
       incsr_or_sep_coo_rowptr_or_indices.numel() - 1;
-  int nblks_y =
-      std::min(ceil_div(incsr_or_sep_coo_num_rows_or_edges, (int64_t)nthrs_y),
-               MAX_NBLKS);
-  const dim3 nblks(nblks_x, nblks_y);
-  const dim3 nthrs(nthrs_x, nthrs_y);
+  auto [nblks, nthrs] =
+      get_type1_schedule(gdata.num_heads, incsr_or_sep_coo_num_rows_or_edges);
+
+  // int nthrs_x = 1;
+  // int nthrs_y = 32;
+  // int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
+  // int nblks_y =
+  //     std::min(ceil_div(incsr_or_sep_coo_num_rows_or_edges,
+  //     (int64_t)nthrs_y),
+  //              MAX_NBLKS);
+  // const dim3 nblks(nblks_x, nblks_y);
+  // const dim3 nthrs(nthrs_x, nthrs_y);
 
   if constexpr (EdgeParallelFlag) {
     // use separate coo instead of in csr
@@ -191,16 +195,19 @@ void _full_graph_message_mean_aggregation(
   // threadIdx.x and threadIdx.y and only this pair is exchanged compared with
   // original seastar schedule to allow reduction within the warp, i.e., along
   // x-axis
-  int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-  int nthrs_x = SeastarFindNumThreads(
-      gdata.message_out_dim,
-      MAX_NTHRS /
-          nthrs_y);  // NB: message_out_dim is the total dim, and the number of
-                     // elements for each head is message_out_dim//num_heads
-  int nblks_x = 1;
-  int nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
-  const dim3 nthrs(nthrs_x, nthrs_y);
-  const dim3 nblks(nblks_x, nblks_y);
+  auto [nblks, nthrs] = get_type2_schedule(
+      gdata.num_heads, gdata.message_out_dim, incsr_num_rows);
+  // int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+  // int nthrs_x = SeastarFindNumThreads(
+  //     gdata.message_out_dim / gdata.num_heads,
+  //     MAX_NTHRS /
+  //         nthrs_y);  // NB: message_out_dim is the total dim, and the number
+  //         of
+  //                    // elements for each head is message_out_dim//num_heads
+  // int nblks_x = 1;
+  // int nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
+  // const dim3 nthrs(nthrs_x, nthrs_y);
+  // const dim3 nblks(nblks_x, nblks_y);
   // printf("nblks_x=%d, nblks_y=%d, nthrs_x=%d, nthrs_y=%d\n", nblks_x,
   // nblks_y,
   //       nthrs_x, nthrs_y);
@@ -405,13 +412,16 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
   // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
   // head -> blockIdx.x * blockDim.x + threadIdx.x;
   // node -> blockIdx.y * blockDim.y + threadIdx.y;
-  int nthrs_y = 32;
-  int nthrs_x = 1;
-  int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
-  int nblks_y = std::min(ceil_div(incsr_row_ptr.numel() - 1, (int64_t)nthrs_y),
-                         MAX_NBLKS);
-  const dim3 nthrs(nthrs_x, nthrs_y);
-  const dim3 nblks(nblks_x, nblks_y);
+  auto [nblks, nthrs] =
+      get_type1_schedule(gdata.num_heads, incsr_row_ptr.numel() - 1);
+  // int nthrs_y = 32;
+  // int nthrs_x = 1;
+  // int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
+  // int nblks_y = std::min(ceil_div(incsr_row_ptr.numel() - 1,
+  // (int64_t)nthrs_y),
+  //                        MAX_NBLKS);
+  // const dim3 nthrs(nthrs_x, nthrs_y);
+  // const dim3 nblks(nblks_x, nblks_y);
   HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel<Idx, DType, true,
                                                             false>
       <<<nblks, nthrs, 0, stream>>>(
@@ -494,17 +504,19 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-  int nthrs_y = SeastarFindNumThreads(gdata_attn.num_heads, 64);
-  int nthrs_x = SeastarFindNumThreads(
-      gdata_attn.message_src_xlen,
-      MAX_NTHRS / nthrs_y);  // NB: message_src_xlen is the total dimension
-                             // whereas each head gets message_src_xlen //
-                             // num_heads number of elements
   int64_t outcsr_num_rows = outcsr_rowptr.numel() - 1;
-  int nblks_x = 1;
-  int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
-  const dim3 nthrs(nthrs_x, nthrs_y);
-  const dim3 nblks(nblks_x, nblks_y);
+  auto [nblks, nthrs] = get_type2_schedule(
+      gdata_attn.num_heads, gdata_attn.message_src_xlen, outcsr_num_rows);
+  // int nthrs_y = SeastarFindNumThreads(gdata_attn.num_heads, 64);
+  // int nthrs_x = SeastarFindNumThreads(
+  //     gdata_attn.message_src_xlen,
+  //     MAX_NTHRS / nthrs_y);  // NB: message_src_xlen is the total dimension
+  //                            // whereas each head gets message_src_xlen //
+  //                            // num_heads number of elements
+  // int nblks_x = 1;
+  // int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
+  // const dim3 nthrs(nthrs_x, nthrs_y);
+  // const dim3 nblks(nblks_x, nblks_y);
 
   // gdata_msg.grad_message_src = grad_message.data_ptr<DType>();
   HET__hgtAttnAndMessageSrcFusedBckKernel<Idx, DType, false, true, false,
@@ -577,17 +589,22 @@ void _full_graph_message_mean_aggregation(
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-  int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-  int nthrs_x = SeastarFindNumThreads(
-      gdata.message_src_xlen,
-      MAX_NTHRS / nthrs_y);  // NB: message_src_xlen is the total dimension
-                             // whereas each head gets message_src_xlen //
-                             // num_heads number of elements
   int64_t outcsr_num_rows = outcsr_rowptr.numel() - 1;
-  int nblks_x = 1;
-  int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
-  const dim3 nthrs(nthrs_x, nthrs_y);
-  const dim3 nblks(nblks_x, nblks_y);
+
+  // TODO: KWU: FIXME: should be feat_dim_per_head
+  auto [nblks, nthrs] = get_type2_schedule(
+      gdata.num_heads, gdata.message_src_xlen, outcsr_num_rows);
+  // int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+  // int nthrs_x = SeastarFindNumThreads(
+  //     gdata.message_src_xlen,
+  //     MAX_NTHRS / nthrs_y);  // NB: message_src_xlen is the total dimension
+  //                            // whereas each head gets message_src_xlen //
+  //                            // num_heads number of elements
+
+  // int nblks_x = 1;
+  // int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
+  // const dim3 nthrs(nthrs_x, nthrs_y);
+  // const dim3 nblks(nblks_x, nblks_y);
 
   HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel<
       Idx, DType, false, true, false, UseMuAppliedAttnScoreSwitch>
@@ -665,17 +682,19 @@ void _full_graph_edge_softmax_ops(
   // threadIdx.x and threadIdx.y and only this pair is exchanged compared with
   // original seastar schedule to allow reduction within the warp, i.e., along
   // x-axis
-  int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-  int nthrs_x = SeastarFindNumThreads(
-      gdata.message_src_xlen,
-      MAX_NTHRS / nthrs_y);  // NB: message_src_xlen is the total dimension
-                             // whereas each head gets message_src_xlen //
-                             // num_heads number of elements
   int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
-  int nblks_x = 1;
-  int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
-  const dim3 nthrs(nthrs_x, nthrs_y);
-  const dim3 nblks(nblks_x, nblks_y);
+  auto [nblks, nthrs] = get_type2_schedule(
+      gdata.num_heads, gdata.message_src_xlen, outcsr_num_rows);
+  // int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+  // int nthrs_x = SeastarFindNumThreads(
+  //     gdata.message_src_xlen,
+  //     MAX_NTHRS / nthrs_y);  // NB: message_src_xlen is the total dimension
+  //                            // whereas each head gets message_src_xlen //
+  //                            // num_heads number of elements
+  // int nblks_x = 1;
+  // int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
+  // const dim3 nthrs(nthrs_x, nthrs_y);
+  // const dim3 nblks(nblks_x, nblks_y);
   HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel<
       Idx, DType, false, true, false, OutputMuAppliedAttnScoreSwitch>
       <<<nblks, nthrs, 0, stream>>>(

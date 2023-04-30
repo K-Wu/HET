@@ -9,6 +9,7 @@
 #include "DGLHackKernel/RGCN/RGCNKernelsEdgeParallel.cu.h"
 #include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
+#include "ThreadingGridsBlocksSchedules.h"
 
 // TODO: create dummy tensor instead whenever unused field in torch export
 // functions
@@ -46,13 +47,16 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode_SeparateCOO(
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-  int nthrs_y = SeastarFindNumThreads(/*num_heads*/ 1, 64);
-  int nthrs_x = SeastarFindNumThreads(gdata.feat_src_xlen / /*num_heads*/ 1,
-                                      MAX_NTHRS / nthrs_y);
-  int nblks_x = 1;
-  int nblks_y = std::min(num_edges, MAX_NBLKS);
-  const dim3 nthrs2(nthrs_x, nthrs_y);
-  const dim3 nblks2(nblks_x, nblks_y);
+  auto [nblks2, nthrs2] =
+      get_type2_schedule(num_edges, /*num_heads*/ 1, num_edges);
+  //   int nthrs_y = SeastarFindNumThreads(/*num_heads*/ 1, 64);
+  //   int nthrs_x = SeastarFindNumThreads(gdata.feat_src_xlen / /*num_heads*/
+  //   1,
+  //                                       MAX_NTHRS / nthrs_y);
+  //   int nblks_x = 1;
+  //   int nblks_y = std::min(num_edges, MAX_NBLKS);
+  //   const dim3 nthrs2(nthrs_x, nthrs_y);
+  //   const dim3 nblks2(nblks_x, nblks_y);
   HET_rgcnNodeMeanAggregation_edge_parallel<Idx, DType, true>
       <<<nblks2, nthrs2, 0, stream>>>(
           gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
@@ -320,13 +324,14 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode_SeparateCOO(
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-  int nthrs_y = SeastarFindNumThreads(1 /*gdata.num_heads*/, 64);
-  int nthrs_x = SeastarFindNumThreads(
-      gdata.feat_src_xlen / 1 /*gdata.num_heads*/, MAX_NTHRS / nthrs_y);
-  int nblks_x = 1;
-  int nblks_y = std::min(num_edges, MAX_NBLKS);
-  const dim3 nthrs(nthrs_x, nthrs_y);
-  const dim3 nblks(nblks_x, nblks_y);
+  auto [nblks, nthrs] = get_type2_schedule(1, gdata.feat_src_xlen, num_edges);
+  //   int nthrs_y = SeastarFindNumThreads(1 /*gdata.num_heads*/, 64);
+  //   int nthrs_x = SeastarFindNumThreads(
+  //       gdata.feat_src_xlen / 1 /*gdata.num_heads*/, MAX_NTHRS / nthrs_y);
+  //   int nblks_x = 1;
+  //   int nblks_y = std::min(num_edges, MAX_NBLKS);
+  //   const dim3 nthrs(nthrs_x, nthrs_y);
+  //   const dim3 nblks(nblks_x, nblks_y);
 
   HET_rgcnBackwardNodeMeanAggregation_edge_parallel<Idx, DType, true>
       <<<nblks, nthrs, 0, stream>>>(

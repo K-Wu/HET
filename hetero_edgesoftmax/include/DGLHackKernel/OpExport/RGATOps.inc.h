@@ -9,6 +9,7 @@
 #include "DGLHackKernel/RGAT/RGATBackwardKernelsSeparateCOO.cu.h"
 //#include "DGLHackKernel/RGAT/RGATBackwardKernelsSeparateCSR.cu.h"
 #include "DGLHackKernel/RGAT/RGATKernelsSeparateCOO.cu.h"
+#include "ThreadingGridsBlocksSchedules.h"
 //#include "DGLHackKernel/RGAT/RGATKernelsSeparateCSR.cu.h"
 //#include "GATOps.inc.h"
 
@@ -68,14 +69,15 @@ void _RelationalFusedGATKernel(
     // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
     // head -> blockIdx.x * blockDim.x + threadIdx.x;
     // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
-    int nthrs_x = 1;
-    int nthrs_y = 32;
-    int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
     int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
-    int nblks_y =
-        std::min(ceil_div(incsr_num_rows, (int64_t)nthrs_y), MAX_NBLKS);
-    const dim3 nblks(nblks_x, nblks_y);
-    const dim3 nthrs(nthrs_x, nthrs_y);
+    auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, incsr_num_rows);
+    // int nthrs_x = 1;
+    // int nthrs_y = 32;
+    // int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
+    // int nblks_y =
+    //     std::min(ceil_div(incsr_num_rows, (int64_t)nthrs_y), MAX_NBLKS);
+    // const dim3 nblks(nblks_x, nblks_y);
+    // const dim3 nthrs(nthrs_x, nthrs_y);
 
     HET_gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, true>
         <<<nblks, nthrs, 0, stream>>>(
@@ -92,13 +94,15 @@ void _RelationalFusedGATKernel(
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-    nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-    nthrs_x = SeastarFindNumThreads(feat_src_xlen / gdata.num_heads,
-                                    MAX_NTHRS / nthrs_y);
-    nblks_x = 1;
-    nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
-    const dim3 nthrs2(nthrs_x, nthrs_y);
-    const dim3 nblks2(nblks_x, nblks_y);
+    auto [nblks2, nthrs2] =
+        get_type2_schedule(gdata.num_heads, feat_src_xlen, incsr_num_rows);
+    // nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+    // nthrs_x = SeastarFindNumThreads(feat_src_xlen / gdata.num_heads,
+    //                                 MAX_NTHRS / nthrs_y);
+    // nblks_x = 1;
+    // nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
+    // const dim3 nthrs2(nthrs_x, nthrs_y);
+    // const dim3 nblks2(nblks_x, nblks_y);
 
     HET_gatSumProdZipDivKernel<Idx, DType, CompactAsOfNodeFlag, true>
         <<<nblks2, nthrs2, 0, stream>>>(
@@ -121,12 +125,13 @@ void _RelationalFusedGATKernel(
     // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
     // head -> blockIdx.x * blockDim.x + threadIdx.x;
     // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
-    int nthrs_x = 1;
-    int nthrs_y = 32;
-    int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
-    int nblks_y = std::min(ceil_div(num_edges, (int64_t)nthrs_y), MAX_NBLKS);
-    const dim3 nblks(nblks_x, nblks_y);
-    const dim3 nthrs(nthrs_x, nthrs_y);
+    auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, num_edges);
+    // int nthrs_x = 1;
+    // int nthrs_y = 32;
+    // int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
+    // int nblks_y = std::min(ceil_div(num_edges, (int64_t)nthrs_y), MAX_NBLKS);
+    // const dim3 nblks(nblks_x, nblks_y);
+    // const dim3 nthrs(nthrs_x, nthrs_y);
 
     HET_gatExpLeakyReluSumKernel_relational_separate_coo<
         Idx, DType, CompactAsOfNodeFlag, DualUniqueNodeList>
@@ -152,13 +157,15 @@ void _RelationalFusedGATKernel(
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-    nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-    nthrs_x = SeastarFindNumThreads(feat_src_xlen / gdata.num_heads,
-                                    MAX_NTHRS / nthrs_y);
-    nblks_x = 1;
-    nblks_y = std::min(num_edges, MAX_NBLKS);
-    const dim3 nthrs2(nthrs_x, nthrs_y);
-    const dim3 nblks2(nblks_x, nblks_y);
+    auto [nblks2, nthrs2] =
+        get_type2_schedule(gdata.num_heads, feat_src_xlen, num_edges);
+    // nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+    // nthrs_x = SeastarFindNumThreads(feat_src_xlen / gdata.num_heads,
+    //                                 MAX_NTHRS / nthrs_y);
+    // nblks_x = 1;
+    // nblks_y = std::min(num_edges, MAX_NBLKS);
+    // const dim3 nthrs2(nthrs_x, nthrs_y);
+    // const dim3 nblks2(nblks_x, nblks_y);
     HET_gatSumProdZipDivKernel_relational_separate_coo<
         Idx, DType, CompactAsOfNodeFlag, DualUniqueNodeList>
         <<<nblks2, nthrs2, 0, stream>>>(
@@ -312,14 +319,16 @@ void _RelationalFusedGATKernel(
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-    int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-    int nthrs_x = SeastarFindNumThreads(feat_src_xlen / gdata.num_heads,
-                                        MAX_NTHRS / nthrs_y);
-    int nblks_x = 1;
     int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
-    int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
-    const dim3 nthrs(nthrs_x, nthrs_y);
-    const dim3 nblks(nblks_x, nblks_y);
+    auto [nblks, nthrs] =
+        get_type2_schedule(gdata.num_heads, feat_src_xlen, outcsr_num_rows);
+    // int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+    // int nthrs_x = SeastarFindNumThreads(feat_src_xlen / gdata.num_heads,
+    //                                     MAX_NTHRS / nthrs_y);
+    // int nblks_x = 1;
+    // int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
+    // const dim3 nthrs(nthrs_x, nthrs_y);
+    // const dim3 nblks(nblks_x, nblks_y);
     if constexpr (!FLAG_KERNEL_FUSED) {
       HET_fusedGatBackwardGradFeatSrc<Idx, DType, CompactAsOfNodeFlag, true>
           <<<nblks, nthrs, 0, stream>>>(
@@ -366,14 +375,16 @@ void _RelationalFusedGATKernel(
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-    int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-    int nthrs_x = SeastarFindNumThreads(feat_src_xlen / gdata.num_heads,
-                                        MAX_NTHRS / nthrs_y);
-    int nblks_x = 1;
-    int nblks_y = std::min(num_edges, MAX_NBLKS);
-    int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
-    const dim3 nthrs(nthrs_x, nthrs_y);
-    const dim3 nblks(nblks_x, nblks_y);
+    auto [nblks, nthrs] =
+        get_type2_schedule(gdata.num_heads, feat_src_xlen, num_edges);
+    // int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+    // int nthrs_x = SeastarFindNumThreads(feat_src_xlen / gdata.num_heads,
+    //                                     MAX_NTHRS / nthrs_y);
+    // int nblks_x = 1;
+    // int nblks_y = std::min(num_edges, MAX_NBLKS);
+    // int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
+    // const dim3 nthrs(nthrs_x, nthrs_y);
+    // const dim3 nblks(nblks_x, nblks_y);
     if constexpr (!FLAG_KERNEL_FUSED) {
       HET_fusedGatBackwardGradFeatSrc_relational_separate_coo<
           Idx, DType, CompactAsOfNodeFlag, DualUniqueNodeList>

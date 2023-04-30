@@ -5,6 +5,7 @@
 #include <torch/extension.h>
 #include <torch/library.h>
 #include "DGLHackKernel/DGLHackUtils.h"
+#include "ThreadingGridsBlocksSchedules.h"
 namespace HET {
 namespace TorchExport {
 namespace RGCN {
@@ -65,14 +66,14 @@ void _FusedKernelImpl(at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
   // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
   // head -> blockIdx.x * blockDim.x + threadIdx.x;
   // node -> blockIdx.y * blockDim.y + threadIdx.y;
-  int nthrs_x = 1;
-  int nthrs_y = 32;
-  int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
   int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
-  int nblks_y = std::min(ceil_div(incsr_num_rows, (int64_t)nthrs_y), MAX_NBLKS);
-
-  const dim3 nblks(nblks_x, nblks_y);
-  const dim3 nthrs(nthrs_x, nthrs_y);
+  auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, incsr_num_rows);
+  // int nthrs_x = 1;
+  // int nthrs_y = 32;
+  // int nblks_x = (gdata.num_heads + nthrs_x - 1) / (nthrs_x);
+  // int nblks_y = std::min(ceil_div(incsr_num_rows, (int64_t)nthrs_y),
+  // MAX_NBLKS); const dim3 nblks(nblks_x, nblks_y); const dim3 nthrs(nthrs_x,
+  // nthrs_y);
 
   // LOG(INFO) << "kernel1 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:"
   // <<nthrs_x << "*" << nthrs_y; aten::CSRMatrix incsr =
@@ -100,13 +101,15 @@ void _FusedKernelImpl(at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
   //
-  nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-  nthrs_x = SeastarFindNumThreads(feat_src_xlen / gdata.num_heads,
-                                  MAX_NTHRS / nthrs_y);
-  nblks_x = 1;
-  nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
-  const dim3 nthrs2(nthrs_x, nthrs_y);
-  const dim3 nblks2(nblks_x, nblks_y);
+  auto [nblks2, nthrs2] =
+      get_type2_schedule(gdata.num_heads, feat_src_xlen, incsr_num_rows);
+  // nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+  // nthrs_x = SeastarFindNumThreads(feat_src_xlen / gdata.num_heads,
+  //                                 MAX_NTHRS / nthrs_y);
+  // nblks_x = 1;
+  // nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
+  // const dim3 nthrs2(nthrs_x, nthrs_y);
+  // const dim3 nblks2(nblks_x, nblks_y);
   // LOG(INFO) << "kernel2 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:"
   // <<nthrs_x << "*" << nthrs_y;
   HET_gatSumProdZipDivKernel<Idx, DType, true, false>
@@ -200,14 +203,17 @@ void _FusedKernelImpl(
   // head -> threadIdx.y
   // edge|node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-  int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-  int nthrs_x = SeastarFindNumThreads(feat_src_xlen / gdata.num_heads,
-                                      MAX_NTHRS / nthrs_y);
   int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
-  int nblks_x = 1;
-  int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
-  const dim3 nthrs(nthrs_x, nthrs_y);
-  const dim3 nblks(nblks_x, nblks_y);
+  auto [nblks, nthrs] =
+      get_type2_schedule(gdata.num_heads, feat_src_xlen, outcsr_num_rows);
+  // int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+  // int nthrs_x = SeastarFindNumThreads(feat_src_xlen / gdata.num_heads,
+  //                                     MAX_NTHRS / nthrs_y);
+  // int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
+  // int nblks_x = 1;
+  // int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
+  // const dim3 nthrs(nthrs_x, nthrs_y);
+  // const dim3 nblks(nblks_x, nblks_y);
 
   // LOG(INFO) << "GradFeatSrc kernel blk dim:" << nblks_x << "*" <<nblks_y << "
   // thr dim:" <<nthrs_x << "*" << nthrs_y;

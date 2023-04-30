@@ -8,6 +8,7 @@
 #include "DGLHackKernel/RGNN/inner_product_edge_parallel.cu.h"
 #include "DGLHackKernel/RGNN/my_shmem_sgemm_func.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
+#include "ThreadingGridsBlocksSchedules.h"
 
 namespace HET {
 namespace TorchExport {
@@ -324,14 +325,17 @@ void inner_product_various_left_and_node_right(
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
 
-    int64_t nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-    int64_t nthrs_x = SeastarFindNumThreads(
-        gdata.feat_src_xlen / gdata.num_heads, MAX_NTHRS / nthrs_y);
-    int64_t nblks_x = 1;
     int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
-    int64_t nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
-    const dim3 nthrs2(nthrs_x, nthrs_y);
-    const dim3 nblks2(nblks_x, nblks_y);
+    auto [nblks2, nthrs2] = get_type2_schedule(
+        gdata.num_heads, gdata.feat_src_xlen, incsr_num_rows);
+
+    // int64_t nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+    // int64_t nthrs_x = SeastarFindNumThreads(
+    //     gdata.feat_src_xlen / gdata.num_heads, MAX_NTHRS / nthrs_y);
+    // int64_t nblks_x = 1;
+    // int64_t nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
+    // const dim3 nthrs2(nthrs_x, nthrs_y);
+    // const dim3 nblks2(nblks_x, nblks_y);
 
     Idx* incsr_row_ptr_data_ptr =
         incsr_row_ptr.numel() > 0 ? incsr_row_ptr.data_ptr<Idx>() : nullptr;
@@ -370,16 +374,18 @@ void inner_product_various_left_and_node_right(
     // threadIdx.x and threadIdx.y and only this pair is exchanged compared with
     // original seastar schedule to allow reduction within the warp, i.e., along
     // x-axis
-    int nthrs_y_inner_product = SeastarFindNumThreads(gdata.num_heads, 64);
-    int nthrs_x_inner_product =
-        SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
-                              MAX_NTHRS / nthrs_y_inner_product);
-    int nblks_inner_product_x = 1;
-    int nblks_inner_product_y = std::min(num_edges, MAX_NBLKS);
-    const dim3 nthrs_inner_product(nthrs_x_inner_product,
-                                   nthrs_y_inner_product);
-    const dim3 nblks_inner_product(nblks_inner_product_x,
-                                   nblks_inner_product_y);
+    auto [nblks_inner_product, nthrs_inner_product] =
+        get_type2_schedule(gdata.num_heads, gdata.feat_src_xlen, num_edges);
+    // int nthrs_y_inner_product = SeastarFindNumThreads(gdata.num_heads, 64);
+    // int nthrs_x_inner_product =
+    //     SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
+    //                           MAX_NTHRS / nthrs_y_inner_product);
+    // int nblks_inner_product_x = 1;
+    // int nblks_inner_product_y = std::min(num_edges, MAX_NBLKS);
+    // const dim3 nthrs_inner_product(nthrs_x_inner_product,
+    //                                nthrs_y_inner_product);
+    // const dim3 nblks_inner_product(nblks_inner_product_x,
+    //                                nblks_inner_product_y);
     Idx* separate_coo_row_indices_data_ptr =
         separate_coo_row_indices.numel() > 0
             ? separate_coo_row_indices.data_ptr<Idx>()
@@ -785,14 +791,17 @@ void inner_product_various_left_and_node_right(
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-    int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-    int nthrs_x = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
-                                        MAX_NTHRS / nthrs_y);
-    int nblks_x = 1;
     int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
-    int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
-    const dim3 nthrs(nthrs_x, nthrs_y);
-    const dim3 nblks(nblks_x, nblks_y);
+    auto [nblks, nthrs] = get_type2_schedule(
+        gdata.num_heads, gdata.feat_src_xlen, outcsr_num_rows);
+    // int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+    // int nthrs_x = SeastarFindNumThreads(gdata.feat_src_xlen /
+    // gdata.num_heads,
+    //                                     MAX_NTHRS / nthrs_y);
+    // int nblks_x = 1;
+    // int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
+    // const dim3 nthrs(nthrs_x, nthrs_y);
+    // const dim3 nblks(nblks_x, nblks_y);
 
     HET_inner_product_bck_kernel<Idx, DType, CompactAsOfNodeFlag, true, false>
         <<<nblks, nthrs, 0, stream>>>(
@@ -813,14 +822,18 @@ void inner_product_various_left_and_node_right(
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-    int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-    int nthrs_x = SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
-                                        MAX_NTHRS / nthrs_y);
-    int nblks_x = 1;
-    int nblks_y = std::min(num_edges, MAX_NBLKS);
-    int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
-    const dim3 nthrs(nthrs_x, nthrs_y);
-    const dim3 nblks(nblks_x, nblks_y);
+
+    // int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
+    auto [nblks, nthrs] =
+        get_type2_schedule(gdata.num_heads, gdata.feat_src_xlen, num_edges);
+    // int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
+    // int nthrs_x = SeastarFindNumThreads(gdata.feat_src_xlen /
+    // gdata.num_heads,
+    //                                     MAX_NTHRS / nthrs_y);
+    // int nblks_x = 1;
+    // int nblks_y = std::min(num_edges, MAX_NBLKS);
+    // const dim3 nthrs(nthrs_x, nthrs_y);
+    // const dim3 nblks(nblks_x, nblks_y);
     Idx* separate_coo_row_indices_data_ptr =
         separate_coo_row_indices.numel() > 0
             ? separate_coo_row_indices.data_ptr<Idx>()

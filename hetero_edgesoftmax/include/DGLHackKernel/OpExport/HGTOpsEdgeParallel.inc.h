@@ -10,6 +10,7 @@
 
 #include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
+#include "ThreadingGridsBlocksSchedules.h"
 
 namespace HET {
 namespace TorchExport {
@@ -299,18 +300,23 @@ void full_graph_hetero_attention_ops(
   // threadIdx.x and threadIdx.y and only this pair is exchanged compared with
   // original seastar schedule to allow reduction within the warp, i.e., along
   // x-axis
-  const int64_t MAX_NBLKS = 65535;
-  const int64_t MAX_NTHRS = 1024;
-  int nthrs_y_type2 = SeastarFindNumThreads(gdata.num_heads, 64);
-  int nthrs_x_type2 = SeastarFindNumThreads(
-      gdata.k_vect_dim_per_head,
-      MAX_NTHRS / nthrs_y_type2);  // NB: message_out_dim is the total dim, and
-                                   // the number of elements for each head is
-                                   // message_out_dim//num_heads
-  int nblks_x_type2 = 1;
-  int nblks_y_type2 = std::min(incsr_row_ptr.numel() - 1, MAX_NBLKS);
-  const dim3 nthrs_type2(nthrs_x_type2, nthrs_y_type2);
-  const dim3 nblks_type2(nblks_x_type2, nblks_y_type2);
+  auto [nblks_type2, nthrs_type2] = get_type2_schedule(
+      gdata.num_heads, gdata.k_vect_dim_per_head * gdata.num_heads,
+      incsr_row_ptr.numel() - 1);
+  //   const int64_t MAX_NBLKS = 65535;
+  //   const int64_t MAX_NTHRS = 1024;
+  //   int nthrs_y_type2 = SeastarFindNumThreads(gdata.num_heads, 64);
+  //   int nthrs_x_type2 = SeastarFindNumThreads(
+  //       gdata.k_vect_dim_per_head,
+  //       MAX_NTHRS / nthrs_y_type2);  // NB: message_out_dim is the total dim,
+  //       and
+  //                                    // the number of elements for each head
+  //                                    is
+  //                                    // message_out_dim//num_heads
+  //   int nblks_x_type2 = 1;
+  //   int nblks_y_type2 = std::min(incsr_row_ptr.numel() - 1, MAX_NBLKS);
+  //   const dim3 nthrs_type2(nthrs_x_type2, nthrs_y_type2);
+  //   const dim3 nblks_type2(nblks_x_type2, nblks_y_type2);
   HET__hgtQVectType2BackwardKernel<int64_t, float, false, true, true>
       <<<nblks_type2, nthrs_type2, 0, stream>>>(
           gdata, incsr_row_ptr.data_ptr<int64_t>(),
