@@ -4,7 +4,7 @@
 #include "../DGLHackUtils.h"
 #include "device_launch_parameters.h"
 
-// C++ 17: auto [nblks, nthrs] = get_type1_schedule();
+// requires C++ 17: auto [nblks, nthrs] = get_type1_schedule();
 std::tuple<dim3, dim3> get_type1_schedule(int64_t num_heads,
                                           int64_t num_rows_or_edges) {
   // Type 1 Schedule:
@@ -24,7 +24,7 @@ std::tuple<dim3, dim3> get_type1_schedule(int64_t num_heads,
   return std::make_tuple(nblks, nthrs);
 }
 
-// C++ 17: auto [nblks, nthrs] = get_type2_schedule();
+// requires C++ 17: auto [nblks, nthrs] = get_type2_schedule();
 // feat_src_xlen is obtained by applying SeastarComputeXLength to the feature
 // tensor
 std::tuple<dim3, dim3> get_type2_schedule(int64_t num_heads,

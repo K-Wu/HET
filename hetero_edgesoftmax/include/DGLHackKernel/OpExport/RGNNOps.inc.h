@@ -19,10 +19,10 @@ template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int WORK_BLOCK_SIZE, bool CompactAsOfNodeFlag,
           bool ACGatherScatterListIdenticalFlag, bool InputNumHeadOneFlag>
 void _RelationalMatMul_separatecoo(
-    at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
-    at::Tensor& separate_coo_eids, at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& weights,
-    at::Tensor& node_feat, at::Tensor& ret) {
+    at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
+    at::Tensor &separate_coo_eids, at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &weights,
+    at::Tensor &node_feat, at::Tensor &ret) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   const int64_t num_relations =
       separate_coo_relptrs.numel() == 0
@@ -56,7 +56,8 @@ void _RelationalMatMul_separatecoo(
         unique_srcs_and_dests_rel_ptr.cpu().contiguous();
     std::tie(num_blocks_assignment_for_same_relation_vect,
              num_blocks_assignment_for_all_prev_relation_vect) =
-        get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
+        get_schedule_by_relation_kernel_launch_metadata<false, false,
+                                                        int64_t *>(
             grid_dim_y, num_relations, WORK_BLOCK_SIZE,
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>(),
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>() +
@@ -66,7 +67,8 @@ void _RelationalMatMul_separatecoo(
         separate_coo_relptrs.cpu().contiguous();
     std::tie(num_blocks_assignment_for_same_relation_vect,
              num_blocks_assignment_for_all_prev_relation_vect) =
-        get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
+        get_schedule_by_relation_kernel_launch_metadata<false, false,
+                                                        int64_t *>(
             grid_dim_y, num_relations, WORK_BLOCK_SIZE,
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
@@ -95,7 +97,7 @@ void _RelationalMatMul_separatecoo(
     // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
     //           << " nblks.z: " << nblks.z << std::endl;
     HET_RGNNFeatCompactFWProp<COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y,
-                              WORK_BLOCK_SIZE, int64_t, int64_t*,
+                              WORK_BLOCK_SIZE, int64_t, int64_t *,
                               InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
         node_feat.data_ptr<float>(), weights.data_ptr<float>(),
         ret.data_ptr<float>(),
@@ -105,7 +107,6 @@ void _RelationalMatMul_separatecoo(
         thrust::raw_pointer_cast(
             dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
         num_relations);
-
   } else {
     // NB: my shmem sgemm matmul scheme
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
@@ -116,7 +117,7 @@ void _RelationalMatMul_separatecoo(
     if constexpr (ACGatherScatterListIdenticalFlag) {
       HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical<
           COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-          int64_t, int64_t*, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+          int64_t, int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
           node_feat.data_ptr<float>(), weights.data_ptr<float>(),
           ret.data_ptr<float>(), separate_coo_relptrs.data_ptr<int64_t>(),
           separate_coo_eids.data_ptr<int64_t>(), num_input_dim,
@@ -127,7 +128,7 @@ void _RelationalMatMul_separatecoo(
     } else {
       HET_RGNNFeatPerEdgeFWProp<COARSEN_FACTOR_2_FLAG_X,
                                 COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-                                int64_t, int64_t*, InputNumHeadOneFlag>
+                                int64_t, int64_t *, InputNumHeadOneFlag>
           <<<nblks, nthrs, 0, stream>>>(
               node_feat.data_ptr<float>(), weights.data_ptr<float>(),
               ret.data_ptr<float>(),
@@ -144,9 +145,9 @@ void _RelationalMatMul_separatecoo(
 
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int WORK_BLOCK_SIZE>
-void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
-                                          at::Tensor& weights,
-                                          at::Tensor& inputs, at::Tensor& ret) {
+void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
+                                          at::Tensor &weights,
+                                          at::Tensor &inputs, at::Tensor &ret) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   const int64_t num_heads = 1;
 
@@ -174,7 +175,7 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
       ntype_offset_ptrs.cpu().contiguous();
   std::tie(num_blocks_assignment_for_same_ntype_vect,
            num_blocks_assignment_for_all_prev_ntype_vect) =
-      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
+      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
           grid_dim_y, num_ntypes, WORK_BLOCK_SIZE,
           ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>(),
           ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>() + num_ntypes +
@@ -196,7 +197,7 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
   //           << " nblks.z: " << nblks.z << std::endl;
   HET_RGNNMatmulNoScatterGatherListFwOrBwProp<
       COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-      int64_t, int64_t*><<<nblks, nthrs, 0, stream>>>(
+      int64_t, int64_t *><<<nblks, nthrs, 0, stream>>>(
       inputs.data_ptr<float>(), weights.data_ptr<float>(),
       ret.data_ptr<float>(), ntype_offset_ptrs.data_ptr<int64_t>(),
 
@@ -205,18 +206,18 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
       num_ntypes, num_input_dim, num_output_dim);
 }
 
-void RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
-                                         at::Tensor& weights,
-                                         at::Tensor& inputs, at::Tensor& ret) {
+void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
+                                         at::Tensor &weights,
+                                         at::Tensor &inputs, at::Tensor &ret) {
   _RelationalMatmulNoScatterGatherList<true, true, 32>(ntype_offset_ptrs,
                                                        weights, inputs, ret);
 }
 
-void RelationalMatMul_separatecoo(at::Tensor& separate_coo_relptrs,
-                                  at::Tensor& separate_coo_node_indices,
-                                  at::Tensor& separate_coo_eids,
-                                  at::Tensor& weights, at::Tensor& node_feat,
-                                  at::Tensor& ret, bool InputNumHeadOneFlag) {
+void RelationalMatMul_separatecoo(at::Tensor &separate_coo_relptrs,
+                                  at::Tensor &separate_coo_node_indices,
+                                  at::Tensor &separate_coo_eids,
+                                  at::Tensor &weights, at::Tensor &node_feat,
+                                  at::Tensor &ret, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
     _RelationalMatMul_separatecoo<true, true, 32, false, false, true>(
@@ -230,8 +231,8 @@ void RelationalMatMul_separatecoo(at::Tensor& separate_coo_relptrs,
 }
 
 void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
-    at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_eids,
-    at::Tensor& weights, at::Tensor& node_feat, at::Tensor& ret,
+    at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
+    at::Tensor &weights, at::Tensor &node_feat, at::Tensor &ret,
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
@@ -246,9 +247,9 @@ void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
 }
 
 void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& weight,
-    at::Tensor& node_feat, at::Tensor& ret, bool InputNumHeadOneFlag) {
+    at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &weight,
+    at::Tensor &node_feat, at::Tensor &ret, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
     _RelationalMatMul_separatecoo<true, true, 32, true, false, true>(
@@ -292,26 +293,23 @@ template </*int XPU, */ typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool IntegratedFormatRatherThanSeparateFlag,
           bool CSRRatherThanCOOFlag>
 void inner_product_various_left_and_node_right(
-    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
-    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
-    at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
-    at::Tensor& incsr_eids, at::Tensor& incsr_reltypes,
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
-    at::Tensor& feat_dst, at::Tensor& edge_inner_product) {
-  const Idx MAX_NBLKS = 65535;
-  const Idx MAX_NTHRS = 1024;
-  InnerProductData<Idx, DType> gdata;
+    at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
+    at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_idx,
+    at::Tensor &incsr_eids, at::Tensor &incsr_reltypes,
+    at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &feat_src,
+    at::Tensor &feat_dst, at::Tensor &edge_inner_product) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  gdata.num_heads = SeastarComputeXLength<>(edge_inner_product);
-  int64_t feat_src_xlen = SeastarComputeXLength<>(feat_src);
   // NB: in this case gdata.n, calculation is removed since el is now per edge
   // rather than per node
-  gdata.feat_src = feat_src.data_ptr<DType>();
-  gdata.feat_dst = feat_dst.data_ptr<DType>();
-  gdata.edge_inner_product = edge_inner_product.data_ptr<DType>();
-  // gdata.n = el.numel() / el_xlen;
-  gdata.feat_src_xlen = feat_src_xlen;
+  InnerProductData<Idx, DType> gdata{
+      .feat_src_xlen = SeastarComputeXLength<>(feat_src),
+      .num_heads = SeastarComputeXLength<>(edge_inner_product),
+      .eids = nullptr,  // assign later in if branches
+      .feat_src = feat_src.data_ptr<DType>(),
+      .feat_dst = feat_dst.data_ptr<DType>(),
+      .edge_inner_product = edge_inner_product.data_ptr<DType>()};
 
   if constexpr (IntegratedFormatRatherThanSeparateFlag &&
                 CSRRatherThanCOOFlag) {
@@ -329,25 +327,17 @@ void inner_product_various_left_and_node_right(
     auto [nblks2, nthrs2] = get_type2_schedule(
         gdata.num_heads, gdata.feat_src_xlen, incsr_num_rows);
 
-    // int64_t nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-    // int64_t nthrs_x = SeastarFindNumThreads(
-    //     gdata.feat_src_xlen / gdata.num_heads, MAX_NTHRS / nthrs_y);
-    // int64_t nblks_x = 1;
-    // int64_t nblks_y = std::min(incsr_num_rows, MAX_NBLKS);
-    // const dim3 nthrs2(nthrs_x, nthrs_y);
-    // const dim3 nblks2(nblks_x, nblks_y);
-
-    Idx* incsr_row_ptr_data_ptr =
+    Idx *incsr_row_ptr_data_ptr =
         incsr_row_ptr.numel() > 0 ? incsr_row_ptr.data_ptr<Idx>() : nullptr;
-    Idx* incsr_col_idx_data_ptr =
+    Idx *incsr_col_idx_data_ptr =
         incsr_col_idx.numel() > 0 ? incsr_col_idx.data_ptr<Idx>() : nullptr;
-    Idx* incsr_reltypes_data_ptr =
+    Idx *incsr_reltypes_data_ptr =
         incsr_reltypes.numel() > 0 ? incsr_reltypes.data_ptr<Idx>() : nullptr;
-    Idx* unique_srcs_and_dests_rel_ptr_data_ptr =
+    Idx *unique_srcs_and_dests_rel_ptr_data_ptr =
         unique_srcs_and_dests_rel_ptr.numel() > 0
             ? unique_srcs_and_dests_rel_ptr.data_ptr<Idx>()
             : nullptr;
-    Idx* unique_srcs_and_dests_node_indices_data_ptr =
+    Idx *unique_srcs_and_dests_node_indices_data_ptr =
         unique_srcs_and_dests_node_indices.numel() > 0
             ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
             : nullptr;
@@ -358,7 +348,6 @@ void inner_product_various_left_and_node_right(
         incsr_reltypes_data_ptr, incsr_num_rows,
         unique_srcs_and_dests_rel_ptr_data_ptr,
         unique_srcs_and_dests_node_indices_data_ptr);
-
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
     // separate coo
@@ -376,33 +365,23 @@ void inner_product_various_left_and_node_right(
     // x-axis
     auto [nblks_inner_product, nthrs_inner_product] =
         get_type2_schedule(gdata.num_heads, gdata.feat_src_xlen, num_edges);
-    // int nthrs_y_inner_product = SeastarFindNumThreads(gdata.num_heads, 64);
-    // int nthrs_x_inner_product =
-    //     SeastarFindNumThreads(gdata.feat_src_xlen / gdata.num_heads,
-    //                           MAX_NTHRS / nthrs_y_inner_product);
-    // int nblks_inner_product_x = 1;
-    // int nblks_inner_product_y = std::min(num_edges, MAX_NBLKS);
-    // const dim3 nthrs_inner_product(nthrs_x_inner_product,
-    //                                nthrs_y_inner_product);
-    // const dim3 nblks_inner_product(nblks_inner_product_x,
-    //                                nblks_inner_product_y);
-    Idx* separate_coo_row_indices_data_ptr =
+    Idx *separate_coo_row_indices_data_ptr =
         separate_coo_row_indices.numel() > 0
             ? separate_coo_row_indices.data_ptr<Idx>()
             : nullptr;
-    Idx* separate_coo_col_indices_data_ptr =
+    Idx *separate_coo_col_indices_data_ptr =
         separate_coo_col_indices.numel() > 0
             ? separate_coo_col_indices.data_ptr<Idx>()
             : nullptr;
-    Idx* separate_coo_rel_ptrs_data_ptr =
+    Idx *separate_coo_rel_ptrs_data_ptr =
         separate_coo_rel_ptrs.numel() > 0
             ? separate_coo_rel_ptrs.data_ptr<Idx>()
             : nullptr;
-    Idx* unique_srcs_and_dests_rel_ptr_data_ptr =
+    Idx *unique_srcs_and_dests_rel_ptr_data_ptr =
         unique_srcs_and_dests_rel_ptr.numel() > 0
             ? unique_srcs_and_dests_rel_ptr.data_ptr<Idx>()
             : nullptr;
-    Idx* unique_srcs_and_dests_node_indices_data_ptr =
+    Idx *unique_srcs_and_dests_node_indices_data_ptr =
         unique_srcs_and_dests_node_indices.numel() > 0
             ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
             : nullptr;
@@ -425,19 +404,18 @@ void inner_product_various_left_and_node_right(
       //     num_edges, unique_srcs_and_dests_rel_ptr_data_ptr,
       //     unique_srcs_and_dests_node_indices_data_ptr, num_relations);
     }
-
   } else {
     assert(0 && "Not implemented");
   }
 }
 
 void inner_product_node_compact_and_node_separatecoo(
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_idx,
-    at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_eids,
-    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
-    at::Tensor& left_node_compact_data, at::Tensor& right_node_vectors,
-    at::Tensor& edge_inner_product) {
+    at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &unique_srcs_and_dests_node_idx,
+    at::Tensor &separate_coo_rel_ptr, at::Tensor &separate_coo_eids,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
+    at::Tensor &left_node_compact_data, at::Tensor &right_node_vectors,
+    at::Tensor &edge_inner_product) {
   cudaMemsetAsync(edge_inner_product.data_ptr<float>(), 0,
                   edge_inner_product.numel() * sizeof(float),
                   c10::cuda::getCurrentCUDAStream());
@@ -451,9 +429,9 @@ void inner_product_node_compact_and_node_separatecoo(
 }
 
 void inner_product_edge_and_node_separatecoo(
-    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_row_indices,
-    at::Tensor& separate_coo_col_indices, at::Tensor& left_edge_data,
-    at::Tensor& right_node_vectors, at::Tensor& edge_inner_product) {
+    at::Tensor &separate_coo_eids, at::Tensor &separate_coo_row_indices,
+    at::Tensor &separate_coo_col_indices, at::Tensor &left_edge_data,
+    at::Tensor &right_node_vectors, at::Tensor &edge_inner_product) {
   cudaMemsetAsync(edge_inner_product.data_ptr<float>(), 0,
                   edge_inner_product.numel() * sizeof(float),
                   c10::cuda::getCurrentCUDAStream());
@@ -473,11 +451,11 @@ template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int WORK_BLOCK_SIZE, bool CompactAsOfNodeFlag,
           bool ACGatherScatterListIdenticalFlag, bool InputNumHeadOneFlag>
 void _BackwardRelationalMatMul_separatecoo(
-    at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
-    at::Tensor& separate_coo_eids, at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices,
-    at::Tensor& weights_transposed, at::Tensor& node_feat, at::Tensor& gradout,
-    at::Tensor& grad_node_feat, at::Tensor& grad_weights) {
+    at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
+    at::Tensor &separate_coo_eids, at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &unique_srcs_and_dests_node_indices,
+    at::Tensor &weights_transposed, at::Tensor &node_feat, at::Tensor &gradout,
+    at::Tensor &grad_node_feat, at::Tensor &grad_weights) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   const int64_t num_relations =
       separate_coo_relptrs.numel() == 0
@@ -518,35 +496,25 @@ void _BackwardRelationalMatMul_separatecoo(
         unique_srcs_and_dests_rel_ptr.cpu().contiguous();
     std::tie(num_blocks_assignment_for_same_relation_vect,
              num_blocks_assignment_for_all_prev_relation_vect) =
-        get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
+        get_schedule_by_relation_kernel_launch_metadata<false, false,
+                                                        int64_t *>(
             grid_dim_y, num_relations, WORK_BLOCK_SIZE,
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>(),
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>() +
                 num_relations + 1);
-
   } else {
     at::Tensor separate_coo_relptrs_cpu_contiguous =
         separate_coo_relptrs.cpu().contiguous();
     std::tie(num_blocks_assignment_for_same_relation_vect,
              num_blocks_assignment_for_all_prev_relation_vect) =
-        get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
+        get_schedule_by_relation_kernel_launch_metadata<false, false,
+                                                        int64_t *>(
             grid_dim_y, num_relations, WORK_BLOCK_SIZE,
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
                 num_relations + 1);
   }
-  // print all elements of num_blocks_assignment_for_all_prev_relation_vect
-  // for (int i = 0; i < num_relations; i++) {
-  //   std::cout << num_blocks_assignment_for_all_prev_relation_vect[i] << ' ';
-  // }
-  // std::cout << std::endl;
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
-  // print num_blocks_assignment_for_all_prev_relation_vect
-  // std::cout << "num_blocks_assignment_for_all_prev_relation_vect: [";
-  // for (auto i : num_blocks_assignment_for_all_prev_relation_vect) {
-  // std::cout << i << " ";
-  // }
-  // std::cout << "]"<< std::endl;
   thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
       num_blocks_assignment_for_same_relation_vect.begin(),
       num_blocks_assignment_for_same_relation_vect.end());
@@ -576,7 +544,7 @@ void _BackwardRelationalMatMul_separatecoo(
     std::cout << gradout.numel() << std::endl;
     HET_RGNNDeltaNodeFeatInputCompactBWProp<
         COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-        int64_t, int64_t*, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+        int64_t, int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
         gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
         grad_node_feat.data_ptr<float>(),
         unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
@@ -588,7 +556,7 @@ void _BackwardRelationalMatMul_separatecoo(
     // cuda_err_chk(cudaGetLastError());
     HET_RGNNDeltaWeightCompactBWProp<COARSEN_FACTOR_2_FLAG_X,
                                      COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-                                     int64_t, int64_t*, InputNumHeadOneFlag>
+                                     int64_t, int64_t *, InputNumHeadOneFlag>
         <<<nblks_outer_product, nthrs, 0, stream>>>(
             gradout.data_ptr<float>(), node_feat.data_ptr<float>(),
             grad_weights.data_ptr<float>(),
@@ -613,7 +581,7 @@ void _BackwardRelationalMatMul_separatecoo(
     if constexpr (ACGatherScatterListIdenticalFlag) {
       HET_RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical<
           COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-          int64_t, int64_t*, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+          int64_t, int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
           gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
           grad_node_feat.data_ptr<float>(),
           separate_coo_eids.data_ptr<int64_t>(),
@@ -628,7 +596,7 @@ void _BackwardRelationalMatMul_separatecoo(
       // configuration scheme dependent on weight dimensions should  still work
       HET_RGNNDeltaWeightBWPropACGatherScatterListIdentical<
           COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-          int64_t, int64_t*, InputNumHeadOneFlag>
+          int64_t, int64_t *, InputNumHeadOneFlag>
           <<<nblks_outer_product, nthrs, 0, stream>>>(
               node_feat.data_ptr<float>(), gradout.data_ptr<float>(),
               grad_weights.data_ptr<float>(),
@@ -641,7 +609,7 @@ void _BackwardRelationalMatMul_separatecoo(
     } else {
       HET_RGNNDeltaNodeFeatInputBWProp<COARSEN_FACTOR_2_FLAG_X,
                                        COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-                                       int64_t, int64_t*, InputNumHeadOneFlag>
+                                       int64_t, int64_t *, InputNumHeadOneFlag>
           <<<nblks, nthrs, 0, stream>>>(
               gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
               grad_node_feat.data_ptr<float>(),
@@ -654,7 +622,7 @@ void _BackwardRelationalMatMul_separatecoo(
               num_relations);
       HET_RGNNDeltaWeightBWProp<COARSEN_FACTOR_2_FLAG_X,
                                 COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-                                int64_t, int64_t*, InputNumHeadOneFlag>
+                                int64_t, int64_t *, InputNumHeadOneFlag>
           <<<nblks_outer_product, nthrs, 0, stream>>>(
               node_feat.data_ptr<float>(), gradout.data_ptr<float>(),
               grad_weights.data_ptr<float>(),
@@ -670,10 +638,10 @@ void _BackwardRelationalMatMul_separatecoo(
 }
 
 void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices,
-    at::Tensor& weights_transposed, at::Tensor& node_feat, at::Tensor& gradout,
-    at::Tensor& grad_node_feat, at::Tensor& grad_weights,
+    at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &unique_srcs_and_dests_node_indices,
+    at::Tensor &weights_transposed, at::Tensor &node_feat, at::Tensor &gradout,
+    at::Tensor &grad_node_feat, at::Tensor &grad_weights,
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
@@ -690,10 +658,10 @@ void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
 }
 
 void RelationalMatMul_separatecoo(
-    at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_node_indices,
-    at::Tensor& separate_coo_eids, at::Tensor& weights_transposed,
-    at::Tensor& node_feat, at::Tensor& gradout, at::Tensor& grad_node_feat,
-    at::Tensor& grad_weights, bool InputNumHeadOneFlag) {
+    at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
+    at::Tensor &separate_coo_eids, at::Tensor &weights_transposed,
+    at::Tensor &node_feat, at::Tensor &gradout, at::Tensor &grad_node_feat,
+    at::Tensor &grad_weights, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
     _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false, true>(
@@ -709,9 +677,9 @@ void RelationalMatMul_separatecoo(
 }
 
 void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
-    at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_eids,
-    at::Tensor& weights_transposed, at::Tensor& node_feat, at::Tensor& gradout,
-    at::Tensor& grad_node_feat, at::Tensor& grad_weights,
+    at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
+    at::Tensor &weights_transposed, at::Tensor &node_feat, at::Tensor &gradout,
+    at::Tensor &grad_node_feat, at::Tensor &grad_weights,
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
@@ -759,28 +727,24 @@ template </*int XPU, */ typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool IntegratedFormatRatherThanSeparateFlag,
           bool CSRRatherThanCOOFlag>
 void inner_product_various_left_and_node_right(
-    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_rel_ptrs,
-    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
-    at::Tensor& outcsr_row_ptr, at::Tensor& outcsr_col_idx,
-    at::Tensor& outcsr_eids, at::Tensor& outcsr_reltypes,
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_indices, at::Tensor& feat_src,
-    at::Tensor& feat_dst, at::Tensor& grad_inner_product,
-    at::Tensor& grad_feat_src, at::Tensor& grad_feat_dst) {
+    at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
+    at::Tensor &outcsr_row_ptr, at::Tensor &outcsr_col_idx,
+    at::Tensor &outcsr_eids, at::Tensor &outcsr_reltypes,
+    at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &feat_src,
+    at::Tensor &feat_dst, at::Tensor &grad_inner_product,
+    at::Tensor &grad_feat_src, at::Tensor &grad_feat_dst) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  const Idx MAX_NBLKS = 65535;
-  const Idx MAX_NTHRS = 1024;
-  BackwardInnerProductData<Idx, DType> gdata;
-  int64_t feat_src_xlen = SeastarComputeXLength<>(feat_src);
-  gdata.feat_src = feat_src.data_ptr<DType>();
-  gdata.feat_dst = feat_dst.data_ptr<DType>();
-
-  gdata.grad_inner_product = grad_inner_product.data_ptr<DType>();
-  gdata.grad_feat_src = grad_feat_src.data_ptr<DType>();
-  gdata.grad_feat_dst = grad_feat_dst.data_ptr<DType>();
-
-  gdata.num_heads = SeastarComputeXLength<>(grad_inner_product);  // num_heads
-  gdata.feat_src_xlen = feat_src_xlen;
+  BackwardInnerProductData<Idx, DType> gdata{
+      .feat_src_xlen = SeastarComputeXLength<>(feat_src),
+      .num_heads = SeastarComputeXLength<>(grad_inner_product),
+      .eids = nullptr,  // assigned later in if branches
+      .feat_src = feat_src.data_ptr<DType>(),
+      .feat_dst = feat_dst.data_ptr<DType>(),
+      .grad_inner_product = grad_inner_product.data_ptr<DType>(),
+      .grad_feat_dst = grad_feat_dst.data_ptr<DType>(),
+      .grad_feat_src = grad_feat_src.data_ptr<DType>()};
 
   if constexpr (IntegratedFormatRatherThanSeparateFlag &&
                 CSRRatherThanCOOFlag) {
@@ -794,14 +758,6 @@ void inner_product_various_left_and_node_right(
     int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
     auto [nblks, nthrs] = get_type2_schedule(
         gdata.num_heads, gdata.feat_src_xlen, outcsr_num_rows);
-    // int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-    // int nthrs_x = SeastarFindNumThreads(gdata.feat_src_xlen /
-    // gdata.num_heads,
-    //                                     MAX_NTHRS / nthrs_y);
-    // int nblks_x = 1;
-    // int nblks_y = std::min(outcsr_num_rows, MAX_NBLKS);
-    // const dim3 nthrs(nthrs_x, nthrs_y);
-    // const dim3 nblks(nblks_x, nblks_y);
 
     HET_inner_product_bck_kernel<Idx, DType, CompactAsOfNodeFlag, true, false>
         <<<nblks, nthrs, 0, stream>>>(
@@ -810,7 +766,6 @@ void inner_product_various_left_and_node_right(
             outcsr_num_rows, unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
             unique_srcs_and_dests_node_indices.data_ptr<Idx>(),
             unique_srcs_and_dests_rel_ptr.numel() - 1);
-
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
     // separate coo
@@ -823,34 +778,25 @@ void inner_product_various_left_and_node_right(
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
 
-    // int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
     auto [nblks, nthrs] =
         get_type2_schedule(gdata.num_heads, gdata.feat_src_xlen, num_edges);
-    // int nthrs_y = SeastarFindNumThreads(gdata.num_heads, 64);
-    // int nthrs_x = SeastarFindNumThreads(gdata.feat_src_xlen /
-    // gdata.num_heads,
-    //                                     MAX_NTHRS / nthrs_y);
-    // int nblks_x = 1;
-    // int nblks_y = std::min(num_edges, MAX_NBLKS);
-    // const dim3 nthrs(nthrs_x, nthrs_y);
-    // const dim3 nblks(nblks_x, nblks_y);
-    Idx* separate_coo_row_indices_data_ptr =
+    Idx *separate_coo_row_indices_data_ptr =
         separate_coo_row_indices.numel() > 0
             ? separate_coo_row_indices.data_ptr<Idx>()
             : nullptr;
-    Idx* separate_coo_col_indices_data_ptr =
+    Idx *separate_coo_col_indices_data_ptr =
         separate_coo_col_indices.numel() > 0
             ? separate_coo_col_indices.data_ptr<Idx>()
             : nullptr;
-    Idx* separate_coo_rel_ptrs_data_ptr =
+    Idx *separate_coo_rel_ptrs_data_ptr =
         separate_coo_rel_ptrs.numel() > 0
             ? separate_coo_rel_ptrs.data_ptr<Idx>()
             : nullptr;
-    Idx* unique_srcs_and_dests_rel_ptr_data_ptr =
+    Idx *unique_srcs_and_dests_rel_ptr_data_ptr =
         unique_srcs_and_dests_rel_ptr.numel() > 0
             ? unique_srcs_and_dests_rel_ptr.data_ptr<Idx>()
             : nullptr;
-    Idx* unique_srcs_and_dests_node_indices_data_ptr =
+    Idx *unique_srcs_and_dests_node_indices_data_ptr =
         unique_srcs_and_dests_node_indices.numel() > 0
             ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
             : nullptr;
@@ -862,21 +808,20 @@ void inner_product_various_left_and_node_right(
             separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
             num_edges, unique_srcs_and_dests_rel_ptr_data_ptr,
             unique_srcs_and_dests_node_indices_data_ptr, num_relations);
-
   } else {
     assert(0 && "Not implemented");
   }
 }
 
 void inner_product_node_compact_and_node_separatecoo(
-    at::Tensor& unique_srcs_and_dests_rel_ptr,
-    at::Tensor& unique_srcs_and_dests_node_idx,
-    at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_eids,
-    at::Tensor& separate_coo_row_indices, at::Tensor& separate_coo_col_indices,
-    at::Tensor& left_node_compact_data,
-    at::Tensor& right_node_vectors,  // at::Tensor& ret,
-    at::Tensor& grad_inner_product, at::Tensor& grad_left_node_compact_data,
-    at::Tensor& grad_right_node_vectors) {
+    at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &unique_srcs_and_dests_node_idx,
+    at::Tensor &separate_coo_rel_ptr, at::Tensor &separate_coo_eids,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
+    at::Tensor &left_node_compact_data,
+    at::Tensor &right_node_vectors,  // at::Tensor& ret,
+    at::Tensor &grad_inner_product, at::Tensor &grad_left_node_compact_data,
+    at::Tensor &grad_right_node_vectors) {
   at::Tensor dummy_tensor;
   inner_product_various_left_and_node_right<int64_t, float, true, false, false>(
       separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
@@ -888,11 +833,11 @@ void inner_product_node_compact_and_node_separatecoo(
 }
 
 void inner_product_edge_and_node_separatecoo(
-    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_row_indices,
-    at::Tensor& separate_coo_col_indices, at::Tensor& left_edge_data,
-    at::Tensor& right_node_vectors,
-    at::Tensor& grad_inner_product,  // at::Tensor& gradout,
-    at::Tensor& grad_left_edge_data, at::Tensor& grad_right_node_vectors) {
+    at::Tensor &separate_coo_eids, at::Tensor &separate_coo_row_indices,
+    at::Tensor &separate_coo_col_indices, at::Tensor &left_edge_data,
+    at::Tensor &right_node_vectors,
+    at::Tensor &grad_inner_product,  // at::Tensor& gradout,
+    at::Tensor &grad_left_edge_data, at::Tensor &grad_right_node_vectors) {
   at::Tensor dummy_tensor;
   inner_product_various_left_and_node_right<int64_t, float, false, false,
                                             false>(
@@ -905,12 +850,12 @@ void inner_product_edge_and_node_separatecoo(
 
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int WORK_BLOCK_SIZE>
-void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
-                                          at::Tensor& weights_transposed,
-                                          at::Tensor& node_feat_input,
-                                          at::Tensor& grad_node_feat_output,
-                                          at::Tensor& grad_weights,
-                                          at::Tensor& grad_node_feat_input) {
+void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
+                                          at::Tensor &weights_transposed,
+                                          at::Tensor &node_feat_input,
+                                          at::Tensor &grad_node_feat_output,
+                                          at::Tensor &grad_weights,
+                                          at::Tensor &grad_node_feat_input) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   const int64_t num_heads = 1;
   assert(weights_transposed.size(1) == 1 && "assertion n_head == 1 failed");
@@ -938,7 +883,7 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
       ntype_offset_ptrs.cpu().contiguous();
   std::tie(num_blocks_assignment_for_same_ntype_vect,
            num_blocks_assignment_for_all_prev_ntype_vect) =
-      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
+      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
           grid_dim_y, num_ntypes, WORK_BLOCK_SIZE,
           ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>(),
           ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>() + num_ntypes +
@@ -956,11 +901,9 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
   const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), grid_dim_y,
                    num_heads);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
-  // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
-  //           << " nblks.z: " << nblks.z << std::endl;
   HET_RGNNMatmulNoScatterGatherListFwOrBwProp<
       COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-      int64_t, int64_t*><<<nblks, nthrs, 0, stream>>>(
+      int64_t, int64_t *><<<nblks, nthrs, 0, stream>>>(
       grad_node_feat_output.data_ptr<float>(),
       weights_transposed.data_ptr<float>(),
       grad_node_feat_input.data_ptr<float>(),
@@ -974,7 +917,7 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
       ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), grid_dim_y);
   HET_RGNNDeltaWeightNoScatterGatherListBWProp<
       COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-      int64_t, int64_t*><<<nblks_outer_product, nthrs, 0, stream>>>(
+      int64_t, int64_t *><<<nblks_outer_product, nthrs, 0, stream>>>(
       node_feat_input.data_ptr<float>(),
       grad_node_feat_output.data_ptr<float>(), grad_weights.data_ptr<float>(),
       ntype_offset_ptrs.data_ptr<int64_t>(), num_input_dim, num_output_dim,
@@ -983,12 +926,12 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
       num_ntypes);
 }
 
-void RelationalMatmulNoScatterGatherList(at::Tensor& ntype_offset_ptrs,
-                                         at::Tensor& weights_transposed,
-                                         at::Tensor& node_feat_input,
-                                         at::Tensor& grad_node_feat_output,
-                                         at::Tensor& grad_weights,
-                                         at::Tensor& grad_node_feat_input) {
+void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
+                                         at::Tensor &weights_transposed,
+                                         at::Tensor &node_feat_input,
+                                         at::Tensor &grad_node_feat_output,
+                                         at::Tensor &grad_weights,
+                                         at::Tensor &grad_node_feat_input) {
   _RelationalMatmulNoScatterGatherList<true, true, 32>(
       ntype_offset_ptrs, weights_transposed, node_feat_input,
       grad_node_feat_output, grad_weights, grad_node_feat_input);

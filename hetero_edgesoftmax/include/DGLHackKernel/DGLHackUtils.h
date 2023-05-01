@@ -13,7 +13,9 @@ inline int SeastarFindNumThreads(int dim,
   return ret;
 }
 
-template <typename Tensor>  // hack to get rid of the dependency on ATen
+// use template instead of aten::Tensor as a hack to get rid of the dependency
+// on ATen
+template <typename Tensor>
 int64_t SeastarComputeXLength(Tensor tensor) {
   int64_t ret = 1;
   for (int i = 1; i < tensor.dim(); ++i) {

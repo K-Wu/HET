@@ -1,5 +1,5 @@
 #pragma once
-//#include "DGLHackKernel/DGLHackKernel.h"
+// #include "DGLHackKernel/DGLHackKernel.h"
 #include <cuda_runtime.h>
 
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
@@ -13,10 +13,10 @@ template <typename Idx, typename DType>
 struct BackwardHGTMessageData<Idx, DType, 2> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
-  Idx* eids;
+  Idx *eids;
   DType *grad_message_src{nullptr}, *grad_out{nullptr};
   // DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
-  DType* normalized_attn_score{nullptr};
+  DType *normalized_attn_score{nullptr};
   // DType *edgesoftmax_sum_per_node{nullptr};
 };
 
@@ -24,11 +24,11 @@ template <typename Idx, typename DType>
 struct BackwardHGTMessageData<Idx, DType, 1> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
-  Idx* eids;
-  DType *grad_message_src{nullptr}, *edgesoftmax_sum_per_node{nullptr},
-      *grad_out{nullptr};
+  Idx *eids;
+  DType *grad_message_src{nullptr}, *grad_out{nullptr},
+      *edgesoftmax_sum_per_node{nullptr};
   DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
-  DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
+  DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
 };
 
@@ -36,9 +36,9 @@ template <typename Idx, typename DType>
 struct BackwardHGTMessageData<Idx, DType, 0> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
-  Idx* eids;
-  DType *grad_message_src{nullptr}, *edgesoftmax_sum_per_node{nullptr},
-      *grad_out{nullptr};
+  Idx *eids;
+  DType *grad_message_src{nullptr}, *grad_out{nullptr},
+      *edgesoftmax_sum_per_node{nullptr};
   DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
   // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
@@ -47,8 +47,7 @@ struct BackwardHGTMessageData<Idx, DType, 0> {
 template <typename Idx, typename DType>
 struct BackwardNormToUnNormalizedAttnScoreData {
   Idx num_heads{0};
-  Idx k_vect_dim_per_head{0};
-  Idx* eids;
+  Idx *eids;
   DType *grad_normalized_attn_score{nullptr}, *normalized_attn_score{nullptr},
       *grad_mu{nullptr}, *mu{nullptr};
   DType *unnormalized_attn_score{nullptr},
@@ -61,7 +60,7 @@ template <typename Idx, typename DType>
 struct BackwardToDeltaQData {
   Idx num_heads{0};
   Idx k_vect_dim_per_head{0};
-  Idx* eids;
+  Idx *eids;
   DType *grad_unnormalized_attn_score{nullptr}, *k_inner_product{nullptr},
       *grad_q_vectors{nullptr};
 };
@@ -72,10 +71,10 @@ struct BackwardToDeltaQData {
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __global__ void HET__hgtQVectType2BackwardKernel(
-    BackwardToDeltaQData<Idx, DType> gdata, const Idx* row_offsets,
-    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    BackwardToDeltaQData<Idx, DType> gdata, const Idx *row_offsets,
+    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.k_vect_dim_per_head;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -176,9 +175,9 @@ template <typename Idx, typename DType,  // bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
     BackwardNormToUnNormalizedAttnScoreData<Idx, DType> gdata,
-    const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
-    int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
+    int64_t num_rows, const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   for (Idx src_vid = blockIdx.y * blockDim.y + threadIdx.y; src_vid < num_rows;
        src_vid += gridDim.y * blockDim.y) {
@@ -325,9 +324,9 @@ template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
 __global__ void
 HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
     BackwardHGTMessageData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
-    const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
-    int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
+    int64_t num_rows, const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -438,11 +437,11 @@ template <typename Idx, typename DType>
 struct BackwardHGTAttnScoreData<Idx, DType, 2> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
-  Idx* eids;
+  Idx *eids;
   DType *grad_attn_score{nullptr}, *message_src{nullptr},
       *unnormalized_attn_score{nullptr}, *out{nullptr}, *grad_out{nullptr};
   DType *grad_mu{nullptr}, *mu{nullptr};
-  DType* normalized_attn_score{nullptr};
+  DType *normalized_attn_score{nullptr};
   // DType* edgesoftmax_sum_per_node{nullptr};
   // DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
 };
@@ -451,24 +450,24 @@ template <typename Idx, typename DType>
 struct BackwardHGTAttnScoreData<Idx, DType, 1> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
-  Idx* eids;
+  Idx *eids;
   DType *grad_attn_score{nullptr}, *message_src{nullptr},
-      *unnormalized_attn_score{nullptr}, *edgesoftmax_sum_per_node{nullptr},
-      *out{nullptr}, *grad_out{nullptr};
+      *unnormalized_attn_score{nullptr}, *out{nullptr}, *grad_out{nullptr};
   DType *grad_mu{nullptr}, *mu{nullptr};
   // DType* normalized_attn_score{nullptr};
-  DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
+  DType *edgesoftmax_sum_per_node{nullptr};
+  DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
 struct BackwardHGTAttnScoreData<Idx, DType, 0> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
-  Idx* eids;
+  Idx *eids;
   DType *grad_attn_score{nullptr}, *message_src{nullptr},
-      *unnormalized_attn_score{nullptr}, *edgesoftmax_sum_per_node{nullptr},
-      *out{nullptr}, *grad_out{nullptr};
+      *unnormalized_attn_score{nullptr}, *out{nullptr}, *grad_out{nullptr};
   DType *grad_mu{nullptr}, *mu{nullptr};
+  DType *edgesoftmax_sum_per_node{nullptr};
   // DType* normalized_attn_score{nullptr};
   // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
 };
@@ -485,9 +484,9 @@ template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
     BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreSwitch>
         gdata,
-    const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
-    int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
+    int64_t num_rows, const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -627,10 +626,10 @@ template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
 __global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
     BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreSwitch>
         gdata,
-    DType* grad_message_src, const Idx* row_offsets, const Idx* column_indices,
-    const Idx* etypes, int64_t num_rows,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    DType *grad_message_src, const Idx *row_offsets, const Idx *column_indices,
+    const Idx *etypes, int64_t num_rows,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {

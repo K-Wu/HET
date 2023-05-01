@@ -67,10 +67,6 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
               num_relations + 1);
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
 
-  //   thrust::device_vector<int>
-  //   dev_num_blocks_assignment_for_same_relation_vect(
-  //       num_blocks_assignment_for_same_relation_vect.begin(),
-  //       num_blocks_assignment_for_same_relation_vect.end());
   thrust::device_vector<int>
       dev_num_blocks_assignment_for_all_prev_relation_vect(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
@@ -136,10 +132,6 @@ void full_graph_hetero_attention_ops(
               num_relations + 1);
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
 
-  //   thrust::device_vector<int>
-  //   dev_num_blocks_assignment_for_same_relation_vect(
-  //       num_blocks_assignment_for_same_relation_vect.begin(),
-  //       num_blocks_assignment_for_same_relation_vect.end());
   thrust::device_vector<int>
       dev_num_blocks_assignment_for_all_prev_relation_vect(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
@@ -226,10 +218,6 @@ void full_graph_hetero_attention_ops(
               num_relations + 1);
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
 
-  //   thrust::device_vector<int>
-  //   dev_num_blocks_assignment_for_same_relation_vect(
-  //       num_blocks_assignment_for_same_relation_vect.begin(),
-  //       num_blocks_assignment_for_same_relation_vect.end());
   thrust::device_vector<int>
       dev_num_blocks_assignment_for_all_prev_relation_vect(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
@@ -284,13 +272,13 @@ void full_graph_hetero_attention_ops(
           num_relations, num_fw_input_dim, num_fw_output_dim, num_heads);
 
   // delta_q = delta_attn_score*inner_product
-  BackwardToDeltaQData<int64_t, float> gdata;
-  gdata.num_heads = num_heads;
-  gdata.k_vect_dim_per_head = num_fw_output_dim;
-  gdata.eids = incsr_eids.data_ptr<int64_t>();
-  gdata.grad_q_vectors = grad_q.data_ptr<float>();
-  gdata.k_inner_product = attn_score_inner_product.data_ptr<float>();
-  gdata.grad_unnormalized_attn_score = grad_unnorm_attn_score.data_ptr<float>();
+  BackwardToDeltaQData<int64_t, float> gdata{
+      .num_heads = num_heads,
+      .k_vect_dim_per_head = num_fw_output_dim,
+      .eids = incsr_eids.data_ptr<int64_t>(),
+      .grad_unnormalized_attn_score = grad_unnorm_attn_score.data_ptr<float>(),
+      .k_inner_product = attn_score_inner_product.data_ptr<float>(),
+      .grad_q_vectors = grad_q.data_ptr<float>()};
 
   // NB: Type 2 Schedule:
   // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
@@ -303,20 +291,9 @@ void full_graph_hetero_attention_ops(
   auto [nblks_type2, nthrs_type2] = get_type2_schedule(
       gdata.num_heads, gdata.k_vect_dim_per_head * gdata.num_heads,
       incsr_row_ptr.numel() - 1);
-  //   const int64_t MAX_NBLKS = 65535;
-  //   const int64_t MAX_NTHRS = 1024;
-  //   int nthrs_y_type2 = SeastarFindNumThreads(gdata.num_heads, 64);
-  //   int nthrs_x_type2 = SeastarFindNumThreads(
-  //       gdata.k_vect_dim_per_head,
-  //       MAX_NTHRS / nthrs_y_type2);  // NB: message_out_dim is the total dim,
-  //       and
-  //                                    // the number of elements for each head
-  //                                    is
-  //                                    // message_out_dim//num_heads
-  //   int nblks_x_type2 = 1;
-  //   int nblks_y_type2 = std::min(incsr_row_ptr.numel() - 1, MAX_NBLKS);
-  //   const dim3 nthrs_type2(nthrs_x_type2, nthrs_y_type2);
-  //   const dim3 nblks_type2(nblks_x_type2, nblks_y_type2);
+  // NB: message_out_dim is the total dim,  the number of elements for each head
+  // is message_out_dim//num_heads
+
   HET__hgtQVectType2BackwardKernel<int64_t, float, false, true, true>
       <<<nblks_type2, nthrs_type2, 0, stream>>>(
           gdata, incsr_row_ptr.data_ptr<int64_t>(),
@@ -361,10 +338,6 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
               num_relations + 1);
   grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
 
-  //   thrust::device_vector<int>
-  //   dev_num_blocks_assignment_for_same_relation_vect(
-  //       num_blocks_assignment_for_same_relation_vect.begin(),
-  //       num_blocks_assignment_for_same_relation_vect.end());
   thrust::device_vector<int>
       dev_num_blocks_assignment_for_all_prev_relation_vect(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
@@ -377,11 +350,6 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
       ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
       ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), num_heads * grid_dim_y);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
-  // std::cout<< "nblks.x: " << nblks.x << " nblks.y: " << nblks.y << " nblks.z:
-  // " << nblks.z << std::endl; std::cout<< "nblks_outer_product.x: " <<
-  // nblks_outer_product.x << " nblks_outer_product.y: " <<
-  // nblks_outer_product.y << " nblks_outer_product.z: " <<
-  // nblks_outer_product.z << std::endl;
   HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp<
       COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
       int64_t, int64_t*><<<nblks, nthrs, 0, stream>>>(
