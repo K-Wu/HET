@@ -94,8 +94,6 @@ void _RelationalMatMul_separatecoo(
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
-    // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
-    //           << " nblks.z: " << nblks.z << std::endl;
     HET_RGNNFeatCompactFWProp<COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y,
                               WORK_BLOCK_SIZE, int64_t, int64_t *,
                               InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
@@ -112,8 +110,6 @@ void _RelationalMatMul_separatecoo(
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
-    // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
-    //           << " nblks.z: " << nblks.z << std::endl;
     if constexpr (ACGatherScatterListIdenticalFlag) {
       HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical<
           COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
@@ -193,8 +189,6 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
   const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, num_heads);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
-  // std::cout << "nblks.x: " << nblks.x << " nblks.y: " << nblks.y
-  //           << " nblks.z: " << nblks.z << std::endl;
   HET_RGNNMatmulNoScatterGatherListFwOrBwProp<
       COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
       int64_t, int64_t *><<<nblks, nthrs, 0, stream>>>(
