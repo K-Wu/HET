@@ -8,7 +8,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_custom_target(
   home ALL
   DEPENDS ${CMAKE_BINARY_DIR}/generated/include/generated/DebugInfo.inc.h
-          ${CMAKE_BINARY_DIR}/generated/include/CMakeLists.txt)
+          ${CMAKE_BINARY_DIR}/generated/include/CMakeLists.txt
+          ${CMAKE_BINARY_DIR}/generated/src/exported_op.cu.cc)
 
 # generate header files by calling buildutils/genutils/gen_headers.py and
 # outputing to build/generated/include/generated.inc.h
@@ -34,6 +35,17 @@ add_custom_command(
     "Copying include/CMakeLists.txt to build/generated/include/CMakeLists.txt"
   VERBATIM)
 include_directories(${CMAKE_BINARY_DIR}/generated/include)
+
+add_custom_command(
+  OUTPUT ${CMAKE_BINARY_DIR}/generated/src/exported_op.cu.cc
+  COMMAND mkdir -p ${CMAKE_BINARY_DIR}/generated/src
+  COMMAND
+    ${PYTHON_EXECUTABLE}
+    ${PROJECT_SOURCE_DIR}/hetero_edgesoftmax/buildutils/genutils/gen_torch_export.py
+    ${PROJECT_SOURCE_DIR} > ${CMAKE_BINARY_DIR}/generated/src/exported_op.cu.cc
+  # DEPENDS ${PROJECT_SOURCE_DIR}/buildutils/genutils/gen_headers.py
+  COMMENT "Generating torch export definitions"
+  VERBATIM)
 
 # Filter files that we don't want in the main library.
 #
@@ -219,8 +231,10 @@ if(BUILD_TORCH_API)
   set(TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS)
   list(APPEND TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS
        ${HETEROEDGESOFTMAX_INCLUDE_FILES})
+  # list(APPEND TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS
+  # "src/export/torch/op.cu.cc")
   list(APPEND TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS
-       "src/export/torch/op.cu.cc")
+       ${CMAKE_BINARY_DIR}/generated/src/exported_op.cu.cc)
   set(TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_CUDA_SRCS
       ${TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS})
   list(FILTER TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_CUDA_SRCS INCLUDE REGEX
