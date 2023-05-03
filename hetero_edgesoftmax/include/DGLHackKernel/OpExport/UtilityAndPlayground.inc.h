@@ -47,19 +47,6 @@ void try_get_schedule_by_relations(int64_t num_relations, int64_t num_blocks) {
 #define GIT_COMMIT_HASH "?"
 #endif
 
-void build_debug_info() {
-  std::cout << "GIT_COMMIT_HASH: " << GIT_COMMIT_HASH << std::endl;
-#ifdef ENABLE_DEBUG_MACRO
-  std::cout << "WARNING: library built in debug mode without -O3" << std::endl;
-#else
-  std::cout << "library built in release mode with -O3" << std::endl;
-#endif
-  std::cout << "library compiled by gcc " << __GNUC__ << "." << __GNUC_MINOR__
-            << "." << __GNUC_PATCHLEVEL__ << ", nvcc " << __CUDACC_VER_MAJOR__
-            << "." << __CUDACC_VER_MINOR__ << "." << __CUDACC_VER_BUILD__
-            << std::endl;
-}
-
 std::vector<std::vector<at::Tensor>> biops_tensor_info(
     at::Tensor& one_tensor, at::Tensor& other_tensor) {
   std::cout << "one_tensor device: " << one_tensor.device() << std::endl;
@@ -102,7 +89,6 @@ torch::Dict<std::string, int64_t> test_argument_takein(
 
 TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
   // Utility and debugging functions
-  m.def("build_debug_info", build_debug_info);
   m.def("try_get_schedule_by_relations", try_get_schedule_by_relations);
   m.def("biops_tensor_info", biops_tensor_info);
   m.def("tensor_info", tensor_info);

@@ -2,7 +2,8 @@ x64/
 .vs/
 .vscode/
 .idea/
-build**/
+/build**/
+third_party/build**/
 cmake-build**/
 *.log
 *.ncu-rep

@@ -31,6 +31,7 @@
 #include "DGLHackKernel/OpExport/RGCNOps.inc.h"
 #include "DGLHackKernel/OpExport/RGNNOps.inc.h"
 #include "DGLHackKernel/OpExport/UtilityAndPlayground.inc.h"
+#include "generated/DebugInfo.inc.h"
 
 // NB: let's establish a convention of namespace hierarchy, i.e.,
 // HET::TorchExport::ModelName::FwOrBwProp::FullGraphOrMinibatch::FormatSpecificationsEGIntegratedCSR::ComputeScheduleSpecificationsEGEdgeParallel::KernelName_VariantName

@@ -5,18 +5,45 @@ add_subdirectory(include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 # include_directories("${PROJECT_SOURCE_DIR}")
 
-#
+add_custom_target(
+  home ALL
+  DEPENDS ${CMAKE_BINARY_DIR}/generated/include/generated/DebugInfo.inc.h
+          ${CMAKE_BINARY_DIR}/generated/include/CMakeLists.txt)
+
+# generate header files by calling buildutils/genutils/gen_headers.py and
+# outputing to build/generated/include/generated.inc.h
+add_custom_command(
+  OUTPUT ${CMAKE_BINARY_DIR}/generated/include/generated/DebugInfo.inc.h
+  COMMAND mkdir -p ${CMAKE_BINARY_DIR}/generated/include/generated
+  COMMAND
+    ${PYTHON_EXECUTABLE}
+    ${PROJECT_SOURCE_DIR}/hetero_edgesoftmax/buildutils/genutils/gen_headers.py
+    --gen_debug_info >
+    ${CMAKE_BINARY_DIR}/generated/include/generated/DebugInfo.inc.h
+  # DEPENDS ${PROJECT_SOURCE_DIR}/buildutils/genutils/gen_headers.py
+  COMMENT "Generating header files"
+  VERBATIM)
+# copy include/CMakeLists.txt to build/generated/include/CMakeLists.txt
+add_custom_command(
+  OUTPUT ${CMAKE_BINARY_DIR}/generated/include/CMakeLists.txt
+  COMMAND
+    ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/include/CMakeLists.txt
+    ${CMAKE_BINARY_DIR}/generated/include/CMakeLists.txt
+  # DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/include/CMakeLists.txt
+  COMMENT
+    "Copying include/CMakeLists.txt to build/generated/include/CMakeLists.txt"
+  VERBATIM)
+include_directories(${CMAKE_BINARY_DIR}/generated/include)
+
 # Filter files that we don't want in the main library.
 #
 # set(FILTER_SRCS) foreach(FILE ${FILTER_SRCS}) list(REMOVE_ITEM DIR_SRCS
 # ${FILE}) endforeach(FILE)
 
-#
 # Add the sources to the build.
 #
 # list(APPEND HETEROEDGESOFTMAX_SRCS ${DIR_SRCS})
 
-#
 # Set .cu.cc files to be compiled as CUDA.
 #
 set(HETEROEDGESOFTMAX_CUDA_SRCS ${HETEROEDGESOFTMAX_SRCS})
@@ -24,27 +51,6 @@ list(FILTER HETEROEDGESOFTMAX_CUDA_SRCS INCLUDE REGEX "\.cu\.cc")
 set_source_files_properties(${HETEROEDGESOFTMAX_CUDA_SRCS} PROPERTIES LANGUAGE
                                                                       CUDA)
 
-#
-# Create lib_hetero_edgesoftmax if applicable.
-#
-# add_library(hetero_edgesoftmax SHARED ${HETEROEDGESOFTMAX_SRCS})
-# target_link_libraries(hetero_edgesoftmax ${HETEROEDGESOFTMAX_LIBS})
-
-#
-# Library installation.
-#
-# install(TARGETS sputnik) set(INSTALL_BASE "include/sputnik") install(FILES
-# "cuda_utils.h" DESTINATION ${INSTALL_BASE}) install(FILES "sputnik.h"
-# DESTINATION ${INSTALL_BASE}) install(FILES "bias_relu/bias_relu.h" DESTINATION
-# "${INSTALL_BASE}/bias_relu") install(FILES "depthwise/cuda_depthwise.h"
-# DESTINATION "${INSTALL_BASE}/depthwise") install(FILES "spmm/cuda_spmm.h"
-# DESTINATION "${INSTALL_BASE}/spmm") install(FILES "sddmm/cuda_sddmm.h"
-# DESTINATION "${INSTALL_BASE}/sddmm") install(FILES "softmax/softmax.h"
-# DESTINATION "${INSTALL_BASE}/softmax") install(FILES
-# "softmax/sparse_softmax.h" DESTINATION "${INSTALL_BASE}/softmax")
-# install(FILES "utils/index_format.h" DESTINATION "${INSTALL_BASE}/utils")
-
-#
 # build the .cu.cc files in the src directory.
 #
 # build kernel.cu.cc
