@@ -51,7 +51,10 @@ std::vector<std::vector<at::Tensor>> biops_tensor_info(
     at::Tensor& one_tensor, at::Tensor& other_tensor) {
   std::cout << "one_tensor device: " << one_tensor.device() << std::endl;
   std::cout << "other_tensor device: " << other_tensor.device() << std::endl;
-
+  std::cout << "one_tensor dtype: " << one_tensor.dtype() << std::endl;
+  std::cout << "other_tensor dtype: " << other_tensor.dtype() << std::endl;
+  std::cout << "one_tensor dataptr" << one_tensor.data_ptr() << std::endl;
+  std::cout << "other_tensor dataptr" << other_tensor.data_ptr() << std::endl;
   std::vector<std::vector<at::Tensor>> result = {
       {one_tensor.clone()}, {one_tensor.clone(), other_tensor.clone()}};
   return result;
@@ -63,6 +66,9 @@ at::Tensor tensor_info(at::Tensor& one_tensor) {
   // implements `inline T* data_ptr_impl() const` as `return
   // storage_.unsafe_data<T>() + storage_offset_;`. Notice that storage_offset
   // count in number of elements, not bytes.
+  // NB: unlike data_ptr(), data_ptr<dtype> will trigger error if the tensor is
+  // not of the dtype.
+  std::cout << "one_tensor dataptr" << one_tensor.data_ptr() << std::endl;
   std::cout << "one_tensor device: " << one_tensor.device() << std::endl;
   std::cout << "one_tensor dtype: " << one_tensor.dtype() << std::endl;
   std::cout << "one_tensor ndim: " << one_tensor.dim() << std::endl;
