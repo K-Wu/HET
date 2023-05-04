@@ -108,6 +108,8 @@ __device__ __forceinline__ Idx binary_search(Idx num_elements, const IdxPtr arr,
   return lo;
 }
 
+// TODO: optimize when warp coorperatively work on to reduce the last 4-5 global
+// loads
 // TODO: figure out metadata caching to optimize the performance
 template <typename Idx, typename IdxPtr>
 __device__ __forceinline__ Idx find_relational_compact_as_of_node_index(
@@ -165,3 +167,55 @@ __device__ __host__ __forceinline__ Idx max2(const Idx a, const Idx b) {
       std::is_same<std::false_type,                                           \
                    std::integral_constant<bool, FLAG>>::value /*unreachable*/ \
       || (/*or true*/ asserted_true_expression && reason))
+
+// can be used for both threadIdx and blockIdx
+__device__ __forceinline__ uint
+get_canonical_1D_threading_Idx(uint3 actual_threadIdx, uint3 actual_blockDim) {
+  return actual_threadIdx.x + actual_threadIdx.y * actual_blockDim.x +
+         actual_threadIdx.z * actual_blockDim.x * actual_blockDim.y;
+}
+// can be used for both threadIdx and blockIdx
+__device__ __forceinline__ uint3 get_pretended_threading_Idx(
+    uint3 actual_threadIdx, uint3 actual_blockDim, uint3 pretended_blockDim) {
+  assert(pretended_blockDim.x * pretended_blockDim.y * pretended_blockDim.z ==
+         actual_blockDim.x * actual_blockDim.y * actual_blockDim.z);
+  uint canonical_1D_threadIdx =
+      get_canonical_1D_threading_Idx(actual_threadIdx, actual_blockDim);
+  uint3 pretended_threadIdx{
+      .x = canonical_1D_threadIdx % pretended_blockDim.x,
+      .y = (canonical_1D_threadIdx %
+            (pretended_blockDim.x * pretended_blockDim.y)) /
+           pretended_blockDim.x,
+      .z = canonical_1D_threadIdx /
+           (pretended_blockDim.x * pretended_blockDim.y)};
+  return pretended_threadIdx;
+}
+
+// from
+// https://github.com/gunrock/loops/blob/6169cf64d06e17b24b7a687fe0baf7ba2347002b/include/loops/schedule/group_mapped.hxx#L109
+#include <cooperative_groups.h>
+#include <cooperative_groups/scan.h>
+
+namespace cg = cooperative_groups;
+
+#if CUDART_VERSION >= 12000
+namespace cg_x = cg;
+#else
+namespace cg_x = cooperative_groups::experimental;
+#endif
+
+// example and APIs more from
+// https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#thread-block-tile2
+// #if CUDART_VERSION >= 12000
+//     __shared__ cg_x::block_tile_memory<threads_per_block> shared_for_cg;
+// #else
+//     __shared__ cg_x::block_tile_memory<4/* by default 8*/, threads_per_block>
+//     shared_for_cg;
+// #endif
+// cg::thread_block thb = cg_x::this_thread_block(shared_for_cg);
+// auto tile = tiled_partition<128>(thb);
+// unsigned long long meta_group_size() const: Returns the number of groups
+// created when the parent group was partitioned. unsigned long long
+// meta_group_rank() const: Linear rank of the group within the set of tiles
+// partitioned from a parent group (bounded by meta_group_size) void sync()
+// const: Synchronize the threads named in the group
