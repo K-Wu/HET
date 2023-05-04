@@ -5,6 +5,7 @@
 #include <torch/library.h>
 #include "MyHyb/MyHyb.h"
 
+// TODO: KWU: allow more dtype than int64_t
 std::vector<at::Tensor> convert_integrated_coo_to_separate_coo(
     at::Tensor& integrated_row_idx, at::Tensor& integrated_col_idx,
     at::Tensor& integrated_reltypes, at::Tensor& integrated_eids,
