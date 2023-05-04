@@ -4,8 +4,8 @@
 #include "utils.cu.h"
 
 template <bool GatherFlag, typename Idx, typename IdxPtr>
-__device__ __forceinline__ float& GetRowMajorElementBasic(
-    float* matrix_data, IdxPtr gather_list, int num_heads,
+__device__ __forceinline__ float &GetRowMajorElementBasic(
+    float *matrix_data, IdxPtr gather_list, int num_heads,
     Idx feat_dim_per_head, Idx row, Idx idx_head, Idx idx_feat) {
   if constexpr (GatherFlag) {
     return matrix_data[idx_head * feat_dim_per_head +
@@ -18,8 +18,8 @@ __device__ __forceinline__ float& GetRowMajorElementBasic(
 }
 
 template <typename Idx, typename IdxPtr>
-__device__ __forceinline__ float& GetRowMajorElementAdvanced(
-    float* matrix_data, IdxPtr unique_srcs_and_dests_rel_ptr,
+__device__ __forceinline__ float &GetRowMajorElementAdvanced(
+    float *matrix_data, IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx idx_relation, Idx idx_node,
     Idx idx_head, Idx idx_feat, int num_heads, Idx feat_dim_per_head) {
   Idx offset = find_relational_compact_as_of_node_index(
@@ -32,8 +32,8 @@ __device__ __forceinline__ float& GetRowMajorElementAdvanced(
 
 template <typename Idx, typename IdxPtr, bool GatherScatterFlag,
           bool AdvancedGatherScatterFlag>
-__device__ __forceinline__ float& GetRowMajorElement(
-    float* matrix_data, IdxPtr gather_scatter_list,
+__device__ __forceinline__ float &GetRowMajorElement(
+    float *matrix_data, IdxPtr gather_scatter_list,
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx idx_relation, Idx idx_row,
     Idx idx_head, Idx idx_feat, int num_heads, Idx feat_dim_per_head) {
@@ -51,7 +51,6 @@ __device__ __forceinline__ float& GetRowMajorElement(
       CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
           AdvancedGatherScatterFlag && !GatherScatterFlag, "");
     }
-
   } else {
     return GetRowMajorElementBasic<GatherScatterFlag, Idx, IdxPtr>(
         matrix_data, gather_scatter_list, num_heads, feat_dim_per_head, idx_row,
@@ -59,16 +58,17 @@ __device__ __forceinline__ float& GetRowMajorElement(
   }
 }
 
-template <bool DOUBLE_BUFFER_FLAG, bool COARSEN_FACTOR_2_FLAG_X,
-          bool COARSEN_FACTOR_2_FLAG_Y, int SHMEM_BLOCK_SIZE,
-          bool OuterProductFlag, bool GatherAFlag, bool AdvancedGatherAFlag,
-          bool GatherBFlag, bool AdvancedGatherBFlag, bool ScatterCFlag,
+template <bool DOUBLE_BUFFER_FLAG, int THREAD_BLOCK_DIM_X,
+          int THREAD_BLOCK_DIM_Y, int SHMEM_BLOCK_SIZE_X,
+          int SHMEM_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
+          bool GatherAFlag, bool AdvancedGatherAFlag, bool GatherBFlag,
+          bool AdvancedGatherBFlag, bool ScatterCFlag,
           bool AdvancedScatterCFlag, bool AtomicUpdateFlag, typename Idx,
           typename IdxPtr, bool A_num_head_one_flag, bool B_num_head_one_flag,
           bool C_num_head_one_flag>
 class _basic_MatMulKernel {
   __device__ __forceinline__ static void execute_function(
-      float* A, float* B, float* C, IdxPtr A_gather_list, IdxPtr B_gather_list,
+      float *A, float *B, float *C, IdxPtr A_gather_list, IdxPtr B_gather_list,
       IdxPtr C_scatter_list, IdxPtr unique_srcs_and_dests_rel_ptr,
       IdxPtr unique_srcs_and_dests_node_indices, Idx idx_relation, Idx numARows,
       Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
@@ -78,21 +78,22 @@ class _basic_MatMulKernel {
 };
 
 // the double buffer version
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int SHMEM_BLOCK_SIZE, bool OuterProductFlag, bool GatherAFlag,
+template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag, bool GatherAFlag,
           bool AdvancedGatherAFlag, bool GatherBFlag, bool AdvancedGatherBFlag,
           bool ScatterCFlag, bool AdvancedScatterCFlag, bool AtomicUpdateFlag,
           typename Idx, typename IdxPtr, bool A_num_head_one_flag,
           bool B_num_head_one_flag, bool C_num_head_one_flag>
 class _basic_MatMulKernel<
-    true, COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, SHMEM_BLOCK_SIZE,
-    OuterProductFlag, GatherAFlag, AdvancedGatherAFlag, GatherBFlag,
-    AdvancedGatherBFlag, ScatterCFlag, AdvancedScatterCFlag, AtomicUpdateFlag,
-    Idx, IdxPtr, A_num_head_one_flag, B_num_head_one_flag,
-    C_num_head_one_flag> {
+    true, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, SHMEM_BLOCK_SIZE_X,
+    SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, OuterProductFlag, GatherAFlag,
+    AdvancedGatherAFlag, GatherBFlag, AdvancedGatherBFlag, ScatterCFlag,
+    AdvancedScatterCFlag, AtomicUpdateFlag, Idx, IdxPtr, A_num_head_one_flag,
+    B_num_head_one_flag, C_num_head_one_flag> {
  public:
   __device__ __forceinline__ static void execute_function(
-      float* A, float* B, float* C, IdxPtr A_gather_list, IdxPtr B_gather_list,
+      float *A, float *B, float *C, IdxPtr A_gather_list, IdxPtr B_gather_list,
       IdxPtr C_scatter_list, IdxPtr unique_srcs_and_dests_rel_ptr,
       IdxPtr unique_srcs_and_dests_node_indices, Idx idx_relation, Idx numARows,
       Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,

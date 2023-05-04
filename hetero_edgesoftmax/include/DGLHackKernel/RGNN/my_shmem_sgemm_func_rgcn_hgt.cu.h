@@ -4,10 +4,10 @@
 #include "my_shmem_sgemm_func_rgcn_hgt_functor.cu.h"
 #include "utils.cu.h"
 
-// TODO: KWU: generalize COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y to
+// NB: KWU: generalize COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y to
 // THREAD_BLOCK_SIZE_X, THREAD_BLOCK_SIZE_Y
-// TODO: KWU: split SHMEM_BLOCK_SIZE to TILE_SIZE_X, TILE_SIZE_Y, TILE_SIZE_K
-// TODO: KWU: add register tiling (left matrix uses shmem tiling and right
+// NB: KWU: split SHMEM_BLOCK_SIZE to TILE_SIZE_X, TILE_SIZE_Y, TILE_SIZE_K
+// NB: KWU: add register tiling (left matrix uses shmem tiling and right
 // matrix uses register tiling) X, Y stands for the grid/block dimension name
 // and corresponds to B column and A row, respectively
 template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
@@ -61,17 +61,31 @@ class _simplified_basic_MatMulKernel<
     // if constexpr(!DoHalfGradNormFlag){
     //   assert(inner_product == nullptr);
     // }
+
+    // TODO: KUW: supercede blockIdx/threadIdx with pretended blockIdx and
+    // threadIdx if in a mega-kernel
+
     constexpr bool RIGHT_REG_TILED_FLAG = THREAD_BLOCK_DIM_Y == 1;
 
     constexpr int COARSEN_DIVISOR_FACTOR =
         (SHMEM_BLOCK_SIZE_Y / THREAD_BLOCK_DIM_Y) *
         (SHMEM_BLOCK_SIZE_X / THREAD_BLOCK_DIM_X);
+    static_assert(SHMEM_BLOCK_SIZE_Y % THREAD_BLOCK_DIM_Y == 0, "");
+    static_assert(SHMEM_BLOCK_SIZE_X % THREAD_BLOCK_DIM_X == 0, "");
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_A =
         SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X / THREAD_BLOCK_DIM_X /
         THREAD_BLOCK_DIM_Y;
+    static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X) %
+                          (THREAD_BLOCK_DIM_X * THREAD_BLOCK_DIM_Y) ==
+                      0,
+                  "");
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_B =
         SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y / THREAD_BLOCK_DIM_X /
         THREAD_BLOCK_DIM_Y;
+    static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y) %
+                          (THREAD_BLOCK_DIM_X * THREAD_BLOCK_DIM_Y) ==
+                      0,
+                  "");
     if constexpr (!HGT_INSTEAD_OF_RGCN_FLAG) {
       // assuming this case is RGCN and there is no multiple head
       assert((blockDim.z == 1));
@@ -125,6 +139,7 @@ class _simplified_basic_MatMulKernel<
       // BLOCK_SIZE]; Each thread computes one element of Csub by accumulating
       // results into Cvalue
       float Cvalue[COARSEN_DIVISOR_FACTOR] = {};
+      // TODO: KWU: use shared memory to store innerproductterm
       float InnerProductTerm[COARSEN_DIVISOR_FACTOR] =
           {};  // zero initialization
 
@@ -146,6 +161,7 @@ class _simplified_basic_MatMulKernel<
         for (int idx_coarsen_factor = 0;
              idx_coarsen_factor < COARSEN_DIVISOR_FACTOR;
              idx_coarsen_factor++) {
+          static_assert(SHMEM_BLOCK_SIZE_Y >= COARSEN_DIVISOR_FACTOR, "");
           int thIdxRow = thIdxRow_initial +
                          idx_coarsen_factor *
                              (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR);
@@ -170,7 +186,7 @@ class _simplified_basic_MatMulKernel<
       if constexpr (OuterProductFlag) {
         int blockAssignmentIdx = blockIdx.z / num_heads;
         mLoopBeg = blockAssignmentIdx - blockIdxAlongRowBeg;
-        mLoopEnd = ceil_div<>(numARows, (Idx)SHMEM_BLOCK_SIZE_X);
+        mLoopEnd = ceil_div<>(numARows, (Idx)SHMEM_BLOCK_SIZE_Y);
         mLoopInc = strideNumBlocksAlongRow;
       } else {
         mLoopBeg = 0;
@@ -209,27 +225,28 @@ class _simplified_basic_MatMulKernel<
                 (threadIdx.y * THREAD_BLOCK_DIM_X + threadIdx.x) %
                     SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT +
                 loadLoopIdx * (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR);
+            static_assert(SHMEM_BLOCK_SIZE_Y % COARSEN_DIVISOR_FACTOR == 0, "");
             int thIdxFeat_A_outer_product =
                 (threadIdx.y * THREAD_BLOCK_DIM_X + threadIdx.x) /
                 SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT;
             As[thIdxRow_A_outer_product][thIdxFeat_A_outer_product] =
                 (thIdxFeat_A_outer_product +
-                         (m)*SHMEM_BLOCK_SIZE_Y <  // + blockRowJobEntryBeg <
+                         (m)*SHMEM_BLOCK_SIZE_K <  // + blockRowJobEntryBeg <
                      numARows &&
-                 blockRow * SHMEM_BLOCK_SIZE_K + thIdxRow_A_outer_product <
+                 blockRow * SHMEM_BLOCK_SIZE_Y + thIdxRow_A_outer_product <
                      num_A_cols)
                     ? A[A_gather_list[thIdxFeat_A_outer_product +
-                                      (m)*SHMEM_BLOCK_SIZE_Y +
+                                      (m)*SHMEM_BLOCK_SIZE_K +
                                       blockRowJobEntryBeg] *
                             num_A_cols * num_heads +
                         num_A_cols * idx_head +
-                        (blockRow * SHMEM_BLOCK_SIZE_K +
+                        (blockRow * SHMEM_BLOCK_SIZE_Y +
                          thIdxRow_A_outer_product)] *
                           (NoEdgeNormFlag
                                ? 1.0f
                                : edge_norm[separate_coo_eids
                                                    [thIdxFeat_A_outer_product +
-                                                    (m)*SHMEM_BLOCK_SIZE_Y +
+                                                    (m)*SHMEM_BLOCK_SIZE_K +
                                                     blockRowJobEntryBeg] *
                                                num_heads +
                                            idx_head])
@@ -237,34 +254,26 @@ class _simplified_basic_MatMulKernel<
           }
           for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR_LOAD_B;
                loadLoopIdx++) {
+            // NB: KWU: for outerproduct, the m loop variable is on the K
+            // dimension
             int thIdxRow = thIdxRow_initial +
                            loadLoopIdx * (SHMEM_BLOCK_SIZE_K /
                                           COARSEN_DIVISOR_FACTOR_LOAD_B);
             int thIdxFeat = thIdxFeat_initial;
+            float value_to_load =
+                ((m)*SHMEM_BLOCK_SIZE_K + thIdxRow <  //+ blockRowJobEntryBeg <
+                     numARows &&
+                 blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols)
+                    ? B[B_gather_list[(m)*SHMEM_BLOCK_SIZE_K + thIdxRow +
+                                      blockRowJobEntryBeg] *
+                            num_B_cols * num_heads +
+                        num_B_cols * idx_head +
+                        (blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat)]
+                    : 0.0f;
             if constexpr (RIGHT_REG_TILED_FLAG) {
-              Bs_reg[thIdxRow] =
-                  ((m)*SHMEM_BLOCK_SIZE_K +
-                           thIdxRow <  //+ blockRowJobEntryBeg <
-                       numARows &&
-                   blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols)
-                      ? B[B_gather_list[(m)*SHMEM_BLOCK_SIZE_K + thIdxRow +
-                                        blockRowJobEntryBeg] *
-                              num_B_cols * num_heads +
-                          num_B_cols * idx_head +
-                          (blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat)]
-                      : 0.0f;
+              Bs_reg[thIdxRow] = value_to_load;
             } else {
-              Bs[thIdxRow][thIdxFeat] =
-                  ((m)*SHMEM_BLOCK_SIZE_K +
-                           thIdxRow <  //+ blockRowJobEntryBeg <
-                       numARows &&
-                   blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols)
-                      ? B[B_gather_list[(m)*SHMEM_BLOCK_SIZE_K + thIdxRow +
-                                        blockRowJobEntryBeg] *
-                              num_B_cols * num_heads +
-                          num_B_cols * idx_head +
-                          (blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat)]
-                      : 0.0f;
+              Bs[thIdxRow][thIdxFeat] = value_to_load;
             }
           }
         } else {
@@ -326,22 +335,18 @@ class _simplified_basic_MatMulKernel<
                            loadLoopIdx * (SHMEM_BLOCK_SIZE_K /
                                           COARSEN_DIVISOR_FACTOR_LOAD_B);
             int thIdxFeat = thIdxFeat_initial;
+
+            float value_to_load =
+                (m * SHMEM_BLOCK_SIZE_K + thIdxRow < num_A_cols &&
+                 blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols)
+                    ? B[(m * SHMEM_BLOCK_SIZE_K + thIdxRow) * num_B_cols +
+                        idx_head * num_B_cols * num_A_cols +
+                        (blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat)]
+                    : 0.0f;
             if constexpr (RIGHT_REG_TILED_FLAG) {
-              Bs_reg[thIdxFeat] =
-                  (m * SHMEM_BLOCK_SIZE_K + thIdxRow < num_A_cols &&
-                   blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols)
-                      ? B[(m * SHMEM_BLOCK_SIZE_K + thIdxRow) * num_B_cols +
-                          idx_head * num_B_cols * num_A_cols +
-                          (blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat)]
-                      : 0.0f;
+              Bs_reg[thIdxFeat] = value_to_load;
             } else {
-              Bs[thIdxRow][thIdxFeat] =
-                  (m * SHMEM_BLOCK_SIZE_K + thIdxRow < num_A_cols &&
-                   blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols)
-                      ? B[(m * SHMEM_BLOCK_SIZE_K + thIdxRow) * num_B_cols +
-                          idx_head * num_B_cols * num_A_cols +
-                          (blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat)]
-                      : 0.0f;
+              Bs[thIdxRow][thIdxFeat] = value_to_load;
             }
           }
         }
@@ -376,6 +381,7 @@ class _simplified_basic_MatMulKernel<
         //   }
         // }
 
+        // TODO: KWU: switch to cg::sync
         __syncthreads();
         // Synchronize to make sure the sub-matrices are loaded
         // before starting the computation
@@ -384,19 +390,17 @@ class _simplified_basic_MatMulKernel<
           for (int idx_coarsen_factor = 0;
                idx_coarsen_factor < COARSEN_DIVISOR_FACTOR;
                ++idx_coarsen_factor) {
-            if (RIGHT_REG_TILED_FLAG) {
-              Cvalue[idx_coarsen_factor] +=
-                  As[thIdxRow_initial +
-                     idx_coarsen_factor *
-                         (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR)][e] *
-                  Bs_reg[e];
+            float right_operand;
+            if constexpr (RIGHT_REG_TILED_FLAG) {
+              right_operand = Bs_reg[e];
             } else {
-              Cvalue[idx_coarsen_factor] +=
-                  As[thIdxRow_initial +
-                     idx_coarsen_factor *
-                         (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR)][e] *
-                  Bs[e][thIdxFeat_initial];
+              right_operand = Bs[e][thIdxFeat_initial];
             }
+            Cvalue[idx_coarsen_factor] +=
+                As[thIdxRow_initial +
+                   idx_coarsen_factor *
+                       (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR)][e] *
+                right_operand;
           }
         }
 
@@ -572,6 +576,8 @@ __global__ void __launch_bounds__(256, 3)
         IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
         int *accum_num_blocks_per_relation, Idx num_relations, Idx input_dim,
         Idx output_dim) {
+  // TODO: KUW: supercede blockIdx/threadIdx with pretended blockIdx and
+  // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -602,6 +608,8 @@ __global__ void __launch_bounds__(256, 3)
         IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
         IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
         Idx num_relations, Idx delta_output_dim, Idx delta_input_dim) {
+  // TODO: KUW: supercede blockIdx/threadIdx with pretended blockIdx and
+  // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.z;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -634,6 +642,8 @@ __global__ void __launch_bounds__(256, 3)
         IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
         IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
         Idx num_relations, Idx delta_output_dim, Idx delta_input_dim) {
+  // TODO: KUW: supercede blockIdx/threadIdx with pretended blockIdx and
+  // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -670,6 +680,8 @@ __global__ void __launch_bounds__(256, 3)
         IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
         IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
         Idx num_relations, Idx input_dim, Idx output_dim, int num_heads) {
+  // TODO: KUW: supercede blockIdx/threadIdx with pretended blockIdx and
+  // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -704,6 +716,8 @@ __global__ void HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp(
     Idx num_relations, Idx input_dim, Idx delta_output_dim, int num_heads) {
   // TODO: block assignment scheme might be different when OuterProductFlag ==
   // True
+  // TODO: KUW: supercede blockIdx/threadIdx with pretended blockIdx and
+  // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -737,6 +751,8 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
     IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
     Idx num_relations, Idx delta_output_dim, Idx delta_input_dim,
     int num_heads) {
+  // TODO: KUW: supercede blockIdx/threadIdx with pretended blockIdx and
+  // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -770,6 +786,8 @@ __global__ void __launch_bounds__(256, 3) HET_HGTFusedAttnScoreFwProp(
     IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
     Idx num_relations, Idx fw_input_dim_per_head, Idx fw_output_dim_per_head,
     int num_heads) {
+  // TODO: KUW: supercede blockIdx/threadIdx with pretended blockIdx and
+  // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -807,7 +825,8 @@ __global__ void HET_HGTFusedAttnScoreDeltaKVectBckProp(
     int *accum_num_blocks_per_relation, Idx num_relations,
     Idx fw_input_dim_per_head, Idx fw_output_dim_per_head, int num_heads) {
   // edge_norm is delta_attn_score
-
+  // TODO: KUW: supercede blockIdx/threadIdx with pretended blockIdx and
+  // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -845,13 +864,11 @@ __global__ void HET_HGTFusedAttnScoreDeltaWeightBckProp(
     Idx fw_input_dim_per_head, Idx fw_output_dim_per_head, int num_heads) {
   // edge_norm is delta_attn_score
   // TODO: use int instead for idx_block_assignment and idx_relation
+  // TODO: KUW: supercede blockIdx/threadIdx with pretended blockIdx and
+  // threadIdx if in a mega-kernel
   int idx_block_assignment = blockIdx.z / num_heads;
   int idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  // if (threadIdx.x == 0 && threadIdx.y == 0){
-  //     printf("idx_relation=%d, idx_block_z=%d, num_relations=%d\n",
-  //     idx_relation, blockIdx.z , num_relations);
-  //   }
   _simplified_basic_MatMulKernel<
       false, COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
       COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
