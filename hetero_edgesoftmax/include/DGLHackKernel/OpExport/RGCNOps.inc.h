@@ -99,6 +99,7 @@ void Layer1_SeparateCOO(at::Tensor &separate_coo_relptrs,
   const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
                    grid_dim_y, 1);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
+  // TODO: KWU: allow more dtype options in this file
   HET_RGCNMatmulNoScatterGatherListFwProp<COARSEN_FACTOR_2_FLAG_X,
                                           COARSEN_FACTOR_2_FLAG_Y,
                                           WORK_BLOCK_SIZE, int64_t, int64_t *>
