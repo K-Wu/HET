@@ -14,25 +14,33 @@ option(BUILD_BENCHMARK "build sputnik benchmark suite" ON)
 option(BUILD_GENERATED "build sputnik-based generated op code" ON)
 option(BUILD_TORCH_API "build torch api library" ON)
 option(RES_USAGE "show resource usage during nvcc compilation" OFF)
+option(GITHUB_ACTION_TEST
+       "turn on if the machine does not have cuda device, e.g., github action"
+       OFF)
 
 if(DEFINED CUDA_ARCHS)
   # exit with error
   message(FATAL_ERROR "CUDA_ARCHS is deprecated.")
-  # create_cuda_gencode_flags(CUDA_GENCODE_FLAGS ${CUDA_ARCHS})
-  # set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${CUDA_GENCODE_FLAGS}")
 endif()
 
 # from https://stackoverflow.com/a/69353718
-include(FindCUDA/select_compute_arch)
-cuda_detect_installed_gpus(INSTALLED_GPU_CCS_1)
-string(STRIP "${INSTALLED_GPU_CCS_1}" INSTALLED_GPU_CCS_2)
-string(REPLACE " " ";" INSTALLED_GPU_CCS_3 "${INSTALLED_GPU_CCS_2}")
-string(REPLACE "." "" CUDA_ARCH_LIST "${INSTALLED_GPU_CCS_3}")
-message("CUDA_ARCH_LIST = ${CUDA_ARCH_LIST}")
-set(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
-set_property(GLOBAL PROPERTY CUDA_ARCHITECTURES "${CUDA_ARCH_LIST}")
-# set CUDA_ARCHS as a two-digit number for sputnik
-set(CUDA_ARCHS ${CUDA_ARCH_LIST})
+if(GITHUB_ACTION_TEST)
+  # set a fake cuda arch for github action test purpose
+  set(CUDA_ARCHS 75)
+  create_cuda_gencode_flags(CUDA_GENCODE_FLAGS ${CUDA_ARCHS})
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${CUDA_GENCODE_FLAGS}")
+else()
+  include(FindCUDA/select_compute_arch)
+  cuda_detect_installed_gpus(INSTALLED_GPU_CCS_1)
+  string(STRIP "${INSTALLED_GPU_CCS_1}" INSTALLED_GPU_CCS_2)
+  string(REPLACE " " ";" INSTALLED_GPU_CCS_3 "${INSTALLED_GPU_CCS_2}")
+  string(REPLACE "." "" CUDA_ARCH_LIST "${INSTALLED_GPU_CCS_3}")
+  message("CUDA_ARCH_LIST = ${CUDA_ARCH_LIST}")
+  set(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
+  set_property(GLOBAL PROPERTY CUDA_ARCHITECTURES "${CUDA_ARCH_LIST}")
+  # set CUDA_ARCHS as a two-digit number for sputnik
+  set(CUDA_ARCHS ${CUDA_ARCH_LIST})
+endif()
 
 #
 # Handle Dependencies.
