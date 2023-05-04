@@ -5,58 +5,58 @@ import torch as th
 from ..kernels import K
 
 
-class RgnnRelationalMatmulACScatterGatherListIdentical(th.autograd.Function):
-    @staticmethod
-    def forward(
-        ctx,
-        separate_coo_relptrs,
-        separate_coo_eids,
-        weights,
-        inputs,
-        ret,
-        input_num_head_one_flag,
-    ):
-        ctx.save_for_backward(
-            separate_coo_relptrs,
-            separate_coo_eids,
-            weights,
-            inputs,
-        )
-        ctx.input_num_head_one_flag = input_num_head_one_flag
-        K.rgnn_relational_matmul_ac_gather_scatter_list_identical(
-            separate_coo_relptrs,
-            separate_coo_eids,
-            weights,
-            inputs,
-            ret,
-            input_num_head_one_flag,
-        )
-        return ret
+# class RgnnRelationalMatmulACScatterGatherListIdentical(th.autograd.Function):
+#     @staticmethod
+#     def forward(
+#         ctx,
+#         separate_coo_relptrs,
+#         separate_coo_eids,
+#         weights,
+#         inputs,
+#         ret,
+#         input_num_head_one_flag,
+#     ):
+#         ctx.save_for_backward(
+#             separate_coo_relptrs,
+#             separate_coo_eids,
+#             weights,
+#             inputs,
+#         )
+#         ctx.input_num_head_one_flag = input_num_head_one_flag
+#         K.rgnn_relational_matmul_ac_gather_scatter_list_identical(
+#             separate_coo_relptrs,
+#             separate_coo_eids,
+#             weights,
+#             inputs,
+#             ret,
+#             input_num_head_one_flag,
+#         )
+#         return ret
 
-    @staticmethod
-    def backward(ctx, gradout):
-        (
-            separate_coo_relptrs,
-            separate_coo_eids,
-            weights,
-            inputs,
-        ) = ctx.saved_tensors
-        input_num_head_one_flag = ctx.input_num_head_one_flag
-        grad_weight = th.zeros_like(weights, memory_format=th.contiguous_format)
-        grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
-        K.backward_rgnn_relational_matmul_ac_gather_scatter_list_identical(
-            separate_coo_relptrs,
-            separate_coo_eids,
-            th.transpose(weights, 2, 3).contiguous(),
-            inputs,
-            gradout.contiguous(),
-            grad_input,
-            grad_weight,
-            input_num_head_one_flag,
-        )
-        # fmt: off
-        return None, None, grad_weight, grad_input, None, None
-        # fmt: on
+#     @staticmethod
+#     def backward(ctx, gradout):
+#         (
+#             separate_coo_relptrs,
+#             separate_coo_eids,
+#             weights,
+#             inputs,
+#         ) = ctx.saved_tensors
+#         input_num_head_one_flag = ctx.input_num_head_one_flag
+#         grad_weight = th.zeros_like(weights, memory_format=th.contiguous_format)
+#         grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
+#         K.backward_rgnn_relational_matmul_ac_gather_scatter_list_identical(
+#             separate_coo_relptrs,
+#             separate_coo_eids,
+#             th.transpose(weights, 2, 3).contiguous(),
+#             inputs,
+#             gradout.contiguous(),
+#             grad_input,
+#             grad_weight,
+#             input_num_head_one_flag,
+#         )
+#         # fmt: off
+#         return None, None, grad_weight, grad_input, None, None
+#         # fmt: on
 
 
 class RgnnRelationalMatmul(th.autograd.Function):
@@ -139,27 +139,27 @@ def rgnn_relational_matmul(
         device=weights.device,
         requires_grad=True,
     ).contiguous()
-    if separate_coo_node_indices.data_ptr() == separate_coo_eids.data_ptr():
-        return RgnnRelationalMatmulACScatterGatherListIdentical.apply(
-            separate_coo_relptrs,
-            separate_coo_eids,
-            weights.contiguous(),
-            inputs.contiguous(),
-            ret,
-            input_num_head_one_flag,
-        )
-    else:
-        return RgnnRelationalMatmul.apply(
-            separate_coo_relptrs,
-            separate_coo_node_indices,
-            separate_coo_eids,
-            # unique_srcs_and_dests_rel_ptr,
-            # unique_srcs_and_dests_node_indices,
-            weights.contiguous(),
-            inputs.contiguous(),
-            ret,
-            input_num_head_one_flag,
-        )
+    # if separate_coo_node_indices.data_ptr() == separate_coo_eids.data_ptr():
+    #     return RgnnRelationalMatmulACScatterGatherListIdentical.apply(
+    #         separate_coo_relptrs,
+    #         separate_coo_eids,
+    #         weights.contiguous(),
+    #         inputs.contiguous(),
+    #         ret,
+    #         input_num_head_one_flag,
+    #     )
+    # else:
+    return RgnnRelationalMatmul.apply(
+        separate_coo_relptrs,
+        separate_coo_node_indices,
+        separate_coo_eids,
+        # unique_srcs_and_dests_rel_ptr,
+        # unique_srcs_and_dests_node_indices,
+        weights.contiguous(),
+        inputs.contiguous(),
+        ret,
+        input_num_head_one_flag,
+    )
 
 
 class RgnnRelationalMatmulNoScatterGatherList(th.autograd.Function):

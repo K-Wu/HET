@@ -14,6 +14,8 @@ namespace HET {
 namespace TorchExport {
 namespace RGNN {
 namespace FwProp {
+
+// TODO: KWU: use reg tiling here: test fuse attn score vs non-fused
 // TODO: remove the unused SingleSidedCompactAsOfNodeFlag and its logic
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int WORK_BLOCK_SIZE, bool CompactAsOfNodeFlag,
@@ -34,6 +36,9 @@ void _RelationalMatMul_separatecoo(
       weights.size(3);  // weight shape (num_relations, n_heads,
                         // in_feat, out_feat // n_heads)
   int64_t num_edges;
+
+  // TODO: KWU: add reg-tiled speicifc configurations by introducing tenary
+  // operators NB: configuration specific to shmem-tiled sgemm
   constexpr int THREADING_BLOCK_SIZE_X =
       COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
   constexpr int THREADING_BLOCK_SIZE_Y =
@@ -94,6 +99,7 @@ void _RelationalMatMul_separatecoo(
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
+    // TODO: KWU: allow more dtype options in this file
     HET_RGNNFeatCompactFWProp<COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y,
                               WORK_BLOCK_SIZE, int64_t, int64_t *,
                               InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
@@ -110,6 +116,7 @@ void _RelationalMatMul_separatecoo(
     const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
                      grid_dim_y, num_heads);
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
+    // TODO: KWU: simplify this and the API exposed to Python
     if constexpr (ACGatherScatterListIdenticalFlag) {
       HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical<
           COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
@@ -122,6 +129,7 @@ void _RelationalMatMul_separatecoo(
               dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
           num_relations);
     } else {
+      // TODO: KWU: add a new reg tile version
       HET_RGNNFeatPerEdgeFWProp<COARSEN_FACTOR_2_FLAG_X,
                                 COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
                                 int64_t, int64_t *, InputNumHeadOneFlag>
@@ -213,14 +221,29 @@ void RelationalMatMul_separatecoo(at::Tensor &separate_coo_relptrs,
                                   at::Tensor &weights, at::Tensor &node_feat,
                                   at::Tensor &ret, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
-  if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<true, true, 32, false, false, true>(
-        separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
-        dummy_tensor, dummy_tensor, weights, node_feat, ret);
+  // TODO: KWU: simplify the PyThon API so that we don't need to have two APIs
+  // for num_heads==1 vs. num_heads>1 if separate_coo_node_indices and
+  // separate_coo_eids are the same tenssor
+  if (separate_coo_node_indices.data_ptr() == separate_coo_eids.data_ptr()) {
+    if (InputNumHeadOneFlag) {
+      _RelationalMatMul_separatecoo<true, true, 32, false, true, true>(
+          separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
+          dummy_tensor, weights, node_feat, ret);
+    } else {
+      _RelationalMatMul_separatecoo<true, true, 32, false, true, false>(
+          separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
+          dummy_tensor, weights, node_feat, ret);
+    }
   } else {
-    _RelationalMatMul_separatecoo<true, true, 32, false, false, false>(
-        separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
-        dummy_tensor, dummy_tensor, weights, node_feat, ret);
+    if (InputNumHeadOneFlag) {
+      _RelationalMatMul_separatecoo<true, true, 32, false, false, true>(
+          separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
+          dummy_tensor, dummy_tensor, weights, node_feat, ret);
+    } else {
+      _RelationalMatMul_separatecoo<true, true, 32, false, false, false>(
+          separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
+          dummy_tensor, dummy_tensor, weights, node_feat, ret);
+    }
   }
 }
 
@@ -229,6 +252,7 @@ void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
     at::Tensor &weights, at::Tensor &node_feat, at::Tensor &ret,
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
+  assert(0 && "deprecated");
   if (InputNumHeadOneFlag) {
     _RelationalMatMul_separatecoo<true, true, 32, false, true, true>(
         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
@@ -657,16 +681,31 @@ void RelationalMatMul_separatecoo(
     at::Tensor &node_feat, at::Tensor &gradout, at::Tensor &grad_node_feat,
     at::Tensor &grad_weights, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
-  if (InputNumHeadOneFlag) {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false, true>(
-        separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
-        dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
-        grad_node_feat, grad_weights);
+  if (separate_coo_eids.data_ptr() == separate_coo_node_indices.data_ptr()) {
+    if (InputNumHeadOneFlag) {
+      _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true, true>(
+          separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
+          dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
+          grad_weights);
+    } else {
+      _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true, false>(
+          separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
+          dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
+          grad_weights);
+    }
   } else {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false, false>(
-        separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
-        dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
-        grad_node_feat, grad_weights);
+    if (InputNumHeadOneFlag) {
+      _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false, true>(
+          separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
+          dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
+          grad_node_feat, grad_weights);
+    } else {
+      _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false,
+                                            false>(
+          separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
+          dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
+          grad_node_feat, grad_weights);
+    }
   }
 }
 
@@ -675,6 +714,7 @@ void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
     at::Tensor &weights_transposed, at::Tensor &node_feat, at::Tensor &gradout,
     at::Tensor &grad_node_feat, at::Tensor &grad_weights,
     bool InputNumHeadOneFlag) {
+  assert(0 && "deprecated");
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
     _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true, true>(
@@ -943,12 +983,12 @@ TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
   m.def("rgnn_relational_matmul", RGNN::FwProp::RelationalMatMul_separatecoo);
   m.def("backward_rgnn_relational_matmul",
         RGNN::BckProp::RelationalMatMul_separatecoo);
-  m.def(
-      "rgnn_relational_matmul_ac_gather_scatter_list_identical",
-      RGNN::FwProp::RelationalMatMul_ACGatherScatterListIdentical_separatecoo);
-  m.def(
-      "backward_rgnn_relational_matmul_ac_gather_scatter_list_identical",
-      RGNN::BckProp::RelationalMatMul_ACGatherScatterListIdentical_separatecoo);
+  //   m.def(
+  //       "rgnn_relational_matmul_ac_gather_scatter_list_identical",
+  //       RGNN::FwProp::RelationalMatMul_ACGatherScatterListIdentical_separatecoo);
+  //   m.def(
+  //       "backward_rgnn_relational_matmul_ac_gather_scatter_list_identical",
+  //       RGNN::BckProp::RelationalMatMul_ACGatherScatterListIdentical_separatecoo);
   m.def("backward_rgnn_relational_matmul_compact_as_of_node",
         RGNN::BckProp::RelationalMatMulCompactAsOfNode_unique_rel_node_indices);
   m.def("rgnn_relational_matmul_compact_as_of_node",

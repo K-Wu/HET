@@ -107,46 +107,47 @@ def backward_rgnn_relational_matmul(
     )
 
 
-def rgnn_relational_matmul_ac_gather_scatter_list_identical(
-    separate_coo_relptrs,
-    separate_coo_eids,
-    weights,  # (num_edge_types, num_heads, in_dim, feat_dim)
-    inputs,  # (num edges, num_heads, in_dim)
-    ret,  # (num edges, num_heads, feat_dim)
-    input_num_head_one_flag,
-):
-    rgnn_relational_matmul(
-        separate_coo_relptrs,
-        separate_coo_eids,
-        separate_coo_eids,
-        weights,
-        inputs,
-        ret,
-        input_num_head_one_flag,
-    )
+# NB: KWU: reflect the deprecation
+# def rgnn_relational_matmul_ac_gather_scatter_list_identical(
+#     separate_coo_relptrs,
+#     separate_coo_eids,
+#     weights,  # (num_edge_types, num_heads, in_dim, feat_dim)
+#     inputs,  # (num edges, num_heads, in_dim)
+#     ret,  # (num edges, num_heads, feat_dim)
+#     input_num_head_one_flag,
+# ):
+#     rgnn_relational_matmul(
+#         separate_coo_relptrs,
+#         separate_coo_eids,
+#         separate_coo_eids,
+#         weights,
+#         inputs,
+#         ret,
+#         input_num_head_one_flag,
+#     )
 
 
-def backward_rgnn_relational_matmul_ac_gather_scatter_list_identical(
-    separate_coo_relptrs,
-    separate_coo_eids,
-    weights_transposed,  # (num_edge_types, num_heads, feat_dim, in_dim)
-    inputs,  # (num edges, num_heads, in_dim)
-    gradout,  # (num edges, num_heads, feat_dim)
-    grad_input,  # (num edges, num_heads, in_dim)
-    grad_weight,  # (num_heads, in_dim, feat_dim)
-    input_num_head_one_flag,
-):
-    backward_rgnn_relational_matmul(
-        separate_coo_relptrs,
-        separate_coo_eids,
-        separate_coo_eids,
-        weights_transposed,
-        inputs,
-        gradout,
-        grad_input,
-        grad_weight,
-        input_num_head_one_flag,
-    )
+# def backward_rgnn_relational_matmul_ac_gather_scatter_list_identical(
+#     separate_coo_relptrs,
+#     separate_coo_eids,
+#     weights_transposed,  # (num_edge_types, num_heads, feat_dim, in_dim)
+#     inputs,  # (num edges, num_heads, in_dim)
+#     gradout,  # (num edges, num_heads, feat_dim)
+#     grad_input,  # (num edges, num_heads, in_dim)
+#     grad_weight,  # (num_heads, in_dim, feat_dim)
+#     input_num_head_one_flag,
+# ):
+#     backward_rgnn_relational_matmul(
+#         separate_coo_relptrs,
+#         separate_coo_eids,
+#         separate_coo_eids,
+#         weights_transposed,
+#         inputs,
+#         gradout,
+#         grad_input,
+#         grad_weight,
+#         input_num_head_one_flag,
+#     )
 
 
 def rgnn_relational_matmul_compact_as_of_node(
