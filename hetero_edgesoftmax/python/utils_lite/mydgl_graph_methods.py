@@ -84,7 +84,8 @@ def generate_get_separate_unique_node_idx_single_sided_for_each_etype(
 def generate_separate_unique_node_idx_for_each_etype(
     num_rels, rel_ptr, row_idx, col_idx, get_inverse_idx=False
 ):
-    result_node_idx_reverse_idx = []
+    if get_inverse_idx:
+        result_node_idx_reverse_idx = []
     result_node_idx = []
     result_rel_ptr = [0]
     for idx_relation in range(num_rels):
@@ -98,21 +99,25 @@ def generate_separate_unique_node_idx_for_each_etype(
             return_inverse=get_inverse_idx,
         )
         if get_inverse_idx:
-            # unpack the result
+            # node_idx_for_curr_relation is a tuple, unpack the result
             (
                 node_idx_for_curr_relation,
                 node_idx_for_curr_relation_reverse_idx,
             ) = node_idx_for_curr_relation
+            result_node_idx_reverse_idx.append(node_idx_for_curr_relation_reverse_idx)
         else:
-            node_idx_for_curr_relation_reverse_idx = None
+            # node_idx_for_curr_relation is a tensor, do nothing
+            pass
 
-        result_node_idx_reverse_idx.append(node_idx_for_curr_relation_reverse_idx)
         result_node_idx.append(node_idx_for_curr_relation)
         result_rel_ptr.append(
             (result_rel_ptr[-1] + node_idx_for_curr_relation.shape[0])
         )
 
     result_node_idx = torch.concat(result_node_idx)
-    result_node_idx_reverse_idx = torch.concat(result_node_idx_reverse_idx)
+    if get_inverse_idx:
+        result_node_idx_reverse_idx = torch.concat(result_node_idx_reverse_idx)
+    else:
+        result_node_idx_reverse_idx = None
     result_rel_ptr = torch.tensor(result_rel_ptr, dtype=torch.int64)
     return result_node_idx, result_rel_ptr, result_node_idx_reverse_idx
