@@ -17,9 +17,8 @@ namespace FwProp {
 
 // TODO: KWU: use reg tiling here: test fuse attn score vs non-fused
 // TODO: remove the unused SingleSidedCompactAsOfNodeFlag and its logic
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int WORK_BLOCK_SIZE, bool CompactAsOfNodeFlag,
-          bool ACGatherScatterListIdenticalFlag, bool InputNumHeadOneFlag>
+template <bool CompactAsOfNodeFlag, bool ACGatherScatterListIdenticalFlag,
+          bool InputNumHeadOneFlag>
 void _RelationalMatMul_separatecoo(
     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
     at::Tensor &separate_coo_eids, at::Tensor &unique_srcs_and_dests_rel_ptr,
@@ -39,10 +38,22 @@ void _RelationalMatMul_separatecoo(
 
   // TODO: KWU: add reg-tiled speicifc configurations by introducing tenary
   // operators NB: configuration specific to shmem-tiled sgemm
+
+  // assuming coarsening in both x and y direction if shmem is used instead of
+  // reg tiling
+  constexpr bool REG_TILING_FLAG = true;
+
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
+  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
+  //   constexpr int THREADING_BLOCK_SIZE_X =
+  //       COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+  //   constexpr int THREADING_BLOCK_SIZE_Y =
+  //       COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
   constexpr int THREADING_BLOCK_SIZE_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
   constexpr int THREADING_BLOCK_SIZE_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
 
   if constexpr (CompactAsOfNodeFlag) {
     num_edges = unique_srcs_and_dests_node_indices.numel();
@@ -50,7 +61,7 @@ void _RelationalMatMul_separatecoo(
     num_edges = separate_coo_eids.numel();
   }
   int grid_dim_y = std::min(
-      ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE),
+      ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
       (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
                         // case the total number of blocks is slightly larger
                         // due to relationship with very few workloads
@@ -63,7 +74,7 @@ void _RelationalMatMul_separatecoo(
              num_blocks_assignment_for_all_prev_relation_vect) =
         get_schedule_by_relation_kernel_launch_metadata<false, false,
                                                         int64_t *>(
-            grid_dim_y, num_relations, WORK_BLOCK_SIZE,
+            grid_dim_y, num_relations, WORK_BLOCK_SIZE_Y,
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>(),
             unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>() +
                 num_relations + 1);
@@ -74,7 +85,7 @@ void _RelationalMatMul_separatecoo(
              num_blocks_assignment_for_all_prev_relation_vect) =
         get_schedule_by_relation_kernel_launch_metadata<false, false,
                                                         int64_t *>(
-            grid_dim_y, num_relations, WORK_BLOCK_SIZE,
+            grid_dim_y, num_relations, WORK_BLOCK_SIZE_Y,
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
             separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
                 num_relations + 1);
@@ -90,18 +101,30 @@ void _RelationalMatMul_separatecoo(
           num_blocks_assignment_for_all_prev_relation_vect.end());
 
   if constexpr (CompactAsOfNodeFlag) {
+    if constexpr (REG_TILING_FLAG) {
+      // not implemented yet
+      assert(0 && "not implemented yet");
+    }
+    if constexpr (WORK_BLOCK_SIZE_X != WORK_BLOCK_SIZE_Y ||
+                  WORK_BLOCK_SIZE_X != WORK_BLOCK_SIZE_K) {
+      assert(0 && "not implemented yet");
+    }
     if constexpr (ACGatherScatterListIdenticalFlag) {
       CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
           CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag,
           "CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag");
     }
+
+    constexpr bool COARSEN_FACTOR_2_FLAG_X = REG_TILING_FLAG ? false : true;
+    constexpr bool COARSEN_FACTOR_2_FLAG_Y = REG_TILING_FLAG ? false : true;
     // NB: my shmem sgemm matmul scheme
-    const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
-                     grid_dim_y, num_heads);
+    const dim3 nblks(
+        ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE_X),
+        grid_dim_y, num_heads);
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
     // TODO: KWU: allow more dtype options in this file
     HET_RGNNFeatCompactFWProp<COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y,
-                              WORK_BLOCK_SIZE, int64_t, int64_t *,
+                              WORK_BLOCK_SIZE_Y, int64_t, int64_t *,
                               InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
         node_feat.data_ptr<float>(), weights.data_ptr<float>(),
         ret.data_ptr<float>(),
@@ -113,14 +136,16 @@ void _RelationalMatMul_separatecoo(
         num_relations);
   } else {
     // NB: my shmem sgemm matmul scheme
-    const dim3 nblks(ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE),
-                     grid_dim_y, num_heads);
+    const dim3 nblks(
+        ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE_X),
+        grid_dim_y, num_heads);
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
     // TODO: KWU: simplify this and the API exposed to Python
     if constexpr (ACGatherScatterListIdenticalFlag) {
       HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical<
-          COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-          int64_t, int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+          THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+          WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *,
+          InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
           node_feat.data_ptr<float>(), weights.data_ptr<float>(),
           ret.data_ptr<float>(), separate_coo_relptrs.data_ptr<int64_t>(),
           separate_coo_eids.data_ptr<int64_t>(), num_input_dim,
@@ -130,9 +155,10 @@ void _RelationalMatMul_separatecoo(
           num_relations);
     } else {
       // TODO: KWU: add a new reg tile version
-      HET_RGNNFeatPerEdgeFWProp<COARSEN_FACTOR_2_FLAG_X,
-                                COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-                                int64_t, int64_t *, InputNumHeadOneFlag>
+      HET_RGNNFeatPerEdgeFWProp<THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+                                WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y,
+                                WORK_BLOCK_SIZE_K, int64_t, int64_t *,
+                                InputNumHeadOneFlag>
           <<<nblks, nthrs, 0, stream>>>(
               node_feat.data_ptr<float>(), weights.data_ptr<float>(),
               ret.data_ptr<float>(),
@@ -226,21 +252,21 @@ void RelationalMatMul_separatecoo(at::Tensor &separate_coo_relptrs,
   // separate_coo_eids are the same tenssor
   if (separate_coo_node_indices.data_ptr() == separate_coo_eids.data_ptr()) {
     if (InputNumHeadOneFlag) {
-      _RelationalMatMul_separatecoo<true, true, 32, false, true, true>(
+      _RelationalMatMul_separatecoo<false, true, true>(
           separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
           dummy_tensor, weights, node_feat, ret);
     } else {
-      _RelationalMatMul_separatecoo<true, true, 32, false, true, false>(
+      _RelationalMatMul_separatecoo<false, true, false>(
           separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
           dummy_tensor, weights, node_feat, ret);
     }
   } else {
     if (InputNumHeadOneFlag) {
-      _RelationalMatMul_separatecoo<true, true, 32, false, false, true>(
+      _RelationalMatMul_separatecoo<false, false, true>(
           separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
           dummy_tensor, dummy_tensor, weights, node_feat, ret);
     } else {
-      _RelationalMatMul_separatecoo<true, true, 32, false, false, false>(
+      _RelationalMatMul_separatecoo<false, false, false>(
           separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
           dummy_tensor, dummy_tensor, weights, node_feat, ret);
     }
@@ -254,11 +280,11 @@ void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
   at::Tensor dummy_tensor;
   assert(0 && "deprecated");
   if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<true, true, 32, false, true, true>(
+    _RelationalMatMul_separatecoo<false, true, true>(
         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
         dummy_tensor, weights, node_feat, ret);
   } else {
-    _RelationalMatMul_separatecoo<true, true, 32, false, true, false>(
+    _RelationalMatMul_separatecoo<false, true, false>(
         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
         dummy_tensor, weights, node_feat, ret);
   }
@@ -270,11 +296,11 @@ void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
     at::Tensor &node_feat, at::Tensor &ret, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<true, true, 32, true, false, true>(
+    _RelationalMatMul_separatecoo<true, false, true>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weight, node_feat, ret);
   } else {
-    _RelationalMatMul_separatecoo<true, true, 32, true, false, false>(
+    _RelationalMatMul_separatecoo<true, false, false>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weight, node_feat, ret);
   }

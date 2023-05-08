@@ -344,7 +344,7 @@ class _simplified_basic_MatMulKernel<
                         (blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat)]
                     : 0.0f;
             if constexpr (RIGHT_REG_TILED_FLAG) {
-              Bs_reg[thIdxFeat] = value_to_load;
+              Bs_reg[thIdxRow] = value_to_load;
             } else {
               Bs[thIdxRow][thIdxFeat] = value_to_load;
             }
@@ -776,27 +776,30 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
                        delta_input_dim, num_heads);
 }
 
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(256, 3) HET_HGTFusedAttnScoreFwProp(
-    float *applied_klinear_node_features, float *applied_qlinear_node_features,
-    float *attn_score_weight, float *attn_score_inner_product,
-    float *unnormalized_attn_score, IdxPtr separate_coo_row_idx,
-    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
-    IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
-    Idx num_relations, Idx fw_input_dim_per_head, Idx fw_output_dim_per_head,
-    int num_heads) {
+// TODO: kwu: add a reg tiled version here
+template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
+__global__ void __launch_bounds__(THREAD_BLOCK_DIM_Y == 1 ? 64 : 256,
+                                  THREAD_BLOCK_DIM_Y == 1 ? 8 : 3)
+    HET_HGTFusedAttnScoreFwProp(
+        float *applied_klinear_node_features,
+        float *applied_qlinear_node_features, float *attn_score_weight,
+        float *attn_score_inner_product, float *unnormalized_attn_score,
+        IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
+        IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
+        int *accum_num_blocks_per_relation, Idx num_relations,
+        Idx fw_input_dim_per_head, Idx fw_output_dim_per_head, int num_heads) {
   // TODO: KUW: supercede blockIdx/threadIdx with pretended blockIdx and
   // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   // NB: should be mode 1 since we need to output inner product for bck prop use
-  _simplified_basic_MatMulKernel<
-      false, COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, Idx, IdxPtr, true,
-      false, 1, false, true>::
+  _simplified_basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
+                                 SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y,
+                                 SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, true, false,
+                                 1, false, true>::
       execute_function(
           applied_klinear_node_features,
           &attn_score_weight[idx_relation * num_heads * fw_output_dim_per_head *
