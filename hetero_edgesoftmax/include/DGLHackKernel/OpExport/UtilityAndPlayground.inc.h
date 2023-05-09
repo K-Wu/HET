@@ -71,6 +71,17 @@ at::Tensor tensor_info(at::Tensor& one_tensor) {
   std::cout << "one_tensor dataptr" << one_tensor.data_ptr() << std::endl;
   std::cout << "one_tensor device: " << one_tensor.device() << std::endl;
   std::cout << "one_tensor dtype: " << one_tensor.dtype() << std::endl;
+  // print is_floating_point_type is_integral_type size
+  std::cout << "one_tensor is_floating_point: "
+            << one_tensor.is_floating_point() << std::endl;
+  std::cout << "one_tensor is_integral: "
+            << at::isIntegralType(one_tensor.scalar_type()) << std::endl;
+  std::cout << "one_tensor is_signed: " << one_tensor.is_signed() << std::endl;
+  std::cout << "one_tensor is_complex: " << one_tensor.is_complex()
+            << std::endl;
+  std::cout << "one_tensor scalar type: "
+            << at::elementSize(one_tensor.scalar_type()) << std::endl;
+
   std::cout << "one_tensor ndim: " << one_tensor.dim() << std::endl;
   std::cout << "one_tensor shape: " << one_tensor.sizes() << std::endl;
   std::cout << "one_tensor numel: " << one_tensor.numel() << std::endl;
