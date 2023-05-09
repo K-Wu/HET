@@ -137,9 +137,9 @@ class _basic_MatMulKernel<
       } else {
         int InnerProductPartitionIdx = blockIdx.z / num_heads;
         int NumInnerProductionPartitions = blockDim.z / num_heads;
-        mLoopBeg = ceil_div<Idx>(num_A_cols, SHMEM_BLOCK_SIZE_X) *
+        mLoopBeg = ceil_div<Idx>(num_A_cols, SHMEM_BLOCK_SIZE_K) *
                    InnerProductPartitionIdx / NumInnerProductionPartitions;
-        mLoopEnd = ceil_div<Idx>(num_A_cols, SHMEM_BLOCK_SIZE_X) *
+        mLoopEnd = ceil_div<Idx>(num_A_cols, SHMEM_BLOCK_SIZE_K) *
                    (InnerProductPartitionIdx + 1) /
                    NumInnerProductionPartitions;
         mLoopInc = 1;
@@ -159,7 +159,7 @@ class _basic_MatMulKernel<
         // shared memory Each thread loads one element of each sub-matrix
 
         if constexpr (OuterProductFlag) {
-          for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR;
+          for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR_LOAD_A;
                loadLoopIdx++) {
             // NB: in outer product, m and y are interchanged, and the loading
             // scheme is a transpose in the fly. that is why both thIdxRow and m
@@ -169,7 +169,8 @@ class _basic_MatMulKernel<
             int thIdxRow_A_outer_product =
                 (threadIdx.y * THREAD_BLOCK_DIM_X + threadIdx.x) %
                     SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT +
-                loadLoopIdx * (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR);
+                loadLoopIdx *
+                    (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR_LOAD_A);
             int thIdxFeat_A_outer_product =
                 (threadIdx.y * THREAD_BLOCK_DIM_X + threadIdx.x) /
                 SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT;
@@ -198,12 +199,13 @@ class _basic_MatMulKernel<
           }
           // NB: KWU: for outerproduct, the m loop variable is on the K
           // dimension
-          for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR;
+          for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR_LOAD_B;
                loadLoopIdx++) {
-            int thIdxRow =
-                thIdxRow_initial +
-                loadLoopIdx * (SHMEM_BLOCK_SIZE_K / COARSEN_DIVISOR_FACTOR);
-            static_assert(SHMEM_BLOCK_SIZE_K % COARSEN_DIVISOR_FACTOR == 0, "");
+            int thIdxRow = thIdxRow_initial +
+                           loadLoopIdx * (SHMEM_BLOCK_SIZE_K /
+                                          COARSEN_DIVISOR_FACTOR_LOAD_B);
+            static_assert(
+                SHMEM_BLOCK_SIZE_K % COARSEN_DIVISOR_FACTOR_LOAD_B == 0, "");
             int thIdxFeat = thIdxFeat_initial;
             float value_to_load =
                 ((m)*SHMEM_BLOCK_SIZE_K + thIdxRow <  //+ blockRowJobEntryBeg <
@@ -227,12 +229,14 @@ class _basic_MatMulKernel<
             }
           }
         } else {
-          for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR;
+          // TODO: KWU: split to load a, load b factor
+          for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR_LOAD_A;
                loadLoopIdx++) {
-            int thIdxRow =
-                thIdxRow_initial +
-                loadLoopIdx * (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR);
-            static_assert(SHMEM_BLOCK_SIZE_Y % COARSEN_DIVISOR_FACTOR == 0, "");
+            int thIdxRow = thIdxRow_initial +
+                           loadLoopIdx * (SHMEM_BLOCK_SIZE_Y /
+                                          COARSEN_DIVISOR_FACTOR_LOAD_A);
+            static_assert(
+                SHMEM_BLOCK_SIZE_Y % COARSEN_DIVISOR_FACTOR_LOAD_A == 0, "");
             int thIdxFeat = thIdxFeat_initial;
             // Get sub-matrix Asub of A
             // Asub = &A[blockRow * BLOCK_SIZE * num_A_cols + m * BLOCK_SIZE];
@@ -250,6 +254,15 @@ class _basic_MatMulKernel<
                           thIdxFeat + m * SHMEM_BLOCK_SIZE_K,
                           A_num_head_one_flag ? 1 : num_heads, num_A_cols)
                     : 0.0f;
+          }
+          for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR_LOAD_B;
+               loadLoopIdx++) {
+            int thIdxRow = thIdxRow_initial +
+                           loadLoopIdx * (SHMEM_BLOCK_SIZE_K /
+                                          COARSEN_DIVISOR_FACTOR_LOAD_B);
+            static_assert(
+                SHMEM_BLOCK_SIZE_K % COARSEN_DIVISOR_FACTOR_LOAD_B == 0, "");
+            int thIdxFeat = thIdxFeat_initial;
             if constexpr (BWeightInsteadOfFeatureFlag) {
               // B matrix the most major dimension is num_heads, i.e.,
               // [num_heads, num_B_rows_feat, num_B_cols_feat] instead of
