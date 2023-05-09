@@ -131,12 +131,14 @@ __device__ __host__ __forceinline__ Idx ceil_div(const Idx a, const Idx b) {
 }
 
 template <typename Idx>
-__device__ __host__ __forceinline__ Idx min2(const Idx a, const Idx b) {
+__device__ __host__ __forceinline__ constexpr Idx min2(const Idx a,
+                                                       const Idx b) {
   return a < b ? a : b;
 }
 
 template <typename Idx>
-__device__ __host__ __forceinline__ Idx max2(const Idx a, const Idx b) {
+__device__ __host__ __forceinline__ constexpr Idx max2(const Idx a,
+                                                       const Idx b) {
   return a > b ? a : b;
 }
 

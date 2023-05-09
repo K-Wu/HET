@@ -15,7 +15,7 @@ namespace TorchExport {
 namespace RGNN {
 namespace FwProp {
 
-// TODO: KWU: use reg tiling here: test fuse attn score vs non-fused
+// NB: KWU: use reg tiling here: test fuse attn score vs non-fused
 // TODO: remove the unused SingleSidedCompactAsOfNodeFlag and its logic
 template <bool CompactAsOfNodeFlag, bool ACGatherScatterListIdenticalFlag,
           bool InputNumHeadOneFlag>
@@ -37,19 +37,17 @@ void _RelationalMatMul_separatecoo(
   int64_t num_edges;
 
   // TODO: KWU: add reg-tiled speicifc configurations by introducing tenary
-  // operators NB: configuration specific to shmem-tiled sgemm
+  // operators
+
+  // NB: configuration specific to shmem-tiled sgemm
 
   // assuming coarsening in both x and y direction if shmem is used instead of
   // reg tiling
   constexpr bool REG_TILING_FLAG = true;
 
   constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
-  //   constexpr int THREADING_BLOCK_SIZE_X =
-  //       COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  //   constexpr int THREADING_BLOCK_SIZE_Y =
-  //       COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 16 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
   constexpr int THREADING_BLOCK_SIZE_Y =
@@ -105,26 +103,21 @@ void _RelationalMatMul_separatecoo(
       // not implemented yet
       assert(0 && "not implemented yet");
     }
-    if constexpr (WORK_BLOCK_SIZE_X != WORK_BLOCK_SIZE_Y ||
-                  WORK_BLOCK_SIZE_X != WORK_BLOCK_SIZE_K) {
-      assert(0 && "not implemented yet");
-    }
     if constexpr (ACGatherScatterListIdenticalFlag) {
       CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
           CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag,
           "CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag");
     }
 
-    constexpr bool COARSEN_FACTOR_2_FLAG_X = REG_TILING_FLAG ? false : true;
-    constexpr bool COARSEN_FACTOR_2_FLAG_Y = REG_TILING_FLAG ? false : true;
     // NB: my shmem sgemm matmul scheme
     const dim3 nblks(
         ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE_X),
         grid_dim_y, num_heads);
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
     // TODO: KWU: allow more dtype options in this file
-    HET_RGNNFeatCompactFWProp<COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y,
-                              WORK_BLOCK_SIZE_Y, int64_t, int64_t *,
+    HET_RGNNFeatCompactFWProp<THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+                              WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y,
+                              WORK_BLOCK_SIZE_K, int64_t, int64_t *,
                               InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
         node_feat.data_ptr<float>(), weights.data_ptr<float>(),
         ret.data_ptr<float>(),
@@ -140,7 +133,6 @@ void _RelationalMatMul_separatecoo(
         ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE_X),
         grid_dim_y, num_heads);
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
-    // TODO: KWU: simplify this and the API exposed to Python
     if constexpr (ACGatherScatterListIdenticalFlag) {
       HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical<
           THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
@@ -154,7 +146,7 @@ void _RelationalMatMul_separatecoo(
               dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
           num_relations);
     } else {
-      // TODO: KWU: add a new reg tile version
+      // NB: KWU: use by default the new reg tiled version here
       HET_RGNNFeatPerEdgeFWProp<THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
                                 WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y,
                                 WORK_BLOCK_SIZE_K, int64_t, int64_t *,
@@ -273,22 +265,22 @@ void RelationalMatMul_separatecoo(at::Tensor &separate_coo_relptrs,
   }
 }
 
-void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
-    at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
-    at::Tensor &weights, at::Tensor &node_feat, at::Tensor &ret,
-    bool InputNumHeadOneFlag) {
-  at::Tensor dummy_tensor;
-  assert(0 && "deprecated");
-  if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<false, true, true>(
-        separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
-        dummy_tensor, weights, node_feat, ret);
-  } else {
-    _RelationalMatMul_separatecoo<false, true, false>(
-        separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
-        dummy_tensor, weights, node_feat, ret);
-  }
-}
+// void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
+//     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
+//     at::Tensor &weights, at::Tensor &node_feat, at::Tensor &ret,
+//     bool InputNumHeadOneFlag) {
+//   at::Tensor dummy_tensor;
+//   assert(0 && "deprecated");
+//   if (InputNumHeadOneFlag) {
+//     _RelationalMatMul_separatecoo<false, true, true>(
+//         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
+//         dummy_tensor, weights, node_feat, ret);
+//   } else {
+//     _RelationalMatMul_separatecoo<false, true, false>(
+//         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
+//         dummy_tensor, weights, node_feat, ret);
+//   }
+// }
 
 void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
     at::Tensor &unique_srcs_and_dests_rel_ptr,
@@ -735,25 +727,26 @@ void RelationalMatMul_separatecoo(
   }
 }
 
-void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
-    at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
-    at::Tensor &weights_transposed, at::Tensor &node_feat, at::Tensor &gradout,
-    at::Tensor &grad_node_feat, at::Tensor &grad_weights,
-    bool InputNumHeadOneFlag) {
-  assert(0 && "deprecated");
-  at::Tensor dummy_tensor;
-  if (InputNumHeadOneFlag) {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true, true>(
-        separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
-        dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
-        grad_weights);
-  } else {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true, false>(
-        separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
-        dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
-        grad_weights);
-  }
-}
+// void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
+//     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
+//     at::Tensor &weights_transposed, at::Tensor &node_feat, at::Tensor
+//     &gradout, at::Tensor &grad_node_feat, at::Tensor &grad_weights, bool
+//     InputNumHeadOneFlag) {
+//   assert(0 && "deprecated");
+//   at::Tensor dummy_tensor;
+//   if (InputNumHeadOneFlag) {
+//     _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true, true>(
+//         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
+//         dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
+//         grad_weights);
+//   } else {
+//     _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true,
+//     false>(
+//         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
+//         dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
+//         grad_weights);
+//   }
+// }
 
 // void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
 //     at::Tensor& unique_srcs_and_dests_rel_ptr,

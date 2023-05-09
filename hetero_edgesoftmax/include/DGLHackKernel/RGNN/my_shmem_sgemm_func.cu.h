@@ -295,35 +295,6 @@ class _basic_MatMulKernel<
               }
             }
           }
-          // if (ScatterCFlag && !AdvancedScatterCFlag) {
-          //   bool WriteCInRangeFlag =
-          //       thIdxRow + blockRow * BLOCK_SIZE < numARows &&
-          //       idx_head < num_heads &&
-          //       blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols;
-          //   if (C_scatter_list[thIdxRow + blockRow * BLOCK_SIZE +
-          //                      blockRowJobEntryBeg] == 0 &&
-          //       WriteCInRangeFlag) {
-          //     bool bflag = m * BLOCK_SIZE + thIdxRow < num_A_cols &&
-          //                  blockFeat * BLOCK_SIZE + thIdxFeat < num_B_cols
-          //                  && idx_head < num_heads;
-          //     bool aflag = thIdxRow + blockRow * BLOCK_SIZE < numARows &&
-          //                  m * BLOCK_SIZE + thIdxFeat < num_A_cols &&
-          //                  idx_head < num_heads;
-
-          //     printf(
-          //         "0 found(WriteCInRangeFlag)!!! (thIdxRow %ld, blockRow
-          //         %ld, " "blockRowJobEntryBeg "
-          //         "%ld, numARows %ld), (thIdxFeat %ld, blockFeat %ld,
-          //         num_B_cols "
-          //         "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld) "
-          //         "(mLoopBeg %ld mLoopEnd %ld m%ld) (bweightflag %d aflag
-          //         %d " "bflag %d) (shmem A %f B %f)\n", thIdxRow, blockRow,
-          //         blockRowJobEntryBeg, numARows, thIdxFeat, blockFeat,
-          //         num_B_cols, idx_head, num_heads, idx_relation, mLoopBeg,
-          //         mLoopEnd, m, BWeightInsteadOfFeatureFlag, aflag, bflag,
-          //         As[thIdxRow][thIdxFeat], Bs[thIdxRow][thIdxFeat]);
-          //   }
-          // }
         }
 
         // Synchronize to make sure the sub-matrices are loaded
@@ -388,23 +359,6 @@ class _basic_MatMulKernel<
               idx_head < num_heads &&
               blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols;
           // TODO: KWU: clean up these dead code
-
-          // if (ScatterCFlag && !AdvancedScatterCFlag) {
-          //   if (C_scatter_list[thIdxRow + blockRow * BLOCK_SIZE +
-          //                      blockRowJobEntryBeg] == 0) {
-          //     printf(
-          //         "0 found(%d)!!! (thIdxRow %ld, blockRow %ld,
-          //         blockRowJobEntryBeg "
-          //         "%ld, numARows %ld), (thIdxFeat %ld, blockFeat %ld,
-          //         num_B_cols
-          //         "
-          //         "%ld), (idx_head %ld, num_head %ld) (idx_relation %ld)
-          //         (mLoopBeg "
-          //         "%ld mLoopEnd %ld) CValue %f\n",
-          //         WriteCInRangeFlag, thIdxRow, blockRow, blockRowJobEntryBeg,
-          //         numARows, thIdxFeat, blockFeat, num_B_cols, idx_head,
-          //         num_heads, idx_relation, mLoopBeg, mLoopEnd, Cvalue);
-          //   }
           // }
           if (WriteCInRangeFlag) {
             if constexpr (AtomicUpdateFlag) {
@@ -616,8 +570,8 @@ __global__ void HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
 }
 
 template <
-    bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-    int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr,
+    int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y, int WORK_BLOCK_SIZE_X,
+    int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K, typename Idx, typename IdxPtr,
     bool A_num_head_one_flag /*whether (delta_)input_feat is single-headed*/>
 __global__ void __launch_bounds__(256, 3)
     HET_RGNNFeatCompactFWProp(float *node_feat_input, float *weight,
@@ -627,17 +581,12 @@ __global__ void __launch_bounds__(256, 3)
                               Idx input_dim, Idx output_per_head_dim,
                               int num_heads, int *accum_num_blocks_per_relation,
                               Idx num_relations) {
-  constexpr int THREAD_BLOCK_DIM_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  constexpr int THREAD_BLOCK_DIM_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<
-      false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, WORK_BLOCK_SIZE,
-      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, false, true, false, false, false,
+      false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, false, true, false, false, false,
       false,  // NB: no need to scatter C
       false, false, Idx, IdxPtr, A_num_head_one_flag, false, false>::
       execute_function(

@@ -118,8 +118,8 @@ void full_graph_hetero_attention_ops(
 
   // NB: configuration irrelavant to whether use reg tiled or not
   constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 16 : 32;
 
   int grid_dim_y = std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
                             (int64_t)4096);
@@ -141,7 +141,7 @@ void full_graph_hetero_attention_ops(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
           num_blocks_assignment_for_all_prev_relation_vect.end());
 
-  // TODO: KWU: add reg tiled configurations by introducing ternary operators
+  // NB: KWU: choose reg tiled configurations by introducing ternary operators
   // NB: shmem-tiled specific configuration
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
@@ -152,7 +152,7 @@ void full_graph_hetero_attention_ops(
                    grid_dim_y, num_heads);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
 
-  // TODO: KWU: add a new reg tile version
+  // NB: KWU: using reg tiled version by default
   HET_HGTFusedAttnScoreFwProp<THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
                               WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y,
                               WORK_BLOCK_SIZE_K, int64_t, int64_t*>
