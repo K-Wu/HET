@@ -18,17 +18,6 @@ __device__ __forceinline__ static float &GetCEle(float *C,
   }
 }
 
-// this is a basic version of the GetBEle
-template <bool gather_col_flag, int OUT_DIM>
-__device__ __forceinline__ static float _deprecated_GetBEle(
-    float *B, int *col_gather_list, int K, int idx_head, int row, int col) {
-  if constexpr (gather_col_flag) {
-    return B[(idx_head * K) + (row) + (col_gather_list[col]) * OUT_DIM];
-  } else {
-    return B[(idx_head * K) + (row) + (col)*OUT_DIM];
-  }
-}
-
 template <bool gather_col_flag, int OUT_DIM,
           bool B_col_second_indirection_gather_flag,
           bool B_col_second_indirection_gather_binary_search_flag>
