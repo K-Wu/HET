@@ -519,6 +519,8 @@ class MyDGLGraph:
                 )
 
         original_or_transposed = "transposed" if transposed_flag else "original"
+
+        # TODO: KWU: get mapping from (src idx, etype) or edge idx to (row index in the compact tensor)
         # then call C++ wrapper function to do the job
         if self.get_sparse_format() == "csr":
             (

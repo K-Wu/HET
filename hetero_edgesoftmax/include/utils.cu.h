@@ -221,3 +221,18 @@ namespace cg_x = cooperative_groups::experimental;
 // meta_group_rank() const: Linear rank of the group within the set of tiles
 // partitioned from a parent group (bounded by meta_group_size) void sync()
 // const: Synchronize the threads named in the group
+
+// TODO: step 1: add thb as an argument to the sgemm exec_function and
+// initialize it in every entry global function
+// TODO: stpe 2: implement logic to figure out the occupancy and warn if it is
+// reduced we may use the following function and compare whether there is any
+// num_block difference when between  specialized kernels w/ and w/o the cg
+// __shared__ usage
+// __host__​cudaError_t cudaOccupancyAvailableDynamicSMemPerBlock ( size_t*
+// dynamicSmemSize, const void* func, int  numBlocks, int  blockSize) Returns
+// dynamic shared memory available per block when launching numBlocks blocks on
+// SM. error no == 1 if cannot arrange (cannot satisfy the requested block size,
+// block num  for example) use cudaGetLastError to reset the error code or
+// better using __host__​__device__​cudaError_t
+// cudaOccupancyMaxActiveBlocksPerMultiprocessor ( int* numBlocks, const void*
+// func, int  blockSize, size_t dynamicSMemSize )
