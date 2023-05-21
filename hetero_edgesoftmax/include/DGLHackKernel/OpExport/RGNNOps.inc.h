@@ -171,7 +171,6 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
                                           at::Tensor &weights,
                                           at::Tensor &inputs, at::Tensor &ret) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  const int64_t num_heads = 1;
 
   assert(weights.size(1) == 1 && "assertion n_head == 1 failed");
   const int64_t num_input_dim = weights.size(2);
@@ -212,8 +211,9 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
       num_blocks_assignment_for_all_prev_ntype_vect.begin(),
       num_blocks_assignment_for_all_prev_ntype_vect.end());
   // NB: my shmem sgemm matmul scheme
+  // in NoScatterScatter scenario, there is no such thing as multi-headed
   const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
-                   grid_dim_y, num_heads);
+                   grid_dim_y, 1);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
   HET_RGNNMatmulNoScatterGatherListFwOrBwProp<
       COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
@@ -910,7 +910,6 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
                                           at::Tensor &grad_weights,
                                           at::Tensor &grad_node_feat_input) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  const int64_t num_heads = 1;
   assert(weights_transposed.size(1) == 1 && "assertion n_head == 1 failed");
   const int64_t num_input_dim = weights_transposed.size(3);
   const int64_t num_output_dim =
@@ -951,8 +950,9 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
       num_blocks_assignment_for_all_prev_ntype_vect.begin(),
       num_blocks_assignment_for_all_prev_ntype_vect.end());
   // NB: my shmem sgemm matmul scheme
+  // in NoScatterGather scenario, there is no such thing as multi-headed
   const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), grid_dim_y,
-                   num_heads);
+                   1);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
   HET_RGNNMatmulNoScatterGatherListFwOrBwProp<
       COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,

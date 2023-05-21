@@ -69,7 +69,6 @@ void Layer1_SeparateCOO(at::Tensor &separate_coo_relptrs,
   constexpr int THREADING_BLOCK_SIZE_Y =
       COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
-  const int64_t num_heads = 1;
   const int64_t num_input_dim = weights.size(1);
   const int64_t num_output_dim = weights.size(2);
   int64_t num_edges = separate_coo_eids.numel();
@@ -335,7 +334,6 @@ void Layer1_SeparateCOO(
   constexpr int THREADING_BLOCK_SIZE_Y =
       COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
-  const int64_t num_heads = 1;
   const int64_t num_fw_input_dim = weights_transposed.size(2);
   const int64_t num_fw_output_dim = weights_transposed.size(1);
   int64_t num_edges = separate_coo_eids.numel();
@@ -405,10 +403,12 @@ void Layer1_SeparateCOO(
       dev_num_blocks_assignment_for_all_prev_relation_vect_outprod(
           num_blocks_assignment_for_all_prev_relation_vect_outprod.begin(),
           num_blocks_assignment_for_all_prev_relation_vect_outprod.end());
+
   const dim3 nblks_outer_product(
       ceil_div<>(num_fw_output_dim, (long)WORK_BLOCK_SIZE_OUTPROD),
       ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE_OUTPROD),
-      num_heads * grid_dim_y_outprod);
+      1 * grid_dim_y_outprod);  // In NoScatterGather scenario, there is no such
+                                // thing as multi-headed
   const dim3 nthrs_outer_product(THREADING_BLOCK_SIZE_X_OUTPROD,
                                  THREADING_BLOCK_SIZE_Y_OUTPROD);
   HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp<
