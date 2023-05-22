@@ -1,21 +1,23 @@
 #pragma once
-// #include "DGLHackKernel/DGLHackKernel.h"
+
 #include <cuda_runtime.h>
 #include "DGLHackKernel/GAT/FusedGATBackward.cu.h"
 
 // edge-centric schedule cf. HET_fusedGatBackwardGradElErFeatSrcFused in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag, bool DualUniqueNodeList>
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
+          bool RelationalFlag>
 __device__ __forceinline__ void
 _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
-    BackwardGatFusedData<Idx, DType> gdata, const Idx* etypes,
-    const Idx* row_indices, const Idx* col_indices, int64_t num_edges,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_rel_ptr_col,
-    const Idx* unique_srcs_and_dests_node_indices,
-    const Idx* unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
+    BackwardGatFusedData<Idx, DType> gdata, const Idx *etypes,
+    const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_rel_ptr_col,
+    const Idx *unique_srcs_and_dests_node_indices,
+    const Idx *unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
   constexpr bool ETypeRelPtrFlag = true;
+  constexpr bool CompactAsOfNodeFlag = IsCompact(kind);
+  constexpr bool DualUniqueNodeList = IsCompactWithDualList(kind);
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx e = blockIdx.y; e < num_edges; e += gridDim.y) {
@@ -24,7 +26,7 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
     // Idx start_off = row_offsets[src_vid];
     // Idx end_off = row_offsets[src_vid + 1];
     Idx src_vid = row_indices[e];
-    Idx eid = gdata.eids[e];
+    Idx edata_idx = gdata.eids[e];
     Idx dst_vid = col_indices[e];
 
     for (Idx head_idx = threadIdx.y; head_idx < num_heads;
@@ -48,10 +50,10 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
         if constexpr (!CompactAsOfNodeFlag) {
           // in this case, feat_src_offset, er_idx and el_idx are related to
           // edge id, regardless of the type of the edge
-          feat_src_offset =
-              eid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
-          er_idx = eid * num_heads + head_idx;
-          el_idx = eid * num_heads + head_idx;
+          feat_src_offset = edata_idx * gdata.feat_src_xlen +
+                            head_idx * hidden_xlen + feat_idx;
+          er_idx = edata_idx * num_heads + head_idx;
+          el_idx = edata_idx * num_heads + head_idx;
         } else {  // CompactAsOfNodeFlag
           if constexpr (!RelationalFlag) {
             er_idx = dst_vid * num_heads + head_idx;
@@ -86,7 +88,7 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
           }
         }
 
-        Idx edge_offset = eid * num_heads + head_idx;
+        Idx edge_offset = edata_idx * num_heads + head_idx;
 
         Idx dst_out_offset =
             dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
@@ -106,12 +108,12 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
         // if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
         atomicAdd(gdata.grad_el + el_idx, tmp2);
         atomicAdd(gdata.grad_feat_src + feat_src_offset,
-                  gdata.exp[eid * num_heads + head_idx] /
+                  gdata.exp[edata_idx * num_heads + head_idx] /
                       gdata.sum[dst_vid * num_heads + head_idx] *
                       gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                      head_idx * hidden_xlen + feat_idx]);
         //   } else {
-        //     sfeatsrc += gdata.exp[eid * num_heads + head_idx] /
+        //     sfeatsrc += gdata.exp[edata_idx * num_heads + head_idx] /
         //                 gdata.sum[sum_vid * num_heads + head_idx] *
         //                 gdata.grad_out[dst_vid * gdata.feat_src_xlen +
         //                                head_idx * hidden_xlen + feat_idx];
@@ -127,18 +129,16 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
   }      // while src_vid
 }
 
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool DualUniqueNodeList>
+template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void
 HET_fusedGatBackwardGradElErFeatSrcFused_relational_separate_coo(
-    BackwardGatFusedData<Idx, DType> gdata, const Idx* rel_ptrs,
-    const Idx* row_indices, const Idx* col_indices, int64_t num_edges,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_rel_ptr_col,
-    const Idx* unique_srcs_and_dests_node_indices,
-    const Idx* unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
-  _fusedGatBackwardGradElErFeatSrcFused_edge_parallel<
-      Idx, DType, CompactAsOfNodeFlag, true, DualUniqueNodeList>(
+    BackwardGatFusedData<Idx, DType> gdata, const Idx *rel_ptrs,
+    const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_rel_ptr_col,
+    const Idx *unique_srcs_and_dests_node_indices,
+    const Idx *unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
+  _fusedGatBackwardGradElErFeatSrcFused_edge_parallel<Idx, DType, kind, true>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_rel_ptr_col,
       unique_srcs_and_dests_node_indices,
@@ -147,22 +147,24 @@ HET_fusedGatBackwardGradElErFeatSrcFused_relational_separate_coo(
 
 // edge-centric schedule cf. HET_fusedGatBackwardGradFeatSrc in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag, bool DualUniqueNodeList>
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
+          bool RelationalFlag>
 __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
-    BackwardGatFusedData<Idx, DType> gdata, const Idx* etypes,
-    const Idx* row_indices, const Idx* col_indices, int64_t num_edges,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_rel_ptr_col,
-    const Idx* unique_srcs_and_dests_node_indices,
-    const Idx* unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
+    BackwardGatFusedData<Idx, DType> gdata, const Idx *etypes,
+    const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_rel_ptr_col,
+    const Idx *unique_srcs_and_dests_node_indices,
+    const Idx *unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
   constexpr bool ETypeRelPtrFlag = true;
+  constexpr bool CompactAsOfNodeFlag = IsCompact(kind);
+  constexpr bool DualUniqueNodeList = IsCompactWithDualList(kind);
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx e = blockIdx.y; e < num_edges; e += gridDim.y) {
     Idx src_vid = row_indices[e];
 
-    Idx eid = gdata.eids[e];
+    Idx edata_idx = gdata.eids[e];
     Idx dst_vid = col_indices[e];
     // for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y)
     // {
@@ -185,8 +187,8 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
         if constexpr (!CompactAsOfNodeFlag) {
           // in this case, feat_src_offset, er_idx and el_idx are related to
           // edge id, regardless of the type of the edge
-          feat_src_offset =
-              eid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
+          feat_src_offset = edata_idx * gdata.feat_src_xlen +
+                            head_idx * hidden_xlen + feat_idx;
         } else {  // CompactAsOfNodeFlag
           if constexpr (RelationalFlag) {
             // Idx etype = etypes[e];
@@ -220,12 +222,12 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
         // }
         // if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
         atomicAdd(gdata.grad_feat_src + feat_src_offset,
-                  gdata.exp[eid * num_heads + head_idx] /
+                  gdata.exp[edata_idx * num_heads + head_idx] /
                       gdata.sum[dst_vid * num_heads + head_idx] *
                       gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                      head_idx * hidden_xlen + feat_idx]);
         //   } else {  // CompactAsOfNodeFlag && !RelationalFlag
-        //     s += gdata.exp[eid * num_heads + head_idx] /
+        //     s += gdata.exp[edata_idx * num_heads + head_idx] /
         //          gdata.sum[sum_vid * num_heads + head_idx] *
         //          gdata.grad_out[dst_vid * gdata.feat_src_xlen +
         //                         head_idx * hidden_xlen + feat_idx];
@@ -241,22 +243,24 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
 
 // edge-centric schedule cf. HET_fusedGatBackwardGradElEr in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool RelationalFlag, bool DualUniqueNodeList>
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
+          bool RelationalFlag>
 __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
-    BackwardGatFusedData<Idx, DType> gdata, const Idx* etypes,
-    const Idx* row_indices, const Idx* column_indices, int64_t num_edges,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_rel_ptr_col,
-    const Idx* unique_srcs_and_dests_node_indices,
-    const Idx* unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
+    BackwardGatFusedData<Idx, DType> gdata, const Idx *etypes,
+    const Idx *row_indices, const Idx *column_indices, int64_t num_edges,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_rel_ptr_col,
+    const Idx *unique_srcs_and_dests_node_indices,
+    const Idx *unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
   constexpr bool ETypeRelPtrFlag = true;
+  constexpr bool CompactAsOfNodeFlag = IsCompact(kind);
+  constexpr bool DualUniqueNodeList = IsCompactWithDualList(kind);
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx e = blockIdx.y; e < num_edges; e += gridDim.y) {
     Idx src_vid = row_indices[e];
 
-    Idx eid = gdata.eids[e];
+    Idx edata_idx = gdata.eids[e];
     Idx dst_vid = column_indices[e];
     // for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y)
     // {
@@ -283,10 +287,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
         if constexpr (!CompactAsOfNodeFlag) {
           // in this case, feat_src_offset, er_idx and el_idx are related to
           // edge id, regardless of the type of the edge
-          feat_src_offset =
-              eid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
-          er_idx = eid * num_heads + head_idx;
-          el_idx = eid * num_heads + head_idx;
+          feat_src_offset = edata_idx * gdata.feat_src_xlen +
+                            head_idx * hidden_xlen + feat_idx;
+          er_idx = edata_idx * num_heads + head_idx;
+          el_idx = edata_idx * num_heads + head_idx;
         } else {  // CompactAsOfNodeFlag
           if constexpr (!RelationalFlag) {
             er_idx = dst_vid * num_heads + head_idx;
@@ -344,34 +348,30 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
   }
 }
 
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool DualUniqueNodeList>
+template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_fusedGatBackwardGradFeatSrc_relational_separate_coo(
-    BackwardGatFusedData<Idx, DType> gdata, const Idx* rel_ptrs,
-    const Idx* row_indices, const Idx* col_indices, int64_t num_edges,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_rel_ptr_col,
-    const Idx* unique_srcs_and_dests_node_indices,
-    const Idx* unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
-  _fusedGatBackwardGradFeatSrc_edge_parallel<Idx, DType, CompactAsOfNodeFlag,
-                                             true, DualUniqueNodeList>(
+    BackwardGatFusedData<Idx, DType> gdata, const Idx *rel_ptrs,
+    const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_rel_ptr_col,
+    const Idx *unique_srcs_and_dests_node_indices,
+    const Idx *unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
+  _fusedGatBackwardGradFeatSrc_edge_parallel<Idx, DType, kind, true>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_rel_ptr_col,
       unique_srcs_and_dests_node_indices,
       unique_srcs_and_dests_node_indices_col, num_relations);
 }
 
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
-          bool DualUniqueNodeList>
+template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_fusedGatBackwardGradElEr_relational_separate_coo(
-    BackwardGatFusedData<Idx, DType> gdata, const Idx* rel_ptrs,
-    const Idx* row_indices, const Idx* column_indices, int64_t num_edges,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_rel_ptr_col,
-    const Idx* unique_srcs_and_dests_node_indices,
-    const Idx* unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
-  _fusedGatBackwardGradElEr_edge_parallel<Idx, DType, CompactAsOfNodeFlag, true,
-                                          DualUniqueNodeList>(
+    BackwardGatFusedData<Idx, DType> gdata, const Idx *rel_ptrs,
+    const Idx *row_indices, const Idx *column_indices, int64_t num_edges,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_rel_ptr_col,
+    const Idx *unique_srcs_and_dests_node_indices,
+    const Idx *unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
+  _fusedGatBackwardGradElEr_edge_parallel<Idx, DType, kind, true>(
       gdata, rel_ptrs, row_indices, column_indices, num_edges,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_rel_ptr_col,
       unique_srcs_and_dests_node_indices,

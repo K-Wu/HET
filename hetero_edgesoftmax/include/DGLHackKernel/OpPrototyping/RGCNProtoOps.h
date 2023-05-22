@@ -1,9 +1,13 @@
 #pragma once
-#include "DGLHackKernel/DGLHackKernel.h"
+
+#include <cusp/coo_matrix.h>
+#include <cusp/csr_matrix.h>
+#include <npy.hpp>
 #include "DGLHackKernel/RGCN/RGCNLayer1BackwardMyHYB.h"
 #include "DGLHackKernel/RGCN/RGCNLayer1MyHYB.h"
 #include "DGLHackKernel/RGCN/SeastarRGCNBackwardKernels.cu.h"
 #include "DGLHackKernel/RGCN/SeastarRGCNKernels.cu.h"
+#include "MySimpleNDArray/MySimpleNDArray.h"
 
 namespace HET {
 namespace OpPrototyping {

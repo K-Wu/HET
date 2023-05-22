@@ -1,5 +1,5 @@
 #pragma once
-// #include "DGLHackKernel/DGLHackKernel.h"
+
 #include <cuda_runtime.h>
 
 template <typename Idx, typename DType>
@@ -11,12 +11,12 @@ struct RGCNData {
   // Idx ret_xlen{0};
   // num nodes
   // Idx n{0};
-  Idx* eids;
+  Idx* __restrict__ eids{nullptr};
   // DType leaky_relu_slope;
   // Inputs
-  DType *feat_src{nullptr}, *enorm{nullptr};
+  DType* __restrict__ feat_src{nullptr}, *__restrict__ enorm{nullptr};
   // Output
-  DType* ret{nullptr};
+  DType* __restrict__ ret{nullptr};
 };
 
 // adapted from _gatSumProdZipDivKernel_edge_parallel in
@@ -46,7 +46,7 @@ __device__ __forceinline__ void _rgcnNodeMeanAggregation_edge_parallel(
       // DType s = 0.;
       // for (Idx eidx = start_off; eidx < end_off; eidx++) {
       Idx feat_src_entry_id = -1;
-      Idx edge_id = gdata.eids[eidx];
+      Idx edata_idx = gdata.eids[eidx];
       if constexpr (RelationalFlag) {
         // Idx sum_idx = -1;
         Idx etype = -1;
@@ -70,28 +70,28 @@ __device__ __forceinline__ void _rgcnNodeMeanAggregation_edge_parallel(
                 "should be non-reachable not implemented");
           }
         } else {
-          feat_src_entry_id = edge_id;
+          feat_src_entry_id = edata_idx;
           // sum_idx = find_relational_compact_as_of_node_index(
           //     etype, dst_vid, unique_srcs_and_dests_node_indices,
           //     unique_srcs_and_dests_rel_ptr);
         }
-        // s += (gdata.enorm[edge_id] * gdata.feat_src[feat_src_entry_id *
+        // s += (gdata.enorm[edata_idx] * gdata.feat_src[feat_src_entry_id *
         // gdata.feat_src_xlen +
         //                      /*head_idx * hidden_xlen +*/ feat_idx]);
         atomicAdd(&gdata.ret[dst_vid * gdata.feat_src_xlen +
                              /* head_idx * hidden_xlen +*/ feat_idx],
-                  (gdata.enorm[edge_id] *
+                  (gdata.enorm[edata_idx] *
                    gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                   /*head_idx * hidden_xlen +*/ feat_idx]));
       } else {  // !RelationalFlag
-        feat_src_entry_id = edge_id;
-        // s += gdata.enorm[edge_id] *
+        feat_src_entry_id = edata_idx;
+        // s += gdata.enorm[edata_idx] *
         //      gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen/* +
         //                     head_idx * hidden_xlen*/ + feat_idx];
 
         atomicAdd(&gdata.ret[dst_vid * gdata.feat_src_xlen +
                              /*head_idx * hidden_xlen + */ feat_idx],
-                  gdata.enorm[edge_id] *
+                  gdata.enorm[edata_idx] *
                       gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                      /*head_idx * hidden_xlen + */ feat_idx]);
       }

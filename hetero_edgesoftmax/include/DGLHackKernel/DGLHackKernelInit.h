@@ -1,6 +1,9 @@
 #pragma once
-#include "DGLHackKernel/DGLHackKernel.h"
+
+#include <cusp/coo_matrix.h>
+#include <cusp/csr_matrix.h>
 #include "DGLHackKernel/OpPrototyping/ModelsProfiling.h"
+#include "OpPrototyping/MySimpleNDArray/MySimpleNDArray.h"
 
 cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(
     bool sorted = false, bool sorted_by_src = false,

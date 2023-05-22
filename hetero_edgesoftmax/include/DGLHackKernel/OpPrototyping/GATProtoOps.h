@@ -1,5 +1,4 @@
 #pragma once
-//#include "DGLHackKernel/DGLHackKernel.h"
 
 #include "DGLHackKernel/DGLHackUtils.h"
 #include "DGLHackKernel/GAT/FusedGAT.cu.h"
@@ -12,12 +11,12 @@ template </*int XPU, */ typename Idx, typename DType>
 void FusedGatKernelImpl(
     MyHeteroSeparateCSR<Idx, thrust::device_allocator<Idx>>
         incsr,  // create incsr in the driver logic
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& feat_src,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& el,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& er,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& sum,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& exp,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& ret,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &feat_src,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &el,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &er,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &sum,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &exp,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &ret,
     // MySimpleNDArray<Idx, thrust::device_allocator<Idx>>
     // eids,//thrust::sequence<Idx>(eids.data.begin(),eids.data.end(), 0);
     float slope) {
@@ -59,7 +58,7 @@ void FusedGatKernelImpl(
 
   // gdata.eids = incsr.data.Ptr<Idx>();
   // gdata.eids = eids.Ptr();
-  gdata.eids = static_cast<Idx*>(thrust::raw_pointer_cast(incsr.eids.data()));
+  gdata.eids = static_cast<Idx *>(thrust::raw_pointer_cast(incsr.eids.data()));
 
   // write a device function and call it from here
   // LOG(INFO) << "Within Fused Gat Kernel Impl." << "feat_src_dim:" <<
@@ -96,8 +95,8 @@ void FusedGatKernelImpl(
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   HET_gatExpLeakyReluSumKernel<Idx, DType, true, false><<<nblks, nthrs>>>(
-      gdata, static_cast<Idx*>(thrust::raw_pointer_cast(incsr.row_ptr.data())),
-      static_cast<Idx*>(thrust::raw_pointer_cast(incsr.col_idx.data())),
+      gdata, static_cast<Idx *>(thrust::raw_pointer_cast(incsr.row_ptr.data())),
+      static_cast<Idx *>(thrust::raw_pointer_cast(incsr.col_idx.data())),
       nullptr, incsr.num_rows, nullptr, nullptr);
   nthrs_x = SeastarFindNumThreads(el_xlen, 64);
   nthrs_y = SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
@@ -108,8 +107,8 @@ void FusedGatKernelImpl(
   // LOG(INFO) << "kernel2 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:"
   // <<nthrs_x << "*" << nthrs_y;
   HET_gatSumProdZipDivKernel<Idx, DType, true, false><<<nblks2, nthrs2>>>(
-      gdata, static_cast<Idx*>(thrust::raw_pointer_cast(incsr.row_ptr.data())),
-      static_cast<Idx*>(thrust::raw_pointer_cast(incsr.col_idx.data())),
+      gdata, static_cast<Idx *>(thrust::raw_pointer_cast(incsr.row_ptr.data())),
+      static_cast<Idx *>(thrust::raw_pointer_cast(incsr.col_idx.data())),
       nullptr, incsr.num_rows, nullptr, nullptr);
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());
@@ -135,16 +134,16 @@ template </*int XPU, */ typename Idx, typename DType, bool FLAG_KERNEL_FUSED>
 void BackwardFusedGatKernelImpl(
     // create CSR in driver code
     MyHeteroSeparateCSR<Idx, thrust::device_allocator<Idx>> outcsr,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& feat_src,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& el,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& er,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& sum,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& exp,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& ret,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& grad_out,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& grad_feat_src,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& grad_el,
-    MySimpleNDArray<DType, thrust::device_allocator<DType>>& grad_er,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &feat_src,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &el,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &er,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &sum,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &exp,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &ret,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_out,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_feat_src,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_el,
+    MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_er,
     // MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids,
     // //thrust::sequence<Idx>(eids.data.begin(),eids.data.end(), 0); TODO:
     // check if it needs a different eid
@@ -182,7 +181,7 @@ void BackwardFusedGatKernelImpl(
   // minigun::Csr<Idx> ocsr = utils::CreateCsr<Idx>(outcsr.indptr,
   // outcsr.indices); gdata.eids =
   // eids.Ptr();//static_cast<Idx*>(outcsr.data->data);
-  gdata.eids = static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.eids.data()));
+  gdata.eids = static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.eids.data()));
   // write a device function and call it from here
   // LOG(INFO) << "Within Fused Gat Kernel Impl." << "feat_src_dim:" <<
   // feat_src.GetSize()/sizeof(DType)/feat_src_xlen << "*" << feat_src_xlen
@@ -212,23 +211,23 @@ void BackwardFusedGatKernelImpl(
   if constexpr (!FLAG_KERNEL_FUSED) {
     HET_fusedGatBackwardGradFeatSrc<Idx, DType, true, false><<<nblks, nthrs>>>(
         gdata,
-        static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
-        static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
+        static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
+        static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
         nullptr, outcsr.num_rows, nullptr, nullptr);
     // const dim3 nthrs3(nthrs_y, nthrs_x);
     // fusedGatBackwardGradElEr4<<<nblks, nthrs3, 0, thr_entry->stream>>>(gdata,
     // ocsr);
     HET_fusedGatBackwardGradElEr<Idx, DType, true, false><<<nblks, nthrs>>>(
         gdata,
-        static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
-        static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
+        static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
+        static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
         nullptr, outcsr.num_rows, nullptr, nullptr);
   } else {
     HET_fusedGatBackwardGradElErFeatSrcFused<Idx, DType, true, false>
         <<<nblks, nthrs>>>(
             gdata,
-            static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
-            static_cast<Idx*>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
+            static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
+            static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
             nullptr, outcsr.num_rows, nullptr, nullptr);
   }
   cuda_err_chk(cudaPeekAtLastError());

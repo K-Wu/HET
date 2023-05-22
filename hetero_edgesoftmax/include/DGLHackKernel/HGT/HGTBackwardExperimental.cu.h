@@ -1,15 +1,15 @@
 #pragma once
-//#include "DGLHackKernel/DGLHackKernel.h"
+
 #include <cuda_runtime.h>
 
 template <typename Idx, typename DType>
 __global__ void HET_HGTBackwardFusedGradientSmFirstPartGradientAImpl(
-    Idx* ranges, Idx* dst_ids, Idx* eids, Idx* types,
-    DType* grad_a,               // |E| * N_HEADS
-    DType* grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
-    DType* grad_t_neighbour,     //|V| * N_HEADS * DIM_PER_HEAD
-    DType* message,              //|E| * N_HEADS * DIM_PER_HEAD
-    DType* sigmas,               //|E| * N_HEADS
+    Idx *ranges, Idx *dst_ids, Idx *eids, Idx *types,
+    DType *grad_a,               // |E| * N_HEADS
+    DType *grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
+    DType *grad_t_neighbour,     //|V| * N_HEADS * DIM_PER_HEAD
+    DType *message,              //|E| * N_HEADS * DIM_PER_HEAD
+    DType *sigmas,               //|E| * N_HEADS
     Idx num_nodes, Idx num_heads, Idx feat_dim_per_head, Idx n_rel_types) {
   assert(n_rel_types == 2);
   // delta a = delta t_neighbour^(l+1) * sigma^-1 * m^T
@@ -73,11 +73,11 @@ __global__ void HET_HGTBackwardFusedGradientSmFirstPartGradientAImpl(
 
 template <typename Idx, typename DType>
 __global__ void HET_HGTBackwardGradientAImpl(
-    Idx* ranges, Idx* dst_ids, Idx* eids, Idx* types,
-    DType* grad_a,            // |E| * N_HEADS
-    DType* grad_t_neighbour,  //|V| * N_HEADS * DIM_PER_HEAD
-    DType* message,           //|E| * N_HEADS * DIM_PER_HEAD
-    DType* sigmas,            //|E| * N_HEADS
+    Idx *ranges, Idx *dst_ids, Idx *eids, Idx *types,
+    DType *grad_a,            // |E| * N_HEADS
+    DType *grad_t_neighbour,  //|V| * N_HEADS * DIM_PER_HEAD
+    DType *message,           //|E| * N_HEADS * DIM_PER_HEAD
+    DType *sigmas,            //|E| * N_HEADS
     Idx num_nodes, Idx num_heads, Idx feat_dim_per_head, Idx n_rel_types) {
   assert(n_rel_types == 2);
 
@@ -125,11 +125,11 @@ __global__ void HET_HGTBackwardGradientAImpl(
 
 template <typename Idx, typename DType>
 __global__ void HET_HGTBackwardGradientSmFirstPartImpl(
-    Idx* ranges, Idx* dst_ids, Idx* eids, Idx* types,
-    DType* grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
-    DType* grad_t_neighbour,     //|V| * N_HEADS * DIM_PER_HEAD
-    DType* message,              //|E| * N_HEADS * DIM_PER_HEAD
-    DType* sigmas,               //|E| * N_HEADS
+    Idx *ranges, Idx *dst_ids, Idx *eids, Idx *types,
+    DType *grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
+    DType *grad_t_neighbour,     //|V| * N_HEADS * DIM_PER_HEAD
+    DType *message,              //|E| * N_HEADS * DIM_PER_HEAD
+    DType *sigmas,               //|E| * N_HEADS
     Idx num_nodes, Idx num_heads, Idx feat_dim_per_head, Idx n_rel_types) {
   assert(n_rel_types == 2);  // some bit manipulation is used and thus the
                              // kernel is intended for MAG only

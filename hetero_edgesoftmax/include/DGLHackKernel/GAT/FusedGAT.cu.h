@@ -1,5 +1,4 @@
 #pragma once
-//#include "DGLHackKernel/DGLHackKernel.h"
 #include <cuda_runtime.h>
 
 // FIXME: check if RGAT needs different a vector for different etypes
@@ -12,14 +11,15 @@ struct GatFusedData {
   // Idx ret_xlen{0};
   // num nodes
   // Idx n{0};
-  Idx* eids;
+  Idx *__restrict__ eids{nullptr};
   DType leaky_relu_slope;
   // Inputs
-  DType *feat_src{nullptr}, *el{nullptr}, *er{nullptr};
+  DType *__restrict__ feat_src{nullptr}, *__restrict__ el{nullptr},
+      *__restrict__ er{nullptr};
   // Intermediates
-  DType *sum{nullptr}, *exp{nullptr};
+  DType *__restrict__ sum{nullptr}, *__restrict__ exp{nullptr};
   // Output
-  DType* ret{nullptr};
+  DType *__restrict__ ret{nullptr};
 };
 
 template <typename DType>
@@ -33,10 +33,10 @@ __device__ __forceinline__ DType gatLeakyReluExp(DType val, DType slope) {
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _gatSumProdZipDivKernel(
-    GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
-    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
+    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -50,7 +50,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
         for (Idx eidx = start_off; eidx < end_off; eidx++) {
           Idx src_vid = column_indices[eidx];
           Idx feat_src_entry_id = -1;
-          Idx edge_id = gdata.eids[eidx];
+          Idx edata_idx = gdata.eids[eidx];
           if constexpr (RelationalFlag) {
             // Idx sum_idx = -1;
             Idx etype = -1;
@@ -65,8 +65,8 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
                   unique_srcs_and_dests_node_indices);
 
             } else {
-              // NB: we need to use edge_id instead of eidx here
-              feat_src_entry_id = edge_id;
+              // NB: we need to use edata_idx instead of eidx here
+              feat_src_entry_id = edata_idx;
             }
             // TODO: actually full cartesian can be applied both to
             // feat_src_entry_id and sum_idx, in future we may need to add an
@@ -84,19 +84,19 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
                //     unique_srcs_and_dests_rel_ptr);
             //}
 
-            s += (gdata.exp[edge_id * num_heads + head_idx] /
+            s += (gdata.exp[edata_idx * num_heads + head_idx] /
                   gdata.sum[dst_vid * num_heads + head_idx] *
                   gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                  head_idx * hidden_xlen + feat_idx]);
           } else {  // !RelationalFlag
-            // NB: feat_src_entry_id varies between edge_id and src_vid
+            // NB: feat_src_entry_id varies between edata_idx and src_vid
             // depending on compactasofnodeflag
             if constexpr (CompactAsOfNodeFlag) {
               feat_src_entry_id = src_vid;
             } else {
-              feat_src_entry_id = edge_id;
+              feat_src_entry_id = edata_idx;
             }
-            s += gdata.exp[edge_id * num_heads + head_idx] /
+            s += gdata.exp[edata_idx * num_heads + head_idx] /
                  gdata.sum[dst_vid * num_heads + head_idx] *
                  gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx];
@@ -113,10 +113,10 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag>
 __global__ void HET_gatSumProdZipDivKernel(
-    GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
-    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices) {
+    GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
+    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices) {
   _gatSumProdZipDivKernel<Idx, DType, CompactAsOfNodeFlag, RelationalFlag,
                           false, false>(
       gdata, row_offsets, column_indices, etypes, num_rows,
@@ -129,10 +129,10 @@ __global__ void HET_gatSumProdZipDivKernel(
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
-    GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
-    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
+    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   // extern __shared__ DType er[];
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
@@ -162,7 +162,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
       for (Idx eidx = start_off; eidx < end_off; ++eidx) {
         Idx src_id = *(column_indices + eidx);
         Idx feat_off_src = -1;
-        Idx edge_id = gdata.eids[eidx];
+        Idx edata_idx = gdata.eids[eidx];
         Idx dst_vid_relational = -1;
         Idx etype = -1;
         if constexpr (RelationalFlag) {
@@ -197,15 +197,15 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
           }
         } else {
           // per edge
-          feat_off_src = edge_id * num_heads + feat_idx;
-          feat_off_dst = edge_id * num_heads + feat_idx;
+          feat_off_src = edata_idx * num_heads + feat_idx;
+          feat_off_dst = edata_idx * num_heads + feat_idx;
         }
         // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] + er[threadIdx.x],
         // gdata.leaky_relu_slope);
         DType tmp =
             gatLeakyReluExp(gdata.el[feat_off_src] + gdata.er[feat_off_dst],
                             gdata.leaky_relu_slope);
-        gdata.exp[Idx(edge_id * num_heads) + feat_idx] = tmp;
+        gdata.exp[Idx(edata_idx * num_heads) + feat_idx] = tmp;
         if constexpr (RelationalFlag) {
           // NB: double check dst_vid_relational is defined when
           // !CompactAsOfNodeFlag && RelationalFlag
@@ -225,10 +225,10 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag>
 __global__ void HET_gatExpLeakyReluSumKernel(
-    GatFusedData<Idx, DType> gdata, const Idx* row_offsets,
-    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices) {
+    GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
+    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices) {
   _gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, RelationalFlag,
                             false, false>(
       gdata, row_offsets, column_indices, etypes, num_rows,

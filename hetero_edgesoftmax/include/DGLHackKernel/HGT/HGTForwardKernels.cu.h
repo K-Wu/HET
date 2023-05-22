@@ -1,8 +1,6 @@
 #pragma once
-//#include "DGLHackKernel/DGLHackKernel.h"
+
 #include <cuda_runtime.h>
-// #include "DGLHackKernel/HGT/HGTPreprocessing.h"
-// #include "EdgeAttention_4/EdgeAttentionCOO.h"
 #include "EdgeAttention_4/mysgemm_functor.cu.h"
 #include "utils.cu.h"
 
@@ -11,12 +9,12 @@
 // NUM_HEADS, OUT_DIM, COARSE_SGEMM_NODES_PER_BLOCK>
 template <int TILE_SZ_A, int TILE_SZ_B, int OUT_DIM, int NUM_HEADS>
 __global__ void HET__global_EdgeMessageConcatenatedCOOKernel(
-    float** intermediate_node_vect, int nnz, int* matCols, int* matRelation,
-    float* node_input_data, float* relation_message_matrices,
-    int** dest_node_to_unique_index_per_relation,
-    int* sizes_unique_index_to_dest_node_per_relation, int num_relations,
-    int* num_blocks_xdim_for_same_relation_per_block_vect,
-    int* beg_node_entry_idxes_vect, int* blockid_relation_id_vect) {
+    float **intermediate_node_vect, int nnz, int *matCols, int *matRelation,
+    float *node_input_data, float *relation_message_matrices,
+    int **dest_node_to_unique_index_per_relation,
+    int *sizes_unique_index_to_dest_node_per_relation, int num_relations,
+    int *num_blocks_xdim_for_same_relation_per_block_vect,
+    int *beg_node_entry_idxes_vect, int *blockid_relation_id_vect) {
   constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
   constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
   int beg_node_entry_idx = beg_node_entry_idxes_vect[blockIdx.x];
@@ -49,11 +47,11 @@ template <typename Idx, typename DType, bool EdgeMessagesCompactAsOfNodeFlag,
           typename EdgeMessagesPointerType,
           bool BinarySearchToGetEtypeNodeOffsetFlag, bool CSRInsteadOfCOOFlag>
 __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
-    Idx* col_idxes, Idx* etypes, Idx* eids,
-    EdgeMessagesPointerType EdgeMessages, DType* EdgeAttnScores, Idx num_nodes,
+    Idx *col_idxes, Idx *etypes, Idx *eids,
+    EdgeMessagesPointerType EdgeMessages, DType *EdgeAttnScores, Idx num_nodes,
     Idx num_edges, Idx num_etypes, Idx num_heads, Idx inout_feat_dim,
-    DType* NodeAggregates, Idx* MapAmongEtypeNodeAndOffsetArray,
-    Idx* etype_unique_node_offsets, Idx* row_indices_or_row_ptrs) {
+    DType *NodeAggregates, Idx *MapAmongEtypeNodeAndOffsetArray,
+    Idx *etype_unique_node_offsets, Idx *row_indices_or_row_ptrs) {
   // each warp deals with one edge
   Idx edge_idx =
       (blockIdx.x * blockDim.x + threadIdx.x) / warpSize;  // warpSize = 32
@@ -63,20 +61,20 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
     Idx col_idx = col_idxes[edge_idx];
     Idx etype = etypes[edge_idx];
     Idx eid = eids[edge_idx];
-    DType* EdgeMessage;
+    DType *EdgeMessage;
     if constexpr (EdgeMessagesCompactAsOfNodeFlag) {
       Idx unique_node_index_for_curr_etype;
       Idx row_idx;
       if constexpr (CSRInsteadOfCOOFlag) {
         // do binary search in row_ptrs if CSR
-        row_idx = binary_search<Idx, Idx*>(num_edges, row_indices_or_row_ptrs,
-                                           edge_idx);
+        row_idx = binary_search<Idx, Idx *>(num_edges, row_indices_or_row_ptrs,
+                                            edge_idx);
       } else {
         // if COO, just index the row_idx directly
         row_idx = row_indices_or_row_ptrs[edge_idx];
       }  // if constexpr (CSRInsteadOfCOOFlag) {
       if constexpr (BinarySearchToGetEtypeNodeOffsetFlag) {
-        unique_node_index_for_curr_etype = binary_search<Idx, Idx*>(
+        unique_node_index_for_curr_etype = binary_search<Idx, Idx *>(
             etype_unique_node_offsets[etype + 1] -
                 etype_unique_node_offsets[etype],
             &MapAmongEtypeNodeAndOffsetArray[etype_unique_node_offsets[etype]],
@@ -95,7 +93,7 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
     } else {
       EdgeMessage = &EdgeMessages[eid * inout_feat_dim];
     }
-    DType* EdgeAttnScore = &EdgeAttnScores[eid * num_heads];
+    DType *EdgeAttnScore = &EdgeAttnScores[eid * num_heads];
     Idx featid = threadIdx.x % warpSize;
 
     for (; featid < inout_feat_dim; featid += warpSize) {
@@ -112,13 +110,13 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
 }
 
 __global__ void HET_HGTTriviallyEdgeParallelVanillaNodeMeanAggregation(
-    int64_t* col_idxes, int64_t* etypes, int64_t* eids, float* EdgeMessages,
-    float* EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
+    int64_t *col_idxes, int64_t *etypes, int64_t *eids, float *EdgeMessages,
+    float *EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
     int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
-    float* NodeAggregates) {
+    float *NodeAggregates) {
   _HGTTriviallyEdgeParallelNodeMeanAggregation<
       int64_t, float, /* EdgeMessagesCompactAsOfNodeFlag = */ false,
-      /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ false, float*,
+      /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ false, float *,
       /*flag not applicable*/ false, /*flag not applicable*/ false>(
       col_idxes, etypes, eids, EdgeMessages, EdgeAttnScores, num_nodes,
       num_edges, num_etypes, num_heads, inout_feat_dim, NodeAggregates, nullptr,
@@ -126,14 +124,14 @@ __global__ void HET_HGTTriviallyEdgeParallelVanillaNodeMeanAggregation(
 }
 
 __global__ void HET_HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation(
-    int64_t* col_idxes, int64_t* etypes, int64_t* eids, float* EdgeMessages,
-    float* EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
+    int64_t *col_idxes, int64_t *etypes, int64_t *eids, float *EdgeMessages,
+    float *EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
     int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
-    float* NodeAggregates, int64_t* ETypeUniqueIndexToNodeIndexMap,
-    int64_t* etype_unique_node_offsets, int64_t* row_indices) {
+    float *NodeAggregates, int64_t *ETypeUniqueIndexToNodeIndexMap,
+    int64_t *etype_unique_node_offsets, int64_t *row_indices) {
   _HGTTriviallyEdgeParallelNodeMeanAggregation<
       int64_t, float, /* EdgeMessagesCompactAsOfNodeFlag = */ true,
-      /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ true, float*,
+      /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ true, float *,
       /*BinarySearchToGetEtypeNodeOffsetFlag = */ true,
       /*CSRInsteadOfCOOFlag = */ false>(
       col_idxes, etypes, eids, EdgeMessages, EdgeAttnScores, num_nodes,
@@ -155,10 +153,10 @@ template <typename Idx, typename DType, int TILE_SZ_A, int TILE_SZ_B,
           bool InputNodeFeaturesCompactOfNodeFlag,
           bool ETypeUniqueNodeIndexBinarySearchFlag>
 __global__ void HET_EdgeMessageGeneration(
-    Idx* etype_edge_offsets, Idx* etype_block_offsets, Idx* row_idxes,
-    Idx* col_idxes, Idx* etypes, Idx* eids, DType* weight, Idx num_nodes,
-    Idx num_edges, Idx num_etypes, DType* NodeFeatures, DType* OutEdgeMessage,
-    Idx* etype_unique_node_offsets, Idx* etype_unique_node_index_map) {
+    Idx *etype_edge_offsets, Idx *etype_block_offsets, Idx *row_idxes,
+    Idx *col_idxes, Idx *etypes, Idx *eids, DType *weight, Idx num_nodes,
+    Idx num_edges, Idx num_etypes, DType *NodeFeatures, DType *OutEdgeMessage,
+    Idx *etype_unique_node_offsets, Idx *etype_unique_node_index_map) {
   constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
   constexpr int COARSE_SGEMM_EDGES_PER_BLOCK = (TILE_SZ_B);
 
@@ -174,7 +172,7 @@ __global__ void HET_EdgeMessageGeneration(
     // relation_idx = blockid_relation_id_vect[blockIdx.x];
   } else {
     relation_idx =
-        binary_search<Idx, Idx*>(num_etypes, etype_block_offsets, blockIdx.x);
+        binary_search<Idx, Idx *>(num_etypes, etype_block_offsets, blockIdx.x);
     stride =
         COARSE_SGEMM_EDGES_PER_BLOCK * (etype_block_offsets[relation_idx + 1] -
                                         etype_block_offsets[relation_idx]);
@@ -228,12 +226,12 @@ __global__ void HET_EdgeMessageGeneration(
 constexpr auto HGTVanillaEdgeAttentionSecondStage =
     HET_GeneralEdgeMessageMultiplyNodeFeature<
         float, /*ProductCompactAsOfNodeFlag = */ false,
-        /*EidEnableFlag = */ true, float*>;
+        /*EidEnableFlag = */ true, float *>;
 
 // This is to calculate the product of (sW) and t where (sW) is stored per edge
 // and t is stored per node.
 constexpr auto HGTCompactAsOfNodesEdgeAttentionSecondStage =
-    HET_GeneralEdgeMessageMultiplyNodeFeature<float, true, false, float**>;
+    HET_GeneralEdgeMessageMultiplyNodeFeature<float, true, false, float **>;
 
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
 struct HgtDstOutData {
@@ -248,20 +246,23 @@ template <typename Idx, typename DType>
 struct HgtDstOutData<Idx, DType, 0> {
   Idx num_heads{0};
   Idx message_out_dim{0};
-  Idx* eids;
-  DType *edgesoftmax_sum_per_node{nullptr}, *message{nullptr}, *ret{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ edgesoftmax_sum_per_node{nullptr},
+      *__restrict__ message{nullptr}, *__restrict__ ret{nullptr};
   // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
-  DType *mu{nullptr}, *unnormalized_attn_score{nullptr};
+  DType *__restrict__ mu{nullptr},
+      *__restrict__ unnormalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
 struct HgtDstOutData<Idx, DType, 1> {
   Idx num_heads{0};
   Idx message_out_dim{0};
-  Idx* eids;
-  DType *edgesoftmax_sum_per_node{nullptr}, *message{nullptr}, *ret{nullptr};
-  DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ edgesoftmax_sum_per_node{nullptr},
+      *__restrict__ message{nullptr}, *__restrict__ ret{nullptr};
+  DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
   // DType* mu{nullptr}, *unnormalized_attn_score{nullptr};
 };
@@ -270,9 +271,9 @@ template <typename Idx, typename DType>
 struct HgtDstOutData<Idx, DType, 2> {
   Idx num_heads{0};
   Idx message_out_dim{0};
-  Idx* eids;
-  DType *message{nullptr}, *ret{nullptr};
-  DType* normalized_attn_score{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ message{nullptr}, *__restrict__ ret{nullptr};
+  DType *__restrict__ normalized_attn_score{nullptr};
   // DType *edgesoftmax_sum_per_node{nullptr};
   // DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* mu{nullptr}, *unnormalized_attn_score{nullptr};
@@ -288,9 +289,9 @@ template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           int UseMuAppliedAttnScoreSwitch>
 __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
     HgtDstOutData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
-    const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
-    int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
+    int64_t num_rows, const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.message_out_dim / num_heads;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -304,7 +305,7 @@ __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
         for (Idx eidx = start_off; eidx < end_off; eidx++) {
           Idx src_vid = column_indices[eidx];
           Idx feat_src_entry_id = -1;
-          Idx edge_id = gdata.eids[eidx];
+          Idx edata_idx = gdata.eids[eidx];
           if constexpr (RelationalFlag) {
             // Idx sum_idx = -1;
             Idx etype = -1;
@@ -319,8 +320,8 @@ __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
                   unique_srcs_and_dests_node_indices);
 
             } else {
-              // NB: we need to use edge_id instead of eidx here
-              feat_src_entry_id = edge_id;
+              // NB: we need to use edata_idx instead of eidx here
+              feat_src_entry_id = edata_idx;
             }
 
             if constexpr (FullCartesianFlag) {
@@ -342,19 +343,19 @@ __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
             if constexpr (UseMuAppliedAttnScoreSwitch == 0) {
               normalized_attn_score =
                   expf(gdata.mu[etype * num_heads + head_idx] *
-                       gdata.unnormalized_attn_score[edge_id * num_heads +
+                       gdata.unnormalized_attn_score[edata_idx * num_heads +
                                                      head_idx]) /
                   gdata
                       .edgesoftmax_sum_per_node[dst_vid * num_heads + head_idx];
             } else if constexpr (UseMuAppliedAttnScoreSwitch == 1) {
               normalized_attn_score =
                   gdata.mu_softmax_applied_unnormalized_attn_score
-                      [edge_id * num_heads + head_idx] /
+                      [edata_idx * num_heads + head_idx] /
                   gdata
                       .edgesoftmax_sum_per_node[dst_vid * num_heads + head_idx];
             } else if constexpr (UseMuAppliedAttnScoreSwitch == 2) {
               normalized_attn_score =
-                  gdata.normalized_attn_score[edge_id * num_heads + head_idx];
+                  gdata.normalized_attn_score[edata_idx * num_heads + head_idx];
             } else {
               CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
                   UseMuAppliedAttnScoreSwitch != 0 &&
@@ -366,12 +367,12 @@ __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
                   gdata.message[feat_src_entry_id * gdata.message_out_dim +
                                 head_idx * hidden_xlen + feat_idx]);
           } else {  // !RelationalFlag
-            // NB: feat_src_entry_id varies between edge_id and src_vid
+            // NB: feat_src_entry_id varies between edata_idx and src_vid
             // depending on compactasofnodeflag
             if constexpr (CompactAsOfNodeFlag) {
               feat_src_entry_id = src_vid;
             } else {
-              feat_src_entry_id = edge_id;
+              feat_src_entry_id = edata_idx;
             }
             DType normalized_attn_score;
             // TODO: extend UseMuAppliedAttnScoreFlag to a switch that could
@@ -379,20 +380,20 @@ __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
             if constexpr (UseMuAppliedAttnScoreSwitch == 0) {
               normalized_attn_score =
                   gdata.mu[head_idx] *
-                  gdata
-                      .unnormalized_attn_score[edge_id * num_heads + head_idx] /
+                  gdata.unnormalized_attn_score[edata_idx * num_heads +
+                                                head_idx] /
                   gdata
                       .edgesoftmax_sum_per_node[dst_vid * num_heads + head_idx];
             } else if constexpr (UseMuAppliedAttnScoreSwitch == 1) {
               normalized_attn_score =
                   gdata.mu_softmax_applied_unnormalized_attn_score
-                      [edge_id * num_heads + head_idx] /
+                      [edata_idx * num_heads + head_idx] /
                   gdata
                       .edgesoftmax_sum_per_node[dst_vid * num_heads + head_idx];
 
             } else if constexpr (UseMuAppliedAttnScoreSwitch == 2) {
               normalized_attn_score =
-                  gdata.normalized_attn_score[edge_id * num_heads + head_idx];
+                  gdata.normalized_attn_score[edata_idx * num_heads + head_idx];
             } else {
               CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
                   UseMuAppliedAttnScoreSwitch != 0 &&
@@ -424,9 +425,10 @@ struct HgtEdgeSoftmaxAccumData {
 template <typename Idx, typename DType>
 struct HgtEdgeSoftmaxAccumData<Idx, DType, 0> {
   Idx num_heads{0};
-  Idx* eids;
-  DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
-      *edgesoftmax_sum_per_node{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ mu{nullptr},
+      *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ edgesoftmax_sum_per_node{nullptr};
   // DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
 };
@@ -434,30 +436,33 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 0> {
 template <typename Idx, typename DType>
 struct HgtEdgeSoftmaxAccumData<Idx, DType, 1> {
   Idx num_heads{0};
-  Idx* eids;
-  DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
-      *edgesoftmax_sum_per_node{nullptr};
-  DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ mu{nullptr},
+      *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ edgesoftmax_sum_per_node{nullptr};
+  DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
 struct HgtEdgeSoftmaxAccumData<Idx, DType, 2> {
   Idx num_heads{0};
-  Idx* eids;
-  DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
-      *edgesoftmax_sum_per_node{nullptr};
-  DType* normalized_attn_score{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ mu{nullptr},
+      *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ edgesoftmax_sum_per_node{nullptr};
+  DType *__restrict__ normalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
 struct HgtEdgeSoftmaxAccumData<Idx, DType, 3> {
   Idx num_heads{0};
-  Idx* eids;
-  DType *mu{nullptr}, *unnormalized_attn_score{nullptr},
-      *edgesoftmax_sum_per_node{nullptr};
-  DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
-  DType* normalized_attn_score{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ mu{nullptr},
+      *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ edgesoftmax_sum_per_node{nullptr};
+  DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
+  DType *__restrict__ normalized_attn_score{nullptr};
 };
 
 // TODO: add mu
@@ -471,9 +476,9 @@ template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           int OutputMuAppliedAttnScoreSwitch>
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
-    const Idx* row_offsets, const Idx* column_indices, const Idx* etypes,
-    int64_t num_rows, const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
+    int64_t num_rows, const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   // extern __shared__ DType er[];
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
@@ -505,7 +510,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
       for (Idx eidx = start_off; eidx < end_off; ++eidx) {
         Idx src_id = *(column_indices + eidx);
         Idx feat_off_src = -1;
-        Idx edge_id = gdata.eids[eidx];
+        Idx edata_idx = gdata.eids[eidx];
         // Idx dst_vid_relational = -1;
         Idx etype = -1;
         DType mu = 1.0;
@@ -540,7 +545,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
           }
         } else {
           // per edge
-          feat_off_src = edge_id * num_heads + feat_idx;
+          feat_off_src = edata_idx * num_heads + feat_idx;
         }
         if constexpr (RelationalFlag) {
           mu = gdata.mu[etype * num_heads + feat_idx];
@@ -581,11 +586,11 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
              feat_idx += blockDim.x * gridDim.x) {
           for (Idx eidx = start_off; eidx < end_off; ++eidx) {
             Idx src_id = *(column_indices + eidx);
-            Idx edge_id = gdata.eids[eidx];
+            Idx edata_idx = gdata.eids[eidx];
             if constexpr (OutputMuAppliedAttnScoreSwitch == 3) {
-              gdata.normalized_attn_score[edge_id * num_heads + feat_idx] =
+              gdata.normalized_attn_score[edata_idx * num_heads + feat_idx] =
                   gdata.mu_softmax_applied_unnormalized_attn_score
-                      [edge_id * num_heads + feat_idx] /
+                      [edata_idx * num_heads + feat_idx] /
                   gdata.edgesoftmax_sum_per_node[Idx(dst_vid * num_heads) +
                                                  feat_idx];
             } else {
@@ -593,8 +598,9 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
               // fixed the feat_off_src undefined bug
               // TODO: fix similar bugs in the other kernels
               Idx feat_off_src = -1;
-              // TODO: etype == -1 only for passing the compilation, needs to define it
-	      Idx etype = -1;
+              // TODO: etype == -1 only for passing the compilation, needs to
+              // define it
+              Idx etype = -1;
               if constexpr (CompactAsOfNodeFlag) {
                 if constexpr (RelationalFlag) {
                   // Idx etype = etypes[eidx];
@@ -618,7 +624,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
                 }
               } else {
                 // per edge
-                feat_off_src = edge_id * num_heads + feat_idx;
+                feat_off_src = edata_idx * num_heads + feat_idx;
               }
               if constexpr (RelationalFlag) {
                 Idx etype;
@@ -631,7 +637,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
               } else {
                 mu = gdata.mu[feat_idx];
               }
-              gdata.normalized_attn_score[edge_id * num_heads + feat_idx] =
+              gdata.normalized_attn_score[edata_idx * num_heads + feat_idx] =
                   gdata.unnormalized_attn_score[feat_off_src] * mu /
                   gdata.edgesoftmax_sum_per_node[Idx(dst_vid * num_heads) +
                                                  feat_idx];
@@ -650,9 +656,9 @@ template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           int OutputMuAppliedAttnScoreSwitch>
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
-    const Idx* row_indices, const Idx* column_indices, const Idx* etypes,
-    int64_t num_edges, const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    const Idx *row_indices, const Idx *column_indices, const Idx *etypes,
+    int64_t num_edges, const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   // extern __shared__ DType er[];
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
@@ -686,7 +692,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
       // for (Idx eidx = start_off; eidx < end_off; ++eidx) {
       Idx src_id = *(column_indices + eidx);
       Idx feat_off_src = -1;
-      Idx edge_id = gdata.eids[eidx];
+      Idx edata_idx = gdata.eids[eidx];
       // Idx dst_vid_relational = -1;
       Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
                       // !RelationalFlag, the default value is set as 0
@@ -722,7 +728,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
         }
       } else {
         // per edge
-        feat_off_src = edge_id * num_heads + feat_idx;
+        feat_off_src = edata_idx * num_heads + feat_idx;
       }
       if constexpr (RelationalFlag) {
         mu = gdata.mu[etype * num_heads + feat_idx];
@@ -767,9 +773,9 @@ template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           int OutputMuAppliedAttnScoreSwitch>
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
-    const Idx* row_indices, const Idx* column_indices, const Idx* etypes,
-    int64_t num_edges, const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    const Idx *row_indices, const Idx *column_indices, const Idx *etypes,
+    int64_t num_edges, const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
   Idx num_heads = gdata.num_heads;
@@ -778,14 +784,14 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
     for (Idx eidx = ty; eidx < num_edges; eidx += blockDim.y * gridDim.y) {
       Idx src_id = *(column_indices + eidx);
 
-      Idx edge_id = gdata.eids[eidx];
+      Idx edata_idx = gdata.eids[eidx];
       Idx dst_vid = *(row_indices + eidx);
       for (Idx feat_idx = tx; feat_idx < num_heads;
            feat_idx += blockDim.x * gridDim.x) {
         Idx feat_off_src = -1;
         if constexpr (OutputMuAppliedAttnScoreSwitch == 3) {
-          gdata.normalized_attn_score[edge_id * num_heads + feat_idx] =
-              gdata.mu_softmax_applied_unnormalized_attn_score[edge_id *
+          gdata.normalized_attn_score[edata_idx * num_heads + feat_idx] =
+              gdata.mu_softmax_applied_unnormalized_attn_score[edata_idx *
                                                                    num_heads +
                                                                feat_idx] /
               gdata.edgesoftmax_sum_per_node[Idx(dst_vid * num_heads) +
@@ -803,7 +809,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
           } else {
             mu = gdata.mu[feat_idx];
           }
-          gdata.normalized_attn_score[edge_id * num_heads + feat_idx] =
+          gdata.normalized_attn_score[edata_idx * num_heads + feat_idx] =
               gdata.unnormalized_attn_score[feat_off_src] * mu /
               gdata.edgesoftmax_sum_per_node[Idx(dst_vid * num_heads) +
                                              feat_idx];

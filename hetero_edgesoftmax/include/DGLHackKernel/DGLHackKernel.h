@@ -1,7 +1,6 @@
 #pragma once
-// TODO: this should be headers to expose APIs to outside the project, and we
+// NB: this should be headers to expose APIs to outside the project, and we
 // need to avoid the reference of this header in this project.
-// TODO: best effort to remove all unused headers in all source files.
 
 // NB: the order here is sensitive. To suppress clang-format change the order, I
 // deliberately add new line among these include statements for the time being.

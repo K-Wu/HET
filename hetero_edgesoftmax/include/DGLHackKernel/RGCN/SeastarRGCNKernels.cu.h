@@ -1,5 +1,5 @@
 #pragma once
-// #include "DGLHackKernel/DGLHackKernel.h"
+
 #include <cuda_runtime.h>
 
 // NB: A wrapper version for python api export is implemented at

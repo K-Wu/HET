@@ -3,12 +3,17 @@
 // #include "cuda.h"
 #include "utils.cu.h"
 
+// DoInnerProductSwitch 0: no inner product, 1: do inner product,
+// 2: do inner product and do not output C
+enum class MySGEMMInnerProductKind { Disabled, Enabled, EnabledAndSkipOutputC };
+
 template <bool DOUBLE_BUFFER_FLAG, int THREAD_BLOCK_DIM_X,
           int THREAD_BLOCK_DIM_Y, int SHMEM_BLOCK_SIZE_X,
           int SHMEM_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_K, typename Idx,
           typename IdxPtr, bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
-          int DoInnerProductSwitch,
-          bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag>
+          MySGEMMInnerProductKind DoInnerProductSwitch,
+          bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag,
+          bool AtomicUpdateFlag>
 class _simplified_basic_MatMulKernel {
  public:
   __device__ __forceinline__ static void execute_function(
@@ -27,13 +32,14 @@ template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr,
           bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
-          int DoInnerProductSwitch,
-          bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag>
+          MySGEMMInnerProductKind DoInnerProductSwitch,
+          bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag,
+          bool AtomicUpdateFlag>
 class _simplified_basic_MatMulKernel<
     true, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, SHMEM_BLOCK_SIZE_X,
     SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr,
     HGT_INSTEAD_OF_RGCN_FLAG, OuterProductFlag, DoInnerProductSwitch,
-    InnerProductGatherListNodeInsteadOfEdge, NoEdgeNormFlag> {
+    InnerProductGatherListNodeInsteadOfEdge, NoEdgeNormFlag, AtomicUpdateFlag> {
  public:
   // vanilla tiled shmem gemm code from
   // http://www.shodor.org/media/content//petascale/materials/UPModules/matrixMultiplication/moduleDocument.pdf

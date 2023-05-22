@@ -3,11 +3,25 @@
 // #include "cuda.h"
 #include "utils.cu.h"
 
-template <bool GatherFlag, typename Idx, typename IdxPtr>
+enum class MySGEMMNumHeadKind {
+  NoAssert,
+  AssertANumIsOne,
+  AssertCNumIsOne,
+  AssertAllAreOnes
+};
+
+enum class MySGEMMGatherKind {
+  Disabled,
+  Basic,
+  TwoOrderBinarySearch,
+  TwoOrderDirectIndexing
+};
+
+template <MySGEMMGatherKind kind, typename Idx, typename IdxPtr>
 __device__ __forceinline__ float &GetRowMajorElementBasic(
     float *matrix_data, IdxPtr gather_list, int num_heads,
     Idx feat_dim_per_head, Idx row, Idx idx_head, Idx idx_feat) {
-  if constexpr (GatherFlag) {
+  if constexpr (kind != MySGEMMGatherKind::Disabled) {
     return matrix_data[idx_head * feat_dim_per_head +
                        gather_list[row] * num_heads * feat_dim_per_head +
                        idx_feat];
@@ -18,29 +32,29 @@ __device__ __forceinline__ float &GetRowMajorElementBasic(
 }
 
 template <typename Idx, typename IdxPtr>
-__device__ __forceinline__ float &GetRowMajorElementAdvanced(
+__device__ __forceinline__ float &GetRowMajorElementAdvancedBinarySearch(
     float *matrix_data, IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx idx_relation, Idx idx_node,
     Idx idx_head, Idx idx_feat, int num_heads, Idx feat_dim_per_head) {
   Idx offset = find_relational_compact_as_of_node_index(
       idx_relation, idx_node, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices);
-  return GetRowMajorElementBasic<false, Idx, IdxPtr>(
+  return GetRowMajorElementBasic<MySGEMMGatherKind::Disabled, Idx, IdxPtr>(
       matrix_data, nullptr, num_heads, feat_dim_per_head, offset, idx_head,
       idx_feat);
 }
 
-template <typename Idx, typename IdxPtr, bool GatherScatterFlag,
-          bool AdvancedGatherScatterFlag>
+template <typename Idx, typename IdxPtr, MySGEMMGatherKind kind>
 __device__ __forceinline__ float &GetRowMajorElement(
     float *matrix_data, IdxPtr gather_scatter_list,
     IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx idx_relation, Idx idx_row,
     Idx idx_head, Idx idx_feat, int num_heads, Idx feat_dim_per_head) {
-  if constexpr (AdvancedGatherScatterFlag) {
+  if constexpr (kind == MySGEMMGatherKind::TwoOrderBinarySearch ||
+                kind == MySGEMMGatherKind::TwoOrderDirectIndexing) {
     Idx idx_node = gather_scatter_list[idx_row];
-    if constexpr (GatherScatterFlag) {
-      return GetRowMajorElementAdvanced<Idx, IdxPtr>(
+    if constexpr (kind == MySGEMMGatherKind::TwoOrderBinarySearch) {
+      return GetRowMajorElementAdvancedBinarySearch<Idx, IdxPtr>(
           matrix_data, unique_srcs_and_dests_rel_ptr,
           unique_srcs_and_dests_node_indices, idx_relation, idx_node, idx_head,
           idx_feat, num_heads, feat_dim_per_head);
@@ -49,10 +63,10 @@ __device__ __forceinline__ float &GetRowMajorElement(
       //    matrix_data, nullptr, num_heads, feat_dim_per_head, idx_node,
       //    idx_head, idx_feat);
       CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-          AdvancedGatherScatterFlag && !GatherScatterFlag, "");
+          kind == MySGEMMGatherKind::TwoOrderDirectIndexing, "not implemented");
     }
   } else {
-    return GetRowMajorElementBasic<GatherScatterFlag, Idx, IdxPtr>(
+    return GetRowMajorElementBasic<kind, Idx, IdxPtr>(
         matrix_data, gather_scatter_list, num_heads, feat_dim_per_head, idx_row,
         idx_head, idx_feat);
   }
@@ -61,11 +75,9 @@ __device__ __forceinline__ float &GetRowMajorElement(
 template <bool DOUBLE_BUFFER_FLAG, int THREAD_BLOCK_DIM_X,
           int THREAD_BLOCK_DIM_Y, int SHMEM_BLOCK_SIZE_X,
           int SHMEM_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
-          bool GatherAFlag, bool AdvancedGatherAFlag, bool GatherBFlag,
-          bool AdvancedGatherBFlag, bool ScatterCFlag,
-          bool AdvancedScatterCFlag, bool AtomicUpdateFlag, typename Idx,
-          typename IdxPtr, bool A_num_head_one_flag, bool B_num_head_one_flag,
-          bool C_num_head_one_flag>
+          MySGEMMGatherKind AGatherKind, MySGEMMGatherKind BGatherKind,
+          MySGEMMGatherKind CScatterKind, bool AtomicUpdateFlag, typename Idx,
+          typename IdxPtr, MySGEMMNumHeadKind numHeadKind>
 class _basic_MatMulKernel {
   __device__ __forceinline__ static void execute_function(
       float *A, float *B, float *C, IdxPtr A_gather_list, IdxPtr B_gather_list,
@@ -80,17 +92,14 @@ class _basic_MatMulKernel {
 // the double buffer version
 template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
-          int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag, bool GatherAFlag,
-          bool AdvancedGatherAFlag, bool GatherBFlag, bool AdvancedGatherBFlag,
-          bool ScatterCFlag, bool AdvancedScatterCFlag, bool AtomicUpdateFlag,
-          typename Idx, typename IdxPtr, bool A_num_head_one_flag,
-          bool B_num_head_one_flag, bool C_num_head_one_flag>
+          int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
+          MySGEMMGatherKind AGatherKind, MySGEMMGatherKind BGatherKind,
+          MySGEMMGatherKind CScatterKind, bool AtomicUpdateFlag, typename Idx,
+          typename IdxPtr, MySGEMMNumHeadKind numHeadKind>
 class _basic_MatMulKernel<
     true, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, SHMEM_BLOCK_SIZE_X,
-    SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, OuterProductFlag, GatherAFlag,
-    AdvancedGatherAFlag, GatherBFlag, AdvancedGatherBFlag, ScatterCFlag,
-    AdvancedScatterCFlag, AtomicUpdateFlag, Idx, IdxPtr, A_num_head_one_flag,
-    B_num_head_one_flag, C_num_head_one_flag> {
+    SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, OuterProductFlag, AGatherKind,
+    BGatherKind, CScatterKind, AtomicUpdateFlag, Idx, IdxPtr, numHeadKind> {
  public:
   __device__ __forceinline__ static void execute_function(
       float *A, float *B, float *C, IdxPtr A_gather_list, IdxPtr B_gather_list,

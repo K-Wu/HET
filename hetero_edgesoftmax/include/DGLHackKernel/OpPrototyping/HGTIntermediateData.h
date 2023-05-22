@@ -1,7 +1,6 @@
 #pragma once
-// #include "DGLHackKernel/DGLHackKernel.h"
+
 #include "DGLHackKernel/HGT/HGTPreprocessing.h"
-// #include "DGLHackKernel/NodeLinear.h"
 
 namespace HET {
 namespace OpPrototyping {

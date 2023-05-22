@@ -1,5 +1,5 @@
 #pragma once
-//#include "DGLHackKernel/DGLHackKernel.h"
+
 #include <cuda_runtime.h>
 
 template <typename Idx, typename DType>
@@ -9,11 +9,11 @@ struct InnerProductData {
   Idx num_heads{0};
   // num nodes
   // Idx n{0};
-  Idx* eids;
+  Idx *__restrict__ eids{nullptr};
   // Inputs
-  DType *feat_src{nullptr}, *feat_dst{nullptr};
+  DType *__restrict__ feat_src{nullptr}, *__restrict__ feat_dst{nullptr};
   // Output
-  DType* edge_inner_product{nullptr};
+  DType *__restrict__ edge_inner_product{nullptr};
 };
 
 template <typename Idx, typename DType>
@@ -23,12 +23,13 @@ struct BackwardInnerProductData {
   Idx num_heads{0};
   // num nodes
   // Idx n{0};
-  Idx* eids;
+  Idx *__restrict__ eids{nullptr};
   // Inputs
-  DType *feat_src{nullptr}, *feat_dst{nullptr};
-  DType* grad_inner_product{nullptr};
+  DType *__restrict__ feat_src{nullptr}, *__restrict__ feat_dst{nullptr};
+  DType *__restrict__ grad_inner_product{nullptr};
   // Output
-  DType *grad_feat_dst{nullptr}, *grad_feat_src{nullptr};
+  DType *__restrict__ grad_feat_dst{nullptr},
+      *__restrict__ grad_feat_src{nullptr};
 };
 
 // adapted from _gatSumProdZipDivKernel in
@@ -36,10 +37,10 @@ struct BackwardInnerProductData {
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __global__ void HET_inner_product_fw_kernel(
-    InnerProductData<Idx, DType> gdata, const Idx* row_offsets,
-    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    InnerProductData<Idx, DType> gdata, const Idx *row_offsets,
+    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -53,7 +54,7 @@ __global__ void HET_inner_product_fw_kernel(
           DType s = 0.;
           Idx src_vid = column_indices[eidx];
           Idx feat_src_entry_id = -1;
-          Idx edge_id = gdata.eids[eidx];
+          Idx edata_idx = gdata.eids[eidx];
           if constexpr (RelationalFlag) {
             // Idx sum_idx = -1;
             if constexpr (CompactAsOfNodeFlag) {
@@ -69,8 +70,8 @@ __global__ void HET_inner_product_fw_kernel(
                   unique_srcs_and_dests_node_indices);
 
             } else {
-              // NB: we need to use edge_id instead of eidx here
-              feat_src_entry_id = edge_id;
+              // NB: we need to use edata_idx instead of eidx here
+              feat_src_entry_id = edata_idx;
             }
             // TODO: actually full cartesian can be applied both to
             // feat_src_entry_id and sum_idx, in future we may need to add an
@@ -93,19 +94,19 @@ __global__ void HET_inner_product_fw_kernel(
                  gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx];
           } else {  // !RelationalFlag
-            // NB: feat_src_entry_id varies between edge_id and src_vid
+            // NB: feat_src_entry_id varies between edata_idx and src_vid
             // depending on compactasofnodeflag
             if constexpr (CompactAsOfNodeFlag) {
               feat_src_entry_id = src_vid;
             } else {
-              feat_src_entry_id = edge_id;
+              feat_src_entry_id = edata_idx;
             }
             s += gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx] *
                  gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx];
           }
-          atomicAdd(&gdata.edge_inner_product[edge_id * num_heads + head_idx],
+          atomicAdd(&gdata.edge_inner_product[edata_idx * num_heads + head_idx],
                     s);
         }
       }
@@ -118,10 +119,10 @@ __global__ void HET_inner_product_fw_kernel(
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __global__ void HET_inner_product_bck_kernel(
-    BackwardInnerProductData<Idx, DType> gdata, const Idx* row_offsets,
-    const Idx* column_indices, const Idx* etypes, int64_t num_rows,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    BackwardInnerProductData<Idx, DType> gdata, const Idx *row_offsets,
+    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -143,17 +144,17 @@ __global__ void HET_inner_product_bck_kernel(
           // el_idx = src_vid * num_heads + head_idx;
         }
         for (Idx e = start_off; e < end_off; ++e) {
-          Idx eid = gdata.eids[e];
+          Idx edata_idx = gdata.eids[e];
           Idx dst_vid = column_indices[e];
           // Idx er_idx = -1;
           // Idx dst_vid_relational = -1;
           if constexpr (!CompactAsOfNodeFlag) {
             // in this case, feat_src_offset, er_idx and el_idx are related to
             // edge id, regardless of the type of the edge
-            feat_src_offset =
-                eid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
-            // er_idx = eid * num_heads + head_idx;
-            // el_idx = eid * num_heads + head_idx;
+            feat_src_offset = edata_idx * gdata.feat_src_xlen +
+                              head_idx * hidden_xlen + feat_idx;
+            // er_idx = edata_idx * num_heads + head_idx;
+            // el_idx = edata_idx * num_heads + head_idx;
           } else {  // CompactAsOfNodeFlag
             // if constexpr (!RelationalFlag) {
             //   er_idx = dst_vid * num_heads + head_idx;
@@ -189,7 +190,7 @@ __global__ void HET_inner_product_bck_kernel(
             }
           }
 
-          Idx edge_offset = eid * num_heads + head_idx;
+          Idx edge_offset = edata_idx * num_heads + head_idx;
 
           Idx dst_out_offset =
               dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
@@ -207,17 +208,18 @@ __global__ void HET_inner_product_bck_kernel(
           // }
           gdata.grad_feat_dst + (dst_vid * gdata.feat_src_xlen +
                                  head_idx * hidden_xlen + feat_idx) =
-              gdata.grad_inner_product[eid * num_heads + head_idx] *
+              gdata.grad_inner_product[edata_idx * num_heads + head_idx] *
               gdata.feat_src[feat_src_offset];
           if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
             gdata.grad_feat_src + feat_src_offset =
-                gdata.grad_inner_product[eid * num_heads + head_idx] *
+                gdata.grad_inner_product[edata_idx * num_heads + head_idx] *
                 gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
                                head_idx * hidden_xlen + feat_idx];
           } else {
-            sfeatsrc += gdata.grad_inner_product[eid * num_heads + head_idx] *
-                        gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
-                                       head_idx * hidden_xlen + feat_idx];
+            sfeatsrc +=
+                gdata.grad_inner_product[edata_idx * num_heads + head_idx] *
+                gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
+                               head_idx * hidden_xlen + feat_idx];
 
           }  // if constexpr (!CompactAsOfNodeFlag)
         }    // for Idx e

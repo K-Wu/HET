@@ -1,5 +1,5 @@
 #pragma once
-//#include "DGLHackKernel/DGLHackKernel.h"
+
 #include <cuda_runtime.h>
 #include "inner_product.cu.h"
 
@@ -9,15 +9,15 @@ template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           bool FeatSizeNoLessThanWarpSize>
 __global__ void HET_inner_product_fw_kernel_edge_parallel(
-    InnerProductData<Idx, DType> gdata, const Idx* row_indices,
-    const Idx* column_indices, const Idx* etypes, int64_t num_edges,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    InnerProductData<Idx, DType> gdata, const Idx *row_indices,
+    const Idx *column_indices, const Idx *etypes, int64_t num_edges,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx eidx = blockIdx.y; eidx < num_edges; eidx += gridDim.y) {
     Idx dst_vid = row_indices[eidx];
-    Idx edge_id = gdata.eids[eidx];
+    Idx edata_idx = gdata.eids[eidx];
     Idx src_vid = column_indices[eidx];
     // Idx start_off = *(row_offsets + dst_vid);
     // Idx end_off = *(row_offsets + dst_vid + 1);
@@ -45,8 +45,8 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
                 unique_srcs_and_dests_node_indices);
 
           } else {
-            // NB: we need to use edge_id instead of eidx here
-            feat_src_entry_id = edge_id;
+            // NB: we need to use edata_idx instead of eidx here
+            feat_src_entry_id = edata_idx;
           }
           // TODO: actually full cartesian can be applied both to
           // feat_src_entry_id and sum_idx, in future we may need to add an
@@ -70,12 +70,12 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
                               head_idx * hidden_xlen + feat_idx];
 
         } else {  // !RelationalFlag
-          // NB: feat_src_entry_id varies between edge_id and src_vid
+          // NB: feat_src_entry_id varies between edata_idx and src_vid
           // depending on compactasofnodeflag
           if constexpr (CompactAsOfNodeFlag) {
             feat_src_entry_id = src_vid;
           } else {
-            feat_src_entry_id = edge_id;
+            feat_src_entry_id = edata_idx;
           }
           s += gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx] *
@@ -90,8 +90,8 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
           s += __shfl_xor_sync(0xffffffff, s, 2);
           s += __shfl_xor_sync(0xffffffff, s, 1);
           if (threadIdx.x % 32 == 0) {
-            atomicAdd(&gdata.edge_inner_product[edge_id * num_heads + head_idx],
-                      s);
+            atomicAdd(
+                &gdata.edge_inner_product[edata_idx * num_heads + head_idx], s);
           }
         } else {
           CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(
@@ -109,10 +109,10 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __global__ void HET_inner_product_bck_kernel_edge_parallel(
-    BackwardInnerProductData<Idx, DType> gdata, const Idx* row_indices,
-    const Idx* column_indices, const Idx* etypes, int64_t num_edges,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    BackwardInnerProductData<Idx, DType> gdata, const Idx *row_indices,
+    const Idx *column_indices, const Idx *etypes, int64_t num_edges,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx e = blockIdx.y; e < num_edges; e += gridDim.y) {
@@ -135,17 +135,17 @@ __global__ void HET_inner_product_bck_kernel_edge_parallel(
           // el_idx = src_vid * num_heads + head_idx;
         }
         // for (Idx e = start_off; e < end_off; ++e) {
-        Idx eid = gdata.eids[e];
+        Idx edata_idx = gdata.eids[e];
         Idx dst_vid = column_indices[e];
         // Idx er_idx = -1;
         // Idx dst_vid_relational = -1;
         if constexpr (!CompactAsOfNodeFlag) {
           // in this case, feat_src_offset, er_idx and el_idx are related to
           // edge id, regardless of the type of the edge
-          feat_src_offset =
-              eid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
-          // er_idx = eid * num_heads + head_idx;
-          // el_idx = eid * num_heads + head_idx;
+          feat_src_offset = edata_idx * gdata.feat_src_xlen +
+                            head_idx * hidden_xlen + feat_idx;
+          // er_idx = edata_idx * num_heads + head_idx;
+          // el_idx = edata_idx * num_heads + head_idx;
         } else {  // CompactAsOfNodeFlag
           // if constexpr (!RelationalFlag) {
           //   er_idx = dst_vid * num_heads + head_idx;
@@ -181,7 +181,7 @@ __global__ void HET_inner_product_bck_kernel_edge_parallel(
           }
         }
 
-        Idx edge_offset = eid * num_heads + head_idx;
+        Idx edge_offset = edata_idx * num_heads + head_idx;
 
         Idx dst_out_offset =
             dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
@@ -199,17 +199,18 @@ __global__ void HET_inner_product_bck_kernel_edge_parallel(
         // }
         gdata.grad_feat_dst[(dst_vid * gdata.feat_src_xlen +
                              head_idx * hidden_xlen + feat_idx)] =
-            gdata.grad_inner_product[eid * num_heads + head_idx] *
+            gdata.grad_inner_product[edata_idx * num_heads + head_idx] *
             gdata.feat_src[feat_src_offset];
         if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
           gdata.grad_feat_src[feat_src_offset] =
-              gdata.grad_inner_product[eid * num_heads + head_idx] *
+              gdata.grad_inner_product[edata_idx * num_heads + head_idx] *
               gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
                              head_idx * hidden_xlen + feat_idx];
         } else {
-          sfeatsrc += gdata.grad_inner_product[eid * num_heads + head_idx] *
-                      gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
-                                     head_idx * hidden_xlen + feat_idx];
+          sfeatsrc +=
+              gdata.grad_inner_product[edata_idx * num_heads + head_idx] *
+              gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
+                             head_idx * hidden_xlen + feat_idx];
 
         }  // if constexpr (!CompactAsOfNodeFlag)
         if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {

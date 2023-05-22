@@ -1,5 +1,5 @@
 #pragma once
-//#include "DGLHackKernel/DGLHackKernel.h"
+
 #include <cuda_runtime.h>
 
 // TODO: the layer 0 and 1 may ends with bias and activation

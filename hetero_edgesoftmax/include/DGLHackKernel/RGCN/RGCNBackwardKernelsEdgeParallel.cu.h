@@ -1,5 +1,5 @@
 #pragma once
-// #include "DGLHackKernel/DGLHackKernel.h"
+
 #include <cuda_runtime.h>
 
 template <typename Idx, typename DType>
@@ -11,15 +11,16 @@ struct BackwardRGCNData {
   // Idx ret_xlen{0};
   // num nodes
   // Idx n{0};
-  Idx* eids;
+  Idx *__restrict__ eids{nullptr};
   // DType leaky_relu_slope;
   // Inputs
-  DType* feat_src{nullptr};  //, *el{nullptr}, *er{nullptr};
-  DType* enorm{nullptr};
-  DType* ret{nullptr};  // *sum{nullptr}, *exp{nullptr},
+  DType *__restrict__ feat_src{nullptr};  //, *el{nullptr}, *er{nullptr};
+  DType *__restrict__ enorm{nullptr};
+  DType *__restrict__ ret{nullptr};  // *sum{nullptr}, *exp{nullptr},
   // Output
-  DType *grad_out{nullptr}, *grad_feat_src{nullptr};  //, *grad_el{nullptr},
-                                                      //*grad_er{nullptr};
+  DType *__restrict__ grad_out{nullptr},
+      *__restrict__ grad_feat_src{nullptr};  //, *grad_el{nullptr},
+                                             //*grad_er{nullptr};
 };
 
 // adapted from _fusedGatBackwardGradElErFeatSrcFused_edge_parallel in
@@ -27,10 +28,10 @@ struct BackwardRGCNData {
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
           bool RelationalFlag>
 __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
-    BackwardRGCNData<Idx, DType> gdata, const Idx* etypes,
-    const Idx* row_indices, const Idx* col_indices, int64_t num_edges,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    BackwardRGCNData<Idx, DType> gdata, const Idx *etypes,
+    const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   constexpr bool ETypeRelPtrFlag = true;
   // Idx num_heads = gdata.num_heads;
   // Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
@@ -40,7 +41,7 @@ __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
     // Idx start_off = row_offsets[src_vid];
     // Idx end_off = row_offsets[src_vid + 1];
     Idx src_vid = row_indices[e];
-    Idx eid = gdata.eids[e];
+    Idx edata_idx = gdata.eids[e];
     Idx dst_vid = col_indices[e];
     // it is still using type 2 schedule with num_head == 1
     // for (Idx head_idx = threadIdx.y; head_idx < num_heads;
@@ -65,10 +66,10 @@ __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
       if constexpr (!CompactAsOfNodeFlag) {
         // in this case, feat_src_offset, er_idx and el_idx are related to
         // edge id, regardless of the type of the edge
-        feat_src_offset =
-            eid * gdata.feat_src_xlen + /*head_idx * hidden_xlen +*/ feat_idx;
-        // er_idx = eid * num_heads + head_idx;
-        // el_idx = eid * num_heads + head_idx;
+        feat_src_offset = edata_idx * gdata.feat_src_xlen +
+                          /*head_idx * hidden_xlen +*/ feat_idx;
+        // er_idx = edata_idx * num_heads + head_idx;
+        // el_idx = edata_idx * num_heads + head_idx;
       } else {  // CompactAsOfNodeFlag
         if constexpr (!RelationalFlag) {
           // er_idx = dst_vid * num_heads + head_idx;
@@ -98,7 +99,7 @@ __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
         }
       }
 
-      // Idx edge_offset = eid * num_heads + head_idx;
+      // Idx edge_offset = edata_idx * num_heads + head_idx;
 
       Idx dst_out_offset =
           dst_vid * gdata.feat_src_xlen /*+ head_idx * hidden_xlen*/ + feat_idx;
@@ -118,11 +119,11 @@ __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
       // if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
       // atomicAdd(gdata.grad_el + el_idx, tmp2);
       atomicAdd(gdata.grad_feat_src + feat_src_offset,
-                gdata.enorm[eid /* num_heads + head_idx*/] *
+                gdata.enorm[edata_idx /* num_heads + head_idx*/] *
                     gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                    /*head_idx * hidden_xlen + */ feat_idx]);
       //   } else {
-      //     sfeatsrc += gdata.exp[eid * num_heads + head_idx] /
+      //     sfeatsrc += gdata.exp[edata_idx * num_heads + head_idx] /
       //                 gdata.sum[sum_vid * num_heads + head_idx] *
       //                 gdata.grad_out[dst_vid * gdata.feat_src_xlen +
       //                                head_idx * hidden_xlen + feat_idx];
@@ -140,10 +141,10 @@ __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
 
 template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
 __global__ void HET_rgcnBackwardNodeMeanAggregation_edge_parallel(
-    BackwardRGCNData<Idx, DType> gdata, const Idx* rel_ptrs,
-    const Idx* row_indices, const Idx* col_indices, int64_t num_edges,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    BackwardRGCNData<Idx, DType> gdata, const Idx *rel_ptrs,
+    const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
+    const Idx *unique_srcs_and_dests_rel_ptr,
+    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
   _rgcnBackwardNodeMeanAggregation_edge_parallel<Idx, DType,
                                                  CompactAsOfNodeFlag, true>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges,

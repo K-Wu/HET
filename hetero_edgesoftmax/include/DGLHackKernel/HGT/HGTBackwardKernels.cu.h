@@ -1,5 +1,5 @@
 #pragma once
-// #include "DGLHackKernel/DGLHackKernel.h"
+
 #include <cuda_runtime.h>
 
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
@@ -13,10 +13,11 @@ template <typename Idx, typename DType>
 struct BackwardHGTMessageData<Idx, DType, 2> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
-  Idx *eids;
-  DType *grad_message_src{nullptr}, *grad_out{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ grad_message_src{nullptr},
+      *__restrict__ grad_out{nullptr};
   // DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
-  DType *normalized_attn_score{nullptr};
+  DType *__restrict__ normalized_attn_score{nullptr};
   // DType *edgesoftmax_sum_per_node{nullptr};
 };
 
@@ -24,11 +25,13 @@ template <typename Idx, typename DType>
 struct BackwardHGTMessageData<Idx, DType, 1> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
-  Idx *eids;
-  DType *grad_message_src{nullptr}, *grad_out{nullptr},
-      *edgesoftmax_sum_per_node{nullptr};
-  DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
-  DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ grad_message_src{nullptr},
+      *__restrict__ grad_out{nullptr},
+      *__restrict__ edgesoftmax_sum_per_node{nullptr};
+  DType *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ mu{nullptr};
+  DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
 };
 
@@ -36,10 +39,12 @@ template <typename Idx, typename DType>
 struct BackwardHGTMessageData<Idx, DType, 0> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
-  Idx *eids;
-  DType *grad_message_src{nullptr}, *grad_out{nullptr},
-      *edgesoftmax_sum_per_node{nullptr};
-  DType *unnormalized_attn_score{nullptr}, *mu{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ grad_message_src{nullptr},
+      *__restrict__ grad_out{nullptr},
+      *__restrict__ edgesoftmax_sum_per_node{nullptr};
+  DType *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ mu{nullptr};
   // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
 };
@@ -47,11 +52,12 @@ struct BackwardHGTMessageData<Idx, DType, 0> {
 template <typename Idx, typename DType>
 struct BackwardNormToUnNormalizedAttnScoreData {
   Idx num_heads{0};
-  Idx *eids;
-  DType *grad_normalized_attn_score{nullptr}, *normalized_attn_score{nullptr},
-      *grad_mu{nullptr}, *mu{nullptr};
-  DType *unnormalized_attn_score{nullptr},
-      *grad_unnormalized_attn_score{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ grad_normalized_attn_score{nullptr},
+      *__restrict__ normalized_attn_score{nullptr},
+      *__restrict__ grad_mu{nullptr}, *__restrict__ mu{nullptr};
+  DType *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ grad_unnormalized_attn_score{nullptr};
 };
 
 // NB: no mu flag is used to generalize this scheme to calculate delta q vector
@@ -60,9 +66,10 @@ template <typename Idx, typename DType>
 struct BackwardToDeltaQData {
   Idx num_heads{0};
   Idx k_vect_dim_per_head{0};
-  Idx *eids;
-  DType *grad_unnormalized_attn_score{nullptr}, *k_inner_product{nullptr},
-      *grad_q_vectors{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ grad_unnormalized_attn_score{nullptr},
+      *__restrict__ k_inner_product{nullptr},
+      *__restrict__ grad_q_vectors{nullptr};
 };
 
 // delta_q = delta_attn_score*inner_product
@@ -87,7 +94,7 @@ __global__ void HET__hgtQVectType2BackwardKernel(
         DType s = 0.;
 
         for (Idx e = start_off; e < end_off; ++e) {
-          Idx eid = gdata.eids[e];
+          Idx edata_idx = gdata.eids[e];
           Idx src_vid = column_indices[e];
           // Idx dst_vid_relational = -1;
           Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
@@ -97,7 +104,7 @@ __global__ void HET__hgtQVectType2BackwardKernel(
             // in this case, k_inner_product_offset, er_idx and el_idx are
             // related to edge id, regardless of the type of the edge
             k_inner_product_offset =
-                eid * (gdata.k_vect_dim_per_head * num_heads) +
+                edata_idx * (gdata.k_vect_dim_per_head * num_heads) +
                 head_idx * hidden_xlen + feat_idx;
           } else {  // CompactAsOfNodeFlag
             if constexpr (RelationalFlag) {
@@ -135,7 +142,8 @@ __global__ void HET__hgtQVectType2BackwardKernel(
           // }
 
           DType grad_unnormalized_attn_score =
-              gdata.grad_unnormalized_attn_score[eid * num_heads + head_idx];
+              gdata.grad_unnormalized_attn_score[edata_idx * num_heads +
+                                                 head_idx];
 
           if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
             atomicAdd(gdata.grad_q_vectors +
@@ -144,8 +152,8 @@ __global__ void HET__hgtQVectType2BackwardKernel(
                       grad_unnormalized_attn_score *
                           gdata.k_inner_product[k_inner_product_offset]);
           } else {  // CompactAsOfNodeFlag && !RelationalFlag
-            // exp scheme (both eid and head_idx) could be used for attn_score
-            // message_src's could be used for message_src
+            // exp scheme (both edata_idx and head_idx) could be used for
+            // attn_score message_src's could be used for message_src
             s += grad_unnormalized_attn_score *
                  gdata.k_inner_product[k_inner_product_offset];
           }
@@ -203,7 +211,7 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
         // stage 2 caclulate delta a and delta mu for this edge
         for (Idx e = start_off; e < end_off; ++e) {
           Idx edge_offset = gdata.eids[e] * num_heads + head_idx;
-          Idx eid = gdata.eids[e];
+          Idx edata_idx = gdata.eids[e];
           Idx dst_vid = column_indices[e];
           // Idx edgesoftmax_sum_per_node_idx = -1;
           // Idx dst_vid_relational = -1;
@@ -226,11 +234,11 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
           // edgesoftmax_sum_per_node_idx is still one (num_heads,) vector per
           // destination node
           // message_src_offset =
-          //     eid * gdata.message_src_xlen + head_idx * hidden_xlen +
+          //     edata_idx * gdata.message_src_xlen + head_idx * hidden_xlen +
           //     feat_idx;
           // edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
           // message_src_idx =
-          //     (eid * num_heads + head_idx) * hidden_xlen + feat_idx;
+          //     (edata_idx * num_heads + head_idx) * hidden_xlen + feat_idx;
           //} else {  // CompactAsOfNodeFlag
           //   if constexpr (!RelationalFlag) {
           //     edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
@@ -345,7 +353,7 @@ HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
                                head_idx * hidden_xlen + feat_idx;
         }
         for (Idx e = start_off; e < end_off; ++e) {
-          Idx eid = gdata.eids[e];
+          Idx edata_idx = gdata.eids[e];
           Idx dst_vid = column_indices[e];
           Idx dst_vid_relational = -1;
           Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
@@ -353,7 +361,7 @@ HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
           if constexpr (!CompactAsOfNodeFlag) {
             // in this case, message_src_offset, er_idx and el_idx are related
             // to edge id, regardless of the type of the edge
-            message_src_offset = eid * gdata.message_src_xlen +
+            message_src_offset = edata_idx * gdata.message_src_xlen +
                                  head_idx * hidden_xlen + feat_idx;
           } else {  // CompactAsOfNodeFlag
             if constexpr (RelationalFlag) {
@@ -385,13 +393,13 @@ HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
           DType normalized_attn_score;
           if constexpr (UseMuAppliedAttnScoreSwitch == 1) {
             normalized_attn_score =
-                gdata.mu_softmax_applied_unnormalized_attn_score[eid *
+                gdata.mu_softmax_applied_unnormalized_attn_score[edata_idx *
                                                                      num_heads +
                                                                  head_idx] /
                 gdata.edgesoftmax_sum_per_node[dst_vid * num_heads + head_idx];
           } else if constexpr (UseMuAppliedAttnScoreSwitch == 2) {
             normalized_attn_score =
-                gdata.normalized_attn_score[eid * num_heads + head_idx];
+                gdata.normalized_attn_score[edata_idx * num_heads + head_idx];
           } else if constexpr (UseMuAppliedAttnScoreSwitch == 0) {
             DType mu;
             if constexpr (RelationalFlag) {
@@ -400,7 +408,9 @@ HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
               mu = gdata.mu[head_idx];
             }
             normalized_attn_score =
-                gdata.unnormalized_attn_score[eid * num_heads + head_idx] * mu /
+                gdata
+                    .unnormalized_attn_score[edata_idx * num_heads + head_idx] *
+                mu /
                 gdata.edgesoftmax_sum_per_node[dst_vid * num_heads + head_idx];
           }
 
@@ -410,8 +420,8 @@ HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
                           gdata.grad_out[dst_vid * gdata.message_src_xlen +
                                          head_idx * hidden_xlen + feat_idx]);
           } else {  // CompactAsOfNodeFlag && !RelationalFlag
-            // exp scheme (both eid and head_idx) could be used for attn_score
-            // message_src's could be used for message_src
+            // exp scheme (both edata_idx and head_idx) could be used for
+            // attn_score message_src's could be used for message_src
             s += normalized_attn_score *
                  gdata.grad_out[dst_vid * gdata.message_src_xlen +
                                 head_idx * hidden_xlen + feat_idx];
@@ -437,11 +447,13 @@ template <typename Idx, typename DType>
 struct BackwardHGTAttnScoreData<Idx, DType, 2> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
-  Idx *eids;
-  DType *grad_attn_score{nullptr}, *message_src{nullptr},
-      *unnormalized_attn_score{nullptr}, *out{nullptr}, *grad_out{nullptr};
-  DType *grad_mu{nullptr}, *mu{nullptr};
-  DType *normalized_attn_score{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ grad_attn_score{nullptr},
+      *__restrict__ message_src{nullptr},
+      *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ out{nullptr}, *__restrict__ grad_out{nullptr};
+  DType *__restrict__ grad_mu{nullptr}, *__restrict__ mu{nullptr};
+  DType *__restrict__ normalized_attn_score{nullptr};
   // DType* edgesoftmax_sum_per_node{nullptr};
   // DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
 };
@@ -450,24 +462,28 @@ template <typename Idx, typename DType>
 struct BackwardHGTAttnScoreData<Idx, DType, 1> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
-  Idx *eids;
-  DType *grad_attn_score{nullptr}, *message_src{nullptr},
-      *unnormalized_attn_score{nullptr}, *out{nullptr}, *grad_out{nullptr};
-  DType *grad_mu{nullptr}, *mu{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ grad_attn_score{nullptr},
+      *__restrict__ message_src{nullptr},
+      *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ out{nullptr}, *__restrict__ grad_out{nullptr};
+  DType *__restrict__ grad_mu{nullptr}, *__restrict__ mu{nullptr};
   // DType* normalized_attn_score{nullptr};
-  DType *edgesoftmax_sum_per_node{nullptr};
-  DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
+  DType *__restrict__ edgesoftmax_sum_per_node{nullptr};
+  DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
 struct BackwardHGTAttnScoreData<Idx, DType, 0> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
-  Idx *eids;
-  DType *grad_attn_score{nullptr}, *message_src{nullptr},
-      *unnormalized_attn_score{nullptr}, *out{nullptr}, *grad_out{nullptr};
-  DType *grad_mu{nullptr}, *mu{nullptr};
-  DType *edgesoftmax_sum_per_node{nullptr};
+  Idx *__restrict__ eids{nullptr};
+  DType *__restrict__ grad_attn_score{nullptr},
+      *__restrict__ message_src{nullptr},
+      *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ out{nullptr}, *__restrict__ grad_out{nullptr};
+  DType *__restrict__ grad_mu{nullptr}, *__restrict__ mu{nullptr};
+  DType *__restrict__ edgesoftmax_sum_per_node{nullptr};
   // DType* normalized_attn_score{nullptr};
   // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
 };
@@ -509,7 +525,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
         }
         for (Idx e = start_off; e < end_off; ++e) {
           Idx edge_offset = gdata.eids[e] * num_heads + head_idx;
-          Idx eid = gdata.eids[e];
+          Idx edata_idx = gdata.eids[e];
           Idx dst_vid = column_indices[e];
           Idx edgesoftmax_sum_per_node_idx = -1;
           // Idx dst_vid_relational = -1;
@@ -521,11 +537,11 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
             // type of the edge
             // edgesoftmax_sum_per_node_idx is still one (num_heads,) vector per
             // destination node
-            message_src_offset = eid * gdata.message_src_xlen +
+            message_src_offset = edata_idx * gdata.message_src_xlen +
                                  head_idx * hidden_xlen + feat_idx;
             edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
             message_src_idx =
-                (eid * num_heads + head_idx) * hidden_xlen + feat_idx;
+                (edata_idx * num_heads + head_idx) * hidden_xlen + feat_idx;
           } else {  // CompactAsOfNodeFlag
             if constexpr (!RelationalFlag) {
               edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
@@ -653,7 +669,7 @@ __global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
         }
         for (Idx e = start_off; e < end_off; ++e) {
           Idx edge_offset = gdata.eids[e] * num_heads + head_idx;
-          Idx eid = gdata.eids[e];
+          Idx edata_idx = gdata.eids[e];
           Idx dst_vid = column_indices[e];
           Idx edgesoftmax_sum_per_node_idx = -1;
           Idx dst_vid_relational = -1;
@@ -665,11 +681,11 @@ __global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
             // type of the edge
             // edgesoftmax_sum_per_node_idx is still one (num_heads,) vector per
             // destination node
-            message_src_offset = eid * gdata.message_src_xlen +
+            message_src_offset = edata_idx * gdata.message_src_xlen +
                                  head_idx * hidden_xlen + feat_idx;
             edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
             message_src_idx =
-                (eid * num_heads + head_idx) * hidden_xlen + feat_idx;
+                (edata_idx * num_heads + head_idx) * hidden_xlen + feat_idx;
           } else {  // CompactAsOfNodeFlag
             if constexpr (!RelationalFlag) {
               edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;

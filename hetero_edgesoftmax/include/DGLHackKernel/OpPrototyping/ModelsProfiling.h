@@ -1,5 +1,4 @@
 #pragma once
-// #include "DGLHackKernel/DGLHackKernel.h"
 
 namespace HET {
 namespace OpPrototyping {
@@ -125,7 +124,7 @@ int HGTBackPropGradientSMAFusionProfiling_main(
 
 int _HGTExperimental_main(
     MySegmentCSR<int, std::allocator<int>,
-                 MyHeteroSeparateCSR<int, std::allocator<int>>>& graph,
+                 MyHeteroSeparateCSR<int, std::allocator<int>>> &graph,
     int num_heads, int in_feat, int out_feat) {  // noexcept(false) {
   assert(num_heads == 4);
   typedef int32_t Idx;

@@ -3,7 +3,6 @@
 #include <thrust/host_vector.h>
 #include <thrust/random.h>
 #include <vector>
-//#include "DGLHackKernel/DGLHackKernel.h"
 
 namespace HET {
 namespace OpPrototyping {
@@ -48,18 +47,18 @@ class MySimpleNDArray {
   }
   MySimpleNDArray() = default;
   template <typename OtherAlloc>
-  MySimpleNDArray(std::vector<int64_t>& shape,
-                  thrust::detail::vector_base<DType, OtherAlloc>& data) {
+  MySimpleNDArray(std::vector<int64_t> &shape,
+                  thrust::detail::vector_base<DType, OtherAlloc> &data) {
     this->shape = shape;
     this->data = data;
   }
   template <typename OtherAlloc>
-  MySimpleNDArray(thrust::detail::vector_base<DType, OtherAlloc>& data) {
+  MySimpleNDArray(thrust::detail::vector_base<DType, OtherAlloc> &data) {
     this->data = data;
     this->shape = {data.size()};
   }
   template <typename OtherAlloc>
-  MySimpleNDArray(const MySimpleNDArray<DType, OtherAlloc>& other)
+  MySimpleNDArray(const MySimpleNDArray<DType, OtherAlloc> &other)
       : shape(other.shape), data(other.data) {}
 
   /*! \return the data pointer with type. */
@@ -68,8 +67,8 @@ class MySimpleNDArray {
   //    return static_cast<T*>(thrust::raw_pointer_cast(data.data()));
   //}
 
-  inline DType* Ptr() {
-    return static_cast<DType*>(thrust::raw_pointer_cast(data.data()));
+  inline DType *Ptr() {
+    return static_cast<DType *>(thrust::raw_pointer_cast(data.data()));
   }
 
   // template <typename T>
@@ -78,7 +77,7 @@ class MySimpleNDArray {
   //}
 
   template <typename OtherAlloc>
-  bool IsEqual(const MySimpleNDArray<DType, OtherAlloc>& other) const {
+  bool IsEqual(const MySimpleNDArray<DType, OtherAlloc> &other) const {
     if (shape.size() != other.shape.size()) {
       return false;
     }
@@ -116,7 +115,7 @@ class MySimpleNDArray {
 
 template <typename DType, typename Alloc, typename FileDType>
 MySimpleNDArray<DType, Alloc> LoadMySimpleNDArrayFromNumpy(
-    const std::string& filename) {
+    const std::string &filename) {
   std::vector<unsigned long> shape;
   bool fortran_order = false;
   std::vector<FileDType> data;
