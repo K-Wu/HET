@@ -94,10 +94,12 @@ void FusedGatKernelImpl(
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
-  HET_gatExpLeakyReluSumKernel<Idx, DType, true, false><<<nblks, nthrs>>>(
-      gdata, static_cast<Idx *>(thrust::raw_pointer_cast(incsr.row_ptr.data())),
-      static_cast<Idx *>(thrust::raw_pointer_cast(incsr.col_idx.data())),
-      nullptr, incsr.num_rows, nullptr, nullptr);
+  HET_gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeKind::Enabled, false>
+      <<<nblks, nthrs>>>(
+          gdata,
+          static_cast<Idx *>(thrust::raw_pointer_cast(incsr.row_ptr.data())),
+          static_cast<Idx *>(thrust::raw_pointer_cast(incsr.col_idx.data())),
+          nullptr, incsr.num_rows, nullptr, nullptr);
   nthrs_x = SeastarFindNumThreads(el_xlen, 64);
   nthrs_y = SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
   nblks_x = 1;
@@ -106,10 +108,12 @@ void FusedGatKernelImpl(
   const dim3 nblks2(nblks_x, nblks_y);
   // LOG(INFO) << "kernel2 blk dim:" << nblks_x << "*" <<nblks_y << " thr dim:"
   // <<nthrs_x << "*" << nthrs_y;
-  HET_gatSumProdZipDivKernel<Idx, DType, true, false><<<nblks2, nthrs2>>>(
-      gdata, static_cast<Idx *>(thrust::raw_pointer_cast(incsr.row_ptr.data())),
-      static_cast<Idx *>(thrust::raw_pointer_cast(incsr.col_idx.data())),
-      nullptr, incsr.num_rows, nullptr, nullptr);
+  HET_gatSumProdZipDivKernel<Idx, DType, CompactAsOfNodeKind::Enabled, false>
+      <<<nblks2, nthrs2>>>(
+          gdata,
+          static_cast<Idx *>(thrust::raw_pointer_cast(incsr.row_ptr.data())),
+          static_cast<Idx *>(thrust::raw_pointer_cast(incsr.col_idx.data())),
+          nullptr, incsr.num_rows, nullptr, nullptr);
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t2 =
@@ -209,7 +213,8 @@ void BackwardFusedGatKernelImpl(
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
   if constexpr (!FLAG_KERNEL_FUSED) {
-    HET_fusedGatBackwardGradFeatSrc<Idx, DType, true, false><<<nblks, nthrs>>>(
+    HET_fusedGatBackwardGradFeatSrc<Idx, DType, CompactAsOfNodeKind::Enabled,
+                                    false><<<nblks, nthrs>>>(
         gdata,
         static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
         static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
@@ -217,18 +222,19 @@ void BackwardFusedGatKernelImpl(
     // const dim3 nthrs3(nthrs_y, nthrs_x);
     // fusedGatBackwardGradElEr4<<<nblks, nthrs3, 0, thr_entry->stream>>>(gdata,
     // ocsr);
-    HET_fusedGatBackwardGradElEr<Idx, DType, true, false><<<nblks, nthrs>>>(
+    HET_fusedGatBackwardGradElEr<Idx, DType, CompactAsOfNodeKind::Enabled,
+                                 false><<<nblks, nthrs>>>(
         gdata,
         static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
         static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
         nullptr, outcsr.num_rows, nullptr, nullptr);
   } else {
-    HET_fusedGatBackwardGradElErFeatSrcFused<Idx, DType, true, false>
-        <<<nblks, nthrs>>>(
-            gdata,
-            static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
-            static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
-            nullptr, outcsr.num_rows, nullptr, nullptr);
+    HET_fusedGatBackwardGradElErFeatSrcFused<
+        Idx, DType, CompactAsOfNodeKind::Enabled, false><<<nblks, nthrs>>>(
+        gdata,
+        static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.row_ptr.data())),
+        static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.col_idx.data())),
+        nullptr, outcsr.num_rows, nullptr, nullptr);
   }
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());

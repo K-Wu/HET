@@ -45,7 +45,8 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode_SeparateCOO(
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
   auto [nblks2, nthrs2] =
       get_type2_schedule(num_edges, /*num_heads*/ 1, num_edges);
-  HET_rgcnNodeMeanAggregation_edge_parallel<Idx, DType, true>
+  HET_rgcnNodeMeanAggregation_edge_parallel<Idx, DType,
+                                            CompactAsOfNodeKind::Enabled>
       <<<nblks2, nthrs2, 0, stream>>>(
           gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
           separate_coo_row_indices.data_ptr<Idx>(),
@@ -310,13 +311,13 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode_SeparateCOO(
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
   auto [nblks, nthrs] = get_type2_schedule(1, gdata.feat_src_xlen, num_edges);
 
-  HET_rgcnBackwardNodeMeanAggregation_edge_parallel<Idx, DType, true>
-      <<<nblks, nthrs, 0, stream>>>(
-          gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
-          separate_coo_row_indices.data_ptr<Idx>(),
-          separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-          unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
-          unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
+  HET_rgcnBackwardNodeMeanAggregation_edge_parallel<
+      Idx, DType, CompactAsOfNodeKind::Enabled><<<nblks, nthrs, 0, stream>>>(
+      gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
+      separate_coo_row_indices.data_ptr<Idx>(),
+      separate_coo_col_indices.data_ptr<Idx>(), num_edges,
+      unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+      unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
 }
 void Layer1_SeparateCOO(
     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,

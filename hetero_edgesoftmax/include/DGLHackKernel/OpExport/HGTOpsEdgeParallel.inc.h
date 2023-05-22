@@ -3,10 +3,6 @@
 #include <c10/cuda/CUDAStream.h>
 #include <torch/extension.h>
 #include <torch/library.h>
-//#include "DGLHackKernel/OpExport/HGTPrepToAndFromTensors.h"
-//#include "EdgeSoftmax_1/EdgeSoftmaxCSR.h"
-
-//#include "HGTOps.inc.h"
 
 #include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
@@ -19,11 +15,11 @@ namespace FwProp {
 namespace SeparateCOO {
 namespace EdgeParallel {
 void full_graph_edge_softmax_ops(
-    at::Tensor& row_indices, at::Tensor& col_idx, at::Tensor& eids,
-    at::Tensor& reltypes_ptr, at::Tensor& unnormalized_attn_score,
-    at::Tensor& mu, at::Tensor& edgesoftmax_sum_per_node,
-    at::Tensor& mu_softmax_applied_unnormalized_attn_score,
-    at::Tensor& normalized_attn_score) {
+    at::Tensor &row_indices, at::Tensor &col_idx, at::Tensor &eids,
+    at::Tensor &reltypes_ptr, at::Tensor &unnormalized_attn_score,
+    at::Tensor &mu, at::Tensor &edgesoftmax_sum_per_node,
+    at::Tensor &mu_softmax_applied_unnormalized_attn_score,
+    at::Tensor &normalized_attn_score) {
   // calling the partial specialized version of _full_graph_edge_softmax_ops
   // that does both stages, i.e., MuAppliedAttnScoreSwitch == 2
   HET::TorchExport::HGT::FwProp::_full_graph_edge_softmax_ops<int64_t, float, 3,
@@ -34,10 +30,10 @@ void full_graph_edge_softmax_ops(
 }
 // adapted from HET::TorchExport::RGCN::FwProp::Layer1_SeparateCOO
 void FullGraphFusedMessageCalcAndMeanAggregation(
-    at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_eids,
-    at::Tensor& separate_coo_row_idx, at::Tensor& separate_coo_col_idx,
-    at::Tensor& node_feat_input, at::Tensor& weights, at::Tensor& edge_norm,
-    /*at::Tensor& relation_pri, */ at::Tensor& node_feat_output) {
+    at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
+    at::Tensor &separate_coo_row_idx, at::Tensor &separate_coo_col_idx,
+    at::Tensor &node_feat_input, at::Tensor &weights, at::Tensor &edge_norm,
+    /*at::Tensor& relation_pri, */ at::Tensor &node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
 
   constexpr int WORK_BLOCK_SIZE = 32;
@@ -61,7 +57,7 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
   // TODO: KWU: allow more dtype options in this file
   std::tie(num_blocks_assignment_for_same_relation_vect,
            num_blocks_assignment_for_all_prev_relation_vect) =
-      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
+      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
           grid_dim_y, num_relations, WORK_BLOCK_SIZE,
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
@@ -79,7 +75,7 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
   // TODO: KWU: allow more dtype options in this file
   HET_HGTMessageGenerationAndAccumulationFwProp<
       COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-      int64_t, int64_t*><<<nblks, nthrs, 0, stream>>>(
+      int64_t, int64_t *><<<nblks, nthrs, 0, stream>>>(
       node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
       node_feat_output.data_ptr<float>(),
       edge_norm.data_ptr<float>(),  // relation_pri.data_ptr<float>(),
@@ -98,11 +94,11 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
 // i.e., wrapper function of
 // HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp
 void full_graph_hetero_attention_ops(
-    at::Tensor& separate_coo_row_idx, at::Tensor& separate_coo_col_idx,
-    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_relptrs,
-    at::Tensor& applied_klinear_node_features,
-    at::Tensor& applied_qlinear_node_features, at::Tensor& attn_score_weight,
-    at::Tensor& attn_score_inner_product, at::Tensor& unnormalized_attn_score) {
+    at::Tensor &separate_coo_row_idx, at::Tensor &separate_coo_col_idx,
+    at::Tensor &separate_coo_eids, at::Tensor &separate_coo_relptrs,
+    at::Tensor &applied_klinear_node_features,
+    at::Tensor &applied_qlinear_node_features, at::Tensor &attn_score_weight,
+    at::Tensor &attn_score_inner_product, at::Tensor &unnormalized_attn_score) {
   // we need to implement a fused kernel based on W*t via RGNN relational_matmul
   // and RGNN inner_product
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
@@ -119,7 +115,8 @@ void full_graph_hetero_attention_ops(
   // NB: configuration irrelavant to whether use reg tiled or not
   constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
   constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_K =
+      REG_TILING_FLAG ? 16 : 32;  // TODO: KWU: change to 8
 
   int grid_dim_y = std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
                             (int64_t)4096);
@@ -129,7 +126,7 @@ void full_graph_hetero_attention_ops(
       num_blocks_assignment_for_all_prev_relation_vect;
   std::tie(num_blocks_assignment_for_same_relation_vect,
            num_blocks_assignment_for_all_prev_relation_vect) =
-      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
+      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
           grid_dim_y, num_relations, WORK_BLOCK_SIZE_Y,
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
@@ -155,7 +152,7 @@ void full_graph_hetero_attention_ops(
   // NB: KWU: using reg tiled version by default
   HET_HGTFusedAttnScoreFwProp<THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
                               WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y,
-                              WORK_BLOCK_SIZE_K, int64_t, int64_t*>
+                              WORK_BLOCK_SIZE_K, int64_t, int64_t *>
       <<<nblks, nthrs, 0, stream>>>(
           applied_klinear_node_features.data_ptr<float>(),
           applied_qlinear_node_features.data_ptr<float>(),
@@ -189,16 +186,16 @@ namespace BckProp {
 namespace SeparateCOO {
 namespace EdgeParallel {
 void full_graph_hetero_attention_ops(
-    at::Tensor& incsr_row_ptr, at::Tensor& incsr_col_idx,
-    at::Tensor& incsr_eids, at::Tensor& incsr_reltypes,
-    at::Tensor& separate_coo_row_idx, at::Tensor& separate_coo_col_idx,
-    at::Tensor& separate_coo_eids, at::Tensor& separate_coo_relptrs,
-    at::Tensor& grad_attn_score_weight,
-    at::Tensor& attn_score_weight_transposed,
-    at::Tensor& applied_klinear_node_features,
-    at::Tensor& applied_qlinear_node_features,
-    at::Tensor& attn_score_inner_product, at::Tensor& grad_unnorm_attn_score,
-    at::Tensor& grad_k, at::Tensor& grad_q) {
+    at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_idx,
+    at::Tensor &incsr_eids, at::Tensor &incsr_reltypes,
+    at::Tensor &separate_coo_row_idx, at::Tensor &separate_coo_col_idx,
+    at::Tensor &separate_coo_eids, at::Tensor &separate_coo_relptrs,
+    at::Tensor &grad_attn_score_weight,
+    at::Tensor &attn_score_weight_transposed,
+    at::Tensor &applied_klinear_node_features,
+    at::Tensor &applied_qlinear_node_features,
+    at::Tensor &attn_score_inner_product, at::Tensor &grad_unnorm_attn_score,
+    at::Tensor &grad_k, at::Tensor &grad_q) {
   // we need to implement a fused kernel based on back prop of RGNN
   // inner_product and back prop of W*t via RGNN relational_matmul
 
@@ -224,7 +221,7 @@ void full_graph_hetero_attention_ops(
       num_blocks_assignment_for_all_prev_relation_vect;
   std::tie(num_blocks_assignment_for_same_relation_vect,
            num_blocks_assignment_for_all_prev_relation_vect) =
-      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
+      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
           grid_dim_y, num_relations, WORK_BLOCK_SIZE,
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
@@ -256,7 +253,7 @@ void full_graph_hetero_attention_ops(
 
   HET_HGTFusedAttnScoreDeltaKVectBckProp<COARSEN_FACTOR_2_FLAG_X,
                                          COARSEN_FACTOR_2_FLAG_Y,
-                                         WORK_BLOCK_SIZE, int64_t, int64_t*>
+                                         WORK_BLOCK_SIZE, int64_t, int64_t *>
       <<<nblks, nthrs, 0, stream>>>(
           applied_qlinear_node_features.data_ptr<float>(),
           attn_score_weight_transposed.data_ptr<float>(),
@@ -270,7 +267,7 @@ void full_graph_hetero_attention_ops(
           num_relations, num_fw_input_dim, num_fw_output_dim, num_heads);
   HET_HGTFusedAttnScoreDeltaWeightBckProp<COARSEN_FACTOR_2_FLAG_X,
                                           COARSEN_FACTOR_2_FLAG_Y,
-                                          WORK_BLOCK_SIZE, int64_t, int64_t*>
+                                          WORK_BLOCK_SIZE, int64_t, int64_t *>
       <<<nblks_outer_product, nthrs, 0, stream>>>(
           applied_klinear_node_features.data_ptr<float>(),
           applied_qlinear_node_features.data_ptr<float>(),
@@ -307,7 +304,8 @@ void full_graph_hetero_attention_ops(
   // NB: message_out_dim is the total dim,  the number of elements for each head
   // is message_out_dim//num_heads
 
-  HET__hgtQVectType2BackwardKernel<int64_t, float, false, true, true>
+  HET__hgtQVectType2BackwardKernel<int64_t, float,
+                                   CompactAsOfNodeKind::Disabled, true, true>
       <<<nblks_type2, nthrs_type2, 0, stream>>>(
           gdata, incsr_row_ptr.data_ptr<int64_t>(),
           incsr_col_idx.data_ptr<int64_t>(), incsr_reltypes.data_ptr<int64_t>(),
@@ -315,13 +313,13 @@ void full_graph_hetero_attention_ops(
 }
 
 void FullGraphFusedMessageCalcAndMeanAggregation(
-    at::Tensor& separate_coo_relptrs, at::Tensor& separate_coo_eids,
-    at::Tensor& separate_coo_row_idx, at::Tensor& separate_coo_col_idx,
-    at::Tensor& node_feat_input, at::Tensor& weights_transposed,
-    at::Tensor& edge_norm,
-    /*at::Tensor& relation_pri, */ at::Tensor& node_feat_output,
-    at::Tensor& grad_node_feat_input, at::Tensor& grad_weights,
-    at::Tensor& grad_edge_norm, at::Tensor& grad_node_feat_output) {
+    at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
+    at::Tensor &separate_coo_row_idx, at::Tensor &separate_coo_col_idx,
+    at::Tensor &node_feat_input, at::Tensor &weights_transposed,
+    at::Tensor &edge_norm,
+    /*at::Tensor& relation_pri, */ at::Tensor &node_feat_output,
+    at::Tensor &grad_node_feat_input, at::Tensor &grad_weights,
+    at::Tensor &grad_edge_norm, at::Tensor &grad_node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   constexpr int WORK_BLOCK_SIZE = 32;
   constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
@@ -344,7 +342,7 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
       num_blocks_assignment_for_all_prev_relation_vect;
   std::tie(num_blocks_assignment_for_same_relation_vect,
            num_blocks_assignment_for_all_prev_relation_vect) =
-      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t*>(
+      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
           grid_dim_y, num_relations, WORK_BLOCK_SIZE,
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
@@ -365,7 +363,7 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
   HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp<
       COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-      int64_t, int64_t*><<<nblks, nthrs, 0, stream>>>(
+      int64_t, int64_t *><<<nblks, nthrs, 0, stream>>>(
       grad_node_feat_output.data_ptr<float>(),
       weights_transposed.data_ptr<float>(),
       grad_node_feat_input.data_ptr<float>(), node_feat_input.data_ptr<float>(),
@@ -379,7 +377,7 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
       num_relations, num_output_dim, num_input_dim, num_heads);
   HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp<
       COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-      int64_t, int64_t*><<<nblks_outer_product, nthrs, 0, stream>>>(
+      int64_t, int64_t *><<<nblks_outer_product, nthrs, 0, stream>>>(
       node_feat_input.data_ptr<float>(),
       grad_node_feat_output.data_ptr<float>(), grad_weights.data_ptr<float>(),
       edge_norm.data_ptr<float>(), separate_coo_row_idx.data_ptr<int64_t>(),

@@ -17,7 +17,7 @@ namespace FwProp {
 
 // NB: KWU: use reg tiling here: test fuse attn score vs non-fused
 // TODO: remove the unused SingleSidedCompactAsOfNodeFlag and its logic
-template <bool CompactAsOfNodeFlag, bool ACGatherScatterListIdenticalFlag,
+template <CompactAsOfNodeKind kind, bool ACGatherScatterListIdenticalFlag,
           bool InputNumHeadOneFlag>
 void _RelationalMatMul_separatecoo(
     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
@@ -47,13 +47,14 @@ void _RelationalMatMul_separatecoo(
 
   constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
   constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_K =
+      REG_TILING_FLAG ? 16 : 32;  // TODO: KWU: change to 16
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
   constexpr int THREADING_BLOCK_SIZE_Y =
       REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
 
-  if constexpr (CompactAsOfNodeFlag) {
+  if constexpr (IsCompact(kind)) {
     num_edges = unique_srcs_and_dests_node_indices.numel();
   } else {
     num_edges = separate_coo_eids.numel();
@@ -65,7 +66,7 @@ void _RelationalMatMul_separatecoo(
                         // due to relationship with very few workloads
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
       num_blocks_assignment_for_all_prev_relation_vect;
-  if constexpr (CompactAsOfNodeFlag) {
+  if constexpr (IsCompact(kind)) {
     at::Tensor unique_srcs_and_dests_rel_ptr_cpu_contiguous =
         unique_srcs_and_dests_rel_ptr.cpu().contiguous();
     std::tie(num_blocks_assignment_for_same_relation_vect,
@@ -98,14 +99,14 @@ void _RelationalMatMul_separatecoo(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
           num_blocks_assignment_for_all_prev_relation_vect.end());
 
-  if constexpr (CompactAsOfNodeFlag) {
+  if constexpr (IsCompact(kind)) {
     if constexpr (REG_TILING_FLAG) {
       // not implemented yet
       assert(0 && "not implemented yet");
     }
     if constexpr (ACGatherScatterListIdenticalFlag) {
       CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-          CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag,
+          IsCompact(kind) && ACGatherScatterListIdenticalFlag,
           "CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag");
     }
 
@@ -244,21 +245,22 @@ void RelationalMatMul_separatecoo(at::Tensor &separate_coo_relptrs,
   // separate_coo_eids are the same tenssor
   if (separate_coo_node_indices.data_ptr() == separate_coo_eids.data_ptr()) {
     if (InputNumHeadOneFlag) {
-      _RelationalMatMul_separatecoo<false, true, true>(
+      _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, true, true>(
           separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
           dummy_tensor, weights, node_feat, ret);
     } else {
-      _RelationalMatMul_separatecoo<false, true, false>(
+      _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, true, false>(
           separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
           dummy_tensor, weights, node_feat, ret);
     }
   } else {
     if (InputNumHeadOneFlag) {
-      _RelationalMatMul_separatecoo<false, false, true>(
+      _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, false, true>(
           separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
           dummy_tensor, dummy_tensor, weights, node_feat, ret);
     } else {
-      _RelationalMatMul_separatecoo<false, false, false>(
+      _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, false,
+                                    false>(
           separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
           dummy_tensor, dummy_tensor, weights, node_feat, ret);
     }
@@ -288,11 +290,11 @@ void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
     at::Tensor &node_feat, at::Tensor &ret, bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<true, false, true>(
+    _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Enabled, false, true>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weight, node_feat, ret);
   } else {
-    _RelationalMatMul_separatecoo<true, false, false>(
+    _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Enabled, false, false>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weight, node_feat, ret);
   }
@@ -325,7 +327,7 @@ void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
 // adapted from _RelationalFusedGATKernel in
 // hetero_edgesoftmax/include/DGLHackKernel/OpExport/RGATOps.inc.h
-template </*int XPU, */ typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template </*int XPU, */ typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool IntegratedFormatRatherThanSeparateFlag,
           bool CSRRatherThanCOOFlag>
 void inner_product_various_left_and_node_right(
@@ -378,12 +380,12 @@ void inner_product_various_left_and_node_right(
             ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
             : nullptr;
 
-    HET_inner_product_fw_kernel<Idx, DType, CompactAsOfNodeFlag, true, false,
-                                false><<<nblks2, nthrs2, 0, stream>>>(
-        gdata, incsr_row_ptr_data_ptr, incsr_col_idx_data_ptr,
-        incsr_reltypes_data_ptr, incsr_num_rows,
-        unique_srcs_and_dests_rel_ptr_data_ptr,
-        unique_srcs_and_dests_node_indices_data_ptr);
+    HET_inner_product_fw_kernel<Idx, DType, kind, true, false, false>
+        <<<nblks2, nthrs2, 0, stream>>>(
+            gdata, incsr_row_ptr_data_ptr, incsr_col_idx_data_ptr,
+            incsr_reltypes_data_ptr, incsr_num_rows,
+            unique_srcs_and_dests_rel_ptr_data_ptr,
+            unique_srcs_and_dests_node_indices_data_ptr);
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
     // separate coo
@@ -422,8 +424,8 @@ void inner_product_various_left_and_node_right(
             ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
             : nullptr;
     if (gdata.feat_src_xlen / gdata.num_heads >= 32) {
-      HET_inner_product_fw_kernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag,
-                                                true, true, false, true>
+      HET_inner_product_fw_kernel_edge_parallel<Idx, DType, kind, true, true,
+                                                false, true>
           <<<nblks_inner_product, nthrs_inner_product, 0, stream>>>(
               gdata, separate_coo_row_indices_data_ptr,
               separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
@@ -456,7 +458,8 @@ void inner_product_node_compact_and_node_separatecoo(
                   edge_inner_product.numel() * sizeof(float),
                   c10::cuda::getCurrentCUDAStream());
   at::Tensor dummy_tensor;
-  inner_product_various_left_and_node_right<int64_t, float, true, false, false>(
+  inner_product_various_left_and_node_right<
+      int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
       separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
       separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
       dummy_tensor, unique_srcs_and_dests_rel_ptr,
@@ -472,8 +475,8 @@ void inner_product_edge_and_node_separatecoo(
                   edge_inner_product.numel() * sizeof(float),
                   c10::cuda::getCurrentCUDAStream());
   at::Tensor dummy_tensor;
-  inner_product_various_left_and_node_right<int64_t, float, false, false,
-                                            false>(
+  inner_product_various_left_and_node_right<
+      int64_t, float, CompactAsOfNodeKind::Disabled, false, false>(
       separate_coo_eids, dummy_tensor, separate_coo_row_indices,
       separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
       dummy_tensor, dummy_tensor, dummy_tensor, left_edge_data,
@@ -484,7 +487,7 @@ void inner_product_edge_and_node_separatecoo(
 
 namespace BckProp {
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int WORK_BLOCK_SIZE, bool CompactAsOfNodeFlag,
+          int WORK_BLOCK_SIZE, CompactAsOfNodeKind kind,
           bool ACGatherScatterListIdenticalFlag, bool InputNumHeadOneFlag>
 void _BackwardRelationalMatMul_separatecoo(
     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
@@ -515,7 +518,7 @@ void _BackwardRelationalMatMul_separatecoo(
   assert(grad_node_feat.is_contiguous());
   assert(grad_weights.is_contiguous());
 
-  if constexpr (CompactAsOfNodeFlag) {
+  if constexpr (IsCompact(kind)) {
     num_edges = unique_srcs_and_dests_node_indices.numel();
   } else {
     num_edges = separate_coo_eids.numel();
@@ -527,7 +530,7 @@ void _BackwardRelationalMatMul_separatecoo(
                        // due to relationship with very few workloads
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
       num_blocks_assignment_for_all_prev_relation_vect;
-  if constexpr (CompactAsOfNodeFlag) {
+  if constexpr (IsCompact(kind)) {
     at::Tensor unique_srcs_and_dests_rel_ptr_cpu_contiguous =
         unique_srcs_and_dests_rel_ptr.cpu().contiguous();
     std::tie(num_blocks_assignment_for_same_relation_vect,
@@ -559,10 +562,10 @@ void _BackwardRelationalMatMul_separatecoo(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
           num_blocks_assignment_for_all_prev_relation_vect.end());
 
-  if constexpr (CompactAsOfNodeFlag) {
+  if constexpr (IsCompact(kind)) {
     if constexpr (ACGatherScatterListIdenticalFlag) {
       CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-          CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag,
+          IsCompact(kind) && ACGatherScatterListIdenticalFlag,
           "CompactAsOfNodeFlag && ACGatherScatterListIdenticalFlag");
     }
     // NB: my shmem sgemm matmul scheme
@@ -681,12 +684,14 @@ void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   if (InputNumHeadOneFlag) {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, true, false, true>(
+    _BackwardRelationalMatMul_separatecoo<
+        true, true, 32, CompactAsOfNodeKind::Enabled, false, true>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weights_transposed, node_feat,
         gradout, grad_node_feat, grad_weights);
   } else {
-    _BackwardRelationalMatMul_separatecoo<true, true, 32, true, false, false>(
+    _BackwardRelationalMatMul_separatecoo<
+        true, true, 32, CompactAsOfNodeKind::Enabled, false, false>(
         dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
         unique_srcs_and_dests_node_indices, weights_transposed, node_feat,
         gradout, grad_node_feat, grad_weights);
@@ -701,25 +706,28 @@ void RelationalMatMul_separatecoo(
   at::Tensor dummy_tensor;
   if (separate_coo_eids.data_ptr() == separate_coo_node_indices.data_ptr()) {
     if (InputNumHeadOneFlag) {
-      _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true, true>(
+      _BackwardRelationalMatMul_separatecoo<
+          true, true, 32, CompactAsOfNodeKind::Disabled, true, true>(
           separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
           dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
           grad_weights);
     } else {
-      _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true, false>(
+      _BackwardRelationalMatMul_separatecoo<
+          true, true, 32, CompactAsOfNodeKind::Disabled, true, false>(
           separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
           dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
           grad_weights);
     }
   } else {
     if (InputNumHeadOneFlag) {
-      _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false, true>(
+      _BackwardRelationalMatMul_separatecoo<
+          true, true, 32, CompactAsOfNodeKind::Disabled, false, true>(
           separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
           dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
           grad_node_feat, grad_weights);
     } else {
-      _BackwardRelationalMatMul_separatecoo<true, true, 32, false, false,
-                                            false>(
+      _BackwardRelationalMatMul_separatecoo<
+          true, true, 32, CompactAsOfNodeKind::Disabled, false, false>(
           separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
           dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
           grad_node_feat, grad_weights);
@@ -776,7 +784,7 @@ void RelationalMatMul_separatecoo(
 // [[hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTForwardKernels.cu.h]]
 // adapted from _RelationalFusedGATKernel in
 // hetero_edgesoftmax/include/DGLHackKernel/OpExport/RGATOps.inc.h
-template </*int XPU, */ typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template </*int XPU, */ typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool IntegratedFormatRatherThanSeparateFlag,
           bool CSRRatherThanCOOFlag>
 void inner_product_various_left_and_node_right(
@@ -812,7 +820,7 @@ void inner_product_various_left_and_node_right(
     auto [nblks, nthrs] = get_type2_schedule(
         gdata.num_heads, gdata.feat_src_xlen, outcsr_num_rows);
 
-    HET_inner_product_bck_kernel<Idx, DType, CompactAsOfNodeFlag, true, false>
+    HET_inner_product_bck_kernel<Idx, DType, kind, true, false>
         <<<nblks, nthrs, 0, stream>>>(
             gdata, outcsr_row_ptr.data_ptr<Idx>(),
             outcsr_col_idx.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
@@ -854,8 +862,7 @@ void inner_product_various_left_and_node_right(
             ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
             : nullptr;
 
-    HET_inner_product_bck_kernel_edge_parallel<Idx, DType, CompactAsOfNodeFlag,
-                                               true, true>
+    HET_inner_product_bck_kernel_edge_parallel<Idx, DType, kind, true, true>
         <<<nblks, nthrs, 0, stream>>>(
             gdata, separate_coo_row_indices_data_ptr,
             separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
@@ -876,7 +883,8 @@ void inner_product_node_compact_and_node_separatecoo(
     at::Tensor &grad_inner_product, at::Tensor &grad_left_node_compact_data,
     at::Tensor &grad_right_node_vectors) {
   at::Tensor dummy_tensor;
-  inner_product_various_left_and_node_right<int64_t, float, true, false, false>(
+  inner_product_various_left_and_node_right<
+      int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
       separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
       separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
       dummy_tensor, unique_srcs_and_dests_rel_ptr,
@@ -892,8 +900,8 @@ void inner_product_edge_and_node_separatecoo(
     at::Tensor &grad_inner_product,  // at::Tensor& gradout,
     at::Tensor &grad_left_edge_data, at::Tensor &grad_right_node_vectors) {
   at::Tensor dummy_tensor;
-  inner_product_various_left_and_node_right<int64_t, float, false, false,
-                                            false>(
+  inner_product_various_left_and_node_right<
+      int64_t, float, CompactAsOfNodeKind::Disabled, false, false>(
       separate_coo_eids, dummy_tensor, separate_coo_row_indices,
       separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
       dummy_tensor, dummy_tensor, dummy_tensor, left_edge_data,

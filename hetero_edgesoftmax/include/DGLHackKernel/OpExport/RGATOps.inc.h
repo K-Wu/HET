@@ -67,7 +67,7 @@ void _RelationalFusedGATKernel(
     int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
     auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, incsr_num_rows);
 
-    HET_gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, true>
+    HET_gatExpLeakyReluSumKernel<Idx, DType, CompactKind, true>
         <<<nblks, nthrs, 0, stream>>>(
             gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
             incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
@@ -85,7 +85,7 @@ void _RelationalFusedGATKernel(
     auto [nblks2, nthrs2] = get_type2_schedule(
         gdata.num_heads, gdata.feat_src_xlen, incsr_num_rows);
 
-    HET_gatSumProdZipDivKernel<Idx, DType, CompactAsOfNodeFlag, true>
+    HET_gatSumProdZipDivKernel<Idx, DType, CompactKind, true>
         <<<nblks2, nthrs2, 0, stream>>>(
             gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
             incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
@@ -292,7 +292,7 @@ void _RelationalFusedGATKernel(
     auto [nblks, nthrs] = get_type2_schedule(
         gdata.num_heads, gdata.feat_src_xlen, outcsr_num_rows);
     if constexpr (!FLAG_KERNEL_FUSED) {
-      HET_fusedGatBackwardGradFeatSrc<Idx, DType, CompactAsOfNodeFlag, true>
+      HET_fusedGatBackwardGradFeatSrc<Idx, DType, CompactKind, true>
           <<<nblks, nthrs, 0, stream>>>(
               gdata, outcsr_row_ptr.data_ptr<Idx>(),
               outcsr_col_idx.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
@@ -303,7 +303,7 @@ void _RelationalFusedGATKernel(
               CompactAsOfNodeFlag
                   ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
                   : nullptr);
-      HET_fusedGatBackwardGradElEr<Idx, DType, CompactAsOfNodeFlag, true>
+      HET_fusedGatBackwardGradElEr<Idx, DType, CompactKind, true>
           <<<nblks, nthrs, 0, stream>>>(
               gdata, outcsr_row_ptr.data_ptr<Idx>(),
               outcsr_col_idx.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
@@ -315,15 +315,17 @@ void _RelationalFusedGATKernel(
                   ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
                   : nullptr);
     } else {
-      HET_fusedGatBackwardGradElErFeatSrcFused<
-          Idx, DType, CompactAsOfNodeFlag, true><<<nblks, nthrs, 0, stream>>>(
-          gdata, outcsr_row_ptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
-          outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
-          CompactAsOfNodeFlag ? unique_srcs_and_dests_rel_ptr.data_ptr<Idx>()
-                              : nullptr,
-          CompactAsOfNodeFlag
-              ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-              : nullptr);
+      HET_fusedGatBackwardGradElErFeatSrcFused<Idx, DType, CompactKind, true>
+          <<<nblks, nthrs, 0, stream>>>(
+              gdata, outcsr_row_ptr.data_ptr<Idx>(),
+              outcsr_col_idx.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
+              outcsr_num_rows,
+              CompactAsOfNodeFlag
+                  ? unique_srcs_and_dests_rel_ptr.data_ptr<Idx>()
+                  : nullptr,
+              CompactAsOfNodeFlag
+                  ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
+                  : nullptr);
     }
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {

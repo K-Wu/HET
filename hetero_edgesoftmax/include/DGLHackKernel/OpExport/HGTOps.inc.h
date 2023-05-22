@@ -75,34 +75,34 @@ void _full_graph_edge_softmax_ops(
   if constexpr (EdgeParallelFlag) {
     // use separate coo instead of in csr
     HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel<
-        Idx, DType, false, true, true, false, OutputMuAppliedAttnScoreSwitch>
-        <<<nblks, nthrs, 0, stream>>>(
-            gdata, incsr_or_sep_coo_rowptr_or_indices.data_ptr<Idx>(),
-            incsr_or_sep_coo_col_idx.data_ptr<Idx>(),
-            incsr_or_sep_coo_reltypes_or_relptr.data_ptr<Idx>(),
-            incsr_or_sep_coo_num_rows_or_edges,
-            /*no need when !CompactAsOfNode*/ nullptr,
-            /*no need when !CompactAsOfNode*/ nullptr, num_relations);
+        Idx, DType, CompactAsOfNodeKind::Disabled, true, true, false,
+        OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
+        gdata, incsr_or_sep_coo_rowptr_or_indices.data_ptr<Idx>(),
+        incsr_or_sep_coo_col_idx.data_ptr<Idx>(),
+        incsr_or_sep_coo_reltypes_or_relptr.data_ptr<Idx>(),
+        incsr_or_sep_coo_num_rows_or_edges,
+        /*no need when !CompactAsOfNode*/ nullptr,
+        /*no need when !CompactAsOfNode*/ nullptr, num_relations);
     HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2<
-        Idx, DType, false, true, true, false, OutputMuAppliedAttnScoreSwitch>
-        <<<nblks, nthrs, 0, stream>>>(
-            gdata, incsr_or_sep_coo_rowptr_or_indices.data_ptr<Idx>(),
-            incsr_or_sep_coo_col_idx.data_ptr<Idx>(),
-            incsr_or_sep_coo_reltypes_or_relptr.data_ptr<Idx>(),
-            incsr_or_sep_coo_num_rows_or_edges,
-            /*no need when !CompactAsOfNode*/ nullptr,
-            /*no need when !CompactAsOfNode*/ nullptr, num_relations);
+        Idx, DType, CompactAsOfNodeKind::Disabled, true, true, false,
+        OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
+        gdata, incsr_or_sep_coo_rowptr_or_indices.data_ptr<Idx>(),
+        incsr_or_sep_coo_col_idx.data_ptr<Idx>(),
+        incsr_or_sep_coo_reltypes_or_relptr.data_ptr<Idx>(),
+        incsr_or_sep_coo_num_rows_or_edges,
+        /*no need when !CompactAsOfNode*/ nullptr,
+        /*no need when !CompactAsOfNode*/ nullptr, num_relations);
   } else {
     // use in csr
     HET__hgtEdgeSoftmaxAccumStageOnlyKernel<
-        Idx, DType, false, true, false, false, OutputMuAppliedAttnScoreSwitch>
-        <<<nblks, nthrs, 0, stream>>>(
-            gdata, incsr_or_sep_coo_rowptr_or_indices.data_ptr<Idx>(),
-            incsr_or_sep_coo_col_idx.data_ptr<Idx>(),
-            incsr_or_sep_coo_reltypes_or_relptr.data_ptr<Idx>(),
-            incsr_or_sep_coo_num_rows_or_edges,
-            /*no need when !CompactAsOfNode*/ nullptr,
-            /*no need when !CompactAsOfNode*/ nullptr, num_relations);
+        Idx, DType, CompactAsOfNodeKind::Disabled, true, false, false,
+        OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
+        gdata, incsr_or_sep_coo_rowptr_or_indices.data_ptr<Idx>(),
+        incsr_or_sep_coo_col_idx.data_ptr<Idx>(),
+        incsr_or_sep_coo_reltypes_or_relptr.data_ptr<Idx>(),
+        incsr_or_sep_coo_num_rows_or_edges,
+        /*no need when !CompactAsOfNode*/ nullptr,
+        /*no need when !CompactAsOfNode*/ nullptr, num_relations);
   }
 }
 
@@ -169,12 +169,12 @@ void _full_graph_message_mean_aggregation(
   auto [nblks, nthrs] = get_type2_schedule(
       gdata.num_heads, gdata.message_out_dim, incsr_num_rows);
   HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum<
-      Idx, DType, false, true, false, false, UseMuAppliedAttnScoreSwitch>
-      <<<nblks, nthrs, 0, stream>>>(
-          gdata, incsr_rowptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
-          incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
-          nullptr /*no need when !CompactAsOfNodeFlag*/,
-          nullptr /*no need when !CompactAsOfNodeFlag*/, num_relations);
+      Idx, DType, CompactAsOfNodeKind::Disabled, true, false, false,
+      UseMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
+      gdata, incsr_rowptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
+      incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
+      nullptr /*no need when !CompactAsOfNodeFlag*/,
+      nullptr /*no need when !CompactAsOfNodeFlag*/, num_relations);
 }
 
 void full_graph_message_mean_aggregation(
@@ -456,12 +456,12 @@ void _full_graph_message_mean_aggregation(
       gdata.num_heads, gdata.message_src_xlen, outcsr_num_rows);
 
   HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel<
-      Idx, DType, false, true, false, UseMuAppliedAttnScoreSwitch>
-      <<<nblks, nthrs, 0, stream>>>(
-          gdata, outcsr_rowptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
-          outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
-          /*no need unless CompactAsOfNode*/ nullptr,
-          /*no need unless CompactAsOfNode*/ nullptr, num_relations);
+      Idx, DType, CompactAsOfNodeKind::Disabled, true, false,
+      UseMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
+      gdata, outcsr_rowptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
+      outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
+      /*no need unless CompactAsOfNode*/ nullptr,
+      /*no need unless CompactAsOfNode*/ nullptr, num_relations);
 }
 
 void full_graph_message_mean_aggregation(
@@ -531,12 +531,12 @@ void _full_graph_edge_softmax_ops(
   // whereas each head gets message_src_xlen //
   // num_heads number of elements
   HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel<
-      Idx, DType, false, true, false, OutputMuAppliedAttnScoreSwitch>
-      <<<nblks, nthrs, 0, stream>>>(
-          gdata, outcsr_row_ptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
-          outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
-          /*no need when !CompactAsOfNodeFlag*/ nullptr,
-          /*no need when !CompactAsOfNodeFlag*/ nullptr, num_relations);
+      Idx, DType, CompactAsOfNodeKind::Disabled, true, false,
+      OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
+      gdata, outcsr_row_ptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
+      outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
+      /*no need when !CompactAsOfNodeFlag*/ nullptr,
+      /*no need when !CompactAsOfNodeFlag*/ nullptr, num_relations);
 }
 
 void full_graph_edge_softmax_ops(

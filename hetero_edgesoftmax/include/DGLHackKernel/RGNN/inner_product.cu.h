@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include "kernel_enums.h"
 
 template <typename Idx, typename DType>
 struct InnerProductData {
@@ -34,7 +35,7 @@ struct BackwardInnerProductData {
 
 // adapted from _gatSumProdZipDivKernel in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __global__ void HET_inner_product_fw_kernel(
     InnerProductData<Idx, DType> gdata, const Idx *row_offsets,
@@ -57,7 +58,7 @@ __global__ void HET_inner_product_fw_kernel(
           Idx edata_idx = gdata.eids[eidx];
           if constexpr (RelationalFlag) {
             // Idx sum_idx = -1;
-            if constexpr (CompactAsOfNodeFlag) {
+            if constexpr (IsCompact(kind)) {
               Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
                 etype = binary_search(num_relations, etypes, eidx);
@@ -96,7 +97,7 @@ __global__ void HET_inner_product_fw_kernel(
           } else {  // !RelationalFlag
             // NB: feat_src_entry_id varies between edata_idx and src_vid
             // depending on compactasofnodeflag
-            if constexpr (CompactAsOfNodeFlag) {
+            if constexpr (IsCompact(kind)) {
               feat_src_entry_id = src_vid;
             } else {
               feat_src_entry_id = edata_idx;
@@ -116,7 +117,7 @@ __global__ void HET_inner_product_fw_kernel(
 
 // adapted from _fusedGatBackwardGradElErFeatSrcFused in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGATBackward.cu.h]]
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __global__ void HET_inner_product_bck_kernel(
     BackwardInnerProductData<Idx, DType> gdata, const Idx *row_offsets,
@@ -136,7 +137,7 @@ __global__ void HET_inner_product_bck_kernel(
         DType sfeatsrc = 0.;
         Idx feat_src_offset = -1;
         // Idx el_idx = -1;
-        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+        if constexpr (IsCompact(kind) && !RelationalFlag) {
           // in this case, feat_src_offset is the same regardless of which
           // outgoing edge we deal with
           feat_src_offset =
@@ -148,7 +149,7 @@ __global__ void HET_inner_product_bck_kernel(
           Idx dst_vid = column_indices[e];
           // Idx er_idx = -1;
           // Idx dst_vid_relational = -1;
-          if constexpr (!CompactAsOfNodeFlag) {
+          if constexpr (!IsCompact(kind)) {
             // in this case, feat_src_offset, er_idx and el_idx are related to
             // edge id, regardless of the type of the edge
             feat_src_offset = edata_idx * gdata.feat_src_xlen +
@@ -210,7 +211,7 @@ __global__ void HET_inner_product_bck_kernel(
                                  head_idx * hidden_xlen + feat_idx) =
               gdata.grad_inner_product[edata_idx * num_heads + head_idx] *
               gdata.feat_src[feat_src_offset];
-          if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
+          if constexpr (!IsCompact(kind) || RelationalFlag) {
             gdata.grad_feat_src + feat_src_offset =
                 gdata.grad_inner_product[edata_idx * num_heads + head_idx] *
                 gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
@@ -223,7 +224,7 @@ __global__ void HET_inner_product_bck_kernel(
 
           }  // if constexpr (!CompactAsOfNodeFlag)
         }    // for Idx e
-        if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+        if constexpr (IsCompact(kind) && !RelationalFlag) {
           gdata.grad_feat_src[feat_src_offset] = sfeatsrc;
         }
       }  // while feat_idx

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include "kernel_enums.h"
 
 template <typename Idx, typename DType>
 struct RGCNData {
@@ -21,7 +22,7 @@ struct RGCNData {
 
 // adapted from _gatSumProdZipDivKernel_edge_parallel in
 // [[hetero_edgesoftmax/include/DGLHackKernel/RGAT/RGATKernelsSeparateCOO.cu.h]]
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _rgcnNodeMeanAggregation_edge_parallel(
     RGCNData<Idx, DType> gdata, const Idx* etypes, const Idx* row_indices,
@@ -55,7 +56,7 @@ __device__ __forceinline__ void _rgcnNodeMeanAggregation_edge_parallel(
         } else {
           etype = etypes[eidx];
         }
-        if constexpr (CompactAsOfNodeFlag) {
+        if constexpr (IsCompact(kind)) {
           feat_src_entry_id = src_vid;
           // sum_idx = find_relational_compact_as_of_node_index(
           //     etype, dst_vid, unique_srcs_and_dests_node_indices,
@@ -66,7 +67,7 @@ __device__ __forceinline__ void _rgcnNodeMeanAggregation_edge_parallel(
             // matrix. It could be a case in subgraph where compressing along
             // the node dimension may not be worth it.
             CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-                (FullCartesianFlag) && CompactAsOfNodeFlag,
+                (FullCartesianFlag) && IsCompact(kind),
                 "should be non-reachable not implemented");
           }
         } else {
@@ -104,14 +105,13 @@ __device__ __forceinline__ void _rgcnNodeMeanAggregation_edge_parallel(
   }
 }
 
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
+template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_rgcnNodeMeanAggregation_edge_parallel(
     RGCNData<Idx, DType> gdata, const Idx* rel_ptrs, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
     const Idx* unique_srcs_and_dests_rel_ptr,
     const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  _rgcnNodeMeanAggregation_edge_parallel<Idx, DType, CompactAsOfNodeFlag, true,
-                                         false>(
+  _rgcnNodeMeanAggregation_edge_parallel<Idx, DType, kind, true, false>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       num_relations);

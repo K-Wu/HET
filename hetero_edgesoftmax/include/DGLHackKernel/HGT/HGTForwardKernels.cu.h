@@ -42,7 +42,7 @@ __global__ void HET__global_EdgeMessageConcatenatedCOOKernel(
 
 // only requires column indices and therefore both COO and CSR could leverage
 // this kernel.
-template <typename Idx, typename DType, bool EdgeMessagesCompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind EdgeMessagesKind,
           bool EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag,
           typename EdgeMessagesPointerType,
           bool BinarySearchToGetEtypeNodeOffsetFlag, bool CSRInsteadOfCOOFlag>
@@ -62,7 +62,7 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
     Idx etype = etypes[edge_idx];
     Idx eid = eids[edge_idx];
     DType *EdgeMessage;
-    if constexpr (EdgeMessagesCompactAsOfNodeFlag) {
+    if constexpr (IsCompact(EdgeMessagesKind)) {
       Idx unique_node_index_for_curr_etype;
       Idx row_idx;
       if constexpr (CSRInsteadOfCOOFlag) {
@@ -115,7 +115,8 @@ __global__ void HET_HGTTriviallyEdgeParallelVanillaNodeMeanAggregation(
     int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
     float *NodeAggregates) {
   _HGTTriviallyEdgeParallelNodeMeanAggregation<
-      int64_t, float, /* EdgeMessagesCompactAsOfNodeFlag = */ false,
+      int64_t, float,
+      /* EdgeMessagesCompactAsOfNodeFlag = */ CompactAsOfNodeKind::Disabled,
       /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ false, float *,
       /*flag not applicable*/ false, /*flag not applicable*/ false>(
       col_idxes, etypes, eids, EdgeMessages, EdgeAttnScores, num_nodes,
@@ -130,7 +131,8 @@ __global__ void HET_HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation(
     float *NodeAggregates, int64_t *ETypeUniqueIndexToNodeIndexMap,
     int64_t *etype_unique_node_offsets, int64_t *row_indices) {
   _HGTTriviallyEdgeParallelNodeMeanAggregation<
-      int64_t, float, /* EdgeMessagesCompactAsOfNodeFlag = */ true,
+      int64_t, float,
+      /* EdgeMessagesCompactAsOfNodeFlag = */ CompactAsOfNodeKind::Enabled,
       /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ true, float *,
       /*BinarySearchToGetEtypeNodeOffsetFlag = */ true,
       /*CSRInsteadOfCOOFlag = */ false>(
@@ -223,15 +225,16 @@ __global__ void HET_EdgeMessageGeneration(
 
 // This is to calculate the product of (sW) and t where (sW) is stored per edge
 // and t is stored per node.
-constexpr auto HGTVanillaEdgeAttentionSecondStage =
-    HET_GeneralEdgeMessageMultiplyNodeFeature<
-        float, /*ProductCompactAsOfNodeFlag = */ false,
-        /*EidEnableFlag = */ true, float *>;
+// constexpr auto HGTVanillaEdgeAttentionSecondStage =
+//     HET_GeneralEdgeMessageMultiplyNodeFeature<
+//         float, /*ProductCompactAsOfNodeFlag = */
+//         CompactAsOfNodeKind::Disabled,
+//         /*EidEnableFlag = */ true, float *>;
 
 // This is to calculate the product of (sW) and t where (sW) is stored per edge
 // and t is stored per node.
-constexpr auto HGTCompactAsOfNodesEdgeAttentionSecondStage =
-    HET_GeneralEdgeMessageMultiplyNodeFeature<float, true, false, float **>;
+// constexpr auto HGTCompactAsOfNodesEdgeAttentionSecondStage =
+//     HET_GeneralEdgeMessageMultiplyNodeFeature<float, true, false, float **>;
 
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
 struct HgtDstOutData {
@@ -284,7 +287,7 @@ struct HgtDstOutData<Idx, DType, 2> {
 // on unnormalized attn_score and edge_sfotmax sum at each destination nodes,
 // and apply it in the fly to each edge message, and finally accumulates the
 // result to the destination node.
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int UseMuAppliedAttnScoreSwitch>
 __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
@@ -314,7 +317,7 @@ __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
             } else {
               etype = etypes[eidx];
             }
-            if constexpr (CompactAsOfNodeFlag) {
+            if constexpr (IsCompact(kind)) {
               feat_src_entry_id = find_relational_compact_as_of_node_index(
                   etype, src_vid, unique_srcs_and_dests_rel_ptr,
                   unique_srcs_and_dests_node_indices);
@@ -369,7 +372,7 @@ __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
           } else {  // !RelationalFlag
             // NB: feat_src_entry_id varies between edata_idx and src_vid
             // depending on compactasofnodeflag
-            if constexpr (CompactAsOfNodeFlag) {
+            if constexpr (IsCompact(kind)) {
               feat_src_entry_id = src_vid;
             } else {
               feat_src_entry_id = edata_idx;
@@ -471,7 +474,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 3> {
 // softmax sum at each destination node, where the edge softmax normalization
 // of attention was expected to not only do such accumulation, but also use it
 // as the devisor to normalize each edge.
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int OutputMuAppliedAttnScoreSwitch>
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
@@ -524,7 +527,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
           //    etype, dst_vid, unique_srcs_and_dests_node_indices,
           //    unique_srcs_and_dests_rel_ptr);
         }
-        if constexpr (CompactAsOfNodeFlag) {
+        if constexpr (IsCompact(kind)) {
           if constexpr (RelationalFlag) {
             // Idx etype = etypes[eidx];
             if constexpr (FullCartesianFlag) {
@@ -533,7 +536,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
               // matrix. It could be a case in subgraph where compressing
               // along the node dimension may not be worth it.
               CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-                  CompactAsOfNodeFlag && RelationalFlag && FullCartesianFlag,
+                  IsCompact(kind) && RelationalFlag && FullCartesianFlag,
                   "should be non-reachable not implemented");
             }
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
@@ -601,7 +604,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
               // TODO: etype == -1 only for passing the compilation, needs to
               // define it
               Idx etype = -1;
-              if constexpr (CompactAsOfNodeFlag) {
+              if constexpr (IsCompact(kind)) {
                 if constexpr (RelationalFlag) {
                   // Idx etype = etypes[eidx];
                   if constexpr (FullCartesianFlag) {
@@ -610,8 +613,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
                     // matrix. It could be a case in subgraph where compressing
                     // along the node dimension may not be worth it.
                     CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-                        CompactAsOfNodeFlag && RelationalFlag &&
-                            FullCartesianFlag,
+                        IsCompact(kind) && RelationalFlag && FullCartesianFlag,
                         "should be non-reachable not implemented");
                   }
                   Idx src_vid_relational =
@@ -651,7 +653,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
 
 // head -> blockIdx.x * blockDim.x + threadIdx.x;
 // edge -> blockIdx.y * blockDim.y + threadIdx.y;
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int OutputMuAppliedAttnScoreSwitch>
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
@@ -707,7 +709,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
         //    etype, dst_vid, unique_srcs_and_dests_node_indices,
         //    unique_srcs_and_dests_rel_ptr);
       }
-      if constexpr (CompactAsOfNodeFlag) {
+      if constexpr (IsCompact(kind)) {
         if constexpr (RelationalFlag) {
           // Idx etype = etypes[eidx];
           if constexpr (FullCartesianFlag) {
@@ -716,7 +718,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
             // matrix. It could be a case in subgraph where compressing
             // along the node dimension may not be worth it.
             CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-                CompactAsOfNodeFlag && RelationalFlag && FullCartesianFlag,
+                IsCompact(kind) && RelationalFlag && FullCartesianFlag,
                 "should be non-reachable not implemented");
           }
           Idx src_vid_relational = find_relational_compact_as_of_node_index(
@@ -768,7 +770,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
   }
 }
 
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int OutputMuAppliedAttnScoreSwitch>
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(

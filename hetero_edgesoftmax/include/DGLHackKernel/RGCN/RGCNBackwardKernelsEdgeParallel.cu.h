@@ -25,7 +25,7 @@ struct BackwardRGCNData {
 
 // adapted from _fusedGatBackwardGradElErFeatSrcFused_edge_parallel in
 // [[hetero_edgesoftmax/include/DGLHackKernel/RGAT/RGATBackwardKernelsSeparateCOO.cu.h]]
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag>
 __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
     BackwardRGCNData<Idx, DType> gdata, const Idx *etypes,
@@ -52,7 +52,7 @@ __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
       // DType sfeatsrc = 0.;
       Idx feat_src_offset = -1;
       // Idx el_idx = -1;
-      if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
+      if constexpr (IsCompact(kind) && !RelationalFlag) {
         // in this case, feat_src_offset is the same regardless of which
         // outgoing edge we deal with
         feat_src_offset =
@@ -63,7 +63,7 @@ __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
       // for (Idx e = start_off; e < end_off; ++e) {
       // Idx er_idx = -1;
       // Idx dst_vid_relational = -1;
-      if constexpr (!CompactAsOfNodeFlag) {
+      if constexpr (!IsCompact(kind)) {
         // in this case, feat_src_offset, er_idx and el_idx are related to
         // edge id, regardless of the type of the edge
         feat_src_offset = edata_idx * gdata.feat_src_xlen +
@@ -139,14 +139,13 @@ __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
   }  // while src_vid
 }
 
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag>
+template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_rgcnBackwardNodeMeanAggregation_edge_parallel(
     BackwardRGCNData<Idx, DType> gdata, const Idx *rel_ptrs,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
     const Idx *unique_srcs_and_dests_rel_ptr,
     const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  _rgcnBackwardNodeMeanAggregation_edge_parallel<Idx, DType,
-                                                 CompactAsOfNodeFlag, true>(
+  _rgcnBackwardNodeMeanAggregation_edge_parallel<Idx, DType, kind, true>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
       num_relations);

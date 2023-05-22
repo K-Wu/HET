@@ -1,5 +1,6 @@
 #pragma once
 #include <cuda_runtime.h>
+#include "kernel_enums.h"
 
 // FIXME: check if RGAT needs different a vector for different etypes
 template <typename Idx, typename DType>
@@ -30,7 +31,7 @@ __device__ __forceinline__ DType gatLeakyReluExp(DType val, DType slope) {
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 // NB: when CompactAsOfNodeFlag is false, gdata.el, gdata.er, gdata.feat_src are
 // edge-wise data instead of node-wise.
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _gatSumProdZipDivKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
@@ -59,7 +60,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
             } else {
               etype = etypes[eidx];
             }
-            if constexpr (CompactAsOfNodeFlag) {
+            if constexpr (IsCompact(kind)) {
               feat_src_entry_id = find_relational_compact_as_of_node_index(
                   etype, src_vid, unique_srcs_and_dests_rel_ptr,
                   unique_srcs_and_dests_node_indices);
@@ -91,7 +92,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
           } else {  // !RelationalFlag
             // NB: feat_src_entry_id varies between edata_idx and src_vid
             // depending on compactasofnodeflag
-            if constexpr (CompactAsOfNodeFlag) {
+            if constexpr (IsCompact(kind)) {
               feat_src_entry_id = src_vid;
             } else {
               feat_src_entry_id = edata_idx;
@@ -110,15 +111,14 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
   }
 }
 
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag>
 __global__ void HET_gatSumProdZipDivKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
     const Idx *unique_srcs_and_dests_rel_ptr,
     const Idx *unique_srcs_and_dests_node_indices) {
-  _gatSumProdZipDivKernel<Idx, DType, CompactAsOfNodeFlag, RelationalFlag,
-                          false, false>(
+  _gatSumProdZipDivKernel<Idx, DType, kind, RelationalFlag, false, false>(
       gdata, row_offsets, column_indices, etypes, num_rows,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
 }
@@ -126,7 +126,7 @@ __global__ void HET_gatSumProdZipDivKernel(
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 // NB: when CompactAsOfNodeFlag is false, gdata.el, gdata.er, gdata.feat_src are
 // edge-wise data instead of node-wise.
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
@@ -152,7 +152,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
          feat_idx += blockDim.x * gridDim.x) {
       // 1. Load destination vertex into shared memory
       Idx feat_off_dst = -1;
-      if constexpr (CompactAsOfNodeFlag) {
+      if constexpr (IsCompact(kind)) {
         feat_off_dst = dst_vid * num_heads + feat_idx;
       }
       // er[threadIdx.x] = gdata.er[feat_off_dst];
@@ -175,7 +175,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
               etype, dst_vid, unique_srcs_and_dests_rel_ptr,
               unique_srcs_and_dests_node_indices);
         }
-        if constexpr (CompactAsOfNodeFlag) {
+        if constexpr (IsCompact(kind)) {
           if constexpr (RelationalFlag) {
             // Idx etype = etypes[eidx];
             if constexpr (FullCartesianFlag) {
@@ -184,7 +184,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
               // matrix. It could be a case in subgraph where compressing along
               // the node dimension may not be worth it.
               CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-                  CompactAsOfNodeFlag && RelationalFlag && FullCartesianFlag,
+                  IsCompact(kind) && RelationalFlag && FullCartesianFlag,
                   "should be non-reachable not implemented");
             }
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
@@ -222,15 +222,14 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
   }
 }
 
-template <typename Idx, typename DType, bool CompactAsOfNodeFlag,
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag>
 __global__ void HET_gatExpLeakyReluSumKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
     const Idx *unique_srcs_and_dests_rel_ptr,
     const Idx *unique_srcs_and_dests_node_indices) {
-  _gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeFlag, RelationalFlag,
-                            false, false>(
+  _gatExpLeakyReluSumKernel<Idx, DType, kind, RelationalFlag, false, false>(
       gdata, row_offsets, column_indices, etypes, num_rows,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
 }
