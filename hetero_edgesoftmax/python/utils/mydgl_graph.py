@@ -303,6 +303,29 @@ class MyDGLGraph:
         ]["unique_node_idx_single_sided"]["rel_ptr_col"]
         return separate_unique_node_indices_single_sided
 
+    def get_separate_unique_node_indices_inverse_idx(self) -> Dict[str, torch.Tensor]:
+        ret = dict()
+        ret["rel_ptr"] = self.graph_data["separate"]["unique_node_idx"]["rel_ptr"]
+        ret["inverse_idx"] = self.graph_data["separate"]["unique_node_idx"][
+            "inverse_idx"
+        ]
+        return ret
+
+    def get_separate_unique_node_indices_single_sided_inverse_idx(
+        self,
+    ) -> Dict[str, torch.Tensor]:
+        ret = dict()
+        ret["rel_ptr_row"] = self.graph_data["separate"][
+            "unique_node_idx_single_sided"
+        ]["rel_ptr_row"]
+        ret["inverse_idx_row"] = self.graph_data["separate"][
+            "unique_node_idx_single_sided"
+        ]["inverse_idx_row"]
+        ret["inverse_idx_col"] = self.graph_data["separate"][
+            "unique_node_idx_single_sided"
+        ]["inverse_idx_col"]
+        return ret
+
     def to_script_object(self) -> utils.ScriptedMyDGLGraph:
         num_nodes = self.get_num_nodes()
         num_ntypes = self.get_num_ntypes()
@@ -338,36 +361,40 @@ class MyDGLGraph:
         else:
             original_node_type_offsets = None
 
+        separate_coo_original = None
+        separate_csr_original = None
+        separate_unique_node_indices = None
+        separate_unique_node_indices_single_sided = None
+        separate_unique_node_indices_inverse_idx = None
+        separate_unique_node_indices_single_sided_inverse_idx = None
         if "separate" in self.graph_data:
             if (
                 "coo" in self.graph_data["separate"]
                 and "original" in self.graph_data["separate"]["coo"]
             ):
                 separate_coo_original = self.get_separate_coo_original()
-            else:
-                separate_coo_original = None
             if (
                 "csr" in self.graph_data["separate"]
                 and "original" in self.graph_data["separate"]["csr"]
             ):
                 separate_csr_original = self.get_separate_csr_original()
-            else:
-                separate_csr_original = None
             if "unique_node_idx" in self.graph_data["separate"]:
                 separate_unique_node_indices = self.get_separate_unique_node_indices()
-            else:
-                separate_unique_node_indices = None
+                if "inverse_idx" in self.graph_data["separate"]["unique_node_idx"]:
+                    separate_unique_node_indices_inverse_idx = (
+                        self.get_separate_unique_node_indices_inverse_idx()
+                    )
             if "unique_node_idx_single_sided" in self.graph_data["separate"]:
                 separate_unique_node_indices_single_sided = (
                     self.get_separate_unique_node_indices_single_sided()
                 )
-            else:
-                separate_unique_node_indices_single_sided = None
-        else:
-            separate_coo_original = None
-            separate_csr_original = None
-            separate_unique_node_indices = None
-            separate_unique_node_indices_single_sided = None
+                if (
+                    "inverse_idx_row"
+                    in self.graph_data["separate"]["unique_node_idx_single_sided"]
+                ):
+                    separate_unique_node_indices_single_sided_inverse_idx = (
+                        self.get_separate_unique_node_indices_single_sided_inverse_idx()
+                    )
 
         return utils.ScriptedMyDGLGraph(
             num_nodes,
@@ -383,6 +410,8 @@ class MyDGLGraph:
             original_node_type_offsets,
             separate_unique_node_indices,
             separate_unique_node_indices_single_sided,
+            separate_unique_node_indices_inverse_idx,
+            separate_unique_node_indices_single_sided_inverse_idx,
             separate_coo_original,
             separate_csr_original,
         )
@@ -576,7 +605,9 @@ class MyDGLGraph:
         ] = separate_coo_eids
 
     @torch.no_grad()
-    def generate_separate_unique_node_idx_single_sided_for_each_etype(self):
+    def generate_separate_unique_node_idx_single_sided_for_each_etype(
+        self, produce_inverse_idx=True
+    ):
         if (
             "separate" not in self.graph_data
             or "coo" not in self.graph_data["separate"]
@@ -616,9 +647,18 @@ class MyDGLGraph:
         self.graph_data["separate"]["unique_node_idx_single_sided"][
             "rel_ptr_col"
         ] = result_rel_ptr_col
+        if produce_inverse_idx:
+            self.graph_data["separate"]["unique_node_idx_single_sided"][
+                "inverse_idx_row"
+            ] = result_node_idx_row_reverse_idx
+            self.graph_data["separate"]["unique_node_idx_single_sided"][
+                "inverse_idx_col"
+            ] = result_node_idx_col_reverse_idx
 
     @torch.no_grad()
-    def generate_separate_unique_node_idx_for_each_etype(self):
+    def generate_separate_unique_node_idx_for_each_etype(
+        self, produce_inverse_idx=True
+    ):
         if (
             "separate" not in self.graph_data
             or "coo" not in self.graph_data["separate"]
@@ -643,6 +683,10 @@ class MyDGLGraph:
         self.graph_data["separate"]["unique_node_idx"] = dict()
         self.graph_data["separate"]["unique_node_idx"]["node_idx"] = result_node_idx
         self.graph_data["separate"]["unique_node_idx"]["rel_ptr"] = result_rel_ptr
+        if produce_inverse_idx:
+            self.graph_data["separate"]["unique_node_idx"][
+                "inverse_idx"
+            ] = result_node_idx_reverse_idx
 
     def import_metadata_from_dgl_heterograph(self, dglgraph):
         assert (
