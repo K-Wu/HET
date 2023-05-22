@@ -576,7 +576,7 @@ class MyDGLGraph:
         ] = separate_coo_eids
 
     @torch.no_grad()
-    def generate_get_separate_unique_node_idx_single_sided_for_each_etype(self):
+    def generate_separate_unique_node_idx_single_sided_for_each_etype(self):
         if (
             "separate" not in self.graph_data
             or "coo" not in self.graph_data["separate"]
@@ -592,7 +592,7 @@ class MyDGLGraph:
             result_rel_ptr_col,
             result_node_idx_row_reverse_idx,
             result_node_idx_col_reverse_idx,
-        ) = utils_lite.generate_get_separate_unique_node_idx_single_sided_for_each_etype(
+        ) = utils_lite.generate_separate_unique_node_idx_single_sided_for_each_etype(
             self.get_num_rels(),
             self.graph_data["separate"]["coo"]["original"]["rel_ptr"],
             self.graph_data["separate"]["coo"]["original"]["row_idx"],
