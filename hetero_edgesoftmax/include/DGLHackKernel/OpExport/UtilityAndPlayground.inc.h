@@ -48,7 +48,7 @@ void try_get_schedule_by_relations(int64_t num_relations, int64_t num_blocks) {
 #endif
 
 std::vector<std::vector<at::Tensor>> biops_tensor_info(
-    at::Tensor& one_tensor, at::Tensor& other_tensor) {
+    at::Tensor &one_tensor, at::Tensor &other_tensor) {
   std::cout << "one_tensor device: " << one_tensor.device() << std::endl;
   std::cout << "other_tensor device: " << other_tensor.device() << std::endl;
   std::cout << "one_tensor dtype: " << one_tensor.dtype() << std::endl;
@@ -60,7 +60,7 @@ std::vector<std::vector<at::Tensor>> biops_tensor_info(
   return result;
 }
 
-at::Tensor tensor_info(at::Tensor& one_tensor) {
+at::Tensor tensor_info(const at::Tensor &one_tensor) {
   // NB: storage_offset does play a role in tensor metadata, see in
   // github/pytorch/pytorch repo, pytorch/pytorch/c10/core/TensorImpl.h
   // implements `inline T* data_ptr_impl() const` as `return
@@ -104,10 +104,20 @@ torch::Dict<std::string, int64_t> test_argument_takein(
   return result;
 }
 
+void print_tensor_dict_info(torch::Dict<std::string, at::Tensor> dictionary) {
+  // print key and tensor info for each tensor in the dictionary
+  for (auto const &pair : dictionary) {
+    std::cout << "key: " << pair.key() << std::endl;
+    std::cout << "tensor info: " << std::endl;
+    tensor_info(pair.value());
+  }
+}
+
 TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
   // Utility and debugging functions
   m.def("try_get_schedule_by_relations", try_get_schedule_by_relations);
   m.def("biops_tensor_info", biops_tensor_info);
   m.def("tensor_info", tensor_info);
   m.def("test_argument_takein", test_argument_takein);
+  m.def("print_tensor_dict_info", print_tensor_dict_info);
 }

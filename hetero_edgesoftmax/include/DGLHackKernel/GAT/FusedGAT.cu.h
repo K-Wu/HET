@@ -234,9 +234,9 @@ __global__ void HET_gatExpLeakyReluSumKernel(
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
 }
 
-template <typename Idx, typename DType>
-constexpr auto relational_gatExpLeakyReluSumKernel_per_edge =
-    HET_gatExpLeakyReluSumKernel<Idx, DType, false, false, false>;
-template <typename Idx, typename DType>
-constexpr auto relational_gatSumProdZipDivKernel_per_edge =
-    HET_gatSumProdZipDivKernel<Idx, DType, false, false>;
+// template <typename Idx, typename DType>
+// constexpr auto relational_gatExpLeakyReluSumKernel_per_edge =
+//     HET_gatExpLeakyReluSumKernel<Idx, DType, false, false, false>;
+// template <typename Idx, typename DType>
+// constexpr auto relational_gatSumProdZipDivKernel_per_edge =
+//     HET_gatSumProdZipDivKernel<Idx, DType, false, false>;

@@ -383,12 +383,12 @@ __global__ void HET_fusedGatBackwardGradElEr(
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
 }
 
-template <typename Idx, typename DType>
-constexpr auto relational_fusedGatBackwardGradElEr_per_edge =
-    HET_fusedGatBackwardGradElEr<Idx, DType, false, true>;
-template <typename Idx, typename DType>
-constexpr auto relational_fusedGatBackwardGradFeatSrc_per_edge =
-    HET_fusedGatBackwardGradFeatSrc<Idx, DType, false, true>;
-template <typename Idx, typename DType>
-constexpr auto relational_fusedGatBackwardGradElErFeatSrcFused_per_edge =
-    HET_fusedGatBackwardGradElErFeatSrcFused<Idx, DType, false, true>;
+// template <typename Idx, typename DType>
+// constexpr auto relational_fusedGatBackwardGradElEr_per_edge =
+//     HET_fusedGatBackwardGradElEr<Idx, DType, false, true>;
+// template <typename Idx, typename DType>
+// constexpr auto relational_fusedGatBackwardGradFeatSrc_per_edge =
+//     HET_fusedGatBackwardGradFeatSrc<Idx, DType, false, true>;
+// template <typename Idx, typename DType>
+// constexpr auto relational_fusedGatBackwardGradElErFeatSrcFused_per_edge =
+//     HET_fusedGatBackwardGradElErFeatSrcFused<Idx, DType, false, true>;
