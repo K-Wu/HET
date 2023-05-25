@@ -80,9 +80,12 @@ class RgnnRelationalMatmul(th.autograd.Function):
         )
         ctx.input_num_head_one_flag = input_num_head_one_flag
         K.rgnn_relational_matmul(
-            separate_coo_relptrs,
-            separate_coo_node_indices,
-            separate_coo_eids,
+            {
+                "separate_coo_relptrs": separate_coo_relptrs,
+                "separate_coo_node_indices": separate_coo_node_indices,
+                "separate_coo_eids": separate_coo_eids,
+            },
+            0,  # CompactAsOfNodeKind::Disabled
             weights,
             inputs,
             ret,
@@ -104,9 +107,12 @@ class RgnnRelationalMatmul(th.autograd.Function):
         grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
         # FIXME: seems there is a deadlock here
         K.backward_rgnn_relational_matmul(
-            separate_coo_relptrs,
-            separate_coo_node_indices,
-            separate_coo_eids,
+            {
+                "separate_coo_relptrs": separate_coo_relptrs,
+                "separate_coo_node_indices": separate_coo_node_indices,
+                "separate_coo_eids": separate_coo_eids,
+            },
+            0,  # CompactAsOfNode:Disabled
             th.transpose(weights, 2, 3).contiguous(),
             inputs,
             gradout.contiguous(),
@@ -246,9 +252,12 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
             ret,
         )
         ctx.input_num_head_one_flag = input_num_head_one_flag
-        K.rgnn_relational_matmul_compact_as_of_node(
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
+        K.rgnn_relational_matmul(
+            {
+                "unique_srcs_and_dests_rel_ptr": unique_srcs_and_dests_rel_ptr,
+                "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_idx,
+            },
+            1,  # CompactAsOfNode:Enabled
             weight,
             node_feat,
             ret,
@@ -270,9 +279,12 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
         grad_node_feat = th.zeros_like(node_feat, memory_format=th.contiguous_format)
         # FIXME: illegal reading A data when BGS compactAsOfNode is true perhaps bug in schedule_by_relation
         # FIXME: seems there is a bug in gradout when bgs compactAsOfNode is true perhaps the scheming scheme to grad_feat_src is faulty
-        K.backward_rgnn_relational_matmul_compact_as_of_node(
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
+        K.backward_rgnn_relational_matmul(
+            {
+                "unique_srcs_and_dests_rel_ptr": unique_srcs_and_dests_rel_ptr,
+                "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_idx,
+            },
+            1,  # CompactAsOfNodeKind::Enabled
             th.transpose(weight, 2, 3).contiguous(),
             node_feat,
             gradout.contiguous(),
@@ -421,10 +433,13 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
             right_node_vectors,
             ret,
         )
-        K.rgnn_inner_product_node_compact_and_node(
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
-            separate_coo_rel_ptr,
+        K.rgnn_inner_product_right_node_separatecoo(
+            {
+                "unique_srcs_and_dests_rel_ptr": unique_srcs_and_dests_rel_ptr,
+                "unique_srcs_and_dests_node_idx": unique_srcs_and_dests_node_idx,
+                "separate_coo_rel_ptr": separate_coo_rel_ptr,
+            },
+            1,  # CompactAsOfNode::Enabled
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,
@@ -453,10 +468,13 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
         grad_right_node_vectors = th.zeros_like(
             right_node_vectors, memory_format=th.contiguous_format
         )
-        K.backward_rgnn_inner_product_node_compact_and_node(
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
-            separate_coo_rel_ptr,
+        K.backward_inner_product_right_node_separatecoo(
+            {
+                "unique_srcs_and_dests_rel_ptr": unique_srcs_and_dests_rel_ptr,
+                "unique_srcs_and_dests_node_idx": unique_srcs_and_dests_node_idx,
+                "separate_coo_rel_ptr": separate_coo_rel_ptr,
+            },
+            1,  # CompactAsOfNode::Enabled
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,
@@ -520,7 +538,9 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
             right_node_vectors,
             ret,
         )
-        K.rgnn_inner_product_edge_and_node(
+        K.rgnn_inner_product_right_node_separatecoo(
+            {},
+            0,  # CompactAsOfNode::Disabled
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,
@@ -546,7 +566,9 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
         grad_right_node_vectors = th.zeros_like(
             right_node_vectors, memory_format=th.contiguous_format
         )
-        K.backward_rgnn_inner_product_edge_and_node(
+        K.backward_inner_product_right_node_separatecoo(
+            dict(),
+            0,  # CompactAsOfNodeKind::Disabled
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,

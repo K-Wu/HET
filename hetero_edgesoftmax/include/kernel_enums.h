@@ -3,7 +3,7 @@
 #include "cuda_runtime.h"
 
 enum class CompactAsOfNodeKind {
-  Disabled,
+  Disabled = 0,
   // by default we need to use binary search to locate the row
   Enabled,
   EnabledWithDualList,

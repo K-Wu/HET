@@ -3,6 +3,7 @@
 #include <c10/cuda/CUDAStream.h>
 #include <torch/extension.h>
 #include <torch/library.h>
+
 #include "DGLHackKernel/DGLHackUtils.h"
 #include "DGLHackKernel/RGNN/inner_product.cu.h"
 #include "DGLHackKernel/RGNN/inner_product_edge_parallel.cu.h"
@@ -16,7 +17,8 @@ namespace RGNN {
 namespace FwProp {
 
 // NB: KWU: use reg tiling here: test fuse attn score vs non-fused
-// TODO: remove the unused SingleSidedCompactAsOfNodeFlag and its logic
+// TODO: remove HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical by using
+// the HET_RGNNFeatPerEdgeFWProp with one of the argument set as nullptr
 template <CompactAsOfNodeKind kind, bool ACGatherScatterListIdenticalFlag,
           bool InputNumHeadOneFlag>
 void _RelationalMatMul_separatecoo(
@@ -43,12 +45,13 @@ void _RelationalMatMul_separatecoo(
 
   // assuming coarsening in both x and y direction if shmem is used instead of
   // reg tiling
-  constexpr bool REG_TILING_FLAG = true;
+  // TODO: KWU: enable reg tiling for compact as of node
+  constexpr bool REG_TILING_FLAG = (kind == CompactAsOfNodeKind::Disabled);
 
   constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
   constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
   constexpr int WORK_BLOCK_SIZE_K =
-      REG_TILING_FLAG ? 16 : 32;  // TODO: KWU: change to 16
+      REG_TILING_FLAG ? 16 : 32;  // TODO: KWU: change to 8
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
   constexpr int THREADING_BLOCK_SIZE_Y =
@@ -234,91 +237,68 @@ void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
                                                        weights, inputs, ret);
 }
 
-void RelationalMatMul_separatecoo(at::Tensor &separate_coo_relptrs,
-                                  at::Tensor &separate_coo_node_indices,
-                                  at::Tensor &separate_coo_eids,
-                                  at::Tensor &weights, at::Tensor &node_feat,
-                                  at::Tensor &ret, bool InputNumHeadOneFlag) {
+void RelationalMatMul_separatecoo(  // at::Tensor &separate_coo_relptrs,
+                                    // at::Tensor &separate_coo_node_indices,
+                                    // at::Tensor &separate_coo_eids,
+    torch::Dict<std::string, at::Tensor> args_tensor_dict, int64_t IntKind,
+    at::Tensor &weights, at::Tensor &node_feat, at::Tensor &ret,
+    bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   // TODO: KWU: simplify the PyThon API so that we don't need to have two APIs
   // for num_heads==1 vs. num_heads>1 if separate_coo_node_indices and
   // separate_coo_eids are the same tenssor
-  if (separate_coo_node_indices.data_ptr() == separate_coo_eids.data_ptr()) {
-    if (InputNumHeadOneFlag) {
-      _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, true, true>(
-          separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
-          dummy_tensor, weights, node_feat, ret);
+  auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
+  if (Kind == CompactAsOfNodeKind::Disabled) {
+    at::Tensor separate_coo_relptrs =
+        args_tensor_dict.at("separate_coo_relptrs");
+    at::Tensor separate_coo_node_indices =
+        args_tensor_dict.at("separate_coo_node_indices");
+    at::Tensor separate_coo_eids = args_tensor_dict.at("separate_coo_eids");
+    if (separate_coo_node_indices.data_ptr() == separate_coo_eids.data_ptr()) {
+      if (InputNumHeadOneFlag) {
+        _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, true,
+                                      true>(
+            separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
+            dummy_tensor, weights, node_feat, ret);
+      } else {
+        _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, true,
+                                      false>(
+            separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
+            dummy_tensor, weights, node_feat, ret);
+      }
     } else {
-      _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, true, false>(
-          separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
-          dummy_tensor, weights, node_feat, ret);
+      if (InputNumHeadOneFlag) {
+        _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, false,
+                                      true>(
+            separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
+            dummy_tensor, dummy_tensor, weights, node_feat, ret);
+      } else {
+        _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, false,
+                                      false>(
+            separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
+            dummy_tensor, dummy_tensor, weights, node_feat, ret);
+      }
+    }
+  } else if (Kind == CompactAsOfNodeKind::Enabled) {
+    at::Tensor unique_srcs_and_dests_rel_ptr =
+        args_tensor_dict.at("unique_srcs_and_dests_rel_ptr");
+    at::Tensor unique_srcs_and_dests_node_indices =
+        args_tensor_dict.at("unique_srcs_and_dests_node_indices");
+    if (InputNumHeadOneFlag) {
+      _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Enabled, false, true>(
+          dummy_tensor, dummy_tensor, dummy_tensor,
+          unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+          weights, node_feat, ret);
+    } else {
+      _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Enabled, false, false>(
+          dummy_tensor, dummy_tensor, dummy_tensor,
+          unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+          weights, node_feat, ret);
     }
   } else {
-    if (InputNumHeadOneFlag) {
-      _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, false, true>(
-          separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
-          dummy_tensor, dummy_tensor, weights, node_feat, ret);
-    } else {
-      _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, false,
-                                    false>(
-          separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
-          dummy_tensor, dummy_tensor, weights, node_feat, ret);
-    }
+    assert(0 && "Invalid CompactAsOfNodeKind");
   }
 }
-
-// void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
-//     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
-//     at::Tensor &weights, at::Tensor &node_feat, at::Tensor &ret,
-//     bool InputNumHeadOneFlag) {
-//   at::Tensor dummy_tensor;
-//   assert(0 && "deprecated");
-//   if (InputNumHeadOneFlag) {
-//     _RelationalMatMul_separatecoo<false, true, true>(
-//         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
-//         dummy_tensor, weights, node_feat, ret);
-//   } else {
-//     _RelationalMatMul_separatecoo<false, true, false>(
-//         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
-//         dummy_tensor, weights, node_feat, ret);
-//   }
-// }
-
-void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
-    at::Tensor &unique_srcs_and_dests_rel_ptr,
-    at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &weight,
-    at::Tensor &node_feat, at::Tensor &ret, bool InputNumHeadOneFlag) {
-  at::Tensor dummy_tensor;
-  if (InputNumHeadOneFlag) {
-    _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Enabled, false, true>(
-        dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices, weight, node_feat, ret);
-  } else {
-    _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Enabled, false, false>(
-        dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices, weight, node_feat, ret);
-  }
-}
-
-// void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
-//     at::Tensor& unique_srcs_and_dests_rel_ptr,
-//     at::Tensor& unique_srcs_and_dests_node_indices,
-//     at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_node_indices,
-//     at::Tensor& separate_coo_eids, at::Tensor& weight, at::Tensor& node_feat,
-//     at::Tensor& ret, bool InputNumHeadOneFlag) {
-//   at::Tensor dummy_tensor;
-//   if (InputNumHeadOneFlag) {
-//     _RelationalMatMul_separatecoo<true, true, 32, true, true, false, true>(
-//         separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
-//         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-//         weight, node_feat, ret);
-//   } else {
-//     _RelationalMatMul_separatecoo<true, true, 32, true, true, false, false>(
-//         separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
-//         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-//         weight, node_feat, ret);
-//   }
-// }
 
 // NB: We may refer to (edge parallel version)
 // HET_HGTExpermentalEdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel
@@ -447,40 +427,47 @@ void inner_product_various_left_and_node_right(
   }
 }
 
-void inner_product_node_compact_and_node_separatecoo(
-    at::Tensor &unique_srcs_and_dests_rel_ptr,
-    at::Tensor &unique_srcs_and_dests_node_idx,
-    at::Tensor &separate_coo_rel_ptr, at::Tensor &separate_coo_eids,
-    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
-    at::Tensor &left_node_compact_data, at::Tensor &right_node_vectors,
-    at::Tensor &edge_inner_product) {
-  cudaMemsetAsync(edge_inner_product.data_ptr<float>(), 0,
-                  edge_inner_product.numel() * sizeof(float),
-                  c10::cuda::getCurrentCUDAStream());
-  at::Tensor dummy_tensor;
-  inner_product_various_left_and_node_right<
-      int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
-      separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
-      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
-      dummy_tensor, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_idx, left_node_compact_data,
-      right_node_vectors, edge_inner_product);
-}
-
-void inner_product_edge_and_node_separatecoo(
+void inner_product_right_node_separatecoo(
+    // at::Tensor &unique_srcs_and_dests_rel_ptr,
+    // at::Tensor &unique_srcs_and_dests_node_idx,
+    // at::Tensor &separate_coo_rel_ptr,
+    torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_row_indices,
-    at::Tensor &separate_coo_col_indices, at::Tensor &left_edge_data,
+    at::Tensor &separate_coo_col_indices, at::Tensor &left_side_data,
     at::Tensor &right_node_vectors, at::Tensor &edge_inner_product) {
   cudaMemsetAsync(edge_inner_product.data_ptr<float>(), 0,
                   edge_inner_product.numel() * sizeof(float),
                   c10::cuda::getCurrentCUDAStream());
   at::Tensor dummy_tensor;
-  inner_product_various_left_and_node_right<
-      int64_t, float, CompactAsOfNodeKind::Disabled, false, false>(
-      separate_coo_eids, dummy_tensor, separate_coo_row_indices,
-      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
-      dummy_tensor, dummy_tensor, dummy_tensor, left_edge_data,
-      right_node_vectors, edge_inner_product);
+  auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
+  if (Kind == CompactAsOfNodeKind::Enabled) {
+    // originally inner_product_node_compact_and_node_separatecoo
+    // left_side_data is left_node_compact_data
+    at::Tensor unique_srcs_and_dests_rel_ptr =
+        arg_tensor_dict.at("unique_srcs_and_dests_rel_ptr");
+    at::Tensor unique_srcs_and_dests_node_idx =
+        arg_tensor_dict.at("unique_srcs_and_dests_node_idx");
+    at::Tensor separate_coo_rel_ptr =
+        arg_tensor_dict.at("separate_coo_rel_ptr");
+    inner_product_various_left_and_node_right<
+        int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
+        separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
+        separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+        dummy_tensor, unique_srcs_and_dests_rel_ptr,
+        unique_srcs_and_dests_node_idx, left_side_data, right_node_vectors,
+        edge_inner_product);
+  } else if (Kind == CompactAsOfNodeKind::Disabled) {
+    // originally inner_product_edge_and_node_separatecoo
+    // left_side_data is left_edge_data
+    inner_product_various_left_and_node_right<
+        int64_t, float, CompactAsOfNodeKind::Disabled, false, false>(
+        separate_coo_eids, dummy_tensor, separate_coo_row_indices,
+        separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+        dummy_tensor, dummy_tensor, dummy_tensor, left_side_data,
+        right_node_vectors, edge_inner_product);
+  } else {
+    assert(0 && "Not implemented");
+  }
 }
 
 }  // namespace FwProp
@@ -676,109 +663,73 @@ void _BackwardRelationalMatMul_separatecoo(
   }
 }
 
-void RelationalMatMulCompactAsOfNode_unique_rel_node_indices(
-    at::Tensor &unique_srcs_and_dests_rel_ptr,
-    at::Tensor &unique_srcs_and_dests_node_indices,
+void RelationalMatMul_separatecoo(
+    // at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
+    // at::Tensor &separate_coo_eids,
+    torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
     at::Tensor &weights_transposed, at::Tensor &node_feat, at::Tensor &gradout,
     at::Tensor &grad_node_feat, at::Tensor &grad_weights,
     bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
-  if (InputNumHeadOneFlag) {
-    _BackwardRelationalMatMul_separatecoo<
-        true, true, 32, CompactAsOfNodeKind::Enabled, false, true>(
-        dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices, weights_transposed, node_feat,
-        gradout, grad_node_feat, grad_weights);
-  } else {
-    _BackwardRelationalMatMul_separatecoo<
-        true, true, 32, CompactAsOfNodeKind::Enabled, false, false>(
-        dummy_tensor, dummy_tensor, dummy_tensor, unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices, weights_transposed, node_feat,
-        gradout, grad_node_feat, grad_weights);
-  }
-}
-
-void RelationalMatMul_separatecoo(
-    at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
-    at::Tensor &separate_coo_eids, at::Tensor &weights_transposed,
-    at::Tensor &node_feat, at::Tensor &gradout, at::Tensor &grad_node_feat,
-    at::Tensor &grad_weights, bool InputNumHeadOneFlag) {
-  at::Tensor dummy_tensor;
-  if (separate_coo_eids.data_ptr() == separate_coo_node_indices.data_ptr()) {
+  auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
+  if (Kind == CompactAsOfNodeKind::Enabled) {
+    at::Tensor unique_srcs_and_dests_rel_ptr =
+        arg_tensor_dict.at("unique_srcs_and_dests_rel_ptr");
+    at::Tensor unique_srcs_and_dests_node_indices =
+        arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
     if (InputNumHeadOneFlag) {
       _BackwardRelationalMatMul_separatecoo<
-          true, true, 32, CompactAsOfNodeKind::Disabled, true, true>(
-          separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
-          dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
-          grad_weights);
+          true, true, 32, CompactAsOfNodeKind::Enabled, false, true>(
+          dummy_tensor, dummy_tensor, dummy_tensor,
+          unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+          weights_transposed, node_feat, gradout, grad_node_feat, grad_weights);
     } else {
       _BackwardRelationalMatMul_separatecoo<
-          true, true, 32, CompactAsOfNodeKind::Disabled, true, false>(
-          separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
-          dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
-          grad_weights);
+          true, true, 32, CompactAsOfNodeKind::Enabled, false, false>(
+          dummy_tensor, dummy_tensor, dummy_tensor,
+          unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+          weights_transposed, node_feat, gradout, grad_node_feat, grad_weights);
+    }
+
+  } else if (Kind == CompactAsOfNodeKind::Disabled) {
+    at::Tensor separate_coo_relptrs =
+        arg_tensor_dict.at("separate_coo_relptrs");
+    at::Tensor separate_coo_node_indices =
+        arg_tensor_dict.at("separate_coo_node_indices");
+    at::Tensor separate_coo_eids = arg_tensor_dict.at("separate_coo_eids");
+    if (separate_coo_eids.data_ptr() == separate_coo_node_indices.data_ptr()) {
+      if (InputNumHeadOneFlag) {
+        _BackwardRelationalMatMul_separatecoo<
+            true, true, 32, CompactAsOfNodeKind::Disabled, true, true>(
+            separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
+            dummy_tensor, weights_transposed, node_feat, gradout,
+            grad_node_feat, grad_weights);
+      } else {
+        _BackwardRelationalMatMul_separatecoo<
+            true, true, 32, CompactAsOfNodeKind::Disabled, true, false>(
+            separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
+            dummy_tensor, weights_transposed, node_feat, gradout,
+            grad_node_feat, grad_weights);
+      }
+    } else {
+      if (InputNumHeadOneFlag) {
+        _BackwardRelationalMatMul_separatecoo<
+            true, true, 32, CompactAsOfNodeKind::Disabled, false, true>(
+            separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
+            dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
+            grad_node_feat, grad_weights);
+      } else {
+        _BackwardRelationalMatMul_separatecoo<
+            true, true, 32, CompactAsOfNodeKind::Disabled, false, false>(
+            separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
+            dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
+            grad_node_feat, grad_weights);
+      }
     }
   } else {
-    if (InputNumHeadOneFlag) {
-      _BackwardRelationalMatMul_separatecoo<
-          true, true, 32, CompactAsOfNodeKind::Disabled, false, true>(
-          separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
-          dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
-          grad_node_feat, grad_weights);
-    } else {
-      _BackwardRelationalMatMul_separatecoo<
-          true, true, 32, CompactAsOfNodeKind::Disabled, false, false>(
-          separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
-          dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
-          grad_node_feat, grad_weights);
-    }
+    assert(0 && "invalid CompactAsOfNodeKind");
   }
 }
-
-// void RelationalMatMul_ACGatherScatterListIdentical_separatecoo(
-//     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
-//     at::Tensor &weights_transposed, at::Tensor &node_feat, at::Tensor
-//     &gradout, at::Tensor &grad_node_feat, at::Tensor &grad_weights, bool
-//     InputNumHeadOneFlag) {
-//   assert(0 && "deprecated");
-//   at::Tensor dummy_tensor;
-//   if (InputNumHeadOneFlag) {
-//     _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true, true>(
-//         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
-//         dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
-//         grad_weights);
-//   } else {
-//     _BackwardRelationalMatMul_separatecoo<true, true, 32, false, true,
-//     false>(
-//         separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
-//         dummy_tensor, weights_transposed, node_feat, gradout, grad_node_feat,
-//         grad_weights);
-//   }
-// }
-
-// void RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices(
-//     at::Tensor& unique_srcs_and_dests_rel_ptr,
-//     at::Tensor& unique_srcs_and_dests_node_indices,
-//     at::Tensor& separate_coo_rel_ptr, at::Tensor& separate_coo_node_indices,
-//     at::Tensor& separate_coo_eids, at::Tensor& weight_transposed,
-//     at::Tensor& node_feat, at::Tensor& ret, at::Tensor& gradout,
-//     at::Tensor& grad_weights, at::Tensor& grad_node_feat,
-//     bool InputNumHeadOneFlag) {
-//   at::Tensor dummy_tensor;
-//   if (InputNumHeadOneFlag) {
-//     _BackwardRelationalMatMul_separatecoo<true, true, 32, true, true, false,
-//                                           true>(
-//         separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
-//         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-//         weight_transposed, node_feat, gradout, grad_node_feat, grad_weights);
-//   } else {
-//     _BackwardRelationalMatMul_separatecoo<true, true, 32, true, true, false,
-//                                           false>(
-//         separate_coo_rel_ptr, separate_coo_node_indices, separate_coo_eids,
-//         unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-//         weight_transposed, node_feat, gradout, grad_node_feat, grad_weights);
-//   }
-// }
 
 // NB: We may rely on HGTCompactAsOfNodesEdgeAttentionSecondStage in
 // [[hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTForwardKernels.cu.h]]
@@ -873,40 +824,50 @@ void inner_product_various_left_and_node_right(
   }
 }
 
-void inner_product_node_compact_and_node_separatecoo(
-    at::Tensor &unique_srcs_and_dests_rel_ptr,
-    at::Tensor &unique_srcs_and_dests_node_idx,
-    at::Tensor &separate_coo_rel_ptr, at::Tensor &separate_coo_eids,
-    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
-    at::Tensor &left_node_compact_data,
+void inner_product_right_node_separatecoo(
+    // at::Tensor &unique_srcs_and_dests_rel_ptr,
+    /// at::Tensor &unique_srcs_and_dests_node_idx,
+    // at::Tensor &separate_coo_rel_ptr,
+    torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
+    at::Tensor &separate_coo_eids, at::Tensor &separate_coo_row_indices,
+    at::Tensor &separate_coo_col_indices, at::Tensor &left_side_data,
     at::Tensor &right_node_vectors,  // at::Tensor& ret,
-    at::Tensor &grad_inner_product, at::Tensor &grad_left_node_compact_data,
+    at::Tensor &grad_inner_product, at::Tensor &grad_left_side_data,
     at::Tensor &grad_right_node_vectors) {
   at::Tensor dummy_tensor;
-  inner_product_various_left_and_node_right<
-      int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
-      separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
-      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
-      dummy_tensor, unique_srcs_and_dests_rel_ptr,
-      unique_srcs_and_dests_node_idx, left_node_compact_data,
-      right_node_vectors, grad_inner_product, grad_left_node_compact_data,
-      grad_right_node_vectors);
-}
+  auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
 
-void inner_product_edge_and_node_separatecoo(
-    at::Tensor &separate_coo_eids, at::Tensor &separate_coo_row_indices,
-    at::Tensor &separate_coo_col_indices, at::Tensor &left_edge_data,
-    at::Tensor &right_node_vectors,
-    at::Tensor &grad_inner_product,  // at::Tensor& gradout,
-    at::Tensor &grad_left_edge_data, at::Tensor &grad_right_node_vectors) {
-  at::Tensor dummy_tensor;
-  inner_product_various_left_and_node_right<
-      int64_t, float, CompactAsOfNodeKind::Disabled, false, false>(
-      separate_coo_eids, dummy_tensor, separate_coo_row_indices,
-      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
-      dummy_tensor, dummy_tensor, dummy_tensor, left_edge_data,
-      right_node_vectors, grad_inner_product, grad_left_edge_data,
-      grad_right_node_vectors);
+  if (Kind == CompactAsOfNodeKind::Enabled) {
+    // originally inner_product_node_compact_and_node_separatecoo
+    // left_side_data is left_node_compact_data
+    // grad_left_side_data is grad_left_node_compact_data
+    at::Tensor unique_srcs_and_dests_rel_ptr =
+        arg_tensor_dict.at("unique_srcs_and_dests_rel_ptr");
+    at::Tensor unique_srcs_and_dests_node_idx =
+        arg_tensor_dict.at("unique_srcs_and_dests_node_idx");
+    at::Tensor separate_coo_rel_ptr =
+        arg_tensor_dict.at("separate_coo_rel_ptr");
+    inner_product_various_left_and_node_right<
+        int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
+        separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
+        separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+        dummy_tensor, unique_srcs_and_dests_rel_ptr,
+        unique_srcs_and_dests_node_idx, left_side_data, right_node_vectors,
+        grad_inner_product, grad_left_side_data, grad_right_node_vectors);
+  } else if (Kind == CompactAsOfNodeKind::Disabled) {
+    // originally inner_product_edge_and_node_separatecoo
+    // left_side_data is left_edge_data
+    // grad_left_side_data is grad_left_edge_data
+    inner_product_various_left_and_node_right<
+        int64_t, float, CompactAsOfNodeKind::Disabled, false, false>(
+        separate_coo_eids, dummy_tensor, separate_coo_row_indices,
+        separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+        dummy_tensor, dummy_tensor, dummy_tensor, left_side_data,
+        right_node_vectors, grad_inner_product, grad_left_side_data,
+        grad_right_node_vectors);
+  } else {
+    assert(0 && "Not implemented");
+  }
 }
 
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
@@ -1010,35 +971,13 @@ TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
   m.def("rgnn_relational_matmul", RGNN::FwProp::RelationalMatMul_separatecoo);
   m.def("backward_rgnn_relational_matmul",
         RGNN::BckProp::RelationalMatMul_separatecoo);
-  //   m.def(
-  //       "rgnn_relational_matmul_ac_gather_scatter_list_identical",
-  //       RGNN::FwProp::RelationalMatMul_ACGatherScatterListIdentical_separatecoo);
-  //   m.def(
-  //       "backward_rgnn_relational_matmul_ac_gather_scatter_list_identical",
-  //       RGNN::BckProp::RelationalMatMul_ACGatherScatterListIdentical_separatecoo);
-  m.def("backward_rgnn_relational_matmul_compact_as_of_node",
-        RGNN::BckProp::RelationalMatMulCompactAsOfNode_unique_rel_node_indices);
-  m.def("rgnn_relational_matmul_compact_as_of_node",
-        RGNN::FwProp::RelationalMatMulCompactAsOfNode_unique_rel_node_indices);
-  //   m.def(
-  //       "rgnn_relational_matmul_compact_as_of_node_single_ended",
-  //       RGNN::FwProp::
-  //           RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices);
-  //   m.def(
-  //       "backward_rgnn_relational_matmul_compact_as_of_node_single_ended",
-  //       RGNN::BckProp::
-  //           RelationalMatMulCompactAsOfNodeSingleEnded_unique_rel_node_indices);
   m.def("rgnn_relational_matmul_no_scatter_gather_list",
         RGNN::FwProp::RelationalMatmulNoScatterGatherList);
   m.def("backward_rgnn_relational_matmul_no_scatter_gather_list",
         RGNN::BckProp::RelationalMatmulNoScatterGatherList);
   // RGNN innerproduct
-  m.def("rgnn_inner_product_node_compact_and_node",
-        RGNN::FwProp::inner_product_node_compact_and_node_separatecoo);
-  m.def("backward_rgnn_inner_product_node_compact_and_node",
-        RGNN::BckProp::inner_product_node_compact_and_node_separatecoo);
-  m.def("rgnn_inner_product_edge_and_node",
-        RGNN::FwProp::inner_product_edge_and_node_separatecoo);
-  m.def("backward_rgnn_inner_product_edge_and_node",
-        RGNN::BckProp::inner_product_edge_and_node_separatecoo);
+  m.def("rgnn_inner_product_right_node_separatecoo",
+        RGNN::FwProp::inner_product_right_node_separatecoo);
+  m.def("backward_inner_product_right_node_separatecoo",
+        RGNN::BckProp::inner_product_right_node_separatecoo);
 }

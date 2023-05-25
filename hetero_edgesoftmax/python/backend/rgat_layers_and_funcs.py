@@ -4,7 +4,7 @@ import torch as th
 
 from ..kernels import K
 
-
+# TODO: API merge with CompactAsOfNode
 class RelationalFusedGatSeparateCOO(th.autograd.Function):
     @staticmethod
     def forward(
@@ -34,11 +34,13 @@ class RelationalFusedGatSeparateCOO(th.autograd.Function):
             ret,
         )
         ctx.slope = slope
-        K.relational_fused_gat_kernel_separate_coo(
+        K.relational_fused_gat_separate_coo(
             separate_coo_eids,
             separate_coo_rel_ptrs,
             separate_coo_row_idx,
             separate_coo_col_idx,
+            False,
+            {},
             feat_src,
             el,
             er,
@@ -73,6 +75,8 @@ class RelationalFusedGatSeparateCOO(th.autograd.Function):
             separate_coo_rel_ptrs,
             separate_coo_row_idx,
             separate_coo_col_idx,
+            0,  # CompactAsOfNodeKind::Disabled
+            {},
             feat_src,
             el,
             er,
@@ -172,15 +176,18 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeList(
         grad_er = th.zeros_like(er, memory_format=th.contiguous_format)
         grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
 
-        K.backward_relational_fused_gat_compact_as_of_node_separate_coo_dual_unique_node_list(
+        K.backward_relational_fused_gat_separate_coo(
             separate_coo_eids,
             separate_coo_rel_ptrs,
             separate_coo_row_idx,
             separate_coo_col_idx,
-            separate_unique_node_idx_rel_ptr_row,
-            separate_unique_node_idx_rel_ptr_col,
-            separate_unique_node_idx_node_idx_row,
-            separate_unique_node_idx_node_idx_col,
+            2,  # C++ enum class CompactAsOfNodeKind::EnabledWithDualList
+            {
+                "unique_srcs_and_dests_rel_ptr": separate_unique_node_idx_rel_ptr_row,
+                "unique_srcs_and_dests_rel_col": separate_unique_node_idx_rel_ptr_col,
+                "unique_srcs_and_dests_node_indices_row": separate_unique_node_idx_node_idx_row,
+                "unique_srcs_and_dests_node_indices_col": separate_unique_node_idx_node_idx_col,
+            },
             feat_src,
             el,
             er,
@@ -237,8 +244,11 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOO(th.autograd.Function):
             separate_coo_rel_ptrs,
             separate_coo_row_idx,
             separate_coo_col_idx,
-            separate_unique_node_idx_rel_ptr,
-            separate_unique_node_idx_node_idx,
+            True,
+            {
+                "rel_ptr": separate_unique_node_idx_rel_ptr,
+                "node_indices": separate_unique_node_idx_node_idx,
+            },
             feat_src,
             el,
             er,
@@ -275,8 +285,11 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOO(th.autograd.Function):
             separate_coo_rel_ptrs,
             separate_coo_row_idx,
             separate_coo_col_idx,
-            separate_unique_node_idx_rel_ptr,
-            separate_unique_node_idx_node_idx,
+            True,
+            {
+                "rel_ptr": separate_unique_node_idx_rel_ptr,
+                "node_indices": separate_unique_node_idx_node_idx,
+            },
             feat_src,
             el,
             er,
@@ -479,7 +492,7 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
             ret,
         )
         ctx.slope = slope
-        K.rgat_relational_fused_gat_compact_as_of_node_csr(
+        K.relational_fused_gat_csr(
             incsr_row_ptr,
             incsr_col_idx,
             incsr_eids,
@@ -493,6 +506,7 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
             exp,
             ret,
             slope,
+            True,
         )
         return ret
 
@@ -523,7 +537,7 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
             feat_compact, memory_format=th.contiguous_format
         )
 
-        K.backward_rgat_relational_fused_gat_compact_as_of_node_csr(
+        K.backward_relational_fused_gat_csr(
             outcsr_row_ptr,
             outcsr_col_idx,
             outcsr_eids,
@@ -541,6 +555,7 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
             grad_el_compact,
             grad_er_compact,
             slope,
+            True,
         )
         # fmt: off
         return None, None, None, None, None, None, None, None, None, None, grad_feat_compact, grad_el_compact, grad_er_compact, None, None, None, None

@@ -4,6 +4,7 @@
 #include <c10/cuda/CUDAStream.h>
 #include <torch/extension.h>
 #include <torch/library.h>
+
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
 
 void try_get_schedule_by_relations(int64_t num_relations, int64_t num_blocks) {
@@ -109,7 +110,7 @@ void print_tensor_dict_info(torch::Dict<std::string, at::Tensor> dictionary) {
   for (auto const &pair : dictionary) {
     std::cout << "key: " << pair.key() << std::endl;
     std::cout << "tensor info: " << std::endl;
-    tensor_info(pair.value());
+    tensor_info(dictionary.at(pair.key()));
   }
 }
 

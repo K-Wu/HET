@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+
 #include "EdgeAttention_4/mysgemm_functor.cu.h"
 #include "utils.cu.h"
 
@@ -109,37 +110,45 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
   }
 }
 
-__global__ void HET_HGTTriviallyEdgeParallelVanillaNodeMeanAggregation(
-    int64_t *col_idxes, int64_t *etypes, int64_t *eids, float *EdgeMessages,
-    float *EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
-    int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
-    float *NodeAggregates) {
-  _HGTTriviallyEdgeParallelNodeMeanAggregation<
-      int64_t, float,
-      /* EdgeMessagesCompactAsOfNodeFlag = */ CompactAsOfNodeKind::Disabled,
-      /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ false, float *,
-      /*flag not applicable*/ false, /*flag not applicable*/ false>(
-      col_idxes, etypes, eids, EdgeMessages, EdgeAttnScores, num_nodes,
-      num_edges, num_etypes, num_heads, inout_feat_dim, NodeAggregates, nullptr,
-      nullptr, nullptr);
-}
+// // TODO: KWU: merge all kernels with the same semantic but different
+// arguments
+// // TODO: KWU: merge these following two kernels by using struct as an
+// argument
+// __global__ void HET_HGTTriviallyEdgeParallelVanillaNodeMeanAggregation(
+//     int64_t *col_idxes, int64_t *etypes, int64_t *eids, float *EdgeMessages,
+//     float *EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
+//     int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
+//     float *NodeAggregates) {
+//   _HGTTriviallyEdgeParallelNodeMeanAggregation<
+//       int64_t, float,
+//       /* EdgeMessagesCompactAsOfNodeFlag = */ CompactAsOfNodeKind::Disabled,
+//       /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ false, float
+//       *,
+//       /*flag not applicable*/ false, /*flag not applicable*/ false>(
+//       col_idxes, etypes, eids, EdgeMessages, EdgeAttnScores, num_nodes,
+//       num_edges, num_etypes, num_heads, inout_feat_dim, NodeAggregates,
+//       nullptr, nullptr, nullptr);
+// }
 
-__global__ void HET_HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation(
-    int64_t *col_idxes, int64_t *etypes, int64_t *eids, float *EdgeMessages,
-    float *EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
-    int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
-    float *NodeAggregates, int64_t *ETypeUniqueIndexToNodeIndexMap,
-    int64_t *etype_unique_node_offsets, int64_t *row_indices) {
-  _HGTTriviallyEdgeParallelNodeMeanAggregation<
-      int64_t, float,
-      /* EdgeMessagesCompactAsOfNodeFlag = */ CompactAsOfNodeKind::Enabled,
-      /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ true, float *,
-      /*BinarySearchToGetEtypeNodeOffsetFlag = */ true,
-      /*CSRInsteadOfCOOFlag = */ false>(
-      col_idxes, etypes, eids, EdgeMessages, EdgeAttnScores, num_nodes,
-      num_edges, num_etypes, num_heads, inout_feat_dim, NodeAggregates,
-      ETypeUniqueIndexToNodeIndexMap, etype_unique_node_offsets, row_indices);
-}
+// __global__ void
+// HET_HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation(
+//     int64_t *col_idxes, int64_t *etypes, int64_t *eids, float *EdgeMessages,
+//     float *EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
+//     int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
+//     float *NodeAggregates, int64_t *ETypeUniqueIndexToNodeIndexMap,
+//     int64_t *etype_unique_node_offsets, int64_t *row_indices) {
+//   _HGTTriviallyEdgeParallelNodeMeanAggregation<
+//       int64_t, float,
+//       /* EdgeMessagesCompactAsOfNodeFlag = */ CompactAsOfNodeKind::Enabled,
+//       /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ true, float
+//       *,
+//       /*BinarySearchToGetEtypeNodeOffsetFlag = */ true,
+//       /*CSRInsteadOfCOOFlag = */ false>(
+//       col_idxes, etypes, eids, EdgeMessages, EdgeAttnScores, num_nodes,
+//       num_edges, num_etypes, num_heads, inout_feat_dim, NodeAggregates,
+//       ETypeUniqueIndexToNodeIndexMap, etype_unique_node_offsets,
+//       row_indices);
+// }
 
 // constexpr auto HET_HGTTriviallyEdgeParallelVanillaNodeMeanAggregation =
 // HGTTriviallyEdgeParallelNodeMeanAggregation<int, float, false, float *>;
@@ -254,8 +263,8 @@ struct HgtDstOutData<Idx, DType, 0> {
       *__restrict__ message{nullptr}, *__restrict__ ret{nullptr};
   // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
-  DType *__restrict__ mu{nullptr},
-      *__restrict__ unnormalized_attn_score{nullptr};
+  DType *__restrict__ mu{nullptr}, *__restrict__ unnormalized_attn_score{
+                                       nullptr};
 };
 
 template <typename Idx, typename DType>
@@ -431,7 +440,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 0> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ mu{nullptr},
       *__restrict__ unnormalized_attn_score{nullptr},
-      *__restrict__ edgesoftmax_sum_per_node{nullptr};
+          *__restrict__ edgesoftmax_sum_per_node{nullptr};
   // DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
 };
@@ -442,7 +451,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 1> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ mu{nullptr},
       *__restrict__ unnormalized_attn_score{nullptr},
-      *__restrict__ edgesoftmax_sum_per_node{nullptr};
+          *__restrict__ edgesoftmax_sum_per_node{nullptr};
   DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
   // DType* normalized_attn_score{nullptr};
 };
@@ -453,7 +462,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 2> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ mu{nullptr},
       *__restrict__ unnormalized_attn_score{nullptr},
-      *__restrict__ edgesoftmax_sum_per_node{nullptr};
+          *__restrict__ edgesoftmax_sum_per_node{nullptr};
   DType *__restrict__ normalized_attn_score{nullptr};
 };
 
@@ -463,7 +472,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 3> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ mu{nullptr},
       *__restrict__ unnormalized_attn_score{nullptr},
-      *__restrict__ edgesoftmax_sum_per_node{nullptr};
+          *__restrict__ edgesoftmax_sum_per_node{nullptr};
   DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
   DType *__restrict__ normalized_attn_score{nullptr};
 };

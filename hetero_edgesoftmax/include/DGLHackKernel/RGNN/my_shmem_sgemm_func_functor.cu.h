@@ -4,14 +4,14 @@
 #include "utils.cu.h"
 
 enum class MySGEMMNumHeadKind {
-  NoAssert,
+  NoAssert = 0,
   AssertANumIsOne,
   AssertCNumIsOne,
   AssertAllAreOnes
 };
 
 enum class MySGEMMGatherKind {
-  Disabled,
+  Disabled = 0,
   Basic,
   TwoOrderBinarySearch,
   TwoOrderDirectIndexing

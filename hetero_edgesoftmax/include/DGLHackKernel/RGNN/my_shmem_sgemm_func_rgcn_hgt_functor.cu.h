@@ -5,7 +5,11 @@
 
 // DoInnerProductSwitch 0: no inner product, 1: do inner product,
 // 2: do inner product and do not output C
-enum class MySGEMMInnerProductKind { Disabled, Enabled, EnabledAndSkipOutputC };
+enum class MySGEMMInnerProductKind {
+  Disabled = 0,
+  Enabled,
+  EnabledAndSkipOutputC
+};
 
 template <bool DOUBLE_BUFFER_FLAG, int THREAD_BLOCK_DIM_X,
           int THREAD_BLOCK_DIM_Y, int SHMEM_BLOCK_SIZE_X,
@@ -17,8 +21,8 @@ template <bool DOUBLE_BUFFER_FLAG, int THREAD_BLOCK_DIM_X,
 class _simplified_basic_MatMulKernel {
  public:
   __device__ __forceinline__ static void execute_function(
-      float* A, float* B, float* C, float* edge_norm, float* inner_product,
-      float* input_node_feat_for_inner_product, IdxPtr separate_coo_row_idx,
+      float *A, float *B, float *C, float *edge_norm, float *inner_product,
+      float *input_node_feat_for_inner_product, IdxPtr separate_coo_row_idx,
       IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids, Idx idx_relation,
       Idx numARows, Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
       Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, int num_heads) {
@@ -59,8 +63,8 @@ class _simplified_basic_MatMulKernel<
   // 2: do inner product and do no C inner_product is grad_edge_norm or
   // unnormalized_attn_score
   __device__ __forceinline__ static void execute_function(
-      float* A, float* B, float* C, float* edge_norm, float* inner_product,
-      float* input_node_feat_for_inner_product, IdxPtr separate_coo_row_idx,
+      float *A, float *B, float *C, float *edge_norm, float *inner_product,
+      float *input_node_feat_for_inner_product, IdxPtr separate_coo_row_idx,
       IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids, Idx idx_relation,
       Idx numARows, Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
       Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, int num_heads) {
