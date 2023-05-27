@@ -98,8 +98,8 @@ def RGNN_get_mydgl_graph(
             canonical_etype_idx_tuples,
         ) = graphiler_datasets_loader.graphiler_load_data_as_mydgl_graph(dataset, True)
         edge_srcs, edge_dsts, edge_etypes, edge_referential_eids = (
-            g["original"]["row_idx"],
-            g["original"]["col_idx"],
+            g["original"]["row_indices"],
+            g["original"]["col_indices"],
             g["original"]["rel_types"],
             g["original"]["eids"],
         )
@@ -229,7 +229,7 @@ def RGNN_get_mydgl_graph(
 def convert_mydgl_graph_csr_to_coo(g):
     # we haven't implemented csr2coo for tensors so we need to convert to numpy first
     row_ptr = g["original"]["row_ptr"].numpy()
-    col_idx = g["original"]["col_idx"].numpy()
+    col_idx = g["original"]["col_indices"].numpy()
     rel_types = g["original"]["rel_types"].numpy()
     eids = g["original"]["eids"].numpy()
     (
@@ -250,7 +250,7 @@ def convert_mydgl_graph_csr_to_coo(g):
             transposed_edge_referential_eids,
         ) = sparse_matrix_converters.csr2coo(
             g["transposed"]["row_ptr"].numpy(),
-            g["transposed"]["col_idx"].numpy(),
+            g["transposed"]["col_indices"].numpy(),
             g["transposed"]["rel_types"].numpy(),
             g["transposed"]["eids"].numpy(),
         )
@@ -274,7 +274,7 @@ def convert_mydgl_graph_coo_to_csr(g):
         edge_referential_eids,
     ) = sparse_matrix_converters.coo2csr(
         g["original"]["row_ptr"],
-        g["original"]["col_idx"],
+        g["original"]["col_indices"],
         g["original"]["rel_types"],
         g["original"]["eids"],
         torch_flag=True,
@@ -291,7 +291,7 @@ def convert_mydgl_graph_coo_to_csr(g):
             transposed_edge_referential_eids,
         ) = sparse_matrix_converters.coo2csr(
             g["transposed"]["row_ptr"],
-            g["transposed"]["col_idx"],
+            g["transposed"]["col_indices"],
             g["transposed"]["rel_types"],
             g["transposed"]["eids"],
             torch_flag=True,
@@ -321,12 +321,12 @@ def create_mydgl_graph_csr_with_transpose_torch(
     g = mydgl_graph.MyDGLGraph()
     g["original"] = dict()
     g["original"]["row_ptr"] = row_ptr
-    g["original"]["col_idx"] = col_idx
+    g["original"]["col_indices"] = col_idx
     g["original"]["rel_types"] = rel_types
     g["original"]["eids"] = eids
     g["transposed"] = dict()
     g["transposed"]["row_ptr"] = transposed_row_ptr
-    g["transposed"]["col_idx"] = transposed_col_idx
+    g["transposed"]["col_indices"] = transposed_col_idx
     g["transposed"]["rel_types"] = transposed_rel_types
     g["transposed"]["eids"] = transposed_eids
     return g
@@ -336,7 +336,7 @@ def create_mydgl_graph_csr_torch(row_ptr, col_idx, rel_types, eids):
     g = mydgl_graph.MyDGLGraph()
     g["original"] = dict()
     g["original"]["row_ptr"] = row_ptr
-    g["original"]["col_idx"] = col_idx
+    g["original"]["col_indices"] = col_idx
     g["original"]["rel_types"] = rel_types
     g["original"]["eids"] = eids
     return g
@@ -535,13 +535,13 @@ def create_mydgl_graph_coo_with_transpose_torch(
 ):
     g = mydgl_graph.MyDGLGraph()
     g["original"] = dict()
-    g["original"]["row_idx"] = edge_srcs
-    g["original"]["col_idx"] = edge_dsts
+    g["original"]["row_indices"] = edge_srcs
+    g["original"]["col_indices"] = edge_dsts
     g["original"]["rel_types"] = edge_etypes
     g["original"]["eids"] = edge_eids
     g["transposed"] = dict()
-    g["transposed"]["row_idx"] = transposed_edge_srcs
-    g["transposed"]["col_idx"] = transposed_edge_dsts
+    g["transposed"]["row_indices"] = transposed_edge_srcs
+    g["transposed"]["col_indices"] = transposed_edge_dsts
     g["transposed"]["rel_types"] = transposed_edge_etypes
     g["transposed"]["eids"] = transposed_edge_eids
     return g
@@ -552,8 +552,8 @@ def create_mydgl_graph_coo_torch(
 ):
     g = mydgl_graph.MyDGLGraph()
     g["original"] = dict()
-    g["original"]["row_idx"] = edge_srcs
-    g["original"]["col_idx"] = edge_dsts
+    g["original"]["row_indices"] = edge_srcs
+    g["original"]["col_indices"] = edge_dsts
     g["original"]["rel_types"] = edge_etypes
     g["original"]["eids"] = edge_referential_eids
     return g

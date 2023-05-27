@@ -5,60 +5,6 @@ import torch as th
 from ..kernels import K
 
 
-# class RgnnRelationalMatmulACScatterGatherListIdentical(th.autograd.Function):
-#     @staticmethod
-#     def forward(
-#         ctx,
-#         separate_coo_relptrs,
-#         separate_coo_eids,
-#         weights,
-#         inputs,
-#         ret,
-#         input_num_head_one_flag,
-#     ):
-#         ctx.save_for_backward(
-#             separate_coo_relptrs,
-#             separate_coo_eids,
-#             weights,
-#             inputs,
-#         )
-#         ctx.input_num_head_one_flag = input_num_head_one_flag
-#         K.rgnn_relational_matmul_ac_gather_scatter_list_identical(
-#             separate_coo_relptrs,
-#             separate_coo_eids,
-#             weights,
-#             inputs,
-#             ret,
-#             input_num_head_one_flag,
-#         )
-#         return ret
-
-#     @staticmethod
-#     def backward(ctx, gradout):
-#         (
-#             separate_coo_relptrs,
-#             separate_coo_eids,
-#             weights,
-#             inputs,
-#         ) = ctx.saved_tensors
-#         input_num_head_one_flag = ctx.input_num_head_one_flag
-#         grad_weight = th.zeros_like(weights, memory_format=th.contiguous_format)
-#         grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
-#         K.backward_rgnn_relational_matmul_ac_gather_scatter_list_identical(
-#             separate_coo_relptrs,
-#             separate_coo_eids,
-#             th.transpose(weights, 2, 3).contiguous(),
-#             inputs,
-#             gradout.contiguous(),
-#             grad_input,
-#             grad_weight,
-#             input_num_head_one_flag,
-#         )
-#         # fmt: off
-#         return None, None, grad_weight, grad_input, None, None
-#         # fmt: on
-
-
 class RgnnRelationalMatmul(th.autograd.Function):
     @staticmethod
     def forward(
@@ -81,7 +27,7 @@ class RgnnRelationalMatmul(th.autograd.Function):
         ctx.input_num_head_one_flag = input_num_head_one_flag
         K.rgnn_relational_matmul(
             {
-                "separate_coo_relptrs": separate_coo_relptrs,
+                "separate_coo_rel_ptrs": separate_coo_relptrs,
                 "separate_coo_node_indices": separate_coo_node_indices,
                 "separate_coo_eids": separate_coo_eids,
             },
@@ -108,7 +54,7 @@ class RgnnRelationalMatmul(th.autograd.Function):
         # FIXME: seems there is a deadlock here
         K.backward_rgnn_relational_matmul(
             {
-                "separate_coo_relptrs": separate_coo_relptrs,
+                "separate_coo_rel_ptrs": separate_coo_relptrs,
                 "separate_coo_node_indices": separate_coo_node_indices,
                 "separate_coo_eids": separate_coo_eids,
             },
@@ -123,49 +69,6 @@ class RgnnRelationalMatmul(th.autograd.Function):
         # fmt: off
         return None, None, None, grad_weight, grad_input, None, None
         # fmt: on
-
-
-def rgnn_relational_matmul(
-    separate_coo_relptrs,
-    separate_coo_node_indices,
-    separate_coo_eids,
-    # unique_srcs_and_dests_rel_ptr,
-    # unique_srcs_and_dests_node_indices,
-    weights,
-    inputs,
-    input_num_head_one_flag,
-):
-    ret = th.zeros(
-        (
-            separate_coo_node_indices.numel(),
-            weights.size(1),
-            weights.size(3),
-        ),  # [num_items, num_heads, out_feats//num_heads]
-        dtype=weights.dtype,
-        device=weights.device,
-        requires_grad=True,
-    ).contiguous()
-    # if separate_coo_node_indices.data_ptr() == separate_coo_eids.data_ptr():
-    #     return RgnnRelationalMatmulACScatterGatherListIdentical.apply(
-    #         separate_coo_relptrs,
-    #         separate_coo_eids,
-    #         weights.contiguous(),
-    #         inputs.contiguous(),
-    #         ret,
-    #         input_num_head_one_flag,
-    #     )
-    # else:
-    return RgnnRelationalMatmul.apply(
-        separate_coo_relptrs,
-        separate_coo_node_indices,
-        separate_coo_eids,
-        # unique_srcs_and_dests_rel_ptr,
-        # unique_srcs_and_dests_node_indices,
-        weights.contiguous(),
-        inputs.contiguous(),
-        ret,
-        input_num_head_one_flag,
-    )
 
 
 class RgnnRelationalMatmulNoScatterGatherList(th.autograd.Function):
@@ -254,7 +157,7 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
         ctx.input_num_head_one_flag = input_num_head_one_flag
         K.rgnn_relational_matmul(
             {
-                "unique_srcs_and_dests_rel_ptr": unique_srcs_and_dests_rel_ptr,
+                "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptr,
                 "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_idx,
             },
             1,  # CompactAsOfNode:Enabled
@@ -281,7 +184,7 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
         # FIXME: seems there is a bug in gradout when bgs compactAsOfNode is true perhaps the scheming scheme to grad_feat_src is faulty
         K.backward_rgnn_relational_matmul(
             {
-                "unique_srcs_and_dests_rel_ptr": unique_srcs_and_dests_rel_ptr,
+                "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptr,
                 "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_idx,
             },
             1,  # CompactAsOfNodeKind::Enabled
@@ -295,6 +198,36 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
         # fmt: off
         return None, None, grad_weight, grad_node_feat, None, None
         # fmt: on
+
+
+# TODO: merge this with rgnn_relational_matmul_compact_as_of_node
+def rgnn_relational_matmul(
+    separate_coo_relptrs,
+    separate_coo_node_indices,
+    separate_coo_eids,
+    weights,
+    inputs,
+    input_num_head_one_flag,
+):
+    ret = th.zeros(
+        (
+            separate_coo_node_indices.numel(),
+            weights.size(1),
+            weights.size(3),
+        ),  # [num_items, num_heads, out_feats//num_heads]
+        dtype=weights.dtype,
+        device=weights.device,
+        requires_grad=True,
+    ).contiguous()
+    return RgnnRelationalMatmul.apply(
+        separate_coo_relptrs,
+        separate_coo_node_indices,
+        separate_coo_eids,
+        weights.contiguous(),
+        inputs.contiguous(),
+        ret,
+        input_num_head_one_flag,
+    )
 
 
 def rgnn_relational_matmul_compact_as_of_node(
@@ -317,94 +250,6 @@ def rgnn_relational_matmul_compact_as_of_node(
         node_feat,
         ret,
         input_num_head_one_flag,
-    )
-
-
-# class RgnnRelationalMatmulCompactAsOfNodeSingleEnded(th.autograd.Function):
-#     @staticmethod
-#     def forward(
-#         ctx,
-#         unique_srcs_and_dests_rel_ptr,
-#         unique_srcs_and_dests_node_idx,
-#         separate_coo_rel_ptr,
-#         separate_coo_node_indices,
-#         separate_coo_eids,
-#         weight,
-#         node_feat,
-#         ret,
-#         input_num_head_one_flag,
-#     ):
-#         node_feat = node_feat.contiguous()
-#         ctx.save_for_backward(
-#             unique_srcs_and_dests_rel_ptr,
-#             unique_srcs_and_dests_node_idx,
-#             separate_coo_rel_ptr,
-#             separate_coo_node_indices,
-#             separate_coo_eids,
-#             weight,
-#             node_feat,
-#             ret,
-#         )
-#         ctx.input_num_head_one_flag = input_num_head_one_flag
-#         K.rgnn_relational_matmul_compact_as_of_node_single_ended(
-#             unique_srcs_and_dests_rel_ptr,
-#             unique_srcs_and_dests_node_idx,
-#             separate_coo_rel_ptr,
-#             separate_coo_node_indices,
-#             separate_coo_eids,
-#             weight,
-#             node_feat,
-#             ret,
-#             input_num_head_one_flag,
-#         )
-#         return ret
-
-#     @staticmethod
-#     def backward(ctx, gradout):
-#         (
-#             unique_srcs_and_dests_rel_ptr,
-#             unique_srcs_and_dests_node_idx,
-#             separate_coo_rel_ptr,
-#             separate_coo_node_indices,
-#             separate_coo_eids,
-#             weight,
-#             node_feat,
-#             ret,
-#         ) = ctx.saved_tensors
-#         input_num_head_one_flag = ctx.input_num_head_one_flag
-#         grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
-#         grad_node_feat = th.zeros_like(node_feat, memory_format=th.contiguous_format)
-#         K.backward_rgnn_relational_matmul_compact_as_of_node_single_ended(
-#             unique_srcs_and_dests_rel_ptr,
-#             unique_srcs_and_dests_node_idx,
-#             separate_coo_rel_ptr,
-#             separate_coo_node_indices,
-#             separate_coo_eids,
-#             th.transpose(weight, 2, 3).contiguous(),
-#             node_feat,
-#             ret,
-#             gradout.contiguous(),
-#             grad_weight,
-#             grad_node_feat,
-#             input_num_head_one_flag,
-#         )
-#         # fmt: off
-#         return None, None, None, None, None,  grad_weight, grad_node_feat, None, None
-#         # fmt: on
-
-
-def rgnn_relational_matmul_compact_as_of_node_single_ended(
-    unique_srcs_and_dests_rel_ptr,
-    unique_srcs_and_dests_node_indices,
-    separate_coo_rel_ptr,
-    separate_coo_node_indices,
-    separate_coo_eids,
-    weight,
-    node_feat,
-    input_num_head_one_flag,
-):
-    raise ZeroDivisionError(
-        "SingleEnded compact matmul is a mal-purposed API because the additional knowledge of separate coo node index does not help reduce the computation, i.e., the number of entries to be output. The current indexing scheme in the implementation is a mixture of compact and per-edge schemes.  Additionally, datasets we are dealing with are all added with reverse edges. So it is even meaningless to create two unique node indices list."
     )
 
 
@@ -435,9 +280,9 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
         )
         K.rgnn_inner_product_right_node_separatecoo(
             {
-                "unique_srcs_and_dests_rel_ptr": unique_srcs_and_dests_rel_ptr,
-                "unique_srcs_and_dests_node_idx": unique_srcs_and_dests_node_idx,
-                "separate_coo_rel_ptr": separate_coo_rel_ptr,
+                "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptr,
+                "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_idx,
+                "separate_rel_ptrs": separate_coo_rel_ptr,
             },
             1,  # CompactAsOfNode::Enabled
             separate_coo_eids,
@@ -470,9 +315,9 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
         )
         K.backward_inner_product_right_node_separatecoo(
             {
-                "unique_srcs_and_dests_rel_ptr": unique_srcs_and_dests_rel_ptr,
-                "unique_srcs_and_dests_node_idx": unique_srcs_and_dests_node_idx,
-                "separate_coo_rel_ptr": separate_coo_rel_ptr,
+                "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptr,
+                "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_idx,
+                "separate_rel_ptrs": separate_coo_rel_ptr,
             },
             1,  # CompactAsOfNode::Enabled
             separate_coo_eids,
@@ -487,36 +332,6 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
         # fmt: off
         return None, None, None, None, None,  None, grad_left_node_compact_data, grad_right_node_vectors, None
         # fmt: on
-
-
-def rgnn_inner_product_node_compact_and_node(
-    unique_srcs_and_dests_rel_ptr,
-    unique_srcs_and_dests_node_indices,
-    separate_coo_rel_ptr,
-    separate_coo_eids,
-    separate_coo_row_indices,
-    separate_coo_col_indices,
-    left_node_compact_data,
-    right_node_vectors,
-):
-    # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
-    ret = th.zeros(
-        [separate_coo_rel_ptr[-1], right_node_vectors.size(1)],
-        dtype=right_node_vectors.dtype,
-        device=right_node_vectors.device,
-        requires_grad=True,
-    )
-    return RgnnInnerProductNodeCompactAndNode.apply(
-        unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices,
-        separate_coo_rel_ptr,
-        separate_coo_eids,
-        separate_coo_row_indices,
-        separate_coo_col_indices,
-        left_node_compact_data,
-        right_node_vectors,
-        ret,
-    )
 
 
 class RgnnInnerProductEdgeAndNode(th.autograd.Function):
@@ -579,11 +394,40 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
             grad_right_node_vectors,
         )
         # FIXME: check if there is bug here
-        # print(grad_left_edge_data)
-        # print(grad_right_node_vectors)
         # fmt: off
         return None, None, None, grad_left_edge_data, grad_right_node_vectors, None
         # fmt: on
+
+
+# merge the following two functions
+def rgnn_inner_product_node_compact_and_node(
+    unique_srcs_and_dests_rel_ptr,
+    unique_srcs_and_dests_node_indices,
+    separate_coo_rel_ptr,
+    separate_coo_eids,
+    separate_coo_row_indices,
+    separate_coo_col_indices,
+    left_node_compact_data,
+    right_node_vectors,
+):
+    # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
+    ret = th.zeros(
+        [separate_coo_rel_ptr[-1], right_node_vectors.size(1)],
+        dtype=right_node_vectors.dtype,
+        device=right_node_vectors.device,
+        requires_grad=True,
+    )
+    return RgnnInnerProductNodeCompactAndNode.apply(
+        unique_srcs_and_dests_rel_ptr,
+        unique_srcs_and_dests_node_indices,
+        separate_coo_rel_ptr,
+        separate_coo_eids,
+        separate_coo_row_indices,
+        separate_coo_col_indices,
+        left_node_compact_data,
+        right_node_vectors,
+        ret,
+    )
 
 
 def rgnn_inner_product_edge_and_node(

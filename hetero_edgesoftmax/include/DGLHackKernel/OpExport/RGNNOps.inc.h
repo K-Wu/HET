@@ -250,7 +250,7 @@ void RelationalMatMul_separatecoo(  // at::Tensor &separate_coo_relptrs,
   auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
   if (Kind == CompactAsOfNodeKind::Disabled) {
     at::Tensor separate_coo_relptrs =
-        args_tensor_dict.at("separate_coo_relptrs");
+        args_tensor_dict.at("separate_coo_rel_ptrs");
     at::Tensor separate_coo_node_indices =
         args_tensor_dict.at("separate_coo_node_indices");
     at::Tensor separate_coo_eids = args_tensor_dict.at("separate_coo_eids");
@@ -281,7 +281,7 @@ void RelationalMatMul_separatecoo(  // at::Tensor &separate_coo_relptrs,
     }
   } else if (Kind == CompactAsOfNodeKind::Enabled) {
     at::Tensor unique_srcs_and_dests_rel_ptr =
-        args_tensor_dict.at("unique_srcs_and_dests_rel_ptr");
+        args_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
         args_tensor_dict.at("unique_srcs_and_dests_node_indices");
     if (InputNumHeadOneFlag) {
@@ -444,11 +444,10 @@ void inner_product_right_node_separatecoo(
     // originally inner_product_node_compact_and_node_separatecoo
     // left_side_data is left_node_compact_data
     at::Tensor unique_srcs_and_dests_rel_ptr =
-        arg_tensor_dict.at("unique_srcs_and_dests_rel_ptr");
+        arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_idx =
-        arg_tensor_dict.at("unique_srcs_and_dests_node_idx");
-    at::Tensor separate_coo_rel_ptr =
-        arg_tensor_dict.at("separate_coo_rel_ptr");
+        arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
+    at::Tensor separate_coo_rel_ptr = arg_tensor_dict.at("separate_rel_ptrs");
     inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
@@ -674,7 +673,7 @@ void RelationalMatMul_separatecoo(
   auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
   if (Kind == CompactAsOfNodeKind::Enabled) {
     at::Tensor unique_srcs_and_dests_rel_ptr =
-        arg_tensor_dict.at("unique_srcs_and_dests_rel_ptr");
+        arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
     if (InputNumHeadOneFlag) {
@@ -693,7 +692,7 @@ void RelationalMatMul_separatecoo(
 
   } else if (Kind == CompactAsOfNodeKind::Disabled) {
     at::Tensor separate_coo_relptrs =
-        arg_tensor_dict.at("separate_coo_relptrs");
+        arg_tensor_dict.at("separate_coo_rel_ptrs");
     at::Tensor separate_coo_node_indices =
         arg_tensor_dict.at("separate_coo_node_indices");
     at::Tensor separate_coo_eids = arg_tensor_dict.at("separate_coo_eids");
@@ -842,11 +841,10 @@ void inner_product_right_node_separatecoo(
     // left_side_data is left_node_compact_data
     // grad_left_side_data is grad_left_node_compact_data
     at::Tensor unique_srcs_and_dests_rel_ptr =
-        arg_tensor_dict.at("unique_srcs_and_dests_rel_ptr");
+        arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_idx =
-        arg_tensor_dict.at("unique_srcs_and_dests_node_idx");
-    at::Tensor separate_coo_rel_ptr =
-        arg_tensor_dict.at("separate_coo_rel_ptr");
+        arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
+    at::Tensor separate_coo_rel_ptr = arg_tensor_dict.at("separate_rel_ptrs");
     inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,

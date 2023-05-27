@@ -144,7 +144,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
     else:
         print("Using our RGAT model")
         # print(
-        # int(g["original"]["col_idx"].max()) + 1,
+        # int(g["original"]["col_indices"].max()) + 1,
         # )
         # print(g["original"]["row_ptr"].numel() - 1)
         embed_layer, model = RGAT_get_our_model(g, num_classes, args)

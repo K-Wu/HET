@@ -117,8 +117,8 @@ def convert_integrated_coo_to_separate_coo(row_idx, col_idx, rel_types, eids):
     #     separate_coo_col_idx,
     #     separate_coo_eids,
     # ) = K.convert_integrated_coo_to_separate_coo(
-    #     self.graph_data[original_or_transposed]["row_idx"],
-    #     self.graph_data[original_or_transposed]["col_idx"],
+    #     self.graph_data[original_or_transposed]["row_indices"],
+    #     self.graph_data[original_or_transposed]["col_indices"],
     #     self.graph_data[original_or_transposed]["rel_types"],
     #     self.graph_data[original_or_transposed]["eids"],
     # )

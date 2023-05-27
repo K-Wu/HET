@@ -316,10 +316,10 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
             else:
                 separate_coo_original_dict = g.get_separate_coo_original()
                 node_repr = B.rgcn_layer1_separate_coo(
-                    separate_coo_original_dict["rel_ptr"],
+                    separate_coo_original_dict["rel_ptrs"],
                     separate_coo_original_dict["eids"],
-                    separate_coo_original_dict["row_idx"],
-                    separate_coo_original_dict["col_idx"],
+                    separate_coo_original_dict["row_indices"],
+                    separate_coo_original_dict["col_indices"],
                     g,
                     x,
                     weight,

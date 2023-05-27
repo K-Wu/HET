@@ -32,7 +32,6 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             requires_grad=True,
         )
 
-        # edge_norm = th.zeros_like(unnormalized_attn_score, memory_format=th.contiguous_format)
         attn_score_inner_product = th.zeros(
             separate_coo_eids.size(0),
             applied_klinear_node_features.size(1),
@@ -114,86 +113,10 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             grad_k,
             grad_q,
         )
-        # print(grad_attn_weight)
         # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
         # fmt: off
         return  None, None, None, None, None, None, None, None,  grad_k, grad_q, grad_attn_weight
         # fmt: on
-
-
-# FIXME: use outcsr, incsr instead of transposed and original
-# class HGTFullGraphMessageMeanAggregationCSR(th.autograd.Function):
-#     @staticmethod
-#     def forward(
-#         ctx,
-#         row_ptr,
-#         col_idx,
-#         eids,
-#         reltypes,
-#         transposed_row_ptr,
-#         transposed_col_idx,
-#         transposed_eids,
-#         transposed_reltypes,
-#         message_per_edge,
-#         attn_score,
-#         ret,
-#     ):
-
-#         ctx.save_for_backward(
-#             row_ptr,
-#             col_idx,
-#             eids,
-#             reltypes,
-#             transposed_row_ptr,
-#             transposed_col_idx,
-#             transposed_eids,
-#             transposed_reltypes,
-#             message_per_edge,
-#             attn_score,
-#         )
-#         K.hgt_full_graph_message_mean_aggregation_csr(
-#             incsr_row_ptr,
-#             incsr_col_idx,
-#             incsr_eids,
-#             incsr_reltypes,
-#             message_per_edge,
-#             normalized_attn_score,
-#             ret,
-#             unique_srcs_and_dests_rel_ptr,
-#             unique_srcs_and_dests_node_indices
-#         )
-#         return ret
-
-#     @staticmethod
-#     def backward(ctx, gradout):
-#         (
-#             row_ptr,
-#             col_idx,
-#             eids,
-#             reltypes,
-#             transposed_row_ptr,
-#             transposed_col_idx,
-#             transposed_eids,
-#             transposed_reltypes,
-#             message_per_edge,
-#             attn_score,
-#         ) = ctx.saved_tensors
-#         grad_message = th.zeros_like(message_per_edge)
-#         grad_attn_score = th.zeros_like(attn_score)
-#         K.backward_hgt_full_graph_message_mean_aggregation_csr(
-#             outcsr_row_ptr,
-#             outcsr_col_idx,
-#             outcsr_eids,
-#             outcsr_reltypes,
-#             edgesoftmax_sum_per_node,
-#             normalized_atrtn_score,
-#             gradout,
-#             grad_message,
-#             grad_attn_score,
-#         )
-#         # fmt: off
-#         return None, None, None, None, None, None, None, None, grad_message, grad_attn_score, None
-#         # fmt: on
 
 
 def hgt_full_graph_hetero_attention_ops_coo(
@@ -204,49 +127,17 @@ def hgt_full_graph_hetero_attention_ops_coo(
 
     return HGTFullGraphHeteroAttentionOps.apply(
         incsr_dict["row_ptr"],
-        incsr_dict["col_idx"],
+        incsr_dict["col_indices"],
         incsr_dict["eids"],
         incsr_dict["rel_types"],
-        separate_coo_dict["row_idx"],
-        separate_coo_dict["col_idx"],
+        separate_coo_dict["row_indices"],
+        separate_coo_dict["col_indices"],
         separate_coo_dict["eids"],
-        separate_coo_dict["rel_ptr"],
+        separate_coo_dict["rel_ptrs"],
         applied_klinear_node_features,
         applied_qlinear_node_features,
         weight,
     )
-
-
-# def hgt_full_graph_message_mean_aggregation_csr(graph, message_per_edge, attn_score):
-#     outcsr_row_ptr = graph["original"]["row_ptr"]
-#     outcsr_col_idx = graph["original"]["col_idx"]
-#     outcsr_eids = graph["original"]["eids"]
-#     outcsr_reltypes = graph["original"]["rel_types"]
-#     incsr_row_ptr = graph["transposed"]["row_ptr"]
-#     incsr_col_idx = graph["transposed"]["col_idx"]
-#     incsr_eids = graph["transposed"]["eids"]
-#     incsr_reltypes = graph["transposed"]["rel_types"]
-#     ret = th.zeros(
-#         graph["original"]["num_nodes"],
-#         message_per_edge.size(1),
-#         message_per_edge.size(2),
-#         dtype=message_per_edge.dtype,
-#         device=message_per_edge.device,
-#         requires_grad=True,
-#     )
-#     return HGTFullGraphMessageMeanAggregationCSR.apply(
-#         row_ptr,
-#         col_idx,
-#         eids,
-#         reltypes,
-#         transposed_row_ptr,
-#         transposed_col_idx,
-#         transposed_eids,
-#         transposed_reltypes,
-#         message_per_edge,
-#         attn_score,
-#         ret,
-#     )
 
 
 class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
@@ -286,17 +177,6 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             normalized_attn_score,
         )
 
-        # K.hgt_full_graph_edge_softmax_ops_csr(
-        #     incsr_row_ptr,
-        #     incsr_col_idx,
-        #     incsr_eids,
-        #     incsr_reltypes,
-        #     unnormalized_attn_score,
-        #     mu,
-        #     edgesoftmax_sum_per_node,
-        #     mu_softmax_applied_unnormalized_attn_score,
-        #     normalized_attn_score,
-        # )
         # with nvtx.annotate("hector_op_category = mm + weighted aggregation", color="cyan"):
         K.hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo(
             separate_coo_relptrs,
@@ -323,7 +203,6 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             separate_coo_eids,
             message_generation_weights,
             inputs,
-            # relation_pri,
             unnormalized_attn_score,
             edgesoftmax_sum_per_node,
             mu,
@@ -331,8 +210,6 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             normalized_attn_score,
             new_h,
         )
-        # print(normalized_attn_score)
-        # print(mu)
         return new_h
 
     # mere fusing of the original rgnn_relational_matmul and hgt_full_graph_edge_softmax_and_mean_aggregation_csr for now
@@ -341,7 +218,6 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
         ctx,
         gradout,  # delta out node feature
     ):
-        # input_num_head_one_flag = ctx.input_num_head_one_flag
 
         (
             incsr_row_ptr,
@@ -404,11 +280,6 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             grad_unnormalized_attn_score,
             grad_mu,
         )
-        # print(grad_message_generation_weight)
-        # print(grad_input)
-        # print(grad_normalized_attn_score)
-        # print(grad_unnormalized_attn_score)
-        # print(grad_mu)
         # fmt: off
         return None,None,None,None,None,None,None,None,grad_message_generation_weight,grad_input,grad_unnormalized_attn_score,None,grad_mu,None,None,None
         # fmt: on
@@ -427,7 +298,7 @@ def hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
 ):
     incsr_dict = graph.get_in_csr()
     incsr_row_ptr = incsr_dict["row_ptr"]
-    incsr_col_idx = incsr_dict["col_idx"]
+    incsr_col_idx = incsr_dict["col_indices"]
     incsr_eids = incsr_dict["eids"]
     incsr_reltypes = incsr_dict["rel_types"]
 
@@ -603,20 +474,15 @@ def hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
     message_per_edge,
     unnormalized_attn_score,
     mu,
-    # edgesoftmax_sum_per_node,
-    # mu_softmax_applied_unnormalized_attn_score,
-    # normalized_attn_score,
-    # unique_srcs_and_dests_rel_ptr,
-    # unique_srcs_and_dests_node_indices,
 ):
     outcsr_dict = graph.get_out_csr()
     incsr_dict = graph.get_in_csr()
     outcsr_row_ptr = outcsr_dict["row_ptr"]
-    outcsr_col_idx = outcsr_dict["col_idx"]
+    outcsr_col_idx = outcsr_dict["col_indices"]
     outcsr_eids = outcsr_dict["eids"]
     outcsr_reltypes = outcsr_dict["rel_types"]
     incsr_row_ptr = incsr_dict["row_ptr"]
-    incsr_col_idx = incsr_dict["col_idx"]
+    incsr_col_idx = incsr_dict["col_indices"]
     incsr_eids = incsr_dict["eids"]
     incsr_reltypes = incsr_dict["rel_types"]
     mu_softmax_applied_unnormalized_attn_score = th.zeros_like(
@@ -640,8 +506,6 @@ def hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
         requires_grad=True,
     ).contiguous()
 
-    # return new_h
-
     # scale_factor, i.e., sqrt_dk equals math.sqrt(out_dim // n_heads)
     return HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR.apply(
         incsr_row_ptr,
@@ -658,7 +522,5 @@ def hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
         mu_softmax_applied_unnormalized_attn_score,
         normalized_attn_score,
         message_per_edge,
-        # unique_srcs_and_dests_rel_ptr,
-        # unique_srcs_and_dests_node_indices,
         new_h,
     )

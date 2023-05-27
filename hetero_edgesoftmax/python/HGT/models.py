@@ -6,8 +6,6 @@ import torch
 import torch.nn as nn
 import torch.jit
 
-# import dgl.function as fn
-# from dgl.nn.functional import edge_softmax
 from .. import backend as B
 from .. import utils_lite
 
@@ -38,8 +36,6 @@ class HET_HGTLayerHetero(nn.Module):
 
         self.in_dim = in_dim
         self.out_dim = out_dim
-        # self.node_dict = mydglgraph.get_ntype_dict()
-        # self.edge_dict = mydglgraph.get_etype_dict()
         self.num_ntypes = mydglgraph.get_num_ntypes()  # len(self.node_dict)
         self.num_relations = mydglgraph.get_num_rels()  # len(self.edge_dict)
 
@@ -57,10 +53,6 @@ class HET_HGTLayerHetero(nn.Module):
             dst_node_type_per_canonical_edge_type
         )
 
-        # self.k_linears = nn.ModuleList()
-        # self.q_linears = nn.ModuleList()
-        # self.v_linears = nn.ModuleList()
-        # self.a_linears = nn.ModuleList()
         if self.multiply_among_weights_first_flag:
             # this is a varient of the original weights where first the view is changed from (self.num_ntypes, 1, in_dim, out_dim) to (self.num_ntypes, in_dim, self.n_heads, self.d_k) and then a transposition is applied
             self.k_linears = nn.Parameter(
@@ -90,10 +82,6 @@ class HET_HGTLayerHetero(nn.Module):
         self.use_norm = use_norm
 
         for t in range(self.num_ntypes):
-            # self.k_linears.append(nn.Linear(in_dim, out_dim))
-            # self.q_linears.append(nn.Linear(in_dim, out_dim))
-            # self.v_linears.append(nn.Linear(in_dim, out_dim))
-            # self.a_linears.append(nn.Linear(out_dim, out_dim))
             if use_norm:
                 self.norms.append(nn.LayerNorm(out_dim))
 
@@ -114,14 +102,6 @@ class HET_HGTLayerHetero(nn.Module):
         nn.init.xavier_uniform_(self.q_linears)
         nn.init.xavier_uniform_(self.v_linears)
         nn.init.xavier_uniform_(self.a_linears)
-        # for module in self.k_linears:
-        #    module.reset_parameters()
-        # for module in self.q_linears:
-        #    module.reset_parameters()
-        # for module in self.v_linears:
-        #    module.reset_parameters()
-        # for module in self.a_linears:
-        #     module.reset_parameters()
 
     # @torch.jit.script_method
     def forward(self, G, h):
@@ -178,29 +158,27 @@ class HET_HGTLayerHetero(nn.Module):
         else:
             if self.compact_as_of_node_flag:
                 separate_coo_original_dict = G.get_separate_coo_original()
-                # separate_unique_node_indices_dict = G.get_separate_unique_node_indices()
                 separate_unique_node_indices_dict_single_sided = (
                     G.get_separate_unique_node_indices_single_sided()
                 )
 
                 # NB: the todo here to implement single-sided matmul for compact_as_of_node_flag does not make sense
-                attn_weight_dst_product_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_indices_dict_single_sided["rel_ptr_col"],
-                    separate_unique_node_indices_dict_single_sided["node_idx_col"],
-                    # separate_coo_original_dict["rel_ptr"],
-                    # separate_coo_original_dict["col_idx"],
-                    # separate_coo_original_dict["eids"],
-                    relation_att_weight,
-                    q,
-                    False,
+                attn_weight_dst_product_compact = (
+                    B.rgnn_relational_matmul_compact_as_of_node(
+                        separate_unique_node_indices_dict_single_sided["rel_ptr_col"],
+                        separate_unique_node_indices_dict_single_sided["node_idx_col"],
+                        relation_att_weight,
+                        q,
+                        False,
+                    )
                 )  # NB: use single side instead without need to modify kernel
                 attn_score = B.rgnn_inner_product_node_compact_and_node(
                     separate_unique_node_indices_dict_single_sided["rel_ptr_col"],
                     separate_unique_node_indices_dict_single_sided["node_idx_col"],
-                    separate_coo_original_dict["rel_ptr"],
+                    separate_coo_original_dict["rel_ptrs"],
                     separate_coo_original_dict["eids"],
-                    separate_coo_original_dict["row_idx"],
-                    separate_coo_original_dict["col_idx"],
+                    separate_coo_original_dict["row_indices"],
+                    separate_coo_original_dict["col_indices"],
                     attn_weight_dst_product_compact,
                     k,
                 )  # NB: use single side instead without need to modify kernel
@@ -208,8 +186,8 @@ class HET_HGTLayerHetero(nn.Module):
                 separate_coo_original_dict = G.get_separate_coo_original()
                 # with nvtx.annotate("hector_op_category = edgewise mm", color="cyan"):
                 attn_weight_dst_product_per_edge = B.rgnn_relational_matmul(
-                    separate_coo_original_dict["rel_ptr"],
-                    separate_coo_original_dict["col_idx"],
+                    separate_coo_original_dict["rel_ptrs"],
+                    separate_coo_original_dict["col_indices"],
                     separate_coo_original_dict["eids"],
                     relation_att_weight,
                     q,
@@ -218,23 +196,20 @@ class HET_HGTLayerHetero(nn.Module):
                 # with nvtx.annotate("hector_op_category = edgewise elementwise", color="cyan"):
                 attn_score = B.rgnn_inner_product_edge_and_node(
                     separate_coo_original_dict["eids"],
-                    separate_coo_original_dict["row_idx"],
-                    separate_coo_original_dict["col_idx"],
+                    separate_coo_original_dict["row_indices"],
+                    separate_coo_original_dict["col_indices"],
                     attn_weight_dst_product_per_edge,
                     k,
                 )
 
-        # attn_score = B.hgt_full_graph_edge_softmax_ops_csr(
-        #    G, attn_score, mu=(self.relation_pri / self.sqrt_dk)
-        # )
         # NB: the scaling is: attn_score = relation_pri / self.sqrt_dk * attn_score
 
         if self.fused_message_mean_aggregation_flag:
             separate_coo_original_dict = G.get_separate_coo_original()
             new_h = B.hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
-                separate_coo_original_dict["rel_ptr"],
-                separate_coo_original_dict["row_idx"],
-                separate_coo_original_dict["col_idx"],
+                separate_coo_original_dict["rel_ptrs"],
+                separate_coo_original_dict["row_indices"],
+                separate_coo_original_dict["col_indices"],
                 separate_coo_original_dict["eids"],
                 relation_msg_weight,
                 v,
@@ -245,8 +220,8 @@ class HET_HGTLayerHetero(nn.Module):
         else:
             separate_coo_original_dict = G.get_separate_coo_original()
             message_per_edge = B.rgnn_relational_matmul(
-                separate_coo_original_dict["rel_ptr"],
-                separate_coo_original_dict["row_idx"],
+                separate_coo_original_dict["rel_ptrs"],
+                separate_coo_original_dict["row_indices"],
                 separate_coo_original_dict["eids"],
                 relation_msg_weight,
                 v,
@@ -257,8 +232,6 @@ class HET_HGTLayerHetero(nn.Module):
                 message_per_edge,
                 attn_score,
                 (self.relation_pri / self.sqrt_dk),
-                # g["separate"]["unique_node_idx"]["rel_ptr"],
-                # g["separate"]["unique_node_idx"]["node_idx"],
             )  # shape (num_nodes, n_heads, d_k)
 
         # with nvtx.annotate("hector_op_category = nodewise mm", color="cyan"):

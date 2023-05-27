@@ -84,12 +84,12 @@ class SeastarRgcnSecondLayerCOO(th.autograd.Function):
 def seastar_rgcn_layer1_coo(graph, x, weight, norm):
     incsr_dict = graph.get_in_csr()
     outcsr_dict = graph.get_out_csr()
-    in_row_idx = incsr_dict["row_idx"]
-    in_col_idx = incsr_dict["col_idx"]
+    in_row_idx = incsr_dict["row_indices"]
+    in_col_idx = incsr_dict["col_indices"]
     in_eids = incsr_dict["eids"]
     in_reltypes = incsr_dict["rel_types"]
-    out_row_idx = outcsr_dict["row_idx"]
-    out_col_idx = outcsr_dict["col_idx"]
+    out_row_idx = outcsr_dict["row_indices"]
+    out_col_idx = outcsr_dict["col_indices"]
     out_eids = outcsr_dict["eids"]
     transposed_reltypes = outcsr_dict["rel_types"]
     ret = th.zeros(
@@ -181,11 +181,11 @@ def seastar_rgcn_layer0_csr(graph, weight, norm):
     incsr_dict = graph.get_in_csr()
     outcsr_dict = graph.get_out_csr()
     incsr_row_ptr = incsr_dict["row_ptr"]
-    incsr_col_idx = incsr_dict["col_idx"]
+    incsr_col_idx = incsr_dict["col_indices"]
     incsr_eids = incsr_dict["eids"]
     incsr_reltypes = incsr_dict["rel_types"]
     outcsr_row_ptr = outcsr_dict["row_ptr"]
-    outcsr_col_idx = outcsr_dict["col_idx"]
+    outcsr_col_idx = outcsr_dict["col_indices"]
     outcsr_eids = outcsr_dict["eids"]
     outcsr_reltypes = outcsr_dict["rel_types"]
     ret = th.zeros(
@@ -295,11 +295,11 @@ def seastar_rgcn_layer1_csr(
     incsr_dict = graph.get_in_csr()
     outcsr_dict = graph.get_out_csr()
     incsr_row_ptr = incsr_dict["row_ptr"]
-    incsr_col_idx = incsr_dict["col_idx"]
+    incsr_col_idx = incsr_dict["col_indices"]
     incsr_eids = incsr_dict["eids"]
     incsr_reltypes = incsr_dict["rel_types"]
     outcsr_row_ptr = outcsr_dict["row_ptr"]
-    outcsr_col_idx = outcsr_dict["col_idx"]
+    outcsr_col_idx = outcsr_dict["col_indices"]
     outcsr_eids = outcsr_dict["eids"]
     outcsr_reltypes = outcsr_dict["rel_types"]
     ret = th.zeros(
@@ -530,7 +530,7 @@ def rgcn_layer1_separate_coo(
         requires_grad=True,
     ).contiguous()
     outcsr_row_ptr = outcsr_dict["row_ptr"]
-    outcsr_col_idx = outcsr_dict["col_idx"]
+    outcsr_col_idx = outcsr_dict["col_indices"]
     outcsr_eids = outcsr_dict["eids"]
     outcsr_reltypes = outcsr_dict["rel_types"]
     return RgcnLayer1SeparateCoo.apply(
@@ -633,11 +633,11 @@ def rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(g, feat_compact, 
     )
     return RGCNNodeMeanAggregationCompactAsOfNodeSeparateCOO.apply(
         separate_coo_dict["eids"],
-        separate_coo_dict["rel_ptr"],
-        separate_coo_dict["row_idx"],
-        separate_coo_dict["col_idx"],
-        separate_unique_node_idx["rel_ptr"],
-        separate_unique_node_idx["node_idx"],
+        separate_coo_dict["rel_ptrs"],
+        separate_coo_dict["row_indices"],
+        separate_coo_dict["col_indices"],
+        separate_unique_node_idx["rel_ptrs"],
+        separate_unique_node_idx["node_indices"],
         feat_compact,
         enorm,
         ret,
@@ -660,9 +660,9 @@ def rgcn_node_mean_aggregation_compact_as_of_node_separate_coo_single_sided(
     )
     return RGCNNodeMeanAggregationCompactAsOfNodeSeparateCOO.apply(
         separate_coo_dict["eids"],
-        separate_coo_dict["rel_ptr"],
-        separate_coo_dict["row_idx"],
-        separate_coo_dict["col_idx"],
+        separate_coo_dict["rel_ptrs"],
+        separate_coo_dict["row_indices"],
+        separate_coo_dict["col_indices"],
         separate_unique_node_idx_single_sided["rel_ptr_row"],
         separate_unique_node_idx_single_sided["node_idx_row"],
         feat_compact_src,

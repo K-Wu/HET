@@ -111,15 +111,15 @@ def fused_gat(graph, feat_src, el, er, slope):
     # g = graph._graph.get_immutable_gidx(utils.to_dgl_context(context(feat_src)))
     incsr_dict = graph.get_in_csr()
     outcsr_dict = graph.get_out_csr()
-    exp = el.new_empty([incsr_dict["col_idx"].numel()] + list(el.size()[1:]))
+    exp = el.new_empty([incsr_dict["col_indices"].numel()] + list(el.size()[1:]))
     s = th.empty_like(el, memory_format=th.contiguous_format)
     ret = th.empty_like(feat_src, memory_format=th.contiguous_format)
     return FusedGat.apply(
         incsr_dict["row_ptr"],
-        incsr_dict["col_idx"],
+        incsr_dict["col_indices"],
         incsr_dict["eids"],
         outcsr_dict["row_ptr"],
-        outcsr_dict["col_idx"],
+        outcsr_dict["col_indices"],
         outcsr_dict["eids"],
         feat_src,
         el,

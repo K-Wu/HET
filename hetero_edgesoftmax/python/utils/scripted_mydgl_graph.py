@@ -14,7 +14,7 @@ from typing import Dict, Union
 # original needs to be existent in the mydglgraph object. Transposition and unique are also required if needed
 # Data:
 # self.graph_data["original"], as Dict[str, torch.Tensor], should exist
-# optional: self.graph_data["transposed"], self.graph_data["separate"]["csr"]["original"], self.graph_data["separate"]["csr"]["transposed"], self.graph_data["separate"]["coo"]["original"], self.graph_data["separate"]["coo"]["transposed"], self.graph_data["separate"]["unique_node_idx"], all as Dict[str, torch.Tensor]
+# optional: self.graph_data["transposed"], self.graph_data["separate"]["csr"]["original"], self.graph_data["separate"]["csr"]["transposed"], self.graph_data["separate"]["coo"]["original"], self.graph_data["separate"]["coo"]["transposed"], self.graph_data["separate"]["unique_node_indices"], all as Dict[str, torch.Tensor]
 @torch.jit.script
 class ScriptedMyDGLGraph(object):
     def __init__(
@@ -98,8 +98,8 @@ class ScriptedMyDGLGraph(object):
 
     def get_original_coo(self) -> Dict[str, torch.Tensor]:
         # G["original"]["rel_types"]
-        # G["original"]["row_idx"]
-        # G["original"]["col_idx"]
+        # G["original"]["row_indices"]
+        # G["original"]["col_indices"]
         # G["original"]["eids"]
         result = self.original_coo
         assert result is not None
@@ -107,8 +107,8 @@ class ScriptedMyDGLGraph(object):
 
     def get_transposed_coo(self) -> Dict[str, torch.Tensor]:
         # G["transposed"]["rel_types"]
-        # G["transposed"]["row_idx"]
-        # G["transposed"]["col_idx"]
+        # G["transposed"]["row_indices"]
+        # G["transposed"]["col_indices"]
         # G["transposed"]["eids"]
         result = self.transposed_coo
         assert result is not None
@@ -117,7 +117,7 @@ class ScriptedMyDGLGraph(object):
     def get_out_csr(self) -> Dict[str, torch.Tensor]:
         # G["original"]["rel_types"]
         # G["original"]["row_ptr"]
-        # G["original"]["col_idx"]
+        # G["original"]["col_indices"]
         # G["original"]["eids"]
         result = self.out_csr
         assert result is not None
@@ -126,7 +126,7 @@ class ScriptedMyDGLGraph(object):
     def get_in_csr(self) -> Dict[str, torch.Tensor]:
         # G["transposed"]["rel_types"]
         # G["transposed"]["row_ptr"]
-        # G["transposed"]["col_idx"]
+        # G["transposed"]["col_indices"]
         # G["transposed"]["eids"]
 
         # strip away Optional from http://zh0ngtian.tech/posts/3f804c9b.html
@@ -141,15 +141,15 @@ class ScriptedMyDGLGraph(object):
         return result
 
     def get_separate_unique_node_indices(self) -> Dict[str, torch.Tensor]:
-        # G["separate"]["unique_node_idx"]["rel_ptr"],
-        # G["separate"]["unique_node_idx"]["node_idx"],
+        # G["separate"]["unique_node_indices"]["rel_ptrs"],
+        # G["separate"]["unique_node_indices"]["node_indices"],
         result = self.separate_unique_node_indices
         assert result is not None
         return result
 
     def get_separate_unique_node_indices_inverse_idx(self) -> Dict[str, torch.Tensor]:
-        # G["separate"]["unique_node_idx"]["rel_ptr"],
-        # G["separate"]["unique_node_idx"]["inverse_idx"],
+        # G["separate"]["unique_node_indices"]["rel_ptrs"],
+        # G["separate"]["unique_node_indices"]["inverse_indices"],
         result = self.separate_unique_node_indices_inverse_idx
         assert result is not None
         return result
@@ -174,9 +174,9 @@ class ScriptedMyDGLGraph(object):
         return result
 
     def get_separate_coo_original(self) -> Dict[str, torch.Tensor]:
-        # G["separate"]["coo"]["original"]["rel_ptr"],
-        # G["separate"]["coo"]["original"]["row_idx"],
-        # G["separate"]["coo"]["original"]["col_idx"],
+        # G["separate"]["coo"]["original"]["rel_ptrs"],
+        # G["separate"]["coo"]["original"]["row_indices"],
+        # G["separate"]["coo"]["original"]["col_indices"],
         # G["separate"]["coo"]["original"]["eids"],
 
         result = self.separate_coo_original
@@ -184,9 +184,9 @@ class ScriptedMyDGLGraph(object):
         return result
 
     def get_separate_csr_original(self) -> Dict[str, torch.Tensor]:
-        # G["separate"]["csr"]["original"]["rel_ptr"],
+        # G["separate"]["csr"]["original"]["rel_ptrs"],
         # G["separate"]["csr"]["original"]["row_ptr"],
-        # G["separate"]["csr"]["original"]["col_idx"],
+        # G["separate"]["csr"]["original"]["col_indices"],
         # G["separate"]["csr"]["original"]["eids"],
 
         result = self.separate_csr_original

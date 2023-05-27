@@ -188,7 +188,7 @@ void RelationalFusedGATKernel_edge_parallel_separatecoo(
   if (CompactAsOfNodeFlag) {
     // CompactAsOfNode
     at::Tensor unique_srcs_and_dests_rel_ptr =
-        unique_srcs_and_dests.at("rel_ptr");
+        unique_srcs_and_dests.at("rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
         unique_srcs_and_dests.at("node_indices");
     _RelationalFusedGATKernel<int64_t, float, CompactAsOfNodeKind::Enabled,
@@ -438,7 +438,7 @@ void RelationalFusedGATKernel_edge_parallel_separatecoo(
   auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
   if (Kind == CompactAsOfNodeKind::EnabledWithDualList) {
     at::Tensor unique_srcs_and_dests_rel_ptr =
-        unique_srcs_and_dests.at("unique_srcs_and_dests_rel_ptr");
+        unique_srcs_and_dests.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_rel_ptr_col =
         unique_srcs_and_dests.at("unique_srcs_and_dests_rel_col");
     at::Tensor unique_srcs_and_dests_node_indices =
@@ -457,7 +457,7 @@ void RelationalFusedGATKernel_edge_parallel_separatecoo(
         gradout, grad_feat_src, grad_el, grad_er, slope);
   } else if (Kind == CompactAsOfNodeKind::Enabled) {
     at::Tensor unique_srcs_and_dests_rel_ptr =
-        unique_srcs_and_dests.at("unique_srcs_and_dests_rel_ptr");
+        unique_srcs_and_dests.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
         unique_srcs_and_dests.at("unique_srcs_and_dests_node_indices");
     _RelationalFusedGATKernel<int64_t, float, true,
