@@ -97,9 +97,7 @@ def GAT_train(args, single_layer_flag: bool):
     print("# of nodes : {}".format(num_nodes))
     print("# of features : {}".format(args.num_feats))
     features = torch.randn(num_nodes, args.num_feats, requires_grad=True)
-    # features = torch.FloatTensor(features)
     labels = torch.from_numpy(np.random.randint(0, args.num_classes, num_nodes))
-    # labels = torch.LongTensor(labels)
     train_idx = torch.randint(0, num_nodes, (args.train_size,))
 
     print(
@@ -108,12 +106,6 @@ def GAT_train(args, single_layer_flag: bool):
     print(
         "WARNING the original seastar train_mask utility is replaced with the seastar randomized train_mask instead."
     )
-
-    # if hasattr(torch, "BoolTensor"):
-    #    train_mask = torch.BoolTensor(train_mask)
-    #
-    # else:
-    #    train_mask = torch.ByteTensor(train_mask)
 
     if args.gpu < 0:
         cuda = False
@@ -124,24 +116,9 @@ def GAT_train(args, single_layer_flag: bool):
         features = features.cuda()
         labels = labels.cuda()
         train_idx = train_idx.cuda()
-        # train_mask = train_mask.cuda()
-
-    # u = edges[:, 0]
-    # v = edges[:, 1]
 
     # initialize a DGL graph
-    # g = DGLGraph()
-    # g.add_nodes(num_nodes)
-    # g.add_edges(u, v)
     # TODO: incorporate the following modification to mydgl_graph
-    # if isinstance(g, nx.classes.digraph.DiGraph):
-    #     g.remove_edges_from(nx.selfloop_edges(g))
-    #     g = DGLGraph(g)
-    #     g.add_edges(g.nodes(), g.nodes())
-    # elif isinstance(g, DGLGraph):
-    #     g = transform.add_self_loop(g)
-
-    # n_edges = g.number_of_edges()
     # create model
     if not single_layer_flag:
         heads = ([args.num_heads] * args.num_layers) + [args.num_out_heads]
@@ -191,8 +168,6 @@ def GAT_train(args, single_layer_flag: bool):
     Used_memory = 0
 
     for epoch in range(args.num_epochs):
-        # print('epoch = ', epoch)
-        # print('mem0 = {}'.format(mem0))
         torch.cuda.synchronize()
         tf = time.time()
         model.train()
@@ -201,9 +176,7 @@ def GAT_train(args, single_layer_flag: bool):
         # forward
         logits = model(features)
 
-        # loss = loss_fcn(logits[train_mask], labels[train_mask])
         loss = loss_fcn(logits[train_idx], labels[train_idx])
-        # loss = loss_fcn(logits, labels)
         now_mem = torch.cuda.max_memory_allocated(0)
         print("now_mem : ", now_mem)
         Used_memory = max(now_mem, Used_memory)
@@ -223,9 +196,7 @@ def GAT_train(args, single_layer_flag: bool):
 
             avg_run_time += run_time_this_epoch
 
-        # train_acc = accuracy(logits[train_mask], labels[train_mask])
         train_acc = accuracy(logits[train_idx], labels[train_idx])
-        # train_acc = accuracy(logits, labels)
 
         # log for each step
         print(
@@ -260,7 +231,6 @@ def GAT_train(args, single_layer_flag: bool):
 
 def GAT_get_parser(single_layer_flag: bool):
     parser = argparse.ArgumentParser(description="GAT")
-    # register_data_args(parser)
     parser.add_argument(
         "--gpu", type=int, default=0, help="which GPU to use. Set -1 to use CPU."
     )

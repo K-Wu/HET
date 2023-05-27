@@ -85,7 +85,6 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             attn_score_weight,
             unnormalized_attn_score,
         ) = ctx.saved_tensors
-        # print(attn_score_weight.numel())
         grad_attn_weight = th.zeros_like(
             attn_score_weight, memory_format=th.contiguous_format
         )

@@ -108,7 +108,6 @@ class FusedGat(th.autograd.Function):
 
 
 def fused_gat(graph, feat_src, el, er, slope):
-    # g = graph._graph.get_immutable_gidx(utils.to_dgl_context(context(feat_src)))
     incsr_dict = graph.get_in_csr()
     outcsr_dict = graph.get_out_csr()
     exp = el.new_empty([incsr_dict["col_indices"].numel()] + list(el.size()[1:]))

@@ -90,8 +90,6 @@ class HET_RelationalAttLayer(nn.Module):
         if self.self_loop:
             self.loop_weight = nn.Parameter(th.Tensor(in_feat, out_feat))
 
-        # self.reset_parameters()
-
         self.dropout = nn.Dropout(dropout)
 
     def reset_parameters(self):
@@ -145,7 +143,6 @@ class HET_RelationalAttLayer(nn.Module):
                     ),
                     self.attn_l.view(-1, self.out_feat // self.n_heads, 1),
                 ).view(-1, self.n_heads, self.in_feat, 1)
-                # separate_unique_node_idx = g.get_separate_unique_node_indices()
                 separate_unique_node_indices_single_sided = (
                     g.get_separate_unique_node_indices_single_sided()
                 )
@@ -171,7 +168,6 @@ class HET_RelationalAttLayer(nn.Module):
                     True,
                 )  # NB: use single side instead without need to modify kernel
             else:
-                # separate_unique_node_idx = g.get_separate_unique_node_indices()
                 separate_unique_node_indices_single_sided = (
                     g.get_separate_unique_node_indices_single_sided()
                 )
@@ -295,7 +291,6 @@ class HET_RelationalAttLayer(nn.Module):
         # with nvtx.annotate("hector_op_category = activation", color="cyan"):
         h = h.view(-1, self.out_feat)
         if self.self_loop:
-            # print(inputs_dst.shape)
             h = h + th.matmul(inputs_dst, self.loop_weight)
         if self.bias:
             h = h + self.h_bias

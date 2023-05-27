@@ -43,7 +43,6 @@ def RGNN_get_mydgl_graph(
         canonical_etype_indices_tuples = []
         for idx_etype in range(int(max(edge_etypes)) + 1):
             canonical_etype_indices_tuples.append((0, idx_etype, 0))
-        # dglgraph = fetch_fb15k237_dglgraph()
     elif dataset == "wikikg2":
         print("WARNING - loading wikikg2. Currently we only support a few dataset.")
         (edge_srcs, edge_dsts, edge_etypes, edge_referential_eids,) = load_wikikg2(
@@ -69,27 +68,6 @@ def RGNN_get_mydgl_graph(
         canonical_etype_indices_tuples = []
         for idx_etype in range(int(max(edge_etypes)) + 1):
             canonical_etype_indices_tuples.append((0, idx_etype, 0))
-        # graph_dict = fetch_wikikg2_graph_dict()
-    # elif dataset == "mag":
-    #     print("WARNING - loading mag. Currently we only support a few dataset.")
-    #     (edge_srcs, edge_dsts, edge_etypes, edge_referential_eids,) = get_ogbnmag(
-    #         dataset_sort_flag,
-    #         sort_by_src_flag,
-    #         transposed=False,
-    #         infidel_sort_flag=False,
-    #     )
-    #     (
-    #         transposed_edge_srcs,
-    #         transposed_edge_dsts,
-    #         transposed_edge_etypes,
-    #         transposed_edge_referential_eids,
-    #     ) = get_ogbnmag(
-    #         dataset_sort_flag,
-    #         sort_by_src_flag,
-    #         transposed=True,
-    #         infidel_sort_flag=False,
-    #     )
-    #     # graph_dict = fetch_ogbnmag_graph_dict()
     elif dataset in graphiler_datasets_loader.GRAPHILER_DATASET:
         print("RGNN_get_mydgl_graph loading graphiler dataset")
         (
@@ -221,7 +199,6 @@ def RGNN_get_mydgl_graph(
         )
     else:
         raise NotImplementedError("sparse format not supported")
-    # g.import_metadata_from_dgl_heterograph(dglgraph)
     g["original"]["node_type_offsets"] = th.LongTensor(ntype_offsets)
     return g, canonical_etype_indices_tuples
 
@@ -450,10 +427,6 @@ def create_mydgl_graph_csr_numpy(row_ptr, col_idx, rel_types, eids):
 
 @th.no_grad()
 def create_mydgl_graph_coo_from_hetero_dgl_graph(g):
-    # total_edge_srcs = th.zeros(g.number_of_edges(), dtype=th.int64)
-    # total_edge_dsts = th.zeros(g.number_of_edges(), dtype=th.int64)
-    # total_edge_etypes = th.zeros(g.number_of_edges(), dtype=th.int64)
-    # total_edge_referential_eids = th.arange(g.number_of_edges(), dtype=th.int64)
     etype_offsets = np.zeros(len(g.etypes) + 1, dtype=np.int64)
 
     # calculate the offsets for each node type. See the following NB for more details.
@@ -477,20 +450,7 @@ def create_mydgl_graph_coo_from_hetero_dgl_graph(g):
         edge_srcs = edge_srcs + ntype_offsets[ntype_id_map[etype[0]]]
         edge_dsts = edge_dsts + ntype_offsets[ntype_id_map[etype[2]]]
         print("added offsets for etype", etype)
-        # print(
-        #     etype,
-        #     "edge_srcs \in [",
-        #     min(edge_srcs),
-        #     max(edge_srcs),
-        #     "], edge_dests \in [",
-        #     min(edge_dsts),
-        #     max(edge_dsts),
-        #     "]",
-        # )
         # add to total
-        # total_edge_srcs[last_etype_offsets : etype_offsets[etype_idx]] = edge_srcs
-        # total_edge_dsts[last_etype_offsets : etype_offsets[etype_idx]] = edge_dsts
-        # total_edge_etypes[last_etype_offsets : etype_offsets[etype_idx]] = etype_idx
         edge_srcs_list.append(edge_srcs)
         edge_dsts_list.append(edge_dsts)
         edge_etypes_list.append(th.full_like(edge_srcs, etype_idx))

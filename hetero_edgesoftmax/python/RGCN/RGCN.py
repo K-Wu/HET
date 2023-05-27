@@ -125,9 +125,6 @@ class HET_EglRelGraphConv(nn.Module):
         torch.Tensor
             New node features.
         """
-        # print('aaa',th.cuda.memory_allocated(),th.cuda.max_memory_allocated())
-        # torch.cuda.synchronize()
-        # t1 = time.time()
         if self.num_bases < self.num_rels:
             # generate all weights from bases
             weight = self.weight.view(self.num_bases, self.in_feat * self.out_feat)
@@ -137,12 +134,8 @@ class HET_EglRelGraphConv(nn.Module):
             weight = th.matmul(self.w_comp, weight).view(
                 self.num_rels, self.in_feat, self.out_feat
             )
-            # print('new weight size:', weight.size())
         else:
             weight = self.weight
-        # torch.cuda.synchronize()
-        # print('bbb',th.cuda.memory_allocated(),th.cuda.max_memory_allocated())
-        # t2 = time.time()
 
         if self.sparse_format == "csr":
             if self.layer_type == 0:
@@ -151,7 +144,6 @@ class HET_EglRelGraphConv(nn.Module):
                 node_repr = B.seastar_rgcn_layer0_csr(
                     g, weight, norm
                 )  # NB: this line uses my own rgcn_layer0
-                # print('output of layer 0', node_repr)
             else:
                 node_repr = B.seastar_rgcn_layer1_csr(
                     g,
@@ -167,25 +159,15 @@ class HET_EglRelGraphConv(nn.Module):
             if self.layer_type == 0:
                 raise NotImplementedError("Only support csr format for layer 0")
                 node_repr = B.rgcn_layer0_coo(g, weight, norm)
-                # print('output of layer 0', node_repr)
             else:
                 if self.hybrid_assign_flag:
                     raise NotImplementedError
                 node_repr = B.seastar_rgcn_layer1_coo(g, x, weight, norm)
-        # torch.cuda.synchronize()
-        # t3 = time.time()
-        # print('output of layer 1', node_repr)
-        # print('ccc',th.cuda.memory_allocated(),th.cuda.max_memory_allocated())
         if self.bias:
             node_repr = node_repr + self.h_bias
         if self.activation:
             node_repr = self.activation(node_repr)
         node_repr = self.dropout(node_repr)
-        # torch.cuda.synchronize()
-        # t4 = time.time()
-        # print('matmul takes:',t2-t1, 's', (t2-t1)/(t4-t1),'%')
-        # print('gcn takes:',t3-t2, 's', (t3-t2)/(t4-t1),'%')
-        # print('rest takes:',t4-t3, 's', (t4-t3)/(t4-t1),'%')
         return node_repr
 
 
@@ -271,9 +253,6 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
         torch.Tensor
             New node features.
         """
-        # print('aaa',th.cuda.memory_allocated(),th.cuda.max_memory_allocated())
-        # torch.cuda.synchronize()
-        # t1 = time.time()
         if self.num_bases < self.num_rels:
             # generate all weights from bases
             weight = self.weight.view(self.num_bases, self.in_feat * self.out_feat)
@@ -283,22 +262,16 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
             weight = th.matmul(self.w_comp, weight).view(
                 self.num_rels, self.in_feat, self.out_feat
             )
-            # print('new weight size:', weight.size())
         else:
             weight = self.weight
 
         if self.compact_as_of_node_flag:
             weight = weight.unsqueeze(1)
 
-        # torch.cuda.synchronize()
-        # print('bbb',th.cuda.memory_allocated(),th.cuda.max_memory_allocated())
-        # t2 = time.time()
-
         if self.layer_type == 0:
             raise NotImplementedError
         else:
             if self.compact_as_of_node_flag:
-                # separate_unique_node_idx = g.get_separate_unique_node_indices()
                 separate_unique_node_indices_single_sided = (
                     g.get_separate_unique_node_indices_single_sided()
                 )
@@ -326,20 +299,11 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
                     norm,
                 )  # NB: this line uses my own rgcn_layer1
 
-        # torch.cuda.synchronize()
-        # t3 = time.time()
-        # print('output of layer 1', node_repr)
-        # print('ccc',th.cuda.memory_allocated(),th.cuda.max_memory_allocated())
         if self.bias:
             node_repr = node_repr + self.h_bias
         if self.activation:
             node_repr = self.activation(node_repr)
         node_repr = self.dropout(node_repr)
-        # torch.cuda.synchronize()
-        # t4 = time.time()
-        # print('matmul takes:',t2-t1, 's', (t2-t1)/(t4-t1),'%')
-        # print('gcn takes:',t3-t2, 's', (t3-t2)/(t4-t1),'%')
-        # print('rest takes:',t4-t3, 's', (t4-t3)/(t4-t1),'%')
         return node_repr
 
 
@@ -542,9 +506,7 @@ def RGCN_main_procedure(args, g, model, feats):
         logits = model(g, feats, edge_norm)
         torch.cuda.synchronize()
         tb = time.time()
-        # train_logits = logits[train_idx]
         ta = time.time()
-        # loss = F.cross_entropy(train_logits, train_labels)
         loss = F.cross_entropy(logits, labels)
         torch.cuda.synchronize()
         t1 = time.time()

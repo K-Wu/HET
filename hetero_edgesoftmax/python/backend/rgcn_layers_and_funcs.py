@@ -168,7 +168,6 @@ class SeastarRgcnFirstLayerCSR(th.autograd.Function):
             weight,
             norm,
         ) = ctx.saved_tensors
-        # print(weight.numel())
         grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
         K.seastar_backward_rgcn_layer0_csr(
             outcsr_row_ptr,

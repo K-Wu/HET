@@ -39,7 +39,6 @@ class ScriptedMyDGLGraph(object):
         separate_coo_original: Union[None, Dict[str, torch.Tensor]],
         separate_csr_original: Union[None, Dict[str, torch.Tensor]],
     ):
-        # self.graph_data = dict()
         self.num_nodes = num_nodes
         self.num_ntypes = num_ntypes
         self.num_rels = num_rels
@@ -73,9 +72,6 @@ class ScriptedMyDGLGraph(object):
     def get_num_rels(self) -> int:
         return self.num_rels
 
-    # def get_device(self):
-    #     return self.device
-
     def get_sparse_format(self, transpose_flag: bool = False) -> str:
         if transpose_flag:
             result = self.transposed_sparse_format
@@ -86,15 +82,6 @@ class ScriptedMyDGLGraph(object):
 
     def get_num_edges(self) -> int:
         return self.num_edges
-
-    # def __setitem__(self, key, value):
-    #    self.graph_data[key] = value
-
-    # def __getitem__(self, key):
-    #    return self.graph_data[key]
-
-    # def __contains__(self, key):
-    #    return key in self.graph_data
 
     def get_original_coo(self) -> Dict[str, torch.Tensor]:
         # G["original"]["rel_types"]

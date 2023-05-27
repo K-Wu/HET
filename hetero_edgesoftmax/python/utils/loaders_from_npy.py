@@ -67,9 +67,6 @@ def fetch_ogbnmag_raw_data():
     # NB: we need to reindex nodes as nodes of any type in this data set originally starts with index 0
     # the ordering of the abosolute node indices from 0 to N-1 is author, paper, institution, field_of_study
     graph = fetch_ogbnmag_graph_dict()
-    # edges_srcs = graph.edges()[0].detach().numpy()
-    # edges_dsts = graph.edges()[0].detach().numpy()
-    # edges_etypes = graph.edata['etype'].detach().numpy()
     edge_srcs = graph[0]["edge_index_dict"][
         ("author", "affiliated_with", "institution")
     ][0]

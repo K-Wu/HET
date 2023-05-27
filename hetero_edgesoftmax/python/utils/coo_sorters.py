@@ -5,7 +5,6 @@ import torch as th
 
 def get_array_creation_func(torch_flag: bool):
     if torch_flag:
-        # return lambda x, dtype: torch.Tensor(x,dtype = dtype)
         return th.tensor
     else:
         return np.array
@@ -91,11 +90,6 @@ def get_node_index_remap_dict_according_to_number_of_edges(
 def remap_node_indices_according_to_number_of_edges(
     srcs, dests, ntype_offsets, torch_flag: bool
 ):
-    # if torch_flag:
-    #     np_or_th = th
-    # else:
-    #     np_or_th = np
-    # array_flip_func = get_array_flip_func(torch_flag)
     array_creation_func = get_array_creation_func(torch_flag)
     original_src_to_new_src_map = (
         get_node_index_remap_dict_according_to_number_of_edges(

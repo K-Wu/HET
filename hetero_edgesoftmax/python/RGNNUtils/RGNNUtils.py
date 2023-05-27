@@ -102,8 +102,6 @@ def HET_RGNN_train_with_sampler(
     raise NotImplementedError("HET_RGNN_train_with_sampler not implemented yet")
 
 
-# with open("abc.json", 'w') as fd:
-#     json.dump(a,fd)
 def HET_RGNN_train_full_graph(
     g,
     model,
@@ -116,27 +114,18 @@ def HET_RGNN_train_full_graph(
     forward_time = []
     backward_time = []
     training_time = []
-    # node_embed = node_embed_layer()
-    # model = torch.jit.trace(model, (g, node_embed))
-    # th.cuda.empty_cache()
 
-    # model.eval()
     model.train()
     model.requires_grad_(True)
-    # node_embed_layer.eval()
     node_embed_layer.train()
     node_embed_layer.requires_grad_(True)
     node_embed = node_embed_layer()
-    # scripted_model = torch.jit.trace(model.eval(),  node_embed)
-    # scripted_model = torch.jit.trace(torch.jit.script_if_tracing(model.eval()),  node_embed)
-    # scripted_model = torch.jit.optimize_for_inference(scripted_model)
 
     # warm up
     if not args.no_warm_up:
         for epoch in range(5):
             model.train()
             model.requires_grad_(True)
-            # node_embed_layer.eval()
             node_embed_layer.train()
             node_embed_layer.requires_grad_(True)
             optimizer.zero_grad()
@@ -147,39 +136,21 @@ def HET_RGNN_train_full_graph(
     memory_offset = torch.cuda.memory_allocated()
     reset_peak_memory_stats()
     print("start training...")
-    #
-    # with torch.cuda.profiler.profile():
-    #    with torch.autograd.profiler.emit_nvtx():
-    #        with nvtx.annotate("training"):
-    # import nvtx
 
     for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
-        # model.eval()
         import contextlib
 
-        # use a null context manager
-        # with contextlib.nullcontext() as cm:
-
-        # nvtx.push_range("training", domain="my_domain")
         model.train()
         model.requires_grad_(True)
-        # node_embed_layer.eval()
         node_embed_layer.train()
         node_embed_layer.requires_grad_(True)
-        # total_loss = 0
 
-        # emb = extract_embed(node_embed, input_nodes)
-        # emb = node_embed
-
-        # Add the batch's raw "paper" features
-        # emb.update({"paper": g.ndata["feat"]["paper"][input_nodes["paper"]]})
         node_embed = node_embed_layer()
 
         optimizer.zero_grad()
         th.cuda.synchronize()
-        # with nvtx.annotate("forward", color="purple"):
         forward_prop_start = th.cuda.Event(enable_timing=True)
         forward_prop_end = th.cuda.Event(enable_timing=True)
         forward_prop_start.record()
@@ -223,9 +194,6 @@ def HET_RGNN_train_full_graph(
             forward_time.append(forward_prop_start.elapsed_time(forward_prop_end))
             backward_time.append(backward_prop_start.elapsed_time(backward_prop_end))
             training_time.append(forward_prop_start.elapsed_time(backward_prop_end))
-    #              f'Train: {100 * train_acc:.2f}%, '
-    #              f'Valid: {100 * valid_acc:.2f}%, '
-    #              f'Test: {100 * test_acc:.2f}%')
 
     if len(forward_time[len(forward_time) // 4 :]) == 0:
         print(
@@ -293,7 +261,6 @@ def RGNN_train_full_graph(
 ):
     # training loop
     print("start training...")
-    # category = "paper"
     for epoch in range(args.n_epochs):
 
         print(f"Epoch {epoch:02d}")
@@ -301,11 +268,7 @@ def RGNN_train_full_graph(
 
         total_loss = 0
 
-        # emb = extract_embed(node_embed, input_nodes)
         emb = node_embed
-
-        # Add the batch's raw "paper" features
-        # emb.update({"paper": g.ndata["feat"]["paper"][input_nodes["paper"]]})
 
         lbl = labels
 
@@ -353,10 +316,6 @@ def RGNN_train_full_graph(
             f"Backward prop time: {backward_prop_start.elapsed_time(backward_prop_end)} ms"
         )
 
-    #              f'Train: {100 * train_acc:.2f}%, '
-    #              f'Valid: {100 * valid_acc:.2f}%, '
-    #              f'Test: {100 * test_acc:.2f}%')
-
     return  # logger
 
 
@@ -376,14 +335,8 @@ def RGNN_train_with_sampler(
 
         for input_nodes, seeds, blocks in train_loader:
             blocks = [blk.to(device) for blk in blocks]
-            # seeds = seeds[category]  # we only predict the nodes with type "category"
 
             emb = extract_embed(node_embed, input_nodes)
-            # Add the batch's raw "paper" features
-            # emb.update({"paper": g.ndata["feat"]["paper"][input_nodes["paper"]]})
-
-            # lbl = th.concat([labels[seeds[category]] for category in seeds])
-            # lbl = labels[seeds]
             lbl = labels
 
             if th.cuda.is_available():
@@ -424,15 +377,11 @@ def RGNN_train_with_sampler(
         print(
             f"Epoch: {epoch + 1 :02d}, " f"Loss (w/o dividing sample num): {loss:.4f}, "
         )
-    #              f'Train: {100 * train_acc:.2f}%, '
-    #              f'Valid: {100 * valid_acc:.2f}%, '
-    #              f'Test: {100 * test_acc:.2f}%')
 
     return  # logger
 
 
 # TODO: implement logging to json and run all datasets
-
 # TODO: Use conditional arguments to get a clearer structure of arguments as explained in https://stackoverflow.com/questions/9505898/conditional-command-line-arguments-in-python-using-argparse
 def add_generic_RGNN_args(parser, default_logfilename, filtered_args={}):
     if len(filtered_args) > 0:
