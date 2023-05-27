@@ -182,8 +182,6 @@ void RelationalFusedGATKernel_edge_parallel_separatecoo(
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
     bool CompactAsOfNodeFlag,
     torch::Dict<std::string, at::Tensor> unique_srcs_and_dests,
-    // at::Tensor &unique_srcs_and_dests_rel_ptr,
-    // at::Tensor &unique_srcs_and_dests_node_indices,
     at::Tensor &feat_src, at::Tensor &el, at::Tensor &er, at::Tensor &sum,
     at::Tensor &exp, at::Tensor &ret, double slope) {
   at::Tensor dummy_tensor;
@@ -437,8 +435,6 @@ void RelationalFusedGATKernel_edge_parallel_separatecoo(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
     int64_t IntKind, torch::Dict<std::string, at::Tensor> unique_srcs_and_dests,
-    // at::Tensor &unique_srcs_and_dests_rel_ptr,
-    // at::Tensor &unique_srcs_and_dests_node_indices,
     at::Tensor &feat_src, at::Tensor &el, at::Tensor &er, at::Tensor &sum,
     at::Tensor &exp, at::Tensor &ret, at::Tensor &gradout,
     at::Tensor &grad_feat_src, at::Tensor &grad_el, at::Tensor &grad_er,

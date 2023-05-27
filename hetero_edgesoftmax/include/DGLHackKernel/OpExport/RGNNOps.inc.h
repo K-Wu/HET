@@ -237,9 +237,7 @@ void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
                                                        weights, inputs, ret);
 }
 
-void RelationalMatMul_separatecoo(  // at::Tensor &separate_coo_relptrs,
-                                    // at::Tensor &separate_coo_node_indices,
-                                    // at::Tensor &separate_coo_eids,
+void RelationalMatMul_separatecoo(
     torch::Dict<std::string, at::Tensor> args_tensor_dict, int64_t IntKind,
     at::Tensor &weights, at::Tensor &node_feat, at::Tensor &ret,
     bool InputNumHeadOneFlag) {
@@ -431,9 +429,6 @@ void inner_product_various_left_and_node_right(
 }
 
 void inner_product_right_node_separatecoo(
-    // at::Tensor &unique_srcs_and_dests_rel_ptr,
-    // at::Tensor &unique_srcs_and_dests_node_idx,
-    // at::Tensor &separate_coo_rel_ptr,
     torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_row_indices,
     at::Tensor &separate_coo_col_indices, at::Tensor &left_side_data,
@@ -663,8 +658,6 @@ void _BackwardRelationalMatMul_separatecoo(
 }
 
 void RelationalMatMul_separatecoo(
-    // at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
-    // at::Tensor &separate_coo_eids,
     torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
     at::Tensor &weights_transposed, at::Tensor &node_feat, at::Tensor &gradout,
     at::Tensor &grad_node_feat, at::Tensor &grad_weights,
@@ -824,15 +817,11 @@ void inner_product_various_left_and_node_right(
 }
 
 void inner_product_right_node_separatecoo(
-    // at::Tensor &unique_srcs_and_dests_rel_ptr,
-    /// at::Tensor &unique_srcs_and_dests_node_idx,
-    // at::Tensor &separate_coo_rel_ptr,
     torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_row_indices,
     at::Tensor &separate_coo_col_indices, at::Tensor &left_side_data,
-    at::Tensor &right_node_vectors,  // at::Tensor& ret,
-    at::Tensor &grad_inner_product, at::Tensor &grad_left_side_data,
-    at::Tensor &grad_right_node_vectors) {
+    at::Tensor &right_node_vectors, at::Tensor &grad_inner_product,
+    at::Tensor &grad_left_side_data, at::Tensor &grad_right_node_vectors) {
   at::Tensor dummy_tensor;
   auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
 
