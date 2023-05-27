@@ -23,13 +23,13 @@ template <CompactAsOfNodeKind kind, bool ACGatherScatterListIdenticalFlag,
           bool InputNumHeadOneFlag>
 void _RelationalMatMul_separatecoo(
     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
-    at::Tensor &separate_coo_eids, at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &separate_coo_eids, at::Tensor &unique_srcs_and_dests_rel_ptrs,
     at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &weights,
     at::Tensor &node_feat, at::Tensor &ret) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   const int64_t num_relations =
       separate_coo_relptrs.numel() == 0
-          ? (unique_srcs_and_dests_rel_ptr.numel() - 1)
+          ? (unique_srcs_and_dests_rel_ptrs.numel() - 1)
           : (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = weights.size(1);
   const int64_t num_input_dim = weights.size(2);
@@ -70,15 +70,15 @@ void _RelationalMatMul_separatecoo(
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
       num_blocks_assignment_for_all_prev_relation_vect;
   if constexpr (IsCompact(kind)) {
-    at::Tensor unique_srcs_and_dests_rel_ptr_cpu_contiguous =
-        unique_srcs_and_dests_rel_ptr.cpu().contiguous();
+    at::Tensor unique_srcs_and_dests_rel_ptrs_cpu_contiguous =
+        unique_srcs_and_dests_rel_ptrs.cpu().contiguous();
     std::tie(num_blocks_assignment_for_same_relation_vect,
              num_blocks_assignment_for_all_prev_relation_vect) =
         get_schedule_by_relation_kernel_launch_metadata<false, false,
                                                         int64_t *>(
             grid_dim_y, num_relations, WORK_BLOCK_SIZE_Y,
-            unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>(),
-            unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>() +
+            unique_srcs_and_dests_rel_ptrs_cpu_contiguous.data_ptr<int64_t>(),
+            unique_srcs_and_dests_rel_ptrs_cpu_contiguous.data_ptr<int64_t>() +
                 num_relations + 1);
   } else {
     at::Tensor separate_coo_relptrs_cpu_contiguous =
@@ -125,7 +125,7 @@ void _RelationalMatMul_separatecoo(
                               InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
         node_feat.data_ptr<float>(), weights.data_ptr<float>(),
         ret.data_ptr<float>(),
-        unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
+        unique_srcs_and_dests_rel_ptrs.data_ptr<int64_t>(),
         unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_input_dim,
         num_output_per_head_dim, num_heads,
         thrust::raw_pointer_cast(
@@ -255,6 +255,8 @@ void RelationalMatMul_separatecoo(  // at::Tensor &separate_coo_relptrs,
         args_tensor_dict.at("separate_coo_node_indices");
     at::Tensor separate_coo_eids = args_tensor_dict.at("separate_coo_eids");
     if (separate_coo_node_indices.data_ptr() == separate_coo_eids.data_ptr()) {
+      // TODO: use std::map or alike to implement dispatcher to reduce the
+      // duplicate code of calling _RelationalMatMul_separatecoo
       if (InputNumHeadOneFlag) {
         _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, true,
                                       true>(
@@ -280,19 +282,19 @@ void RelationalMatMul_separatecoo(  // at::Tensor &separate_coo_relptrs,
       }
     }
   } else if (Kind == CompactAsOfNodeKind::Enabled) {
-    at::Tensor unique_srcs_and_dests_rel_ptr =
+    at::Tensor unique_srcs_and_dests_rel_ptrs =
         args_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
         args_tensor_dict.at("unique_srcs_and_dests_node_indices");
     if (InputNumHeadOneFlag) {
       _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Enabled, false, true>(
           dummy_tensor, dummy_tensor, dummy_tensor,
-          unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+          unique_srcs_and_dests_rel_ptrs, unique_srcs_and_dests_node_indices,
           weights, node_feat, ret);
     } else {
       _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Enabled, false, false>(
           dummy_tensor, dummy_tensor, dummy_tensor,
-          unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+          unique_srcs_and_dests_rel_ptrs, unique_srcs_and_dests_node_indices,
           weights, node_feat, ret);
     }
   } else {
@@ -313,9 +315,9 @@ template </*int XPU, */ typename Idx, typename DType, CompactAsOfNodeKind kind,
 void inner_product_various_left_and_node_right(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
-    at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_idx,
+    at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_indices,
     at::Tensor &incsr_eids, at::Tensor &incsr_reltypes,
-    at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &unique_srcs_and_dests_rel_ptrs,
     at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &feat_src,
     at::Tensor &feat_dst, at::Tensor &edge_inner_product) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
@@ -347,13 +349,14 @@ void inner_product_various_left_and_node_right(
 
     Idx *incsr_row_ptr_data_ptr =
         incsr_row_ptr.numel() > 0 ? incsr_row_ptr.data_ptr<Idx>() : nullptr;
-    Idx *incsr_col_idx_data_ptr =
-        incsr_col_idx.numel() > 0 ? incsr_col_idx.data_ptr<Idx>() : nullptr;
+    Idx *incsr_col_indices_data_ptr = incsr_col_indices.numel() > 0
+                                          ? incsr_col_indices.data_ptr<Idx>()
+                                          : nullptr;
     Idx *incsr_reltypes_data_ptr =
         incsr_reltypes.numel() > 0 ? incsr_reltypes.data_ptr<Idx>() : nullptr;
-    Idx *unique_srcs_and_dests_rel_ptr_data_ptr =
-        unique_srcs_and_dests_rel_ptr.numel() > 0
-            ? unique_srcs_and_dests_rel_ptr.data_ptr<Idx>()
+    Idx *unique_srcs_and_dests_rel_ptrs_data_ptr =
+        unique_srcs_and_dests_rel_ptrs.numel() > 0
+            ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
             : nullptr;
     Idx *unique_srcs_and_dests_node_indices_data_ptr =
         unique_srcs_and_dests_node_indices.numel() > 0
@@ -362,9 +365,9 @@ void inner_product_various_left_and_node_right(
 
     HET_inner_product_fw_kernel<Idx, DType, kind, true, false, false>
         <<<nblks2, nthrs2, 0, stream>>>(
-            gdata, incsr_row_ptr_data_ptr, incsr_col_idx_data_ptr,
+            gdata, incsr_row_ptr_data_ptr, incsr_col_indices_data_ptr,
             incsr_reltypes_data_ptr, incsr_num_rows,
-            unique_srcs_and_dests_rel_ptr_data_ptr,
+            unique_srcs_and_dests_rel_ptrs_data_ptr,
             unique_srcs_and_dests_node_indices_data_ptr);
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
@@ -395,9 +398,9 @@ void inner_product_various_left_and_node_right(
         separate_coo_rel_ptrs.numel() > 0
             ? separate_coo_rel_ptrs.data_ptr<Idx>()
             : nullptr;
-    Idx *unique_srcs_and_dests_rel_ptr_data_ptr =
-        unique_srcs_and_dests_rel_ptr.numel() > 0
-            ? unique_srcs_and_dests_rel_ptr.data_ptr<Idx>()
+    Idx *unique_srcs_and_dests_rel_ptrs_data_ptr =
+        unique_srcs_and_dests_rel_ptrs.numel() > 0
+            ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
             : nullptr;
     Idx *unique_srcs_and_dests_node_indices_data_ptr =
         unique_srcs_and_dests_node_indices.numel() > 0
@@ -409,7 +412,7 @@ void inner_product_various_left_and_node_right(
           <<<nblks_inner_product, nthrs_inner_product, 0, stream>>>(
               gdata, separate_coo_row_indices_data_ptr,
               separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
-              num_edges, unique_srcs_and_dests_rel_ptr_data_ptr,
+              num_edges, unique_srcs_and_dests_rel_ptrs_data_ptr,
               unique_srcs_and_dests_node_indices_data_ptr, num_relations);
     } else {
       assert(0 && "Not implemented");
@@ -443,17 +446,17 @@ void inner_product_right_node_separatecoo(
   if (Kind == CompactAsOfNodeKind::Enabled) {
     // originally inner_product_node_compact_and_node_separatecoo
     // left_side_data is left_node_compact_data
-    at::Tensor unique_srcs_and_dests_rel_ptr =
+    at::Tensor unique_srcs_and_dests_rel_ptrs =
         arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
-    at::Tensor unique_srcs_and_dests_node_idx =
+    at::Tensor unique_srcs_and_dests_node_indices =
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
-    at::Tensor separate_coo_rel_ptr = arg_tensor_dict.at("separate_rel_ptrs");
+    at::Tensor separate_coo_rel_ptrs = arg_tensor_dict.at("separate_rel_ptrs");
     inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
-        separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
+        separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
-        dummy_tensor, unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_idx, left_side_data, right_node_vectors,
+        dummy_tensor, unique_srcs_and_dests_rel_ptrs,
+        unique_srcs_and_dests_node_indices, left_side_data, right_node_vectors,
         edge_inner_product);
   } else if (Kind == CompactAsOfNodeKind::Disabled) {
     // originally inner_product_edge_and_node_separatecoo
@@ -477,14 +480,14 @@ template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           bool ACGatherScatterListIdenticalFlag, bool InputNumHeadOneFlag>
 void _BackwardRelationalMatMul_separatecoo(
     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
-    at::Tensor &separate_coo_eids, at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &separate_coo_eids, at::Tensor &unique_srcs_and_dests_rel_ptrs,
     at::Tensor &unique_srcs_and_dests_node_indices,
     at::Tensor &weights_transposed, at::Tensor &node_feat, at::Tensor &gradout,
     at::Tensor &grad_node_feat, at::Tensor &grad_weights) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   const int64_t num_relations =
       separate_coo_relptrs.numel() == 0
-          ? (unique_srcs_and_dests_rel_ptr.numel() - 1)
+          ? (unique_srcs_and_dests_rel_ptrs.numel() - 1)
           : (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = weights_transposed.size(1);
   const int64_t num_input_dim = weights_transposed.size(3);
@@ -517,15 +520,15 @@ void _BackwardRelationalMatMul_separatecoo(
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
       num_blocks_assignment_for_all_prev_relation_vect;
   if constexpr (IsCompact(kind)) {
-    at::Tensor unique_srcs_and_dests_rel_ptr_cpu_contiguous =
-        unique_srcs_and_dests_rel_ptr.cpu().contiguous();
+    at::Tensor unique_srcs_and_dests_rel_ptrs_cpu_contiguous =
+        unique_srcs_and_dests_rel_ptrs.cpu().contiguous();
     std::tie(num_blocks_assignment_for_same_relation_vect,
              num_blocks_assignment_for_all_prev_relation_vect) =
         get_schedule_by_relation_kernel_launch_metadata<false, false,
                                                         int64_t *>(
             grid_dim_y, num_relations, WORK_BLOCK_SIZE,
-            unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>(),
-            unique_srcs_and_dests_rel_ptr_cpu_contiguous.data_ptr<int64_t>() +
+            unique_srcs_and_dests_rel_ptrs_cpu_contiguous.data_ptr<int64_t>(),
+            unique_srcs_and_dests_rel_ptrs_cpu_contiguous.data_ptr<int64_t>() +
                 num_relations + 1);
   } else {
     at::Tensor separate_coo_relptrs_cpu_contiguous =
@@ -565,33 +568,30 @@ void _BackwardRelationalMatMul_separatecoo(
 
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
     // NB: #head of node_feat is 1 when InputNumHeadOneFlag is true
-    // cuda_err_chk(cudaGetLastError());
     std::cout << gradout.numel() << std::endl;
     HET_RGNNDeltaNodeFeatInputCompactBWProp<
         COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
         int64_t, int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
         gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
         grad_node_feat.data_ptr<float>(),
-        unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
+        unique_srcs_and_dests_rel_ptrs.data_ptr<int64_t>(),
         unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_edges,
         num_output_per_head_dim, num_input_dim, num_heads,
         thrust::raw_pointer_cast(
             dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
         num_relations);
-    // cuda_err_chk(cudaGetLastError());
     HET_RGNNDeltaWeightCompactBWProp<COARSEN_FACTOR_2_FLAG_X,
                                      COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
                                      int64_t, int64_t *, InputNumHeadOneFlag>
         <<<nblks_outer_product, nthrs, 0, stream>>>(
             gradout.data_ptr<float>(), node_feat.data_ptr<float>(),
             grad_weights.data_ptr<float>(),
-            unique_srcs_and_dests_rel_ptr.data_ptr<int64_t>(),
+            unique_srcs_and_dests_rel_ptrs.data_ptr<int64_t>(),
             unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_edges,
             num_input_dim, num_output_per_head_dim, num_heads,
             thrust::raw_pointer_cast(
                 dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
             num_relations);
-    // cuda_err_chk(cudaGetLastError());
   } else {
     // NB: my shmem sgemm matmul scheme
     const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE),
@@ -672,7 +672,7 @@ void RelationalMatMul_separatecoo(
   at::Tensor dummy_tensor;
   auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
   if (Kind == CompactAsOfNodeKind::Enabled) {
-    at::Tensor unique_srcs_and_dests_rel_ptr =
+    at::Tensor unique_srcs_and_dests_rel_ptrs =
         arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
@@ -680,13 +680,13 @@ void RelationalMatMul_separatecoo(
       _BackwardRelationalMatMul_separatecoo<
           true, true, 32, CompactAsOfNodeKind::Enabled, false, true>(
           dummy_tensor, dummy_tensor, dummy_tensor,
-          unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+          unique_srcs_and_dests_rel_ptrs, unique_srcs_and_dests_node_indices,
           weights_transposed, node_feat, gradout, grad_node_feat, grad_weights);
     } else {
       _BackwardRelationalMatMul_separatecoo<
           true, true, 32, CompactAsOfNodeKind::Enabled, false, false>(
           dummy_tensor, dummy_tensor, dummy_tensor,
-          unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+          unique_srcs_and_dests_rel_ptrs, unique_srcs_and_dests_node_indices,
           weights_transposed, node_feat, gradout, grad_node_feat, grad_weights);
     }
 
@@ -740,9 +740,9 @@ template </*int XPU, */ typename Idx, typename DType, CompactAsOfNodeKind kind,
 void inner_product_various_left_and_node_right(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
-    at::Tensor &outcsr_row_ptr, at::Tensor &outcsr_col_idx,
+    at::Tensor &outcsr_row_ptr, at::Tensor &outcsr_col_indices,
     at::Tensor &outcsr_eids, at::Tensor &outcsr_reltypes,
-    at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &unique_srcs_and_dests_rel_ptrs,
     at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &feat_src,
     at::Tensor &feat_dst, at::Tensor &grad_inner_product,
     at::Tensor &grad_feat_src, at::Tensor &grad_feat_dst) {
@@ -773,10 +773,10 @@ void inner_product_various_left_and_node_right(
     HET_inner_product_bck_kernel<Idx, DType, kind, true, false>
         <<<nblks, nthrs, 0, stream>>>(
             gdata, outcsr_row_ptr.data_ptr<Idx>(),
-            outcsr_col_idx.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
-            outcsr_num_rows, unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+            outcsr_col_indices.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
+            outcsr_num_rows, unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
             unique_srcs_and_dests_node_indices.data_ptr<Idx>(),
-            unique_srcs_and_dests_rel_ptr.numel() - 1);
+            unique_srcs_and_dests_rel_ptrs.numel() - 1);
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
     // separate coo
@@ -803,9 +803,9 @@ void inner_product_various_left_and_node_right(
         separate_coo_rel_ptrs.numel() > 0
             ? separate_coo_rel_ptrs.data_ptr<Idx>()
             : nullptr;
-    Idx *unique_srcs_and_dests_rel_ptr_data_ptr =
-        unique_srcs_and_dests_rel_ptr.numel() > 0
-            ? unique_srcs_and_dests_rel_ptr.data_ptr<Idx>()
+    Idx *unique_srcs_and_dests_rel_ptrs_data_ptr =
+        unique_srcs_and_dests_rel_ptrs.numel() > 0
+            ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
             : nullptr;
     Idx *unique_srcs_and_dests_node_indices_data_ptr =
         unique_srcs_and_dests_node_indices.numel() > 0
@@ -816,7 +816,7 @@ void inner_product_various_left_and_node_right(
         <<<nblks, nthrs, 0, stream>>>(
             gdata, separate_coo_row_indices_data_ptr,
             separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
-            num_edges, unique_srcs_and_dests_rel_ptr_data_ptr,
+            num_edges, unique_srcs_and_dests_rel_ptrs_data_ptr,
             unique_srcs_and_dests_node_indices_data_ptr, num_relations);
   } else {
     assert(0 && "Not implemented");
@@ -840,17 +840,17 @@ void inner_product_right_node_separatecoo(
     // originally inner_product_node_compact_and_node_separatecoo
     // left_side_data is left_node_compact_data
     // grad_left_side_data is grad_left_node_compact_data
-    at::Tensor unique_srcs_and_dests_rel_ptr =
+    at::Tensor unique_srcs_and_dests_rel_ptrs =
         arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
-    at::Tensor unique_srcs_and_dests_node_idx =
+    at::Tensor unique_srcs_and_dests_node_indices =
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
-    at::Tensor separate_coo_rel_ptr = arg_tensor_dict.at("separate_rel_ptrs");
+    at::Tensor separate_coo_rel_ptrs = arg_tensor_dict.at("separate_rel_ptrs");
     inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
-        separate_coo_eids, separate_coo_rel_ptr, separate_coo_row_indices,
+        separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
-        dummy_tensor, unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_idx, left_side_data, right_node_vectors,
+        dummy_tensor, unique_srcs_and_dests_rel_ptrs,
+        unique_srcs_and_dests_node_indices, left_side_data, right_node_vectors,
         grad_inner_product, grad_left_side_data, grad_right_node_vectors);
   } else if (Kind == CompactAsOfNodeKind::Disabled) {
     // originally inner_product_edge_and_node_separatecoo

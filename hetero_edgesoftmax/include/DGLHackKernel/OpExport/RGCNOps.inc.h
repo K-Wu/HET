@@ -23,7 +23,7 @@ template <typename Idx, typename DType>
 void Layer1_NodeMeanAggregation_CompactAsOfNode_SeparateCOO(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
-    at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &unique_srcs_and_dests_rel_ptrs,
     at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &feat_src,
     at::Tensor &enorm, at::Tensor &ret) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
@@ -51,13 +51,13 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode_SeparateCOO(
           gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
           separate_coo_row_indices.data_ptr<Idx>(),
           separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-          unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
           unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
 }
 void Layer1_SeparateCOO(at::Tensor &separate_coo_relptrs,
                         at::Tensor &separate_coo_eids,
-                        at::Tensor &separate_coo_row_idx,
-                        at::Tensor &separate_coo_col_idx,
+                        at::Tensor &separate_coo_row_indices,
+                        at::Tensor &separate_coo_col_indices,
                         at::Tensor &node_feat_input, at::Tensor &weights,
                         at::Tensor &edge_norm, at::Tensor &node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
@@ -106,8 +106,8 @@ void Layer1_SeparateCOO(at::Tensor &separate_coo_relptrs,
       <<<nblks, nthrs, 0, stream>>>(
           node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
           node_feat_output.data_ptr<float>(), edge_norm.data_ptr<float>(),
-          separate_coo_row_idx.data_ptr<int64_t>(),
-          separate_coo_col_idx.data_ptr<int64_t>(),
+          separate_coo_row_indices.data_ptr<int64_t>(),
+          separate_coo_col_indices.data_ptr<int64_t>(),
           separate_coo_eids.data_ptr<int64_t>(),
           separate_coo_relptrs.data_ptr<int64_t>(),
           thrust::raw_pointer_cast(
@@ -117,14 +117,14 @@ void Layer1_SeparateCOO(at::Tensor &separate_coo_relptrs,
 
 namespace IntegratedCSR {
 template </*int XPU, */ typename Idx, typename DType, bool HybridAssignmentFlag>
-void _LayerImpl(at::Tensor &csr_rowptr, at::Tensor &csr_col_idx,
+void _LayerImpl(at::Tensor &csr_rowptr, at::Tensor &csr_col_indices,
                 at::Tensor &csr_eids, at::Tensor &csr_reltypes,
                 at::Tensor &hidden, at::Tensor &weight, at::Tensor &norm,
                 at::Tensor &ret, bool layer1_flag,
                 int num_blocks_on_blocks_per_node) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   auto range_data = csr_rowptr.data_ptr<Idx>();
-  auto ids_data = csr_col_idx.data_ptr<Idx>();
+  auto ids_data = csr_col_indices.data_ptr<Idx>();
   auto eids_data = csr_eids.data_ptr<Idx>();
   auto typeids_data = csr_reltypes.data_ptr<Idx>();
   DType *hidden_data = hidden.numel() == 0 ? nullptr : hidden.data_ptr<DType>();
@@ -146,7 +146,6 @@ void _LayerImpl(at::Tensor &csr_rowptr, at::Tensor &csr_col_idx,
     Idx ntypes = weight.size(0);
     Idx feat_len_y = weight.size(1);
     Idx feat_len_x = weight.size(2);
-    // int nthrs = feat_len_y * feat_len_x;
     int nthrs = feat_len_x < 512 ? 512 : feat_len_x;
     if constexpr (HybridAssignmentFlag) {
       HET_Seastar_RgcnLayer1KernelHybridAssignImpl<Idx, DType>
@@ -179,47 +178,49 @@ void _LayerImpl(at::Tensor &csr_rowptr, at::Tensor &csr_col_idx,
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void Layer0Impl(at::Tensor &csr_rowptr, at::Tensor &csr_col_idx,
+void Layer0Impl(at::Tensor &csr_rowptr, at::Tensor &csr_col_indices,
                 at::Tensor &csr_eids, at::Tensor &csr_reltypes,
                 at::Tensor &weight, at::Tensor &norm, at::Tensor &ret) {
   // NB: graphiler, seastar by default uses int64_t
   at::Tensor dummy_tensor;
-  _LayerImpl<int64_t, float, false>(csr_rowptr, csr_col_idx, csr_eids,
+  _LayerImpl<int64_t, float, false>(csr_rowptr, csr_col_indices, csr_eids,
                                     csr_reltypes, /*dummy_hidden*/ dummy_tensor,
                                     weight, norm, ret, false, -1);
 }
 
-void Layer0HybridAssignmentImpl(at::Tensor &csr_rowptr, at::Tensor &csr_col_idx,
+void Layer0HybridAssignmentImpl(at::Tensor &csr_rowptr,
+                                at::Tensor &csr_col_indices,
                                 at::Tensor &csr_eids, at::Tensor &csr_reltypes,
                                 at::Tensor &weight, at::Tensor &norm,
                                 at::Tensor &ret,
                                 int64_t num_blocks_on_blocks_per_node) {
   // NB: graphiler, seastar by default uses int64_t
   at::Tensor dummy_tensor;
-  _LayerImpl<int64_t, float, true>(csr_rowptr, csr_col_idx, csr_eids,
+  _LayerImpl<int64_t, float, true>(csr_rowptr, csr_col_indices, csr_eids,
                                    csr_reltypes, /*dummy_hidden*/ dummy_tensor,
                                    weight, norm, ret, false,
                                    num_blocks_on_blocks_per_node);
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void Layer1Impl(at::Tensor &csr_rowptr, at::Tensor &csr_col_idx,
+void Layer1Impl(at::Tensor &csr_rowptr, at::Tensor &csr_col_indices,
                 at::Tensor &csr_eids, at::Tensor &csr_reltypes,
                 at::Tensor &hidden, at::Tensor &weight, at::Tensor &norm,
                 at::Tensor &ret) {
   // NB: graphiler, seastar by default uses int64_t
-  _LayerImpl<int64_t, float, false>(csr_rowptr, csr_col_idx, csr_eids,
+  _LayerImpl<int64_t, float, false>(csr_rowptr, csr_col_indices, csr_eids,
                                     csr_reltypes, hidden, weight, norm, ret,
                                     true, -1);
 }
 
-void Layer1HybridAssignmentImpl(at::Tensor &csr_rowptr, at::Tensor &csr_col_idx,
+void Layer1HybridAssignmentImpl(at::Tensor &csr_rowptr,
+                                at::Tensor &csr_col_indices,
                                 at::Tensor &csr_eids, at::Tensor &csr_reltypes,
                                 at::Tensor &hidden, at::Tensor &weight,
                                 at::Tensor &norm, at::Tensor &ret,
                                 int64_t num_blocks_on_blocks_per_node) {
   // NB: graphiler, seastar by default uses int64_t
-  _LayerImpl<int64_t, float, true>(csr_rowptr, csr_col_idx, csr_eids,
+  _LayerImpl<int64_t, float, true>(csr_rowptr, csr_col_indices, csr_eids,
                                    csr_reltypes, hidden, weight, norm, ret,
                                    true, num_blocks_on_blocks_per_node);
 }
@@ -227,13 +228,13 @@ void Layer1HybridAssignmentImpl(at::Tensor &csr_rowptr, at::Tensor &csr_col_idx,
 
 namespace IntegratedCOO {
 template </*int XPU, */ typename Idx, typename DType>
-void _LayerImpl(at::Tensor &coo_row_idx, at::Tensor &coo_col_idx,
+void _LayerImpl(at::Tensor &coo_row_indices, at::Tensor &coo_col_indices,
                 at::Tensor &coo_eids, at::Tensor &coo_reltypes,
                 at::Tensor &hidden, at::Tensor &weight, at::Tensor &norm,
                 at::Tensor &ret, bool layer1_flag) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  auto row_idx_data = coo_row_idx.data_ptr<Idx>();
-  auto ids_data = coo_col_idx.data_ptr<Idx>();
+  auto row_indices_data = coo_row_indices.data_ptr<Idx>();
+  auto ids_data = coo_col_indices.data_ptr<Idx>();
   auto eids_data = coo_eids.data_ptr<Idx>();
   auto typeids_data = coo_reltypes.data_ptr<Idx>();
   auto hidden_data = hidden.data_ptr<DType>();
@@ -252,7 +253,7 @@ void _LayerImpl(at::Tensor &coo_row_idx, at::Tensor &coo_col_idx,
     int nblks =
         ceil_div<>(num_edges, (int64_t)nthrs / 32);  // 32 is the warp size
     HET_Seastar_RgcnLayer1COOKernelImpl<Idx, DType>
-        <<<nblks, nthrs, 0, stream>>>(row_idx_data, ids_data, eids_data,
+        <<<nblks, nthrs, 0, stream>>>(row_indices_data, ids_data, eids_data,
                                       typeids_data, hidden_data, weight_data,
                                       norm_data, ret_data, num_edges,
                                       feat_len_y, feat_len_x, ntypes);
@@ -269,13 +270,13 @@ void _LayerImpl(at::Tensor &coo_row_idx, at::Tensor &coo_col_idx,
 }
 
 // template </*int XPU, */ typename Idx, typename DType>
-void Layer1Impl(at::Tensor &coo_row_idx, at::Tensor &coo_col_idx,
+void Layer1Impl(at::Tensor &coo_row_indices, at::Tensor &coo_col_indices,
                 at::Tensor &coo_eids, at::Tensor &coo_reltypes,
                 at::Tensor &hidden, at::Tensor &weight, at::Tensor &norm,
                 at::Tensor &ret) {
   // NB: graphiler, seastar by default uses int64_t
-  _LayerImpl<int64_t, float>(coo_row_idx, coo_col_idx, coo_eids, coo_reltypes,
-                             hidden, weight, norm, ret, true);
+  _LayerImpl<int64_t, float>(coo_row_indices, coo_col_indices, coo_eids,
+                             coo_reltypes, hidden, weight, norm, ret, true);
 }
 }  // namespace IntegratedCOO
 }  // namespace FwProp
@@ -284,7 +285,7 @@ template <typename Idx, typename DType>
 void Layer1_NodeMeanAggregation_CompactAsOfNode_SeparateCOO(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
-    at::Tensor &unique_srcs_and_dests_rel_ptr,
+    at::Tensor &unique_srcs_and_dests_rel_ptrs,
     at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &feat_src,
     at::Tensor &enorm, at::Tensor &ret, at::Tensor &gradout,
     at::Tensor &grad_feat_src) {
@@ -316,12 +317,12 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode_SeparateCOO(
       gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
       separate_coo_row_indices.data_ptr<Idx>(),
       separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-      unique_srcs_and_dests_rel_ptr.data_ptr<Idx>(),
+      unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
       unique_srcs_and_dests_node_indices.data_ptr<Idx>(), num_relations);
 }
 void Layer1_SeparateCOO(
     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
-    at::Tensor &separate_coo_row_idx, at::Tensor &separate_coo_col_idx,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
     at::Tensor &node_feat_input, at::Tensor &weights_transposed,
     at::Tensor &edge_norm, at::Tensor &grad_edge_norm,
     at::Tensor &delta_node_feat_input, at::Tensor &delta_node_feat_output,
@@ -369,8 +370,8 @@ void Layer1_SeparateCOO(
       weights_transposed.data_ptr<float>(),
       delta_node_feat_input.data_ptr<float>(), edge_norm.data_ptr<float>(),
       grad_edge_norm.data_ptr<float>(), node_feat_input.data_ptr<float>(),
-      separate_coo_row_idx.data_ptr<int64_t>(),
-      separate_coo_col_idx.data_ptr<int64_t>(),
+      separate_coo_row_indices.data_ptr<int64_t>(),
+      separate_coo_col_indices.data_ptr<int64_t>(),
       separate_coo_eids.data_ptr<int64_t>(),
       separate_coo_relptrs.data_ptr<int64_t>(),
       thrust::raw_pointer_cast(
@@ -418,8 +419,8 @@ void Layer1_SeparateCOO(
       int64_t *><<<nblks_outer_product, nthrs_outer_product, 0, stream>>>(
       node_feat_input.data_ptr<float>(),
       delta_node_feat_output.data_ptr<float>(), delta_weights.data_ptr<float>(),
-      edge_norm.data_ptr<float>(), separate_coo_row_idx.data_ptr<int64_t>(),
-      separate_coo_col_idx.data_ptr<int64_t>(),
+      edge_norm.data_ptr<float>(), separate_coo_row_indices.data_ptr<int64_t>(),
+      separate_coo_col_indices.data_ptr<int64_t>(),
       separate_coo_eids.data_ptr<int64_t>(),
       separate_coo_relptrs.data_ptr<int64_t>(),
       thrust::raw_pointer_cast(
@@ -432,14 +433,14 @@ namespace IntegratedCSR {
 template </*int XPU, */ typename Idx, typename DType, bool HybridAssignmentFlag>
 void _LayerImpl(
     // GraphRef graph,
-    at::Tensor &transposed_csr_rowptr, at::Tensor &transposed_csr_col_idx,
+    at::Tensor &transposed_csr_rowptr, at::Tensor &transposed_csr_col_indices,
     at::Tensor &transposed_csr_eids, at::Tensor &transposed_csr_reltypes,
     at::Tensor &hidden, at::Tensor &weight, at::Tensor &norm,
     at::Tensor &grad_out, at::Tensor &grad_hidden, at::Tensor &grad_weight,
     at::Tensor &ret, bool layer1_flag, int num_blocks_on_blocks_per_node) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   auto range_data = transposed_csr_rowptr.data_ptr<Idx>();
-  auto ids_data = transposed_csr_col_idx.data_ptr<Idx>();
+  auto ids_data = transposed_csr_col_indices.data_ptr<Idx>();
   auto eids_data = transposed_csr_eids.data_ptr<Idx>();
   auto typeids_data = transposed_csr_reltypes.data_ptr<Idx>();
   DType *hidden_data = hidden.numel() == 0 ? nullptr : hidden.data_ptr<DType>();
@@ -452,7 +453,7 @@ void _LayerImpl(
       grad_weight.numel() == 0 ? nullptr : grad_weight.data_ptr<DType>();
   DType *ret_data = ret.numel() == 0 ? nullptr : ret.data_ptr<DType>();
   Idx num_nodes = transposed_csr_rowptr.numel() - 1;
-  Idx num_edges = transposed_csr_col_idx.numel();
+  Idx num_edges = transposed_csr_col_indices.numel();
   int nblks = num_nodes;
   if (layer1_flag) {
     Idx ntypes = weight.size(0);
@@ -494,13 +495,13 @@ void _LayerImpl(
 // template </*int XPU, */ typename Idx, typename DType>
 void Layer0Impl(
     // GraphRef graph,
-    at::Tensor &transposed_csr_rowptr, at::Tensor &transposed_csr_col_idx,
+    at::Tensor &transposed_csr_rowptr, at::Tensor &transposed_csr_col_indices,
     at::Tensor &transposed_csr_eids, at::Tensor &transposed_csr_reltypes,
     at::Tensor &grad_out, at::Tensor &norm, at::Tensor &ret) {
   // NB: graphiler, seastar by default uses int64_t
   at::Tensor dummy_tensor;
   _LayerImpl<int64_t, float, false>(
-      transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
+      transposed_csr_rowptr, transposed_csr_col_indices, transposed_csr_eids,
       transposed_csr_reltypes, /*hidden_dummy*/ dummy_tensor,
       /*weight_dummy*/ dummy_tensor, norm, grad_out,
       /*grad_hidden_dummy*/ ret, /*grad_weight_dummy*/ dummy_tensor, ret, false,
@@ -509,14 +510,14 @@ void Layer0Impl(
 
 void Layer0HybridAssignmentImpl(
     // GraphRef graph,
-    at::Tensor &transposed_csr_rowptr, at::Tensor &transposed_csr_col_idx,
+    at::Tensor &transposed_csr_rowptr, at::Tensor &transposed_csr_col_indices,
     at::Tensor &transposed_csr_eids, at::Tensor &transposed_csr_reltypes,
     at::Tensor &grad_out, at::Tensor &norm, at::Tensor &ret,
     int64_t num_blocks_on_blocks_per_node) {
   // NB: graphiler, seastar by default uses int64_t
   at::Tensor dummy_tensor;
   _LayerImpl<int64_t, float, true>(
-      transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
+      transposed_csr_rowptr, transposed_csr_col_indices, transposed_csr_eids,
       transposed_csr_reltypes, /*hidden_dummy*/ dummy_tensor,
       /*weight_dummy*/ dummy_tensor, norm, grad_out,
       /*grad_hidden_dummy*/ dummy_tensor, /*grad_weight_dummy*/ dummy_tensor,
@@ -526,21 +527,21 @@ void Layer0HybridAssignmentImpl(
 // template </*int XPU, */ typename Idx, typename DType>
 void Layer1Impl(
     // GraphRef graph,
-    at::Tensor &transposed_csr_rowptr, at::Tensor &transposed_csr_col_idx,
+    at::Tensor &transposed_csr_rowptr, at::Tensor &transposed_csr_col_indices,
     at::Tensor &transposed_csr_eids, at::Tensor &transposed_csr_reltypes,
     at::Tensor &hidden, at::Tensor &weight, at::Tensor &norm,
     at::Tensor &grad_out, at::Tensor &grad_hidden, at::Tensor &grad_weight) {
   // NB: graphiler, seastar by default uses int64_t
   at::Tensor dummy_tensor;
   _LayerImpl<int64_t, float, false>(
-      transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
+      transposed_csr_rowptr, transposed_csr_col_indices, transposed_csr_eids,
       transposed_csr_reltypes, hidden, weight, norm, grad_out, grad_hidden,
       grad_weight, /*ret_dummy*/ dummy_tensor, true, -1);
 }
 
 void Layer1HybridAssignmentImpl(
     // GraphRef graph,
-    at::Tensor &transposed_csr_rowptr, at::Tensor &transposed_csr_col_idx,
+    at::Tensor &transposed_csr_rowptr, at::Tensor &transposed_csr_col_indices,
     at::Tensor &transposed_csr_eids, at::Tensor &transposed_csr_reltypes,
     at::Tensor &hidden, at::Tensor &weight, at::Tensor &norm,
     at::Tensor &grad_out, at::Tensor &grad_hidden, at::Tensor &grad_weight,
@@ -548,7 +549,7 @@ void Layer1HybridAssignmentImpl(
   // NB: graphiler, seastar by default uses int64_t
   at::Tensor dummy_tensor;
   _LayerImpl<int64_t, float, true>(
-      transposed_csr_rowptr, transposed_csr_col_idx, transposed_csr_eids,
+      transposed_csr_rowptr, transposed_csr_col_indices, transposed_csr_eids,
       transposed_csr_reltypes, hidden, weight, norm, grad_out, grad_hidden,
       grad_weight, /*ret_dummy*/ dummy_tensor, true,
       num_blocks_on_blocks_per_node);
@@ -561,14 +562,14 @@ namespace IntegratedCOO {
 template </*int XPU, */ typename Idx, typename DType>
 void _LayerBackwardImpl(
     // GraphRef graph,
-    at::Tensor &transposed_coo_row_idx, at::Tensor &transposed_coo_col_idx,
-    at::Tensor &transposed_coo_eids, at::Tensor &transposed_coo_reltypes,
-    at::Tensor &hidden, at::Tensor &weight, at::Tensor &norm,
-    at::Tensor &grad_out, at::Tensor &grad_hidden, at::Tensor &grad_weight,
-    at::Tensor &ret, bool layer1_flag) {
+    at::Tensor &transposed_coo_row_indices,
+    at::Tensor &transposed_coo_col_indices, at::Tensor &transposed_coo_eids,
+    at::Tensor &transposed_coo_reltypes, at::Tensor &hidden, at::Tensor &weight,
+    at::Tensor &norm, at::Tensor &grad_out, at::Tensor &grad_hidden,
+    at::Tensor &grad_weight, at::Tensor &ret, bool layer1_flag) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  auto row_idx_data = transposed_coo_row_idx.data_ptr<Idx>();
-  auto ids_data = transposed_coo_col_idx.data_ptr<Idx>();
+  auto row_indices_data = transposed_coo_row_indices.data_ptr<Idx>();
+  auto ids_data = transposed_coo_col_indices.data_ptr<Idx>();
   auto eids_data = transposed_coo_eids.data_ptr<Idx>();
   auto typeids_data = transposed_coo_reltypes.data_ptr<Idx>();
   auto hidden_data = hidden.data_ptr<DType>();
@@ -578,18 +579,17 @@ void _LayerBackwardImpl(
   auto grad_hidden_data = grad_hidden.data_ptr<DType>();
   auto grad_weight_data = grad_weight.data_ptr<DType>();
   DType *ret_data = ret.numel() == 0 ? nullptr : ret.data_ptr<DType>();
-  Idx num_edges = transposed_coo_col_idx.numel();
+  Idx num_edges = transposed_coo_col_indices.numel();
   if (layer1_flag) {
     Idx ntypes = weight.size(0);
     Idx feat_len_y = weight.size(1);
     Idx feat_len_x = weight.size(2);
-    // int nthrs = feat_len_y * feat_len_x;
     int nthrs = feat_len_x < 256 ? 256 : feat_len_x;
     assert(nthrs % 32 == 0);
     int nblks =
         ceil_div<>(num_edges, (int64_t)nthrs / 32);  // 32 is the warp size
     HET_Seastar_RgcnLayer1BackwardCOOKernelImpl<<<nblks, nthrs, 0, stream>>>(
-        row_idx_data, ids_data, eids_data, typeids_data, hidden_data,
+        row_indices_data, ids_data, eids_data, typeids_data, hidden_data,
         weight_data, norm_data, grad_out_data, grad_hidden_data,
         grad_weight_data, num_edges, feat_len_y, feat_len_x, ntypes);
   } else {
@@ -606,16 +606,17 @@ void _LayerBackwardImpl(
 // template </*int XPU, */ typename Idx, typename DType>
 void Layer1BackwardImpl(
     // GraphRef graph,
-    at::Tensor &transposed_coo_row_idx, at::Tensor &transposed_coo_col_idx,
-    at::Tensor &transposed_coo_eids, at::Tensor &transposed_coo_reltypes,
-    at::Tensor &hidden, at::Tensor &weight, at::Tensor &norm,
-    at::Tensor &grad_out, at::Tensor &grad_hidden, at::Tensor &grad_weight) {
+    at::Tensor &transposed_coo_row_indices,
+    at::Tensor &transposed_coo_col_indices, at::Tensor &transposed_coo_eids,
+    at::Tensor &transposed_coo_reltypes, at::Tensor &hidden, at::Tensor &weight,
+    at::Tensor &norm, at::Tensor &grad_out, at::Tensor &grad_hidden,
+    at::Tensor &grad_weight) {
   // NB: graphiler, seastar by default uses int64_t
   at::Tensor dummy_tensor;
   _LayerBackwardImpl<int64_t, float>(
-      transposed_coo_row_idx, transposed_coo_col_idx, transposed_coo_eids,
-      transposed_coo_reltypes, hidden, weight, norm, grad_out, grad_hidden,
-      grad_weight, /*ret_dummy*/ dummy_tensor, true);
+      transposed_coo_row_indices, transposed_coo_col_indices,
+      transposed_coo_eids, transposed_coo_reltypes, hidden, weight, norm,
+      grad_out, grad_hidden, grad_weight, /*ret_dummy*/ dummy_tensor, true);
 }
 }  // namespace IntegratedCOO
 }  // namespace BckProp

@@ -42,7 +42,6 @@ __global__ void HET_Seastar_RgcnLayer1BackwardMyHYBKernelImpl(
     // csr portion
     Idx beg = __ldg(ranges + blockIdx.x);
     Idx end = __ldg(ranges + blockIdx.x + 1);
-    // Idx tx = threadIdx.x;
     for (; tx < feat_len_x * feat_len_y; tx += blockDim.x) {
       Idx ty = tx / feat_len_x;
       Idx th = tx % feat_len_x;

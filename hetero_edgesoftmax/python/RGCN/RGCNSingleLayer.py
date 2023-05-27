@@ -41,7 +41,7 @@ def RGCNSingleLayer_main(args):
     else:
         mydgl_graph_format = args.sparse_format
         assert args.sparse_format == "coo" or args.sparse_format == "csr"
-    g, canonical_etype_idx_tuples = utils.RGNN_get_mydgl_graph(
+    g, canonical_etype_indices_tuples = utils.RGNN_get_mydgl_graph(
         args.dataset,
         args.sort_by_src,
         args.sort_by_etype,
@@ -56,13 +56,17 @@ def RGCNSingleLayer_main(args):
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=False)
         if args.compact_as_of_node_flag:
-            g.generate_separate_unique_node_idx_for_each_etype()
-            g.generate_separate_unique_node_idx_single_sided_for_each_etype()
+            g.generate_separate_unique_node_indices_for_each_etype()
+            g.generate_separate_unique_node_indices_single_sided_for_each_etype()
             print(
                 "size of unique nodes",
                 g["separate"]["unique_node_indices"]["node_indices"].shape,
-                g["separate"]["unique_node_idx_single_sided"]["node_idx_row"].shape,
-                g["separate"]["unique_node_idx_single_sided"]["node_idx_col"].shape,
+                g["separate"]["unique_node_indices_single_sided"][
+                    "node_indices_row"
+                ].shape,
+                g["separate"]["unique_node_indices_single_sided"][
+                    "node_indices_col"
+                ].shape,
             )
     RGCN_main_procedure(args, g, model, feats)
 

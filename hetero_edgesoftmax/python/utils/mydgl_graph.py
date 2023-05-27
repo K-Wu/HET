@@ -49,10 +49,10 @@ class MyDGLGraph:
         assert "original" in self.graph_data
         if "node_type_offsets" in self.graph_data["original"]:
             return int(self.graph_data["original"]["node_type_offsets"][-1])
-        if "row_ptr" in self.graph_data["original"]:
+        if "row_ptrs" in self.graph_data["original"]:
             return int(
                 max(
-                    self.graph_data["original"]["row_ptr"].numel() - 1,
+                    self.graph_data["original"]["row_ptrs"].numel() - 1,
                     int(self.graph_data["original"]["col_indices"].max()) + 1,
                 )
             )
@@ -157,7 +157,7 @@ class MyDGLGraph:
 
     def get_sparse_format(self, transpose_flag: bool = False):
         original_or_transpose = "transposed" if transpose_flag else "original"
-        if "row_ptr" in self.graph_data[original_or_transpose]:
+        if "row_ptrs" in self.graph_data[original_or_transpose]:
             return "csr"
         elif "row_indices" in self.graph_data[original_or_transpose]:
             assert (
@@ -171,11 +171,11 @@ class MyDGLGraph:
     def transpose(self):
         if self.get_sparse_format() == "csr":
             (
-                self.graph_data["original"]["row_ptr"],
+                self.graph_data["original"]["row_ptrs"],
                 self.graph_data["original"]["col_indices"],
             ) = (
                 self.graph_data["original"]["col_indices"],
-                self.graph_data["original"]["row_ptr"],
+                self.graph_data["original"]["row_ptrs"],
             )
         elif self.get_sparse_format() == "coo":
             assert "transposed" not in self.graph_data, "transposed already exists"
@@ -199,12 +199,12 @@ class MyDGLGraph:
                 transposed_rel_types,
                 transposed_eids,
             ) = K.transpose_csr(
-                self.graph_data["original"]["row_ptr"],
+                self.graph_data["original"]["row_ptrs"],
                 self.graph_data["original"]["col_indices"],
                 self.graph_data["original"]["rel_types"],
                 self.graph_data["original"]["eids"],
             )
-            self.graph_data["transposed"]["row_ptr"] = transposed_rowptr
+            self.graph_data["transposed"]["row_ptrs"] = transposed_rowptr
             self.graph_data["transposed"]["col_indices"] = transposed_col_idx
             self.graph_data["transposed"]["rel_types"] = transposed_rel_types
             self.graph_data["transposed"]["eids"] = transposed_eids
@@ -221,7 +221,7 @@ class MyDGLGraph:
     def get_out_csr(self) -> Dict[str, torch.Tensor]:
         out_csr = dict()
         out_csr["rel_types"] = self.graph_data["original"]["rel_types"]
-        out_csr["row_ptr"] = self.graph_data["original"]["row_ptr"]
+        out_csr["row_ptrs"] = self.graph_data["original"]["row_ptrs"]
         out_csr["col_indices"] = self.graph_data["original"]["col_indices"]
         out_csr["eids"] = self.graph_data["original"]["eids"]
         return out_csr
@@ -237,7 +237,7 @@ class MyDGLGraph:
     def get_in_csr(self) -> Dict[str, torch.Tensor]:
         in_csr = dict()
         in_csr["rel_types"] = self.graph_data["transposed"]["rel_types"]
-        in_csr["row_ptr"] = self.graph_data["transposed"]["row_ptr"]
+        in_csr["row_ptrs"] = self.graph_data["transposed"]["row_ptrs"]
         in_csr["col_indices"] = self.graph_data["transposed"]["col_indices"]
         in_csr["eids"] = self.graph_data["transposed"]["eids"]
         return in_csr
@@ -266,9 +266,9 @@ class MyDGLGraph:
         separate_csr_original["rel_ptrs"] = self.graph_data["separate"]["csr"][
             "original"
         ]["rel_ptrs"]
-        separate_csr_original["row_ptr"] = self.graph_data["separate"]["csr"][
+        separate_csr_original["row_ptrs"] = self.graph_data["separate"]["csr"][
             "original"
-        ]["row_ptr"]
+        ]["row_ptrs"]
         separate_csr_original["col_indices"] = self.graph_data["separate"]["csr"][
             "original"
         ]["col_indices"]
@@ -289,18 +289,18 @@ class MyDGLGraph:
 
     def get_separate_unique_node_indices_single_sided(self) -> Dict[str, torch.Tensor]:
         separate_unique_node_indices_single_sided = dict()
-        separate_unique_node_indices_single_sided["node_idx_row"] = self.graph_data[
+        separate_unique_node_indices_single_sided["node_indices_row"] = self.graph_data[
             "separate"
-        ]["unique_node_idx_single_sided"]["node_idx_row"]
-        separate_unique_node_indices_single_sided["rel_ptr_row"] = self.graph_data[
+        ]["unique_node_indices_single_sided"]["node_indices_row"]
+        separate_unique_node_indices_single_sided["rel_ptrs_row"] = self.graph_data[
             "separate"
-        ]["unique_node_idx_single_sided"]["rel_ptr_row"]
-        separate_unique_node_indices_single_sided["node_idx_col"] = self.graph_data[
+        ]["unique_node_indices_single_sided"]["rel_ptrs_row"]
+        separate_unique_node_indices_single_sided["node_indices_col"] = self.graph_data[
             "separate"
-        ]["unique_node_idx_single_sided"]["node_idx_col"]
-        separate_unique_node_indices_single_sided["rel_ptr_col"] = self.graph_data[
+        ]["unique_node_indices_single_sided"]["node_indices_col"]
+        separate_unique_node_indices_single_sided["rel_ptrs_col"] = self.graph_data[
             "separate"
-        ]["unique_node_idx_single_sided"]["rel_ptr_col"]
+        ]["unique_node_indices_single_sided"]["rel_ptrs_col"]
         return separate_unique_node_indices_single_sided
 
     def get_separate_unique_node_indices_inverse_idx(self) -> Dict[str, torch.Tensor]:
@@ -315,15 +315,15 @@ class MyDGLGraph:
         self,
     ) -> Dict[str, torch.Tensor]:
         ret = dict()
-        ret["rel_ptr_row"] = self.graph_data["separate"][
-            "unique_node_idx_single_sided"
-        ]["rel_ptr_row"]
-        ret["inverse_idx_row"] = self.graph_data["separate"][
-            "unique_node_idx_single_sided"
-        ]["inverse_idx_row"]
-        ret["inverse_idx_col"] = self.graph_data["separate"][
-            "unique_node_idx_single_sided"
-        ]["inverse_idx_col"]
+        ret["rel_ptrs_row"] = self.graph_data["separate"][
+            "unique_node_indices_single_sided"
+        ]["rel_ptrs_row"]
+        ret["inverse_indices_row"] = self.graph_data["separate"][
+            "unique_node_indices_single_sided"
+        ]["inverse_indices_row"]
+        ret["inverse_indices_col"] = self.graph_data["separate"][
+            "unique_node_indices_single_sided"
+        ]["inverse_indices_col"]
         return ret
 
     def to_script_object(self) -> utils.ScriptedMyDGLGraph:
@@ -387,13 +387,13 @@ class MyDGLGraph:
                     separate_unique_node_indices_inverse_idx = (
                         self.get_separate_unique_node_indices_inverse_idx()
                     )
-            if "unique_node_idx_single_sided" in self.graph_data["separate"]:
+            if "unique_node_indices_single_sided" in self.graph_data["separate"]:
                 separate_unique_node_indices_single_sided = (
                     self.get_separate_unique_node_indices_single_sided()
                 )
                 if (
-                    "inverse_idx_row"
-                    in self.graph_data["separate"]["unique_node_idx_single_sided"]
+                    "inverse_indices_row"
+                    in self.graph_data["separate"]["unique_node_indices_single_sided"]
                 ):
                     separate_unique_node_indices_single_sided_inverse_idx = (
                         self.get_separate_unique_node_indices_single_sided_inverse_idx()
@@ -471,20 +471,20 @@ class MyDGLGraph:
         # then call C++ wrapper function to do the job
         if self.get_sparse_format() == "csr":
             (
-                separate_csr_rel_ptr,
-                separate_csr_row_ptr,
+                separate_csr_rel_ptrs,
+                separate_csr_row_ptrs,
                 separate_csr_col_idx,
                 separate_csr_eids,
             ) = K.convert_integrated_csr_to_separate_csr(
-                self.graph_data[original_or_transposed]["row_ptr"],
+                self.graph_data[original_or_transposed]["row_ptrs"],
                 self.graph_data[original_or_transposed]["col_indices"],
                 self.graph_data[original_or_transposed]["rel_types"],
                 self.graph_data[original_or_transposed]["eids"],
             )
         elif self.get_sparse_format() == "coo":
             (
-                separate_csr_rel_ptr,
-                separate_csr_row_ptr,
+                separate_csr_rel_ptrs,
+                separate_csr_row_ptrs,
                 separate_csr_col_idx,
                 separate_csr_eids,
             ) = K.convert_integrated_coo_to_separate_csr(
@@ -497,10 +497,10 @@ class MyDGLGraph:
             raise ValueError("unknown sparse format")
         self.graph_data["separate"]["csr"][original_or_transposed][
             "rel_ptrs"
-        ] = separate_csr_rel_ptr
+        ] = separate_csr_rel_ptrs
         self.graph_data["separate"]["csr"][original_or_transposed][
-            "row_ptr"
-        ] = separate_csr_row_ptr
+            "row_ptrs"
+        ] = separate_csr_row_ptrs
         self.graph_data["separate"]["csr"][original_or_transposed][
             "col_indices"
         ] = separate_csr_col_idx
@@ -556,19 +556,19 @@ class MyDGLGraph:
         # then call C++ wrapper function to do the job
         if self.get_sparse_format() == "csr":
             (
-                separate_coo_rel_ptr,
+                separate_coo_rel_ptrs,
                 separate_coo_row_idx,
                 separate_coo_col_idx,
                 separate_coo_eids,
             ) = K.convert_integrated_csr_to_separate_coo(
-                self.graph_data[original_or_transposed]["row_ptr"],
+                self.graph_data[original_or_transposed]["row_ptrs"],
                 self.graph_data[original_or_transposed]["col_indices"],
                 self.graph_data[original_or_transposed]["rel_types"],
                 self.graph_data[original_or_transposed]["eids"],
             )
         elif self.get_sparse_format() == "coo":
             (
-                separate_coo_rel_ptr,
+                separate_coo_rel_ptrs,
                 separate_coo_row_idx,
                 separate_coo_col_idx,
                 separate_coo_eids,
@@ -584,19 +584,19 @@ class MyDGLGraph:
         if rel_eid_sorted_flag:
             # sort the coo by rel_type and eid
             (
-                separate_coo_rel_ptr,
+                separate_coo_rel_ptrs,
                 separate_coo_row_idx,
                 separate_coo_col_idx,
                 separate_coo_eids,
             ) = utils.sort_coo_by_etype_eids_torch_tensors(
-                separate_coo_rel_ptr,
+                separate_coo_rel_ptrs,
                 separate_coo_row_idx,
                 separate_coo_col_idx,
                 separate_coo_eids,
             )
         self.graph_data["separate"]["coo"][original_or_transposed][
             "rel_ptrs"
-        ] = separate_coo_rel_ptr
+        ] = separate_coo_rel_ptrs
         self.graph_data["separate"]["coo"][original_or_transposed][
             "row_indices"
         ] = separate_coo_row_idx
@@ -608,7 +608,7 @@ class MyDGLGraph:
         ] = separate_coo_eids
 
     @torch.no_grad()
-    def generate_separate_unique_node_idx_single_sided_for_each_etype(
+    def generate_separate_unique_node_indices_single_sided_for_each_etype(
         self, produce_inverse_idx=True
     ):
         if (
@@ -620,46 +620,46 @@ class MyDGLGraph:
             )
 
         (
-            result_node_idx_row,
-            result_rel_ptr_row,
-            result_node_idx_col,
-            result_rel_ptr_col,
-            result_node_idx_row_reverse_idx,
-            result_node_idx_col_reverse_idx,
-        ) = utils_lite.generate_separate_unique_node_idx_single_sided_for_each_etype(
+            result_node_indices_row,
+            result_rel_ptrs_row,
+            result_node_indices_col,
+            result_rel_ptrs_col,
+            result_node_indices_row_reverse_idx,
+            result_node_indices_col_reverse_idx,
+        ) = utils_lite.generate_separate_unique_node_indices_single_sided_for_each_etype(
             self.get_num_rels(),
             self.graph_data["separate"]["coo"]["original"]["rel_ptrs"],
             self.graph_data["separate"]["coo"]["original"]["row_indices"],
             self.graph_data["separate"]["coo"]["original"]["col_indices"],
         )
 
-        if "unique_node_idx_single_sided" in self.graph_data["separate"]:
+        if "unique_node_indices_single_sided" in self.graph_data["separate"]:
             print(
-                "WARNING: unique_node_idx_single_sided already exists, will be overwritten"
+                "WARNING: unique_node_indices_single_sided already exists, will be overwritten"
             )
-        self.graph_data["separate"]["unique_node_idx_single_sided"] = dict()
-        self.graph_data["separate"]["unique_node_idx_single_sided"][
-            "node_idx_row"
-        ] = result_node_idx_row
-        self.graph_data["separate"]["unique_node_idx_single_sided"][
-            "rel_ptr_row"
-        ] = result_rel_ptr_row
-        self.graph_data["separate"]["unique_node_idx_single_sided"][
-            "node_idx_col"
-        ] = result_node_idx_col
-        self.graph_data["separate"]["unique_node_idx_single_sided"][
-            "rel_ptr_col"
-        ] = result_rel_ptr_col
+        self.graph_data["separate"]["unique_node_indices_single_sided"] = dict()
+        self.graph_data["separate"]["unique_node_indices_single_sided"][
+            "node_indices_row"
+        ] = result_node_indices_row
+        self.graph_data["separate"]["unique_node_indices_single_sided"][
+            "rel_ptrs_row"
+        ] = result_rel_ptrs_row
+        self.graph_data["separate"]["unique_node_indices_single_sided"][
+            "node_indices_col"
+        ] = result_node_indices_col
+        self.graph_data["separate"]["unique_node_indices_single_sided"][
+            "rel_ptrs_col"
+        ] = result_rel_ptrs_col
         if produce_inverse_idx:
-            self.graph_data["separate"]["unique_node_idx_single_sided"][
-                "inverse_idx_row"
-            ] = result_node_idx_row_reverse_idx
-            self.graph_data["separate"]["unique_node_idx_single_sided"][
-                "inverse_idx_col"
-            ] = result_node_idx_col_reverse_idx
+            self.graph_data["separate"]["unique_node_indices_single_sided"][
+                "inverse_indices_row"
+            ] = result_node_indices_row_reverse_idx
+            self.graph_data["separate"]["unique_node_indices_single_sided"][
+                "inverse_indices_col"
+            ] = result_node_indices_col_reverse_idx
 
     @torch.no_grad()
-    def generate_separate_unique_node_idx_for_each_etype(
+    def generate_separate_unique_node_indices_for_each_etype(
         self, produce_inverse_idx=True
     ):
         if (
@@ -672,9 +672,9 @@ class MyDGLGraph:
 
         (
             result_node_idx,
-            result_rel_ptr,
-            result_node_idx_reverse_idx,
-        ) = utils_lite.generate_separate_unique_node_idx_for_each_etype(
+            result_rel_ptrs,
+            result_node_indices_inverse_idx,
+        ) = utils_lite.generate_separate_unique_node_indices_for_each_etype(
             self.get_num_rels(),
             self.graph_data["separate"]["coo"]["original"]["rel_ptrs"],
             self.graph_data["separate"]["coo"]["original"]["row_indices"],
@@ -687,11 +687,11 @@ class MyDGLGraph:
         self.graph_data["separate"]["unique_node_indices"][
             "node_indices"
         ] = result_node_idx
-        self.graph_data["separate"]["unique_node_indices"]["rel_ptrs"] = result_rel_ptr
+        self.graph_data["separate"]["unique_node_indices"]["rel_ptrs"] = result_rel_ptrs
         if produce_inverse_idx:
             self.graph_data["separate"]["unique_node_indices"][
                 "inverse_indices"
-            ] = result_node_idx_reverse_idx
+            ] = result_node_indices_inverse_idx
 
     def import_metadata_from_dgl_heterograph(self, dglgraph):
         assert (

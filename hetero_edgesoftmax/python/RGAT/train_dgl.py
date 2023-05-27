@@ -111,7 +111,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
                 train_loader,
             ) = legacy_data_loader._legacy_RGAT_prepare_mag_data(args)
     else:
-        g, canonical_etype_idx_tuples = utils.RGNN_get_mydgl_graph(
+        g, canonical_etype_indices_tuples = utils.RGNN_get_mydgl_graph(
             args.dataset,
             args.sort_by_src,
             args.sort_by_etype,
@@ -143,17 +143,13 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         embed_layer, model = RGAT_get_model(g, num_classes, args)
     else:
         print("Using our RGAT model")
-        # print(
-        # int(g["original"]["col_indices"].max()) + 1,
-        # )
-        # print(g["original"]["row_ptr"].numel() - 1)
         embed_layer, model = RGAT_get_our_model(g, num_classes, args)
         # TODO: only certain design choices call for this. Add an option to choose.
 
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=False)
-        # g.generate_separate_unique_node_idx_for_each_etype()
-        g.generate_separate_unique_node_idx_single_sided_for_each_etype()
+        # g.generate_separate_unique_node_indices_for_each_etype()
+        g.generate_separate_unique_node_indices_single_sided_for_each_etype()
         if not args.full_graph_training:
             # need to prepare dgl graph for sampler
             g_dglgraph = g.get_dgl_graph()

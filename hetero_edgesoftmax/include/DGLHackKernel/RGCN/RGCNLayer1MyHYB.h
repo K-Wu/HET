@@ -33,19 +33,10 @@ __global__ void HET_Seastar_RgcnLayer1MyHYBKernelImpl(
       DType n = __ldg(norm + eid);
       agg_val += h * w * n;
     }
-    // atomicAdd(ret + blockIdx.x*feat_len_x + th, agg_val);
-    //}
 
     // csr portion
-    // if (blockIdx.x < num_nodes) {
     Idx beg = __ldg(ranges + blockIdx.x);
     Idx end = __ldg(ranges + blockIdx.x + 1);
-    // Idx tx = threadIdx.x;
-    // Idx ty = threadIdx.x / feat_len_x;
-    // Idx th = threadIdx.x % feat_len_x;
-    // DType agg_val = 0.;
-    // DType w = 0.;
-    // Idx cur_type_id = -1;
     for (; beg < end; beg++) {
       Idx src_id = __ldg(src_ids + beg);
       Idx eid = __ldg(eids + beg);

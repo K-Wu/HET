@@ -80,7 +80,7 @@ def evaluate(model, features, labels, mask):
 
 def GAT_train(args, single_layer_flag: bool):
     # load and preprocess dataset
-    mydgl_graph, canonical_etype_idx_tuples = utils.RGNN_get_mydgl_graph(
+    mydgl_graph, canonical_etype_indices_tuples = utils.RGNN_get_mydgl_graph(
         args.dataset,
         args.sort_by_src,
         args.sort_by_etype,

@@ -140,16 +140,16 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
     @staticmethod
     def forward(
         ctx,
-        unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_idx,
+        unique_srcs_and_dests_rel_ptrs,
+        unique_srcs_and_dests_node_indices,
         weight,
         node_feat,
         ret,
         input_num_head_one_flag,
     ):
         ctx.save_for_backward(
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
+            unique_srcs_and_dests_rel_ptrs,
+            unique_srcs_and_dests_node_indices,
             weight,
             node_feat,
             ret,
@@ -157,8 +157,8 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
         ctx.input_num_head_one_flag = input_num_head_one_flag
         K.rgnn_relational_matmul(
             {
-                "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptr,
-                "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_idx,
+                "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptrs,
+                "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_indices,
             },
             1,  # CompactAsOfNode:Enabled
             weight,
@@ -171,8 +171,8 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
     @staticmethod
     def backward(ctx, gradout):
         (
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
+            unique_srcs_and_dests_rel_ptrs,
+            unique_srcs_and_dests_node_indices,
             weight,
             node_feat,
             ret,
@@ -184,8 +184,8 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
         # FIXME: seems there is a bug in gradout when bgs compactAsOfNode is true perhaps the scheming scheme to grad_feat_src is faulty
         K.backward_rgnn_relational_matmul(
             {
-                "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptr,
-                "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_idx,
+                "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptrs,
+                "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_indices,
             },
             1,  # CompactAsOfNodeKind::Enabled
             th.transpose(weight, 2, 3).contiguous(),
@@ -200,6 +200,7 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
         # fmt: on
 
 
+# TODO: use g as argument instead of separate tensors
 # TODO: merge this with rgnn_relational_matmul_compact_as_of_node
 def rgnn_relational_matmul(
     separate_coo_relptrs,
@@ -230,21 +231,22 @@ def rgnn_relational_matmul(
     )
 
 
+# TODO: use g as argument instead of separate tensors
 def rgnn_relational_matmul_compact_as_of_node(
-    unique_srcs_and_dests_rel_ptr,
+    unique_srcs_and_dests_rel_ptrs,
     unique_srcs_and_dests_node_indices,
     weight,
     node_feat,
     input_num_head_one_flag,
 ):
     ret = th.zeros(
-        (int(unique_srcs_and_dests_rel_ptr[-1]), weight.size(1), weight.size(3)),
+        (int(unique_srcs_and_dests_rel_ptrs[-1]), weight.size(1), weight.size(3)),
         dtype=weight.dtype,
         device=weight.device,
         requires_grad=True,
     )
     return RgnnRelationalMatmulCompactAsOfNode.apply(
-        unique_srcs_and_dests_rel_ptr,
+        unique_srcs_and_dests_rel_ptrs,
         unique_srcs_and_dests_node_indices,
         weight,
         node_feat,
@@ -257,9 +259,9 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
     @staticmethod
     def forward(
         ctx,
-        unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_idx,
-        separate_coo_rel_ptr,
+        unique_srcs_and_dests_rel_ptrs,
+        unique_srcs_and_dests_node_indices,
+        separate_coo_rel_ptrs,
         separate_coo_eids,
         separate_coo_row_indices,
         separate_coo_col_indices,
@@ -268,9 +270,9 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
         ret,
     ):
         ctx.save_for_backward(
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
-            separate_coo_rel_ptr,
+            unique_srcs_and_dests_rel_ptrs,
+            unique_srcs_and_dests_node_indices,
+            separate_coo_rel_ptrs,
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,
@@ -280,9 +282,9 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
         )
         K.rgnn_inner_product_right_node_separatecoo(
             {
-                "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptr,
-                "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_idx,
-                "separate_rel_ptrs": separate_coo_rel_ptr,
+                "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptrs,
+                "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_indices,
+                "separate_rel_ptrs": separate_coo_rel_ptrs,
             },
             1,  # CompactAsOfNode::Enabled
             separate_coo_eids,
@@ -297,9 +299,9 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
     @staticmethod
     def backward(ctx, gradout):
         (
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
-            separate_coo_rel_ptr,
+            unique_srcs_and_dests_rel_ptrs,
+            unique_srcs_and_dests_node_indices,
+            separate_coo_rel_ptrs,
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,
@@ -315,9 +317,9 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
         )
         K.backward_inner_product_right_node_separatecoo(
             {
-                "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptr,
-                "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_idx,
-                "separate_rel_ptrs": separate_coo_rel_ptr,
+                "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptrs,
+                "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_indices,
+                "separate_rel_ptrs": separate_coo_rel_ptrs,
             },
             1,  # CompactAsOfNode::Enabled
             separate_coo_eids,
@@ -399,11 +401,12 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
         # fmt: on
 
 
+# TODO: use g as argument instead of separate tensors
 # merge the following two functions
 def rgnn_inner_product_node_compact_and_node(
-    unique_srcs_and_dests_rel_ptr,
+    unique_srcs_and_dests_rel_ptrs,
     unique_srcs_and_dests_node_indices,
-    separate_coo_rel_ptr,
+    separate_coo_rel_ptrs,
     separate_coo_eids,
     separate_coo_row_indices,
     separate_coo_col_indices,
@@ -412,15 +415,15 @@ def rgnn_inner_product_node_compact_and_node(
 ):
     # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
     ret = th.zeros(
-        [separate_coo_rel_ptr[-1], right_node_vectors.size(1)],
+        [separate_coo_rel_ptrs[-1], right_node_vectors.size(1)],
         dtype=right_node_vectors.dtype,
         device=right_node_vectors.device,
         requires_grad=True,
     )
     return RgnnInnerProductNodeCompactAndNode.apply(
-        unique_srcs_and_dests_rel_ptr,
+        unique_srcs_and_dests_rel_ptrs,
         unique_srcs_and_dests_node_indices,
-        separate_coo_rel_ptr,
+        separate_coo_rel_ptrs,
         separate_coo_eids,
         separate_coo_row_indices,
         separate_coo_col_indices,
@@ -430,6 +433,7 @@ def rgnn_inner_product_node_compact_and_node(
     )
 
 
+# TODO: use g as argument instead of separate tensors
 def rgnn_inner_product_edge_and_node(
     separate_coo_eids,
     separate_coo_row_indices,

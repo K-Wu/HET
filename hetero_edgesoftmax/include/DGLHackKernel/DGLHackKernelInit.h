@@ -2,6 +2,7 @@
 
 #include <cusp/coo_matrix.h>
 #include <cusp/csr_matrix.h>
+
 #include "DGLHackKernel/OpPrototyping/ModelsProfiling.h"
 #include "OpPrototyping/MySimpleNDArray/MySimpleNDArray.h"
 
@@ -152,31 +153,16 @@ MyHeteroIntegratedCSR<int, std::allocator<int>> LoadOGBN_MAG(
                           affliated_with_shape, fortran_order,
                           affliated_with_data);
 
-  // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/written-by_coo_2.npy",
-  // written_by_shape, fortran_order, written_by_data);
-  // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/has_coo_2.npy", has_shape,
-  // fortran_order, has_data);
-  // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/is-about_coo_2.npy",
-  // is_about_shape, fortran_order, is_about_data);
-  // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/cited_coo_2.npy", cited_shape,
-  // fortran_order, cited_data);
-  // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/citing_coo_2.npy", citing_shape,
-  // fortran_order, citing_data);
-  // npy::LoadArrayFromNumpy("data/ogbn_mag_0.1/writing_coo_2.npy",
-  // writing_shape, fortran_order, writing_data);
-
-  std::vector<int> max_idxes;
-  max_idxes.push_back(
+  std::vector<int> max_indices;
+  max_indices.push_back(
       *std::max_element(is_about_data.begin(), is_about_data.end()));
-  max_idxes.push_back(*std::max_element(affliated_with_data.begin(),
-                                        affliated_with_data.end()));
-  max_idxes.push_back(
+  max_indices.push_back(*std::max_element(affliated_with_data.begin(),
+                                          affliated_with_data.end()));
+  max_indices.push_back(
       *std::max_element(citing_data.begin(), citing_data.end()));
-  max_idxes.push_back(
+  max_indices.push_back(
       *std::max_element(writing_data.begin(), writing_data.end()));
-  int max_idx = *std::max_element(max_idxes.begin(), max_idxes.end());
-
-  // cusp::csr_matrix<int, int, cusp::host_memory> csr_host(5, 8, 12);
+  int max_idx = *std::max_element(max_indices.begin(), max_indices.end());
 
   cusp::coo_matrix<int, int, cusp::host_memory> is_about_coo_h(
       max_idx + 1, max_idx + 1, is_about_data.size() / 2);
@@ -255,15 +241,6 @@ LoadSegmentCSR_OGBN_MAG() {
   // following code
 
   // TODO: we also needs to load eid to unify eids
-  // std::vector<int64_t> maximal_edge_num_per_src_node,
-  // maximal_edge_type_per_src_node; std::vector<unsigned long>
-  // maximal_edge_num_per_src_node_shape, maximal_edge_type_per_src_node_shape;
-  // npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_0.edge_nums.npy",
-  // maximal_edge_num_per_src_node_shape, fortran_order,
-  // maximal_edge_num_per_src_node);
-  // npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_0.edge_types.npy",
-  // maximal_edge_type_per_src_node_shape, fortran_order,
-  // maximal_edge_type_per_src_node);
   auto maximal_edge_num_per_src_node =
       HET::OpPrototyping::LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,
                                                        int64_t>(
@@ -275,14 +252,6 @@ LoadSegmentCSR_OGBN_MAG() {
           "data/MyHybData/SegmentCSR/"
           "ogbn_mag.segment_csr.part_0.edge_types.npy");
 
-  // std::vector<int64_t> src_node_per_edge_type, num_src_nodes_per_edge_type;
-  // std::vector<unsigned long> src_node_per_edge_type_shape,
-  // num_src_nodes_per_edge_type_shape;
-  // npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_1.edge_type_num.npy",
-  // src_node_per_edge_type_shape, fortran_order, src_node_per_edge_type);
-  // npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_1.src_node_per_edge_type.npy",
-  // num_src_nodes_per_edge_type_shape, fortran_order,
-  // num_src_nodes_per_edge_type);
   auto num_src_nodes_per_edge_type =
       HET::OpPrototyping::LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,
                                                        int64_t>(
@@ -294,10 +263,6 @@ LoadSegmentCSR_OGBN_MAG() {
           "data/MyHybData/SegmentCSR/"
           "ogbn_mag.segment_csr.part_1.src_node_per_edge_type.npy");
 
-  // std::vector<int64_t> dense_edges;
-  // std::vector<unsigned long> dense_edges_shape;
-  // npy::LoadArrayFromNumpy("ogbn_mag.segment_csr.part_2.maximal_edges.npy",
-  // dense_edges_shape, fortran_order, dense_edges);
   // TODO: needs padding
   // TODO: when padding, both dense_edges and offset_num_src_nodes_per_edge_type
   // (or num_src_nodes_per_edge_type) needs to be padded.
@@ -306,15 +271,6 @@ LoadSegmentCSR_OGBN_MAG() {
                                                        int64_t>(
           "data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_2.edges.npy");
 
-  // std::vector<int64_t> residue_srcs_data, residue_dsts_data,
-  // residue_etypes_data; std::vector<unsigned long> residue_srcs_shape,
-  // residue_dsts_shape, residue_etypes_shape;
-  // npy::LoadArrayFromNumpy("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_3.srcs.npy",
-  // residue_srcs_shape, fortran_order, residue_srcs_data);
-  // npy::LoadArrayFromNumpy("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_3.dsts.npy",
-  // residue_dsts_shape, fortran_order, residue_dsts_data);
-  // npy::LoadArrayFromNumpy("data/MyHybData/SegmentCSR/ogbn_mag.segment_csr.part_3.types.npy",
-  // residue_etypes_shape, fortran_order, residue_etypes_data);
   auto residue_srcs_data =
       HET::OpPrototyping::LoadMySimpleNDArrayFromNumpy<Idx, std::allocator<Idx>,
                                                        int64_t>(

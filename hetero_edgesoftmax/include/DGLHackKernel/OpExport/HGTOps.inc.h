@@ -3,6 +3,7 @@
 #include <c10/cuda/CUDAStream.h>
 #include <torch/extension.h>
 #include <torch/library.h>
+
 #include "DGLHackKernel/HGT/HGTBackwardExperimental.cu.h"
 #include "DGLHackKernel/HGT/HGTBackwardKernels.cu.h"
 #include "DGLHackKernel/HGT/HGTForwardKernels.cu.h"
@@ -22,9 +23,9 @@ namespace FwProp {
 template <typename Idx, typename DType, int OutputMuAppliedAttnScoreSwitch,
           bool EdgeParallelFlag>
 void _full_graph_edge_softmax_ops(
-    at::Tensor &incsr_or_sep_coo_rowptr_or_indices,
-    at::Tensor &incsr_or_sep_coo_col_idx, at::Tensor &incsr_or_sep_coo_eids,
-    at::Tensor &incsr_or_sep_coo_reltypes_or_relptr,
+    at::Tensor &incsr_or_sep_coo_row_ptrs_or_indices,
+    at::Tensor &incsr_or_sep_coo_col_indices, at::Tensor &incsr_or_sep_coo_eids,
+    at::Tensor &incsr_or_sep_coo_reltypes_or_relptrs,
     at::Tensor &unnormalized_attn_score, at::Tensor &mu,
     at::Tensor &edgesoftmax_sum_per_node,
     at::Tensor &mu_softmax_applied_unnormalized_attn_score,
@@ -68,7 +69,7 @@ void _full_graph_edge_softmax_ops(
   // head -> blockIdx.x * blockDim.x + threadIdx.x;
   // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
   int64_t incsr_or_sep_coo_num_rows_or_edges =
-      incsr_or_sep_coo_rowptr_or_indices.numel() - 1;
+      incsr_or_sep_coo_row_ptrs_or_indices.numel() - 1;
   auto [nblks, nthrs] =
       get_type1_schedule(gdata.num_heads, incsr_or_sep_coo_num_rows_or_edges);
 
@@ -77,18 +78,18 @@ void _full_graph_edge_softmax_ops(
     HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel<
         Idx, DType, CompactAsOfNodeKind::Disabled, true, true, false,
         OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
-        gdata, incsr_or_sep_coo_rowptr_or_indices.data_ptr<Idx>(),
-        incsr_or_sep_coo_col_idx.data_ptr<Idx>(),
-        incsr_or_sep_coo_reltypes_or_relptr.data_ptr<Idx>(),
+        gdata, incsr_or_sep_coo_row_ptrs_or_indices.data_ptr<Idx>(),
+        incsr_or_sep_coo_col_indices.data_ptr<Idx>(),
+        incsr_or_sep_coo_reltypes_or_relptrs.data_ptr<Idx>(),
         incsr_or_sep_coo_num_rows_or_edges,
         /*no need when !CompactAsOfNode*/ nullptr,
         /*no need when !CompactAsOfNode*/ nullptr, num_relations);
     HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2<
         Idx, DType, CompactAsOfNodeKind::Disabled, true, true, false,
         OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
-        gdata, incsr_or_sep_coo_rowptr_or_indices.data_ptr<Idx>(),
-        incsr_or_sep_coo_col_idx.data_ptr<Idx>(),
-        incsr_or_sep_coo_reltypes_or_relptr.data_ptr<Idx>(),
+        gdata, incsr_or_sep_coo_row_ptrs_or_indices.data_ptr<Idx>(),
+        incsr_or_sep_coo_col_indices.data_ptr<Idx>(),
+        incsr_or_sep_coo_reltypes_or_relptrs.data_ptr<Idx>(),
         incsr_or_sep_coo_num_rows_or_edges,
         /*no need when !CompactAsOfNode*/ nullptr,
         /*no need when !CompactAsOfNode*/ nullptr, num_relations);
@@ -97,9 +98,9 @@ void _full_graph_edge_softmax_ops(
     HET__hgtEdgeSoftmaxAccumStageOnlyKernel<
         Idx, DType, CompactAsOfNodeKind::Disabled, true, false, false,
         OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
-        gdata, incsr_or_sep_coo_rowptr_or_indices.data_ptr<Idx>(),
-        incsr_or_sep_coo_col_idx.data_ptr<Idx>(),
-        incsr_or_sep_coo_reltypes_or_relptr.data_ptr<Idx>(),
+        gdata, incsr_or_sep_coo_row_ptrs_or_indices.data_ptr<Idx>(),
+        incsr_or_sep_coo_col_indices.data_ptr<Idx>(),
+        incsr_or_sep_coo_reltypes_or_relptrs.data_ptr<Idx>(),
         incsr_or_sep_coo_num_rows_or_edges,
         /*no need when !CompactAsOfNode*/ nullptr,
         /*no need when !CompactAsOfNode*/ nullptr, num_relations);
@@ -109,7 +110,7 @@ void _full_graph_edge_softmax_ops(
 namespace IntegratedCSR {
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
 void _full_graph_message_mean_aggregation(
-    at::Tensor &incsr_rowptr, at::Tensor &incsr_col_idx,
+    at::Tensor &incsr_row_ptrs, at::Tensor &incsr_col_indices,
     at::Tensor &incsr_reltypes, at::Tensor &incsr_eids,
     at::Tensor &edge_messages, at::Tensor &edge_attn_score,
     at::Tensor &edgesoftmax_sum_per_node, at::Tensor &mu, at::Tensor &ret) {
@@ -155,7 +156,7 @@ void _full_graph_message_mean_aggregation(
              edge_messages.size(edge_messages.ndimension() - 2) &&
          "assuming edge_messages[-2] to be num_heads but failed");
 
-  Idx incsr_num_rows = incsr_rowptr.numel() - 1;
+  Idx incsr_num_rows = incsr_row_ptrs.numel() - 1;
 
   // Configure kernel launch parameters.
   // NB: updated to Type 2 Schedule:
@@ -171,24 +172,24 @@ void _full_graph_message_mean_aggregation(
   HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum<
       Idx, DType, CompactAsOfNodeKind::Disabled, true, false, false,
       UseMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
-      gdata, incsr_rowptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
+      gdata, incsr_row_ptrs.data_ptr<Idx>(), incsr_col_indices.data_ptr<Idx>(),
       incsr_reltypes.data_ptr<Idx>(), incsr_num_rows,
       nullptr /*no need when !CompactAsOfNodeFlag*/,
       nullptr /*no need when !CompactAsOfNodeFlag*/, num_relations);
 }
 
 void full_graph_message_mean_aggregation(
-    at::Tensor &incsr_rowptr, at::Tensor &incsr_col_idx,
+    at::Tensor &incsr_row_ptrs, at::Tensor &incsr_col_indices,
     at::Tensor &incsr_reltypes, at::Tensor &incsr_eids,
     at::Tensor &edge_messages, at::Tensor &edge_attn_score,
     at::Tensor &edgesoftmax_sum_per_node, at::Tensor &mu, at::Tensor &ret) {
   _full_graph_message_mean_aggregation<int64_t, float, 1>(
-      incsr_rowptr, incsr_col_idx, incsr_reltypes, incsr_eids, edge_messages,
-      edge_attn_score, edgesoftmax_sum_per_node, mu, ret);
+      incsr_row_ptrs, incsr_col_indices, incsr_reltypes, incsr_eids,
+      edge_messages, edge_attn_score, edgesoftmax_sum_per_node, mu, ret);
 }
 
 void full_graph_edge_softmax_ops(
-    at::Tensor &row_ptr, at::Tensor &col_idx, at::Tensor &eids,
+    at::Tensor &row_ptr, at::Tensor &col_indices, at::Tensor &eids,
     at::Tensor &reltypes, at::Tensor &unnormalized_attn_score, at::Tensor &mu,
     at::Tensor &edgesoftmax_sum_per_node,
     at::Tensor &mu_softmax_applied_unnormalized_attn_score,
@@ -197,16 +198,17 @@ void full_graph_edge_softmax_ops(
   // that does both stages, i.e., MuAppliedAttnScoreSwitch == 2
   HET::TorchExport::HGT::FwProp::_full_graph_edge_softmax_ops<int64_t, float, 3,
                                                               false>(
-      row_ptr, col_idx, eids, reltypes, unnormalized_attn_score, mu,
+      row_ptr, col_indices, eids, reltypes, unnormalized_attn_score, mu,
       edgesoftmax_sum_per_node, mu_softmax_applied_unnormalized_attn_score,
       normalized_attn_score);
 }
 
 // this function only calculates edge softmax sum at each destination node.
 void full_graph_edge_softmax_only_accumu_stage_ops(
-    at::Tensor &incsr_rowptr, at::Tensor &incsr_col_idx, at::Tensor &incsr_eids,
-    at::Tensor &incsr_reltypes, at::Tensor &unnormalized_attn_score,
-    at::Tensor &mu, at::Tensor &edgesoftmax_sum_per_node,
+    at::Tensor &incsr_row_ptrs, at::Tensor &incsr_col_indices,
+    at::Tensor &incsr_eids, at::Tensor &incsr_reltypes,
+    at::Tensor &unnormalized_attn_score, at::Tensor &mu,
+    at::Tensor &edgesoftmax_sum_per_node,
     at::Tensor &mu_softmax_applied_unnormalized_attn_score) {
   // using HET__hgtEdgeSoftmaxAccumStageOnlyKernel based on
   // _gatExpLeakyReluSumKernel whose driver code is
@@ -217,7 +219,7 @@ void full_graph_edge_softmax_only_accumu_stage_ops(
   at::Tensor dummy_tensor;
   HET::TorchExport::HGT::FwProp::_full_graph_edge_softmax_ops<int64_t, float, 1,
                                                               false>(
-      incsr_rowptr, incsr_col_idx, incsr_eids, incsr_reltypes,
+      incsr_row_ptrs, incsr_col_indices, incsr_eids, incsr_reltypes,
       unnormalized_attn_score, mu, edgesoftmax_sum_per_node,
       mu_softmax_applied_unnormalized_attn_score, dummy_tensor);
 }
@@ -233,13 +235,13 @@ namespace IntegratedCSR {
 template </*int XPU, */ typename Idx, typename DType>
 void HGTBackPropGradientSMAFusionExperimental(
     // GraphRef graph,
-    at::Tensor &csr_rowptr, at::Tensor &csr_col_idx, at::Tensor &csr_eids,
+    at::Tensor &csr_row_ptrs, at::Tensor &csr_col_indices, at::Tensor &csr_eids,
     at::Tensor &csr_reltypes, at::Tensor &grad_sm_first_stage,
     at::Tensor &grad_a, at::Tensor &grad_t_neighbour, at::Tensor &message,
     at::Tensor &sigmas) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  auto range_data = csr_rowptr.data_ptr<Idx>();
-  auto ids_data = csr_col_idx.data_ptr<Idx>();
+  auto range_data = csr_row_ptrs.data_ptr<Idx>();
+  auto ids_data = csr_col_indices.data_ptr<Idx>();
   auto eids_data = csr_eids.data_ptr<Idx>();
   auto typeids_data = csr_reltypes.data_ptr<Idx>();
   auto grad_sm_first_stage_data = grad_sm_first_stage.data_ptr<DType>();
@@ -248,8 +250,8 @@ void HGTBackPropGradientSMAFusionExperimental(
   auto message_data = message.data_ptr<DType>();
   auto sigmas_data = sigmas.data_ptr<DType>();
 
-  Idx num_nodes = csr_rowptr.numel() - 1;
-  Idx num_edges = csr_col_idx.numel();
+  Idx num_nodes = csr_row_ptrs.numel() - 1;
+  Idx num_edges = csr_col_indices.numel();
   Idx num_heads = grad_sm_first_stage.size(2);
   Idx feat_dim_per_head = grad_sm_first_stage.size(3);
   Idx n_rel_types = grad_sm_first_stage.size(1);
@@ -277,7 +279,7 @@ void HGTBackPropGradientSMAFusionExperimental(
 // of HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel
 template <typename Idx, typename DType>
 void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
-    at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_idx,
+    at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_indices,
     at::Tensor &incsr_eids, at::Tensor &incsr_reltypes,
     at::Tensor &unnormalized_attn_score, at::Tensor &normalized_attn_score,
     at::Tensor &grad_normalized_attn_score, at::Tensor &mu,
@@ -312,8 +314,9 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
   HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel<Idx, DType, true,
                                                             false>
       <<<nblks, nthrs, 0, stream>>>(
-          gdata, incsr_row_ptr.data_ptr<Idx>(), incsr_col_idx.data_ptr<Idx>(),
-          incsr_reltypes.data_ptr<Idx>(), incsr_row_ptr.numel() - 1,
+          gdata, incsr_row_ptr.data_ptr<Idx>(),
+          incsr_col_indices.data_ptr<Idx>(), incsr_reltypes.data_ptr<Idx>(),
+          incsr_row_ptr.numel() - 1,
           /*no need when !CompactAsOfNodeFlag*/ nullptr,
           /*no need when !CompactAsOfNodeFlag*/ nullptr, num_relations);
 }
@@ -321,7 +324,7 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
 template <typename Idx, typename DType,
           int AttnScoreUseMuAppliedAttnScoreSwitch>
 void _full_graph_message_mean_aggregation_and_edge_softmax(
-    at::Tensor &outcsr_rowptr, at::Tensor &outcsr_col_idx,
+    at::Tensor &outcsr_row_ptrs, at::Tensor &outcsr_col_indices,
     at::Tensor &outcsr_reltypes, at::Tensor &outcsr_eids, at::Tensor &message,
     at::Tensor &edgesoftmax_sum_per_node, at::Tensor &unnormalized_attn_score,
     at::Tensor &mu, at::Tensor &mu_softmax_applied_unnormalized_attn_score,
@@ -384,7 +387,7 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-  int64_t outcsr_num_rows = outcsr_rowptr.numel() - 1;
+  int64_t outcsr_num_rows = outcsr_row_ptrs.numel() - 1;
   auto [nblks, nthrs] = get_type2_schedule(
       gdata_attn.num_heads, gdata_attn.message_src_xlen, outcsr_num_rows);
 
@@ -392,7 +395,7 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
                                           AttnScoreUseMuAppliedAttnScoreSwitch>
       <<<nblks, nthrs, 0, stream>>>(
           gdata_attn, grad_message.data_ptr<DType>(),
-          outcsr_rowptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
+          outcsr_row_ptrs.data_ptr<Idx>(), outcsr_col_indices.data_ptr<Idx>(),
           outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
           /*no need when !CompactAsOfNodeFlag*/ nullptr,
           /*no need when !CompactAsOfNodeFlag*/ nullptr, num_relations);
@@ -400,7 +403,7 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
 
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
 void _full_graph_message_mean_aggregation(
-    at::Tensor &outcsr_rowptr, at::Tensor &outcsr_col_idx,
+    at::Tensor &outcsr_row_ptrs, at::Tensor &outcsr_col_indices,
     at::Tensor &outcsr_reltypes, at::Tensor &outcsr_eids,
     at::Tensor &edgesoftmax_sum_per_node, at::Tensor &unnormalized_attn_score,
     at::Tensor &mu, at::Tensor &mu_softmax_applied_unnormalized_attn_score,
@@ -451,34 +454,35 @@ void _full_graph_message_mean_aggregation(
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
-  int64_t outcsr_num_rows = outcsr_rowptr.numel() - 1;
+  int64_t outcsr_num_rows = outcsr_row_ptrs.numel() - 1;
   auto [nblks, nthrs] = get_type2_schedule(
       gdata.num_heads, gdata.message_src_xlen, outcsr_num_rows);
 
   HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel<
       Idx, DType, CompactAsOfNodeKind::Disabled, true, false,
       UseMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
-      gdata, outcsr_rowptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
-      outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
+      gdata, outcsr_row_ptrs.data_ptr<Idx>(),
+      outcsr_col_indices.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
+      outcsr_num_rows,
       /*no need unless CompactAsOfNode*/ nullptr,
       /*no need unless CompactAsOfNode*/ nullptr, num_relations);
 }
 
 void full_graph_message_mean_aggregation(
-    at::Tensor &outcsr_rowptr, at::Tensor &outcsr_col_idx,
+    at::Tensor &outcsr_row_ptrs, at::Tensor &outcsr_col_indices,
     at::Tensor &outcsr_reltypes, at::Tensor &outcsr_eids,
     at::Tensor &edgesoftmax_sum_per_node, at::Tensor &normalized_attn_score,
     at::Tensor &gradout, at::Tensor &grad_message) {
   at::Tensor dummy_tensor;
   _full_graph_message_mean_aggregation<int64_t, float, 2>(
-      outcsr_rowptr, outcsr_col_idx, outcsr_reltypes, outcsr_eids,
+      outcsr_row_ptrs, outcsr_col_indices, outcsr_reltypes, outcsr_eids,
       edgesoftmax_sum_per_node, dummy_tensor, dummy_tensor, dummy_tensor,
       normalized_attn_score, gradout, grad_message);
 }
 
 template <typename Idx, typename DType, int OutputMuAppliedAttnScoreSwitch>
 void _full_graph_edge_softmax_ops(
-    at::Tensor &outcsr_row_ptr, at::Tensor &outcsr_col_idx,
+    at::Tensor &outcsr_row_ptr, at::Tensor &outcsr_col_indices,
     at::Tensor &outcsr_eids, at::Tensor &outcsr_reltypes, at::Tensor &message,
     at::Tensor &unnormalized_attn_score, at::Tensor &edgesoftmax_sum_per_node,
     at::Tensor &mu_softmax_applied_unnormalized_attn_score,
@@ -533,14 +537,14 @@ void _full_graph_edge_softmax_ops(
   HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel<
       Idx, DType, CompactAsOfNodeKind::Disabled, true, false,
       OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
-      gdata, outcsr_row_ptr.data_ptr<Idx>(), outcsr_col_idx.data_ptr<Idx>(),
+      gdata, outcsr_row_ptr.data_ptr<Idx>(), outcsr_col_indices.data_ptr<Idx>(),
       outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
       /*no need when !CompactAsOfNodeFlag*/ nullptr,
       /*no need when !CompactAsOfNodeFlag*/ nullptr, num_relations);
 }
 
 void full_graph_edge_softmax_ops(
-    at::Tensor &outcsr_row_ptr, at::Tensor &outcsr_col_idx,
+    at::Tensor &outcsr_row_ptr, at::Tensor &outcsr_col_indices,
     at::Tensor &outcsr_eids, at::Tensor &outcsr_reltypes, at::Tensor &message,
     at::Tensor &unnormalized_attn_score, at::Tensor &normalized_attn_score,
     at::Tensor &out, at::Tensor &gradout, at::Tensor &mu,
@@ -549,7 +553,7 @@ void full_graph_edge_softmax_ops(
   // calling the partial specialized version of _full_graph_edge_softmax_ops
   // that does both stages, i.e., MuAppliedAttnScoreSwitch == 2
   _full_graph_edge_softmax_ops<int64_t, float, 2>(
-      outcsr_row_ptr, outcsr_col_idx, outcsr_eids, outcsr_reltypes, message,
+      outcsr_row_ptr, outcsr_col_indices, outcsr_eids, outcsr_reltypes, message,
       unnormalized_attn_score, dummy_tensor, dummy_tensor,
       normalized_attn_score, out, gradout, mu, grad_attn_score, grad_mu);
 }

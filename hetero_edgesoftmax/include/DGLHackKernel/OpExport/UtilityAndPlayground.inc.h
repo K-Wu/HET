@@ -18,22 +18,6 @@ void try_get_schedule_by_relations(int64_t num_relations, int64_t num_blocks) {
           mock_job_entries_for_all_prev_relation_vec.begin(),
           mock_job_entries_for_all_prev_relation_vec.end());
 
-  // std::vector<int> mock_vect(100, 100);
-  // std::vector<int> mock_vect2(100, 100);
-  // thrust::device_vector<int>
-  // dev_num_blocks_along_dimx_for_same_relation_vect(100);
-  // thrust::device_vector<int>
-  // dev_num_blocks_along_dimx_for_all_prev_relation_vect(100); for (int idx =
-  // 0; idx < 100; idx++){
-  //     dev_num_blocks_along_dimx_for_same_relation_vect[idx] = mock_vect[idx];
-  //     dev_num_blocks_along_dimx_for_all_prev_relation_vect[idx] =
-  //     mock_vect2[idx];
-  // }
-  // thrust::device_vector<int>
-  // dev_num_blocks_along_dimx_for_same_relation_vect(mock_vect.begin(),
-  // mock_vect.end()); thrust::device_vector<int>
-  // dev_num_blocks_along_dimx_for_all_prev_relation_vect(mock_vect2.begin(),
-  // mock_vect2.end());
   thrust::device_vector<int> dev_num_blocks_along_dimx_for_same_relation_vect(
       num_blocks_along_dimx_for_same_relation_vect.begin(),
       num_blocks_along_dimx_for_same_relation_vect.end());

@@ -75,7 +75,7 @@ std::shared_ptr<HGTLayerWeights> InitializeHGTLayerWeights(
       MySimpleNDArray<float, thrust::device_allocator<float>>(
           {hyper_params.num_node_types, hyper_params.num_heads,
            hyper_params.vlinear_out_dim});
-  // float *node_input_data; element num: num_nodes * NUM_HEADS *
+  // element num: num_nodes * NUM_HEADS *
   // NODE_INPUT_DIM_PER_HEAD float *relation_attention_matrices; element num:
   // num_relations * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD *
   // NODE_INPUT_DIM_PER_HEAD
@@ -169,7 +169,7 @@ void CompressedEdgeMessageConcatenatedCOOKernel(
 
   // preparing op kernel launch specific preprocessed metadata:
   // num_blocks_for_same_relation_per_block_vect,
-  // beg_node_entry_idxes_vect, blockid_relation_id_vect
+  // beg_node_entry_indices_vect, blockid_relation_id_vect
   auto [num_blocks_for_same_relation_vect,
         num_blocks_for_all_prev_relation_vect] =
       get_schedule_by_relation_kernel_launch_metadata<true, false,
@@ -187,7 +187,7 @@ void CompressedEdgeMessageConcatenatedCOOKernel(
   //   (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes);
 
   auto [num_blocks_for_same_relation_per_block_vect, blockid_relation_id_vect,
-        beg_node_entry_idxes_vect] =
+        beg_node_entry_indices_vect] =
       get_schedule_by_relation_kernel_launch_per_block_metadata(
           num_blocks_for_same_relation_vect,
           num_blocks_for_all_prev_relation_vect, RTX_3090_GRIDSIZE,
@@ -222,7 +222,7 @@ void CompressedEdgeMessageConcatenatedCOOKernel(
       hyper_params.num_relations,
       thrust::raw_pointer_cast(
           num_blocks_for_same_relation_per_block_vect.data()),
-      thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()),
+      thrust::raw_pointer_cast(beg_node_entry_indices_vect.data()),
       thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
 
   cuda_err_chk(cudaPeekAtLastError());
@@ -263,7 +263,7 @@ void EdgeAttentionConcatenatedCOOKernel(
 
   // preparing op kernel launch specific preprocessed metadata:
   // num_blocks_for_same_relation_per_block_vect,
-  // beg_node_entry_idxes_vect, blockid_relation_id_vect
+  // beg_node_entry_indices_vect, blockid_relation_id_vect
 
   auto [num_blocks_for_same_relation_vect,
         num_blocks_for_all_prev_relation_vect] =
@@ -281,7 +281,7 @@ void EdgeAttentionConcatenatedCOOKernel(
   //   (head2 (64 element), 16 nodes), (head3 (64 element), 16 nodes);
 
   auto [num_blocks_for_same_relation_per_block_vect, blockid_relation_id_vect,
-        beg_node_entry_idxes_vect] =
+        beg_node_entry_indices_vect] =
       get_schedule_by_relation_kernel_launch_per_block_metadata(
           num_blocks_for_same_relation_vect,
           num_blocks_for_all_prev_relation_vect, RTX_3090_GRIDSIZE,
@@ -316,7 +316,7 @@ void EdgeAttentionConcatenatedCOOKernel(
       hyper_params.num_relations,
       thrust::raw_pointer_cast(
           num_blocks_for_same_relation_per_block_vect.data()),
-      thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()),
+      thrust::raw_pointer_cast(beg_node_entry_indices_vect.data()),
       thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
 
   const dim3 nthrs2(RTX_3090_BLOCKSIZE, 1, 1);
@@ -357,20 +357,10 @@ void HGTBackPropGradientSMAFusion(
     MySimpleNDArray<DType, thrust::device_allocator<DType>> &grad_t_neighbour,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> &message,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> &sigmas) {
-  // LOG(INFO) << "Calling implementation of rgn layer 1 forward";
-  // assert(csr.IsSortedByEdgeType_CPU());
-  // typedef int32_t Idx;
-  // typedef float DType;
-  // auto csr = graph->GetCsrSortedByEdgeType(false);
-  // auto ranges = csr[0];
-  // auto ids = csr[1];
-  // auto eids = csr[2];
-  // auto type_ids = csr[3];
   auto range_data =
-      static_cast<Idx *>(thrust::raw_pointer_cast(csr.row_ptr.data()));
+      static_cast<Idx *>(thrust::raw_pointer_cast(csr.row_ptrs.data()));
   auto ids_data =
-      static_cast<Idx *>(thrust::raw_pointer_cast(csr.col_idx.data()));
-  // auto eids_data = static_cast<Idx*>(thrust::raw_pointer_cast(eids);
+      static_cast<Idx *>(thrust::raw_pointer_cast(csr.col_indices.data()));
   auto eids_data =
       static_cast<Idx *>(thrust::raw_pointer_cast(csr.eids.data()));
   auto typeids_data =
@@ -381,20 +371,13 @@ void HGTBackPropGradientSMAFusion(
   auto message_data = message.Ptr();
   auto sigmas_data = sigmas.Ptr();
 
-  // print_dims(hidden);
-  // print_dims(weight);
-  // print_dims(norm);
-  // print_dims(ret);
-  // Idx num_nodes = ranges->shape[0] - 1;
-  // Idx num_edges = eids->shape[0];
   Idx num_nodes = csr.num_rows;
-  Idx num_edges = csr.col_idx.size();
+  Idx num_edges = csr.col_indices.size();
   Idx num_heads = grad_sm_first_stage.shape[2];
   Idx feat_dim_per_head = grad_sm_first_stage.shape[3];
   Idx n_rel_types = grad_sm_first_stage.shape[1];
   int nblks = num_nodes;
   int nthrs = num_heads * feat_dim_per_head;
-  // auto* thr_entry = runtime::CUDAThreadEntry::ThreadLocal();
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t1 =
       std::chrono::high_resolution_clock::now();
@@ -477,9 +460,6 @@ void HGTForwardImpl(
   }
   thrust::device_vector<int> exclusive_scan_numBlocks_per_relationship(
       exclusive_scan_numBlocks_per_relationship_h);
-  // print_range("exclusive_scan_numBlocks_per_relationship",
-  // exclusive_scan_numBlocks_per_relationship.begin(),
-  // exclusive_scan_numBlocks_per_relationship.end());
   const dim3 nthrs(512, 1, 1);
   const dim3 nblks(exclusive_scan_numBlocks_per_relationship_h
                        [exclusive_scan_numBlocks_per_relationship_h.size() - 1],
@@ -559,9 +539,9 @@ void HGTForwardImpl(
           static_cast<int *>(thrust::raw_pointer_cast(
               exclusive_scan_residual_num_nnzs_per_relation_device.data())),
           static_cast<int *>(
-              thrust::raw_pointer_cast(graph.csr.row_ptr.data())),
+              thrust::raw_pointer_cast(graph.csr.row_ptrs.data())),
           static_cast<int *>(
-              thrust::raw_pointer_cast(graph.csr.col_idx.data())),
+              thrust::raw_pointer_cast(graph.csr.col_indices.data())),
           static_cast<int *>(thrust::raw_pointer_cast(graph.csr.eids.data())),
           static_cast<int *>(thrust::raw_pointer_cast(
               residual_exclusive_scan_numBlocks_per_relationship.data())));

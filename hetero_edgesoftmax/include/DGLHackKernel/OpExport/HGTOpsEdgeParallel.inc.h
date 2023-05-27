@@ -15,7 +15,7 @@ namespace FwProp {
 namespace SeparateCOO {
 namespace EdgeParallel {
 void full_graph_edge_softmax_ops(
-    at::Tensor &row_indices, at::Tensor &col_idx, at::Tensor &eids,
+    at::Tensor &row_indices, at::Tensor &col_indices, at::Tensor &eids,
     at::Tensor &reltypes_ptr, at::Tensor &unnormalized_attn_score,
     at::Tensor &mu, at::Tensor &edgesoftmax_sum_per_node,
     at::Tensor &mu_softmax_applied_unnormalized_attn_score,
@@ -24,14 +24,14 @@ void full_graph_edge_softmax_ops(
   // that does both stages, i.e., MuAppliedAttnScoreSwitch == 2
   HET::TorchExport::HGT::FwProp::_full_graph_edge_softmax_ops<int64_t, float, 3,
                                                               true>(
-      row_indices, col_idx, eids, reltypes_ptr, unnormalized_attn_score, mu,
+      row_indices, col_indices, eids, reltypes_ptr, unnormalized_attn_score, mu,
       edgesoftmax_sum_per_node, mu_softmax_applied_unnormalized_attn_score,
       normalized_attn_score);
 }
 // adapted from HET::TorchExport::RGCN::FwProp::Layer1_SeparateCOO
 void FullGraphFusedMessageCalcAndMeanAggregation(
     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
-    at::Tensor &separate_coo_row_idx, at::Tensor &separate_coo_col_idx,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
     at::Tensor &node_feat_input, at::Tensor &weights, at::Tensor &edge_norm,
     /*at::Tensor& relation_pri, */ at::Tensor &node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
@@ -79,8 +79,8 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
       node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
       node_feat_output.data_ptr<float>(),
       edge_norm.data_ptr<float>(),  // relation_pri.data_ptr<float>(),
-      separate_coo_row_idx.data_ptr<int64_t>(),
-      separate_coo_col_idx.data_ptr<int64_t>(),
+      separate_coo_row_indices.data_ptr<int64_t>(),
+      separate_coo_col_indices.data_ptr<int64_t>(),
       separate_coo_eids.data_ptr<int64_t>(),
       separate_coo_relptrs.data_ptr<int64_t>(),
       thrust::raw_pointer_cast(
@@ -94,7 +94,7 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
 // i.e., wrapper function of
 // HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp
 void full_graph_hetero_attention_ops(
-    at::Tensor &separate_coo_row_idx, at::Tensor &separate_coo_col_idx,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_relptrs,
     at::Tensor &applied_klinear_node_features,
     at::Tensor &applied_qlinear_node_features, at::Tensor &attn_score_weight,
@@ -159,8 +159,8 @@ void full_graph_hetero_attention_ops(
           attn_score_weight.data_ptr<float>(),
           attn_score_inner_product.data_ptr<float>(),
           unnormalized_attn_score.data_ptr<float>(),
-          separate_coo_row_idx.data_ptr<int64_t>(),
-          separate_coo_col_idx.data_ptr<int64_t>(),
+          separate_coo_row_indices.data_ptr<int64_t>(),
+          separate_coo_col_indices.data_ptr<int64_t>(),
           separate_coo_eids.data_ptr<int64_t>(),
           separate_coo_relptrs.data_ptr<int64_t>(),
           thrust::raw_pointer_cast(
@@ -170,25 +170,14 @@ void full_graph_hetero_attention_ops(
 }  // namespace EdgeParallel
 }  // namespace SeparateCOO
 
-// namespace IntegratedCSR {
-// namespace EdgeParallel {
-// void full_graph_message_mean_aggregation() {
-//   // We may use
-//   HET_HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation
-//   // in hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTForwardKernels.cu.h
-//   assert(0 && "Not implemented yet");
-// }
-// void full_graph_edge_softmax_ops() { assert(0 && "Not implemented yet"); }
-// }  // namespace EdgeParallel
-// }  // namespace IntegratedCSR
 }  // namespace FwProp
 namespace BckProp {
 namespace SeparateCOO {
 namespace EdgeParallel {
 void full_graph_hetero_attention_ops(
-    at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_idx,
+    at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_indices,
     at::Tensor &incsr_eids, at::Tensor &incsr_reltypes,
-    at::Tensor &separate_coo_row_idx, at::Tensor &separate_coo_col_idx,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_relptrs,
     at::Tensor &grad_attn_score_weight,
     at::Tensor &attn_score_weight_transposed,
@@ -258,8 +247,8 @@ void full_graph_hetero_attention_ops(
           applied_qlinear_node_features.data_ptr<float>(),
           attn_score_weight_transposed.data_ptr<float>(),
           grad_k.data_ptr<float>(), grad_unnorm_attn_score.data_ptr<float>(),
-          separate_coo_row_idx.data_ptr<int64_t>(),
-          separate_coo_col_idx.data_ptr<int64_t>(),
+          separate_coo_row_indices.data_ptr<int64_t>(),
+          separate_coo_col_indices.data_ptr<int64_t>(),
           separate_coo_eids.data_ptr<int64_t>(),
           separate_coo_relptrs.data_ptr<int64_t>(),
           thrust::raw_pointer_cast(
@@ -273,8 +262,8 @@ void full_graph_hetero_attention_ops(
           applied_qlinear_node_features.data_ptr<float>(),
           grad_attn_score_weight.data_ptr<float>(),
           grad_unnorm_attn_score.data_ptr<float>(),
-          separate_coo_row_idx.data_ptr<int64_t>(),
-          separate_coo_col_idx.data_ptr<int64_t>(),
+          separate_coo_row_indices.data_ptr<int64_t>(),
+          separate_coo_col_indices.data_ptr<int64_t>(),
           separate_coo_eids.data_ptr<int64_t>(),
           separate_coo_relptrs.data_ptr<int64_t>(),
           thrust::raw_pointer_cast(
@@ -308,13 +297,14 @@ void full_graph_hetero_attention_ops(
                                    CompactAsOfNodeKind::Disabled, true, true>
       <<<nblks_type2, nthrs_type2, 0, stream>>>(
           gdata, incsr_row_ptr.data_ptr<int64_t>(),
-          incsr_col_idx.data_ptr<int64_t>(), incsr_reltypes.data_ptr<int64_t>(),
-          incsr_row_ptr.numel() - 1, nullptr, nullptr, num_relations);
+          incsr_col_indices.data_ptr<int64_t>(),
+          incsr_reltypes.data_ptr<int64_t>(), incsr_row_ptr.numel() - 1,
+          nullptr, nullptr, num_relations);
 }
 
 void FullGraphFusedMessageCalcAndMeanAggregation(
     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
-    at::Tensor &separate_coo_row_idx, at::Tensor &separate_coo_col_idx,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
     at::Tensor &node_feat_input, at::Tensor &weights_transposed,
     at::Tensor &edge_norm,
     /*at::Tensor& relation_pri, */ at::Tensor &node_feat_output,
@@ -368,8 +358,8 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
       weights_transposed.data_ptr<float>(),
       grad_node_feat_input.data_ptr<float>(), node_feat_input.data_ptr<float>(),
       edge_norm.data_ptr<float>(), grad_edge_norm.data_ptr<float>(),
-      separate_coo_row_idx.data_ptr<int64_t>(),
-      separate_coo_col_idx.data_ptr<int64_t>(),
+      separate_coo_row_indices.data_ptr<int64_t>(),
+      separate_coo_col_indices.data_ptr<int64_t>(),
       separate_coo_eids.data_ptr<int64_t>(),
       separate_coo_relptrs.data_ptr<int64_t>(),
       thrust::raw_pointer_cast(
@@ -380,8 +370,8 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
       int64_t, int64_t *><<<nblks_outer_product, nthrs, 0, stream>>>(
       node_feat_input.data_ptr<float>(),
       grad_node_feat_output.data_ptr<float>(), grad_weights.data_ptr<float>(),
-      edge_norm.data_ptr<float>(), separate_coo_row_idx.data_ptr<int64_t>(),
-      separate_coo_col_idx.data_ptr<int64_t>(),
+      edge_norm.data_ptr<float>(), separate_coo_row_indices.data_ptr<int64_t>(),
+      separate_coo_col_indices.data_ptr<int64_t>(),
       separate_coo_eids.data_ptr<int64_t>(),
       separate_coo_relptrs.data_ptr<int64_t>(),
       thrust::raw_pointer_cast(
@@ -391,14 +381,6 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
 
 }  // namespace EdgeParallel
 }  // namespace SeparateCOO
-// namespace IntegratedCSR {
-// namespace EdgeParallel {
-// void full_graph_message_mean_aggregation() {
-//   assert(0 && "Not implemented yet");
-// }
-// void full_graph_edge_softmax_ops() { assert(0 && "Not implemented yet"); }
-// }  // namespace EdgeParallel
-// }  // namespace IntegratedCSR
 }  // namespace BckProp
 
 }  // namespace HGT

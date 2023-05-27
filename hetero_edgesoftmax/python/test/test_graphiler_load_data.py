@@ -26,7 +26,7 @@ def test_load_dataset(name, dataset_originally_homo_flag):
     (
         dataset,
         ntype_offsets,
-        canonical_etype_idx_tuples,
+        canonical_etype_indices_tuples,
     ) = utils.graphiler_load_data_as_mydgl_graph(
         name, to_homo=True, dataset_originally_homo_flag=dataset_originally_homo_flag
     )
@@ -38,7 +38,7 @@ def test_load_dataset(name, dataset_originally_homo_flag):
         dataset.get_num_nodes(),
         dataset.get_num_edges(),
     )
-    print(canonical_etype_idx_tuples)
+    print(canonical_etype_indices_tuples)
     pass
 
 

@@ -11,8 +11,8 @@ class RelationalFusedGatSeparateCOO(th.autograd.Function):
         ctx,
         separate_coo_eids,
         separate_coo_rel_ptrs,
-        separate_coo_row_idx,
-        separate_coo_col_idx,
+        separate_coo_row_indices,
+        separate_coo_col_indices,
         feat_src,
         el,
         er,
@@ -24,8 +24,8 @@ class RelationalFusedGatSeparateCOO(th.autograd.Function):
         ctx.save_for_backward(
             separate_coo_eids,
             separate_coo_rel_ptrs,
-            separate_coo_row_idx,
-            separate_coo_col_idx,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
             feat_src,
             el,
             er,
@@ -37,8 +37,8 @@ class RelationalFusedGatSeparateCOO(th.autograd.Function):
         K.relational_fused_gat_separate_coo(
             separate_coo_eids,
             separate_coo_rel_ptrs,
-            separate_coo_row_idx,
-            separate_coo_col_idx,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
             False,
             {},
             feat_src,
@@ -56,8 +56,8 @@ class RelationalFusedGatSeparateCOO(th.autograd.Function):
         (
             separate_coo_eids,
             separate_coo_rel_ptrs,
-            separate_coo_row_idx,
-            separate_coo_col_idx,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
             feat_src,
             el,
             er,
@@ -73,8 +73,8 @@ class RelationalFusedGatSeparateCOO(th.autograd.Function):
         K.backward_relational_fused_gat_separate_coo(
             separate_coo_eids,
             separate_coo_rel_ptrs,
-            separate_coo_row_idx,
-            separate_coo_col_idx,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
             0,  # CompactAsOfNodeKind::Disabled
             {},
             feat_src,
@@ -103,12 +103,12 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeList(
         ctx,
         separate_coo_eids,
         separate_coo_rel_ptrs,
-        separate_coo_row_idx,
-        separate_coo_col_idx,
-        separate_unique_node_idx_rel_ptr_row,
-        separate_unique_node_idx_node_idx_row,
-        separate_unique_node_idx_rel_ptr_col,
-        separate_unique_node_idx_node_idx_col,
+        separate_coo_row_indices,
+        separate_coo_col_indices,
+        separate_unique_node_indices_rel_ptr_row,
+        separate_unique_node_indices_node_indices_row,
+        separate_unique_node_indices_rel_ptr_col,
+        separate_unique_node_indices_node_indices_col,
         feat_src,
         el,
         er,
@@ -120,12 +120,12 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeList(
         ctx.save_for_backward(
             separate_coo_eids,
             separate_coo_rel_ptrs,
-            separate_coo_row_idx,
-            separate_coo_col_idx,
-            separate_unique_node_idx_rel_ptr_row,
-            separate_unique_node_idx_node_idx_row,
-            separate_unique_node_idx_rel_ptr_col,
-            separate_unique_node_idx_node_idx_col,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            separate_unique_node_indices_rel_ptr_row,
+            separate_unique_node_indices_node_indices_row,
+            separate_unique_node_indices_rel_ptr_col,
+            separate_unique_node_indices_node_indices_col,
             feat_src,
             el,
             er,
@@ -137,12 +137,12 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeList(
         K.relational_fused_gat_kernel_compact_as_of_node_separate_coo_dual_unique_node_list(
             separate_coo_eids,
             separate_coo_rel_ptrs,
-            separate_coo_row_idx,
-            separate_coo_col_idx,
-            separate_unique_node_idx_rel_ptr_row,
-            separate_unique_node_idx_rel_ptr_col,
-            separate_unique_node_idx_node_idx_row,
-            separate_unique_node_idx_node_idx_col,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            separate_unique_node_indices_rel_ptr_row,
+            separate_unique_node_indices_rel_ptr_col,
+            separate_unique_node_indices_node_indices_row,
+            separate_unique_node_indices_node_indices_col,
             feat_src,
             el,
             er,
@@ -158,12 +158,12 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeList(
         (
             separate_coo_eids,
             separate_coo_rel_ptrs,
-            separate_coo_row_idx,
-            separate_coo_col_idx,
-            separate_unique_node_idx_rel_ptr_row,
-            separate_unique_node_idx_node_idx_row,
-            separate_unique_node_idx_rel_ptr_col,
-            separate_unique_node_idx_node_idx_col,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            separate_unique_node_indices_rel_ptr_row,
+            separate_unique_node_indices_node_indices_row,
+            separate_unique_node_indices_rel_ptr_col,
+            separate_unique_node_indices_node_indices_col,
             feat_src,
             el,
             er,
@@ -179,14 +179,14 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeList(
         K.backward_relational_fused_gat_separate_coo(
             separate_coo_eids,
             separate_coo_rel_ptrs,
-            separate_coo_row_idx,
-            separate_coo_col_idx,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
             2,  # C++ enum class CompactAsOfNodeKind::EnabledWithDualList
             {
-                "unique_srcs_and_dests_rel_ptrs": separate_unique_node_idx_rel_ptr_row,
-                "unique_srcs_and_dests_rel_col": separate_unique_node_idx_rel_ptr_col,
-                "unique_srcs_and_dests_node_indices_row": separate_unique_node_idx_node_idx_row,
-                "unique_srcs_and_dests_node_indices_col": separate_unique_node_idx_node_idx_col,
+                "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_rel_ptr_row,
+                "unique_srcs_and_dests_rel_col": separate_unique_node_indices_rel_ptr_col,
+                "unique_srcs_and_dests_node_indices_row": separate_unique_node_indices_node_indices_row,
+                "unique_srcs_and_dests_node_indices_col": separate_unique_node_indices_node_indices_col,
             },
             feat_src,
             el,
@@ -212,10 +212,10 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOO(th.autograd.Function):
         ctx,
         separate_coo_eids,
         separate_coo_rel_ptrs,
-        separate_coo_row_idx,
-        separate_coo_col_idx,
-        separate_unique_node_idx_rel_ptr,
-        separate_unique_node_idx_node_idx,
+        separate_coo_row_indices,
+        separate_coo_col_indices,
+        separate_unique_node_indices_rel_ptr,
+        separate_unique_node_indices_node_indices,
         feat_src,
         el,
         er,
@@ -227,10 +227,10 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOO(th.autograd.Function):
         ctx.save_for_backward(
             separate_coo_eids,
             separate_coo_rel_ptrs,
-            separate_coo_row_idx,
-            separate_coo_col_idx,
-            separate_unique_node_idx_rel_ptr,
-            separate_unique_node_idx_node_idx,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            separate_unique_node_indices_rel_ptr,
+            separate_unique_node_indices_node_indices,
             feat_src,
             el,
             er,
@@ -242,12 +242,12 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOO(th.autograd.Function):
         K.relational_fused_gat_kernel_compact_as_of_node_separate_coo(
             separate_coo_eids,
             separate_coo_rel_ptrs,
-            separate_coo_row_idx,
-            separate_coo_col_idx,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
             True,
             {
-                "rel_ptrs": separate_unique_node_idx_rel_ptr,
-                "node_indices": separate_unique_node_idx_node_idx,
+                "rel_ptrs": separate_unique_node_indices_rel_ptr,
+                "node_indices": separate_unique_node_indices_node_indices,
             },
             feat_src,
             el,
@@ -264,10 +264,10 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOO(th.autograd.Function):
         (
             separate_coo_eids,
             separate_coo_rel_ptrs,
-            separate_coo_row_idx,
-            separate_coo_col_idx,
-            separate_unique_node_idx_rel_ptr,
-            separate_unique_node_idx_node_idx,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            separate_unique_node_indices_rel_ptr,
+            separate_unique_node_indices_node_indices,
             feat_src,
             el,
             er,
@@ -283,12 +283,12 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOO(th.autograd.Function):
         K.backward_relational_fused_gat_compact_as_of_node_separate_coo(
             separate_coo_eids,
             separate_coo_rel_ptrs,
-            separate_coo_row_idx,
-            separate_coo_col_idx,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
             True,
             {
-                "rel_ptrs": separate_unique_node_idx_rel_ptr,
-                "node_indices": separate_unique_node_idx_node_idx,
+                "rel_ptrs": separate_unique_node_indices_rel_ptr,
+                "node_indices": separate_unique_node_indices_node_indices,
             },
             feat_src,
             el,
@@ -313,11 +313,11 @@ class RelationalFusedGatCSR(th.autograd.Function):
     def forward(
         ctx,
         incsr_row_ptr,
-        incsr_col_idx,
+        incsr_col_indices,
         incsr_eids,
         incsr_reltypes,
         outcsr_row_ptr,
-        outcsr_col_idx,
+        outcsr_col_indices,
         outcsr_eids,
         outcsr_reltypes,
         unique_srcs_and_dests_rel_ptr,
@@ -332,11 +332,11 @@ class RelationalFusedGatCSR(th.autograd.Function):
     ):
         ctx.save_for_backward(
             incsr_row_ptr,
-            incsr_col_idx,
+            incsr_col_indices,
             incsr_eids,
             incsr_reltypes,
             outcsr_row_ptr,
-            outcsr_col_idx,
+            outcsr_col_indices,
             outcsr_eids,
             outcsr_reltypes,
             unique_srcs_and_dests_rel_ptr,
@@ -351,7 +351,7 @@ class RelationalFusedGatCSR(th.autograd.Function):
         ctx.slope = slope
         K.relational_fused_gat_kernel_csr(
             incsr_row_ptr,
-            incsr_col_idx,
+            incsr_col_indices,
             incsr_eids,
             incsr_reltypes,
             unique_srcs_and_dests_rel_ptr,
@@ -370,11 +370,11 @@ class RelationalFusedGatCSR(th.autograd.Function):
     def backward(ctx, gradout):
         (
             incsr_row_ptr,
-            incsr_col_idx,
+            incsr_col_indices,
             incsr_eids,
             incsr_reltypes,
             outcsr_row_ptr,
-            outcsr_col_idx,
+            outcsr_col_indices,
             outcsr_eids,
             outcsr_reltypes,
             unique_srcs_and_dests_rel_ptr,
@@ -393,7 +393,7 @@ class RelationalFusedGatCSR(th.autograd.Function):
 
         K.backward_relational_fused_gat_csr(
             outcsr_row_ptr,
-            outcsr_col_idx,
+            outcsr_col_indices,
             outcsr_eids,
             outcsr_reltypes,
             unique_srcs_and_dests_rel_ptr,
@@ -431,11 +431,11 @@ def relational_fused_gat_csr(graph, feat_src, el, er, slope):
         [graph.get_num_nodes()] + list(feat_src.size()[1:])
     )  # [num_dest_nodes, num_heads, out_feats//num_heads]
     return RelationalFusedGatCSR.apply(
-        incsr_dict["row_ptr"],
+        incsr_dict["row_ptrs"],
         incsr_dict["col_indices"],
         incsr_dict["eids"],
         incsr_dict["rel_types"],
-        outcsr_dict["row_ptr"],
+        outcsr_dict["row_ptrs"],
         outcsr_dict["col_indices"],
         outcsr_dict["eids"],
         outcsr_dict["rel_types"],
@@ -456,13 +456,13 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
     def forward(
         ctx,
         unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_idx,
+        unique_srcs_and_dests_node_indices,
         incsr_row_ptr,
-        incsr_col_idx,
+        incsr_col_indices,
         incsr_eids,
         incsr_reltypes,
         outcsr_row_ptr,
-        outcsr_col_idx,
+        outcsr_col_indices,
         outcsr_eids,
         outcsr_reltypes,
         feat_compact,
@@ -475,13 +475,13 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
     ):
         ctx.save_for_backward(
             unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
+            unique_srcs_and_dests_node_indices,
             incsr_row_ptr,
-            incsr_col_idx,
+            incsr_col_indices,
             incsr_eids,
             incsr_reltypes,
             outcsr_row_ptr,
-            outcsr_col_idx,
+            outcsr_col_indices,
             outcsr_eids,
             outcsr_reltypes,
             feat_compact,
@@ -494,11 +494,11 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
         ctx.slope = slope
         K.relational_fused_gat_csr(
             incsr_row_ptr,
-            incsr_col_idx,
+            incsr_col_indices,
             incsr_eids,
             incsr_reltypes,
             unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
+            unique_srcs_and_dests_node_indices,
             feat_compact,
             el_compact,
             er_compact,
@@ -514,13 +514,13 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
     def backward(ctx, gradout):
         (
             unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
+            unique_srcs_and_dests_node_indices,
             incsr_row_ptr,
-            incsr_col_idx,
+            incsr_col_indices,
             incsr_eids,
             incsr_reltypes,
             outcsr_row_ptr,
-            outcsr_col_idx,
+            outcsr_col_indices,
             outcsr_eids,
             outcsr_reltypes,
             feat_compact,
@@ -539,11 +539,11 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
 
         K.backward_relational_fused_gat_csr(
             outcsr_row_ptr,
-            outcsr_col_idx,
+            outcsr_col_indices,
             outcsr_eids,
             outcsr_reltypes,
             unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_idx,
+            unique_srcs_and_dests_node_indices,
             feat_compact,
             el_compact,
             er_compact,
@@ -579,11 +579,11 @@ def relational_fused_gat_compact_as_of_node(
     return RgatRelationalFusedGATCompactAsOfNodeCSR.apply(
         separate_unique_node_indices["rel_ptrs"],
         separate_unique_node_indices["node_indices"],
-        incsr_dict["row_ptr"],
+        incsr_dict["row_ptrs"],
         incsr_dict["col_indices"],
         incsr_dict["eids"],
         incsr_dict["rel_types"],
-        outcsr_dict["row_ptr"],
+        outcsr_dict["row_ptrs"],
         outcsr_dict["col_indices"],
         outcsr_dict["eids"],
         outcsr_dict["rel_types"],
@@ -629,7 +629,7 @@ def relational_fused_gat_compact_as_of_node_separate_coo_dual_unique_node_list(
     g, feat_compact, el_compact, er_compact, negative_slope
 ):
     separate_coo_dict = g.get_separate_coo_original()
-    separate_unique_node_idx_single_sided = (
+    separate_unique_node_indices_single_sided = (
         g.get_separate_unique_node_indices_single_sided()
     )
 
@@ -647,10 +647,10 @@ def relational_fused_gat_compact_as_of_node_separate_coo_dual_unique_node_list(
         separate_coo_dict["rel_ptrs"],
         separate_coo_dict["row_indices"],
         separate_coo_dict["col_indices"],
-        separate_unique_node_idx_single_sided["rel_ptr_row"],
-        separate_unique_node_idx_single_sided["node_idx_row"],
-        separate_unique_node_idx_single_sided["rel_ptr_col"],
-        separate_unique_node_idx_single_sided["node_idx_col"],
+        separate_unique_node_indices_single_sided["rel_ptrs_row"],
+        separate_unique_node_indices_single_sided["node_indices_row"],
+        separate_unique_node_indices_single_sided["rel_ptrs_col"],
+        separate_unique_node_indices_single_sided["node_indices_col"],
         feat_compact,
         el_compact,
         er_compact,
@@ -665,7 +665,7 @@ def relational_fused_gat_compact_as_of_node_separate_coo(
     g, feat_compact, el_compact, er_compact, negative_slope
 ):
     separate_coo_dict = g.get_separate_coo_original()
-    separate_unique_node_idx = g.get_separate_unique_node_indices()
+    separate_unique_node_indices = g.get_separate_unique_node_indices()
 
     exp = el_compact.new_empty([g.get_num_edges()] + list(el_compact.size()[1:]))
     s = el_compact.new_empty([g.get_num_nodes()] + list(el_compact.size()[1:]))
@@ -681,8 +681,8 @@ def relational_fused_gat_compact_as_of_node_separate_coo(
         separate_coo_dict["rel_ptrs"],
         separate_coo_dict["row_indices"],
         separate_coo_dict["col_indices"],
-        separate_unique_node_idx["rel_ptrs"],
-        separate_unique_node_idx["node_indices"],
+        separate_unique_node_indices["rel_ptrs"],
+        separate_unique_node_indices["node_indices"],
         feat_compact,
         el_compact,
         er_compact,
@@ -697,7 +697,7 @@ def relational_fused_gat_compact_as_of_node_separate_coo_single_sided(
     g, feat_compact, el_compact, er_compact, negative_slope
 ):
     separate_coo_dict = g.get_separate_coo_original()
-    separate_unique_node_idx_single_sided = (
+    separate_unique_node_indices_single_sided = (
         g.get_separate_unique_node_indices_single_sided()
     )
 
@@ -715,10 +715,10 @@ def relational_fused_gat_compact_as_of_node_separate_coo_single_sided(
         separate_coo_dict["rel_ptrs"],
         separate_coo_dict["row_indices"],
         separate_coo_dict["col_indices"],
-        separate_unique_node_idx_single_sided["rel_ptr_row"],
-        separate_unique_node_idx_single_sided["node_idx_row"],
-        separate_unique_node_idx_single_sided["rel_ptr_col"],
-        separate_unique_node_idx_single_sided["node_idx_col"],
+        separate_unique_node_indices_single_sided["rel_ptrs_row"],
+        separate_unique_node_indices_single_sided["node_indices_row"],
+        separate_unique_node_indices_single_sided["rel_ptrs_col"],
+        separate_unique_node_indices_single_sided["node_indices_col"],
         feat_compact,
         el_compact,
         er_compact,

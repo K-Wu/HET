@@ -15,24 +15,18 @@ int FusedGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph,
   MySimpleNDArray<Idx, std::allocator<Idx>> eids_h(
       std::vector<int64_t>{(int64_t)graph.values.size()});
   thrust::sequence<>(eids_h.data.begin(), eids_h.data.end(), 0);
-  // MySimpleNDArray<Idx, std::allocator<Idx>> transposed_eids_h(eids_h);
 
   MyHeteroSeparateCSR<Idx, std::allocator<Idx>> incsr_h(
       std::vector<cusp::csr_matrix<int, int, cusp::host_memory>>{graph},
       eids_h.data);
   MyHeteroSeparateCSR<Idx, std::allocator<Idx>> outcsr_h(incsr_h);
 
-  outcsr_h.Transpose();  // std::optional<std::reference_wrapper<typename
-                         // thrust::detail::vector_base<Idx,
-                         // std::allocator<Idx>>>>{transposed_eids_h.data});
+  outcsr_h.Transpose();
 
   // copy CSR+eid data to device
 
   MyHeteroSeparateCSR<Idx, thrust::device_allocator<Idx>> incsr(incsr_h);
   MyHeteroSeparateCSR<Idx, thrust::device_allocator<Idx>> outcsr(outcsr_h);
-  // MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids(eids_h);
-  // MySimpleNDArray<Idx, thrust::device_allocator<Idx>>
-  // transposed_eids(transposed_eids_h);
 
   MySimpleNDArray<DType, thrust::device_allocator<DType>> feat_src =
       GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, num_hidden});
@@ -81,17 +75,11 @@ int HGTBackPropGradientSMAFusionProfiling_main(
 
   MyHeteroIntegratedCSR<Idx, std::allocator<Idx>> transposed_csr_h(csr_h);
 
-  // transposed_csr_h.Transpose<>(std::optional<std::reference_wrapper<typename
-  // thrust::detail::vector_base<Idx,
-  // std::allocator<Idx>>>>{transposed_eids_h.data});
   transposed_csr_h.Transpose();
 
   // copy CSR+eid data to device
   MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> transposed_csr(
       transposed_csr_h);
-  // MySimpleNDArray<Idx, thrust::device_allocator<Idx>> eids(eids_h);
-  // MySimpleNDArray<Idx, thrust::device_allocator<Idx>>
-  // transposed_eids(transposed_eids_h);
 
   assert(csr_h.num_rels ==
          4);  // memory footprint 50% reduction hack for grad_sm_first_stage
@@ -139,9 +127,6 @@ int _HGTExperimental_main(
   MySimpleNDArray<DType, thrust::device_allocator<DType>> weight =
       GenerateRandomNDArray<DType>(
           {graph.num_rels, num_heads, in_feat, out_feat});
-  // MySimpleNDArray<DType, thrust::device_allocator<DType>>
-  // intermediate_vectors=GenerateRandomNDArray<DType>({graph.num_rels,
-  // graph.num_rows, num_heads, out_feat});
   MySimpleNDArray<DTypeVec4, thrust::device_allocator<DTypeVec4>> attention =
       GenerateRandomNDArray<DTypeVec4>({graph.total_num_nnzs, 1});
   HET::OpPrototyping::HGTForwardImpl(deivce_graph, num_heads, in_feat, out_feat,
@@ -164,13 +149,6 @@ int _RGCNLayer1Profiling_main(
   }
 
   // load data
-  // MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr;
-  // MySimpleNDArray<Idx, thrust::device_allocator<Idx>>
-  // eids({csr.total_num_nnzs});
-  // thrust::sequence<>(eids.data.begin(),eids.data.end(), 0);
-  // MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>>
-  // transposed_csr(csr); MySimpleNDArray<Idx, thrust::device_allocator<Idx>>
-  // transposed_eids(eids); transposed_csr.Transpose(transposed_eids);
   MySimpleNDArray<Idx, std::allocator<Idx>> eids_h(
       std::vector<int64_t>{(int64_t)graph.column_indices.size()});
   thrust::sequence<>(eids_h.data.begin(), eids_h.data.end(), 0);
@@ -180,24 +158,14 @@ int _RGCNLayer1Profiling_main(
       graph.row_offsets, graph.column_indices, graph.values, eids_h.data);
   MyHeteroIntegratedCSR<Idx, std::allocator<Idx>> transposed_csr_h(csr_h);
 
-  // transposed_csr_h.Transpose<>(std::optional<std::reference_wrapper<typename
-  // thrust::detail::vector_base<Idx,
-  // std::allocator<Idx>>>>{transposed_eids_h.data});
   transposed_csr_h.Transpose();
 
-  // MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr(csr_h);
-  // MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>>
-  // transposed_csr(transposed_csr_h); MySimpleNDArray<Idx,
-  // thrust::device_allocator<Idx>> eids(eids_h); MySimpleNDArray<Idx,
-  // thrust::device_allocator<Idx>> transposed_eids(transposed_eids_h);
-
   MyHyb<Idx, std::allocator<Idx>,
         MyHeteroIntegratedCSR<Idx, std::allocator<Idx>>>
-      myhyb_h;  // = IntegratedCSRToHyb_ADHOC_CPU(csr_h, 4, 4, csr_h.num_rows);
+      myhyb_h;
   MyHyb<Idx, std::allocator<Idx>,
         MyHeteroIntegratedCSR<Idx, std::allocator<Idx>>>
-      transposed_myhyb_h;  // = IntegratedCSRToHyb_ADHOC_CPU(transposed_csr_h,
-                           // 4, 4, transposed_csr_h.num_rows);
+      transposed_myhyb_h;
   if (flagUseMyHyb || flagCheckCorrect) {
     myhyb_h = IntegratedCSRToHyb_ADHOC_CPU(csr_h, 4, 4, csr_h.num_rows);
     transposed_myhyb_h = IntegratedCSRToHyb_ADHOC_CPU(
@@ -211,9 +179,8 @@ int _RGCNLayer1Profiling_main(
         MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>>>
       transposed_myhyb(transposed_myhyb_h);
 
-  MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr;  //(csr_h);
-  MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>>
-      transposed_csr;  //(transposed_csr_h);
+  MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> csr;
+  MyHeteroIntegratedCSR<Idx, thrust::device_allocator<Idx>> transposed_csr;
 
   if ((!flagUseMyHyb) || flagCheckCorrect) {
     csr = csr_h;
@@ -229,26 +196,18 @@ int _RGCNLayer1Profiling_main(
   // asuming num_bases == num_rels
   MySimpleNDArray<DType, thrust::device_allocator<DType>> norm =
       GenerateRandomNDArray<DType>({csr_h.total_num_nnzs, 1});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>>
-      ret;  //=GenerateRandomNDArray<DType>({myhyb.num_rows, out_feat});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>>
-      ret2;  //=GenerateRandomNDArray<DType>({csr.num_rows, out_feat});
+  MySimpleNDArray<DType, thrust::device_allocator<DType>> ret;
+  MySimpleNDArray<DType, thrust::device_allocator<DType>> ret2;
 
   MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_out =
       GenerateRandomNDArray<DType>(
           {csr_h.num_rows,
            out_feat});  // TODO: verify if the assumption that the shape is the
                         // same as ret is correct
-  MySimpleNDArray<DType, thrust::device_allocator<DType>>
-      grad_hidden;  //=GenerateRandomNDArray<DType>({myhyb.total_num_nnzs,in_feat});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>>
-      grad_weight;  //=GenerateRandomNDArray<DType>({myhyb.num_rels, in_feat,
-                    // out_feat});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>>
-      grad_hidden2;  //=GenerateRandomNDArray<DType>({myhyb.total_num_nnzs,in_feat});
-  MySimpleNDArray<DType, thrust::device_allocator<DType>>
-      grad_weight2;  //=GenerateRandomNDArray<DType>({myhyb.num_rels, in_feat,
-                     // out_feat});
+  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_hidden;
+  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_weight;
+  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_hidden2;
+  MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_weight2;
 
   if ((!flagUseMyHyb) || flagCheckCorrect) {
     ret = GenerateRandomNDArray<DType>({csr_h.num_rows, out_feat});

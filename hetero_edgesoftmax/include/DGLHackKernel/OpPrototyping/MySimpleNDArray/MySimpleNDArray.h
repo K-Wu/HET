@@ -2,6 +2,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/random.h>
+
 #include <vector>
 
 namespace HET {
@@ -62,19 +63,9 @@ class MySimpleNDArray {
       : shape(other.shape), data(other.data) {}
 
   /*! \return the data pointer with type. */
-  // template <typename T>
-  // inline T* Ptr() {
-  //    return static_cast<T*>(thrust::raw_pointer_cast(data.data()));
-  //}
-
   inline DType *Ptr() {
     return static_cast<DType *>(thrust::raw_pointer_cast(data.data()));
   }
-
-  // template <typename T>
-  // inline const T* Ptr() const {
-  //    return static_cast<const T*>(thrust::raw_pointer_cast(data.data()));
-  //}
 
   template <typename OtherAlloc>
   bool IsEqual(const MySimpleNDArray<DType, OtherAlloc> &other) const {

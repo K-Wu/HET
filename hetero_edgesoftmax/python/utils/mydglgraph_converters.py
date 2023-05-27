@@ -40,9 +40,9 @@ def RGNN_get_mydgl_graph(
             infidel_sort_flag=False,
         )
         ntype_offsets = [0, 14541]
-        canonical_etype_idx_tuples = []
+        canonical_etype_indices_tuples = []
         for idx_etype in range(int(max(edge_etypes)) + 1):
-            canonical_etype_idx_tuples.append((0, idx_etype, 0))
+            canonical_etype_indices_tuples.append((0, idx_etype, 0))
         # dglgraph = fetch_fb15k237_dglgraph()
     elif dataset == "wikikg2":
         print("WARNING - loading wikikg2. Currently we only support a few dataset.")
@@ -66,9 +66,9 @@ def RGNN_get_mydgl_graph(
             infidel_sort_flag=False,
         )
         ntype_offsets = [0, 2500604]  # there is only one node type
-        canonical_etype_idx_tuples = []
+        canonical_etype_indices_tuples = []
         for idx_etype in range(int(max(edge_etypes)) + 1):
-            canonical_etype_idx_tuples.append((0, idx_etype, 0))
+            canonical_etype_indices_tuples.append((0, idx_etype, 0))
         # graph_dict = fetch_wikikg2_graph_dict()
     # elif dataset == "mag":
     #     print("WARNING - loading mag. Currently we only support a few dataset.")
@@ -95,7 +95,7 @@ def RGNN_get_mydgl_graph(
         (
             g,
             ntype_offsets,
-            canonical_etype_idx_tuples,
+            canonical_etype_indices_tuples,
         ) = graphiler_datasets_loader.graphiler_load_data_as_mydgl_graph(dataset, True)
         edge_srcs, edge_dsts, edge_etypes, edge_referential_eids = (
             g["original"]["row_indices"],
@@ -223,12 +223,12 @@ def RGNN_get_mydgl_graph(
         raise NotImplementedError("sparse format not supported")
     # g.import_metadata_from_dgl_heterograph(dglgraph)
     g["original"]["node_type_offsets"] = th.LongTensor(ntype_offsets)
-    return g, canonical_etype_idx_tuples
+    return g, canonical_etype_indices_tuples
 
 
 def convert_mydgl_graph_csr_to_coo(g):
     # we haven't implemented csr2coo for tensors so we need to convert to numpy first
-    row_ptr = g["original"]["row_ptr"].numpy()
+    row_ptr = g["original"]["row_ptrs"].numpy()
     col_idx = g["original"]["col_indices"].numpy()
     rel_types = g["original"]["rel_types"].numpy()
     eids = g["original"]["eids"].numpy()
@@ -249,7 +249,7 @@ def convert_mydgl_graph_csr_to_coo(g):
             transposed_edge_etypes,
             transposed_edge_referential_eids,
         ) = sparse_matrix_converters.csr2coo(
-            g["transposed"]["row_ptr"].numpy(),
+            g["transposed"]["row_ptrs"].numpy(),
             g["transposed"]["col_indices"].numpy(),
             g["transposed"]["rel_types"].numpy(),
             g["transposed"]["eids"].numpy(),
@@ -273,7 +273,7 @@ def convert_mydgl_graph_coo_to_csr(g):
         edge_etypes,
         edge_referential_eids,
     ) = sparse_matrix_converters.coo2csr(
-        g["original"]["row_ptr"],
+        g["original"]["row_ptrs"],
         g["original"]["col_indices"],
         g["original"]["rel_types"],
         g["original"]["eids"],
@@ -290,7 +290,7 @@ def convert_mydgl_graph_coo_to_csr(g):
             transposed_edge_etypes,
             transposed_edge_referential_eids,
         ) = sparse_matrix_converters.coo2csr(
-            g["transposed"]["row_ptr"],
+            g["transposed"]["row_ptrs"],
             g["transposed"]["col_indices"],
             g["transposed"]["rel_types"],
             g["transposed"]["eids"],
@@ -320,12 +320,12 @@ def create_mydgl_graph_csr_with_transpose_torch(
 ):
     g = mydgl_graph.MyDGLGraph()
     g["original"] = dict()
-    g["original"]["row_ptr"] = row_ptr
+    g["original"]["row_ptrs"] = row_ptr
     g["original"]["col_indices"] = col_idx
     g["original"]["rel_types"] = rel_types
     g["original"]["eids"] = eids
     g["transposed"] = dict()
-    g["transposed"]["row_ptr"] = transposed_row_ptr
+    g["transposed"]["row_ptrs"] = transposed_row_ptr
     g["transposed"]["col_indices"] = transposed_col_idx
     g["transposed"]["rel_types"] = transposed_rel_types
     g["transposed"]["eids"] = transposed_eids
@@ -335,7 +335,7 @@ def create_mydgl_graph_csr_with_transpose_torch(
 def create_mydgl_graph_csr_torch(row_ptr, col_idx, rel_types, eids):
     g = mydgl_graph.MyDGLGraph()
     g["original"] = dict()
-    g["original"]["row_ptr"] = row_ptr
+    g["original"]["row_ptrs"] = row_ptr
     g["original"]["col_indices"] = col_idx
     g["original"]["rel_types"] = rel_types
     g["original"]["eids"] = eids

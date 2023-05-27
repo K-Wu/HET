@@ -116,7 +116,7 @@ class ScriptedMyDGLGraph(object):
 
     def get_out_csr(self) -> Dict[str, torch.Tensor]:
         # G["original"]["rel_types"]
-        # G["original"]["row_ptr"]
+        # G["original"]["row_ptrs"]
         # G["original"]["col_indices"]
         # G["original"]["eids"]
         result = self.out_csr
@@ -125,7 +125,7 @@ class ScriptedMyDGLGraph(object):
 
     def get_in_csr(self) -> Dict[str, torch.Tensor]:
         # G["transposed"]["rel_types"]
-        # G["transposed"]["row_ptr"]
+        # G["transposed"]["row_ptrs"]
         # G["transposed"]["col_indices"]
         # G["transposed"]["eids"]
 
@@ -155,10 +155,10 @@ class ScriptedMyDGLGraph(object):
         return result
 
     def get_separate_unique_node_indices_single_sided(self) -> Dict[str, torch.Tensor]:
-        # G["separate"]["unique_node_idx_single_sided"]["rel_ptr_row"],
-        # G["separate"]["unique_node_idx_single_sided"]["node_idx_row"],
-        # # G["separate"]["unique_node_idx_single_sided"]["rel_ptr_col"],
-        # G["separate"]["unique_node_idx_single_sided"]["node_idx_col"],
+        # G["separate"]["unique_node_indices_single_sided"]["rel_ptrs_row"],
+        # G["separate"]["unique_node_indices_single_sided"]["node_indices_row"],
+        # # G["separate"]["unique_node_indices_single_sided"]["rel_ptrs_col"],
+        # G["separate"]["unique_node_indices_single_sided"]["node_indices_col"],
         result = self.separate_unique_node_indices_single_sided
         assert result is not None
         return result
@@ -166,9 +166,9 @@ class ScriptedMyDGLGraph(object):
     def get_separate_unique_node_indices_single_sided_inverse_idx(
         self,
     ) -> Dict[str, torch.Tensor]:
-        # G["separate"]["unique_node_idx_single_sided"]["rel_ptr_row"],
-        # G["separate"]["unique_node_idx_single_sided"]["inverse_idx_row"],
-        # G["separate"]["unique_node_idx_single_sided"]["inverse_idx_col"],
+        # G["separate"]["unique_node_indices_single_sided"]["rel_ptrs_row"],
+        # G["separate"]["unique_node_indices_single_sided"]["inverse_indices_row"],
+        # G["separate"]["unique_node_indices_single_sided"]["inverse_indices_col"],
         result = self.separate_unique_node_indices_single_sided_inverse_idx
         assert result is not None
         return result
@@ -185,7 +185,7 @@ class ScriptedMyDGLGraph(object):
 
     def get_separate_csr_original(self) -> Dict[str, torch.Tensor]:
         # G["separate"]["csr"]["original"]["rel_ptrs"],
-        # G["separate"]["csr"]["original"]["row_ptr"],
+        # G["separate"]["csr"]["original"]["row_ptrs"],
         # G["separate"]["csr"]["original"]["col_indices"],
         # G["separate"]["csr"]["original"]["eids"],
 

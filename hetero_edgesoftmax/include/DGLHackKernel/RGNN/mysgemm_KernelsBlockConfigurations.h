@@ -12,7 +12,7 @@ get_schedule_by_relation_kernel_launch_per_block_metadata(
   thrust::device_vector<int>
       num_blocks_along_dimx_for_same_relation_per_block_vect;
   thrust::device_vector<int> blockid_relation_id_vect;
-  thrust::device_vector<int> beg_node_entry_idxes_vect;
+  thrust::device_vector<int> beg_node_entry_indices_vect;
 
   int idx_curr_relation = 0;
   int curr_beg_node_entry_idx = 0;
@@ -30,14 +30,14 @@ get_schedule_by_relation_kernel_launch_per_block_metadata(
       curr_beg_node_entry_idx = 0;
     }
     blockid_relation_id_vect.push_back(idx_curr_relation);
-    beg_node_entry_idxes_vect.push_back(curr_beg_node_entry_idx);
+    beg_node_entry_indices_vect.push_back(curr_beg_node_entry_idx);
     curr_beg_node_entry_idx += num_node_per_block_per_iteration;
     num_blocks_along_dimx_for_same_relation_per_block_vect.push_back(
         num_blocks_along_dimx_for_same_relation_vect[idx_curr_relation]);
   }
 
   return std::make_tuple(num_blocks_along_dimx_for_same_relation_per_block_vect,
-                         blockid_relation_id_vect, beg_node_entry_idxes_vect);
+                         blockid_relation_id_vect, beg_node_entry_indices_vect);
 }
 
 template <bool EqualPartitionFlag, bool PartitionAccordingToBlockSizeFlag,
@@ -138,8 +138,6 @@ get_schedule_by_relation_kernel_launch_metadata(
         num_blocks_along_dimx_for_all_prev_relation_vect[idx_relationship + 1] -
         num_blocks_along_dimx_for_all_prev_relation_vect[idx_relationship]);
   }
-  // num_blocks_along_dimx_for_all_prev_relation_vect.erase(
-  //    num_blocks_along_dimx_for_all_prev_relation_vect.begin());
 
   return std::make_pair(num_blocks_along_dimx_for_same_relation_vect,
                         num_blocks_along_dimx_for_all_prev_relation_vect);

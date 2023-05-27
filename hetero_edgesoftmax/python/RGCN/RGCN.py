@@ -299,12 +299,12 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
         else:
             if self.compact_as_of_node_flag:
                 # separate_unique_node_idx = g.get_separate_unique_node_indices()
-                separate_unique_node_idx_single_sided = (
+                separate_unique_node_indices_single_sided = (
                     g.get_separate_unique_node_indices_single_sided()
                 )
                 feat_compact_src = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_idx_single_sided["rel_ptr_row"],
-                    separate_unique_node_idx_single_sided["node_idx_row"],
+                    separate_unique_node_indices_single_sided["rel_ptrs_row"],
+                    separate_unique_node_indices_single_sided["node_indices_row"],
                     weight,
                     x,
                     True,
@@ -456,7 +456,7 @@ def get_model(args, mydglgraph):
 
 
 def main(args):
-    g, canonical_etype_idx_tuples = utils.RGNN_get_mydgl_graph(
+    g, canonical_etype_indices_tuples = utils.RGNN_get_mydgl_graph(
         args.dataset,
         args.sort_by_src,
         args.sort_by_etype,
@@ -476,9 +476,7 @@ def RGCN_main_procedure(args, g, model, feats):
     # aifb len(labels) == 8285, num_nodes == 8285, num_relations == 91, num_edges == 66371, len(train_idx) == 140, len(test_idx) == 36, num_classes = 4
     # mutag len(labels) == 23644, num_nodes == 23644, num_relations == 47, num_edges == 172098, len(train_idx) == 272, len(test_idx) == 68, num_classes = 2
     # bgs len(labels) == 333845, num_nodes == 333845, num_relations == 207, num_edges == 2166243, len(train_idx) == 117, len(test_idx) == 29, num_classes = 2
-    # num_nodes = g["original"]["row_ptr"].numel() - 1
     num_nodes = g.get_num_nodes()
-    # num_rels = int(g["original"]["rel_types"].max().item()) + 1
     num_classes = args.num_classes
     labels = np.random.randint(0, num_classes, num_nodes)
     train_idx = torch.randint(0, num_nodes, (args.train_size,))

@@ -165,16 +165,18 @@ class HET_HGTLayerHetero(nn.Module):
                 # NB: the todo here to implement single-sided matmul for compact_as_of_node_flag does not make sense
                 attn_weight_dst_product_compact = (
                     B.rgnn_relational_matmul_compact_as_of_node(
-                        separate_unique_node_indices_dict_single_sided["rel_ptr_col"],
-                        separate_unique_node_indices_dict_single_sided["node_idx_col"],
+                        separate_unique_node_indices_dict_single_sided["rel_ptrs_col"],
+                        separate_unique_node_indices_dict_single_sided[
+                            "node_indices_col"
+                        ],
                         relation_att_weight,
                         q,
                         False,
                     )
                 )  # NB: use single side instead without need to modify kernel
                 attn_score = B.rgnn_inner_product_node_compact_and_node(
-                    separate_unique_node_indices_dict_single_sided["rel_ptr_col"],
-                    separate_unique_node_indices_dict_single_sided["node_idx_col"],
+                    separate_unique_node_indices_dict_single_sided["rel_ptrs_col"],
+                    separate_unique_node_indices_dict_single_sided["node_indices_col"],
                     separate_coo_original_dict["rel_ptrs"],
                     separate_coo_original_dict["eids"],
                     separate_coo_original_dict["row_indices"],

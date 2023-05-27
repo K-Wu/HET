@@ -57,7 +57,7 @@ def HGT_get_model(g: dgl.DGLGraph, num_classes, hypermeters):
 
 def HGT_get_our_model(
     g: utils.MyDGLGraph,
-    canonical_etype_idx_tuples,
+    canonical_etype_indices_tuples,
     num_classes,
     args: argparse.Namespace,
 ) -> tuple[HET_RelGraphEmbed, HET_HGT_DGLHetero]:
@@ -68,12 +68,12 @@ def HGT_get_our_model(
         # args.n_hidden,
         num_classes,
         torch.tensor(
-            list(zip(*canonical_etype_idx_tuples))[0],
+            list(zip(*canonical_etype_indices_tuples))[0],
             dtype=torch.long,
             requires_grad=False,
         ),
         torch.tensor(
-            list(zip(*canonical_etype_idx_tuples))[2],
+            list(zip(*canonical_etype_indices_tuples))[2],
             dtype=torch.long,
             requires_grad=False,
         ),
@@ -98,7 +98,7 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
     if dgl_model_flag:
         g, _, _2 = utils.graphiler_load_data(args.dataset, to_homo=False)
     else:
-        g, canonical_etype_idx_tuples = utils.RGNN_get_mydgl_graph(
+        g, canonical_etype_indices_tuples = utils.RGNN_get_mydgl_graph(
             args.dataset,
             args.sort_by_src,
             args.sort_by_etype,
@@ -126,19 +126,15 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         embed_layer, model = HGT_get_model(g, num_classes, args)
     else:
         print("Using our HGT model")
-        # print(
-        # int(g["original"]["col_indices"].max()) + 1,
-        # )
-        # print(g["original"]["row_ptr"].numel() - 1)
         embed_layer, model = HGT_get_our_model(
-            g, canonical_etype_idx_tuples, num_classes, args
+            g, canonical_etype_indices_tuples, num_classes, args
         )
         # TODO: only certain design choices call for this. Add an option to choose.
 
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=False)
-        g.generate_separate_unique_node_idx_for_each_etype()
-        g.generate_separate_unique_node_idx_single_sided_for_each_etype()
+        g.generate_separate_unique_node_indices_for_each_etype()
+        g.generate_separate_unique_node_indices_single_sided_for_each_etype()
         if not args.full_graph_training:
             # need to prepare dgl graph for sampler
             g_dglgraph = g.get_dgl_graph()

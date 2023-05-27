@@ -146,58 +146,58 @@ class HET_RelationalAttLayer(nn.Module):
                     self.attn_l.view(-1, self.out_feat // self.n_heads, 1),
                 ).view(-1, self.n_heads, self.in_feat, 1)
                 # separate_unique_node_idx = g.get_separate_unique_node_indices()
-                separate_unique_node_idx_single_sided = (
+                separate_unique_node_indices_single_sided = (
                     g.get_separate_unique_node_indices_single_sided()
                 )
                 feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_idx_single_sided["rel_ptr_row"],
-                    separate_unique_node_idx_single_sided["node_idx_row"],
+                    separate_unique_node_indices_single_sided["rel_ptrs_row"],
+                    separate_unique_node_indices_single_sided["node_indices_row"],
                     self.conv_weights,
                     inputs,
                     True,  # fixme: check if this is correct
                 )  # NB: use single side instead without need to modify kernel
                 el_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_idx_single_sided["rel_ptr_row"],
-                    separate_unique_node_idx_single_sided["node_idx_row"],
+                    separate_unique_node_indices_single_sided["rel_ptrs_row"],
+                    separate_unique_node_indices_single_sided["node_indices_row"],
                     product_of_conv_weights_attn_l,
                     inputs,
                     True,
                 )  # NB: use single side instead without need to modify kernel
                 er_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_idx_single_sided["rel_ptr_col"],
-                    separate_unique_node_idx_single_sided["node_idx_col"],
+                    separate_unique_node_indices_single_sided["rel_ptrs_col"],
+                    separate_unique_node_indices_single_sided["node_indices_col"],
                     product_of_conv_weights_attn_r,
                     inputs,
                     True,
                 )  # NB: use single side instead without need to modify kernel
             else:
                 # separate_unique_node_idx = g.get_separate_unique_node_indices()
-                separate_unique_node_idx_single_sided = (
+                separate_unique_node_indices_single_sided = (
                     g.get_separate_unique_node_indices_single_sided()
                 )
                 # NB: no need to distinguish feat_compact_src and feat_compact_dst because in our case all datasets are added with inverse edges
                 feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_idx_single_sided["rel_ptr_row"],
-                    separate_unique_node_idx_single_sided["node_idx_row"],
+                    separate_unique_node_indices_single_sided["rel_ptrs_row"],
+                    separate_unique_node_indices_single_sided["node_indices_row"],
                     self.conv_weights,
                     inputs,
                     True,
                 )  # NB: use single side instead without need to modify kernel
                 feat_compact_dst = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_idx_single_sided["rel_ptr_col"],
-                    separate_unique_node_idx_single_sided["node_idx_col"],
+                    separate_unique_node_indices_single_sided["rel_ptrs_col"],
+                    separate_unique_node_indices_single_sided["node_indices_col"],
                     self.conv_weights,
                     inputs,
                     True,
                 )  # NB: use single side instead without need to modify kernel
                 # FIXME: the following two lines should be implemented with relational_inner_product_compact_and_weight
                 el_compact = B.rgnn_relational_matmul_no_scatter_gather_list(
-                    separate_unique_node_idx_single_sided["rel_ptr_row"],
+                    separate_unique_node_indices_single_sided["rel_ptrs_row"],
                     self.attn_l.unsqueeze(-1),
                     feat_compact,
                 )  # NB: use single side instead without need to modify kernel
                 er_compact = B.rgnn_relational_matmul_no_scatter_gather_list(
-                    separate_unique_node_idx_single_sided["rel_ptr_col"],
+                    separate_unique_node_indices_single_sided["rel_ptrs_col"],
                     self.attn_r.unsqueeze(-1),
                     feat_compact_dst,
                 )  # NB: use single side instead without need to modify kernel

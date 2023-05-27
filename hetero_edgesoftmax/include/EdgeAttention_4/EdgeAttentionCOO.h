@@ -1,7 +1,7 @@
 #pragma once
 #include "hetero_edgesoftmax.h"
 #include "mysgemm_functor.cu.h"
-//#include "EdgeAttentionCOO_128_16.h"
+// #include "EdgeAttentionCOO_128_16.h"
 
 // __device__ __forceinline__ void
 // _perRow_EdgeAttentionConcatenatedCOOKernel(int edge_idx, float **__restrict__
@@ -52,16 +52,16 @@
 //   (head3 (64 element), 16 nodes); ... block(BLOCKDIM_X-1,1): (head2 (64
 //   element), 16 nodes), (head3 (64 element), 16 nodes);
 //  problem definition
-//#define TILE_SZ_A 128
-//#define TILE_SZ_B 8
-//#define OUT_DIM (256)
-//#define NUM_HEADS (4)
+// #define TILE_SZ_A 128
+// #define TILE_SZ_B 8
+// #define OUT_DIM (256)
+// #define NUM_HEADS (4)
 // d_k
 // #define NODE_INPUT_DIM_PER_HEAD (OUT_DIM / NUM_HEADS)
 
 // #define TILE_SZ_RATIO (TILE_SZ_A / TILE_SZ_B)
 // #define TILE_NUM_HEAD (TILE_SZ_A / NODE_INPUT_DIM_PER_HEAD)
-//#define TILE_NUM_HEAD 1
+// #define TILE_NUM_HEAD 1
 
 // #define COARSE_SGEMM_BLOCKSIZE (TILE_SZ_A)
 // #define COARSE_SGEMM_NODES_PER_BLOCK (TILE_SZ_B)
@@ -218,11 +218,11 @@ __global__ void HET_EdgeAttentionConcatenatedFirstStageWeightMulDestCOOKernel(
     int *__restrict__ sizes_unique_index_to_dest_node_per_relation,
     int num_relations,
     int *__restrict__ num_blocks_xdim_for_same_relation_per_block_vect,
-    int *__restrict__ beg_node_entry_idxes_vect,
+    int *__restrict__ beg_node_entry_indices_vect,
     int *__restrict__ blockid_relation_id_vect) {
   constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
   constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
-  int beg_node_entry_idx = beg_node_entry_idxes_vect[blockIdx.x];
+  int beg_node_entry_idx = beg_node_entry_indices_vect[blockIdx.x];
   int stride = num_blocks_xdim_for_same_relation_per_block_vect[blockIdx.x] *
                COARSE_SGEMM_NODES_PER_BLOCK;
   int relation_idx = blockid_relation_id_vect[blockIdx.x];
@@ -413,7 +413,7 @@ EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel(
 
   thrust::device_vector<int> num_blocks_xdim_for_same_relation_per_block_vect;
   thrust::device_vector<int> blockid_relation_id_vect;
-  thrust::device_vector<int> beg_node_entry_idxes_vect;
+  thrust::device_vector<int> beg_node_entry_indices_vect;
   std::vector<int> num_blocks_xdim_for_same_relation_vect;
   std::vector<int> num_blocks_xdim_for_all_prev_relation_vect;
   num_blocks_xdim_for_all_prev_relation_vect.push_back(0);
@@ -459,7 +459,7 @@ EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel(
       curr_beg_node_entry_idx = 0;
     }
     blockid_relation_id_vect.push_back(idx_curr_relation);
-    beg_node_entry_idxes_vect.push_back(curr_beg_node_entry_idx);
+    beg_node_entry_indices_vect.push_back(curr_beg_node_entry_idx);
     curr_beg_node_entry_idx += COARSE_SGEMM_NODES_PER_BLOCK;
     num_blocks_xdim_for_same_relation_per_block_vect.push_back(
         num_blocks_xdim_for_same_relation_vect[idx_curr_relation]);
@@ -490,7 +490,7 @@ EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel(
       num_relations,
       thrust::raw_pointer_cast(
           num_blocks_xdim_for_same_relation_per_block_vect.data()),
-      thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()),
+      thrust::raw_pointer_cast(beg_node_entry_indices_vect.data()),
       thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
   dim3 block2(RTX_3090_BLOCKSIZE, 1, 1);
   dim3 grid2(RTX_3090_GRIDSIZE, 1, 1);
@@ -776,7 +776,7 @@ EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_512_32(
 
   thrust::device_vector<int> num_blocks_xdim_for_same_relation_per_block_vect;
   thrust::device_vector<int> blockid_relation_id_vect;
-  thrust::device_vector<int> beg_node_entry_idxes_vect;
+  thrust::device_vector<int> beg_node_entry_indices_vect;
   std::vector<int> num_blocks_xdim_for_same_relation_vect;
   std::vector<int> num_blocks_xdim_for_all_prev_relation_vect;
 
@@ -825,7 +825,7 @@ EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_512_32(
       curr_beg_node_entry_idx = 0;
     }
     blockid_relation_id_vect.push_back(idx_curr_relation);
-    beg_node_entry_idxes_vect.push_back(curr_beg_node_entry_idx);
+    beg_node_entry_indices_vect.push_back(curr_beg_node_entry_idx);
     curr_beg_node_entry_idx += COARSE_SGEMM_NODES_PER_BLOCK;
     num_blocks_xdim_for_same_relation_per_block_vect.push_back(
         num_blocks_xdim_for_same_relation_vect[idx_curr_relation]);
@@ -857,7 +857,7 @@ EdgeAttentionConcatenatedSrcWeightMulDestCOOKernel_512_32(
           num_relations,
           thrust::raw_pointer_cast(
               num_blocks_xdim_for_same_relation_per_block_vect.data()),
-          thrust::raw_pointer_cast(beg_node_entry_idxes_vect.data()),
+          thrust::raw_pointer_cast(beg_node_entry_indices_vect.data()),
           thrust::raw_pointer_cast(blockid_relation_id_vect.data()));
   //}
 
