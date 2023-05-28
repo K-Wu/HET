@@ -33,8 +33,8 @@ def recursive_apply_to_each_tensor_in_dict(func, dict_var, filter_key_set):
             )
         else:
             print(
-                "WARNING in apply_to_each_tensor_in_dict: second_key{second_key} unknown type {type}".format(
-                    second_key=second_key, type=type(second_key)
+                "WARNING in apply_to_each_tensor_in_dict: second_key {second_key} unknown type {type}".format(
+                    second_key=second_key, type=type(dict_var[second_key])
                 )
             )
 
@@ -631,6 +631,7 @@ class MyDGLGraph:
             self.graph_data["separate"]["coo"]["original"]["rel_ptrs"],
             self.graph_data["separate"]["coo"]["original"]["row_indices"],
             self.graph_data["separate"]["coo"]["original"]["col_indices"],
+            get_inverse_idx=produce_inverse_idx,
         )
 
         if "unique_node_indices_single_sided" in self.graph_data["separate"]:
@@ -679,6 +680,7 @@ class MyDGLGraph:
             self.graph_data["separate"]["coo"]["original"]["rel_ptrs"],
             self.graph_data["separate"]["coo"]["original"]["row_indices"],
             self.graph_data["separate"]["coo"]["original"]["col_indices"],
+            get_inverse_idx=produce_inverse_idx,
         )
 
         if "unique_node_indices" in self.graph_data["separate"]:
