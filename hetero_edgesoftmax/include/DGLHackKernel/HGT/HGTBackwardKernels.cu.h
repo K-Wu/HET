@@ -4,6 +4,7 @@
 
 #include "kernel_enums.h"
 
+// TODO: declare UseMuAppliedAttnScoreSwitch as an enum class
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
 struct BackwardHGTMessageData {
   CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
@@ -77,8 +78,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET__hgtQVectType2BackwardKernel(
     BackwardToDeltaQData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.k_vect_dim_per_head;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -110,8 +110,7 @@ __global__ void HET__hgtQVectType2BackwardKernel(
                 etype = etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, src_vid, etype_mapper_data);
               k_inner_product_offset =
                   src_vid_relational * (gdata.k_vect_dim_per_head * num_heads) +
                   head_idx * hidden_xlen + feat_idx;
@@ -166,13 +165,13 @@ __global__ void HET__hgtQVectType2BackwardKernel(
 // -Sum_{incoming edges} (Si * delta Si) at each destination node, and then
 // iterate every edge
 // NB: Compact as of node is irrelevant here as the data are edge-wise
+// FIXME: do we need to add CompactAsOfFlag situation here?
 template <typename Idx, typename DType,  // CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
     BackwardNormToUnNormalizedAttnScoreData<Idx, DType> gdata,
     const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    int64_t num_rows, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   for (Idx src_vid = blockIdx.y * blockDim.y + threadIdx.y; src_vid < num_rows;
        src_vid += gridDim.y * blockDim.y) {
@@ -251,8 +250,8 @@ __global__ void
 HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
     BackwardHGTMessageData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    int64_t num_rows, ETypeMapperData<Idx, kind> etype_mapper_data,
+    int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -289,13 +288,11 @@ HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
                 etype = etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, src_vid, etype_mapper_data);
               message_src_offset = src_vid_relational * gdata.message_src_xlen +
                                    head_idx * hidden_xlen + feat_idx;
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, dst_vid, etype_mapper_data);
             }
           }
 
@@ -408,8 +405,8 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
     BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreSwitch>
         gdata,
     const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    int64_t num_rows, ETypeMapperData<Idx, kind> etype_mapper_data,
+    int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -464,8 +461,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
               }
               edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, src_vid, etype_mapper_data);
               message_src_idx =
                   (src_vid_relational * num_heads + head_idx) * hidden_xlen +
                   feat_idx;
@@ -541,8 +537,7 @@ __global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
         gdata,
     DType *grad_message_src, const Idx *row_offsets, const Idx *column_indices,
     const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -598,12 +593,10 @@ __global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
                 etype = etypes[e];
               }
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, dst_vid, etype_mapper_data);
               edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, src_vid, etype_mapper_data);
               message_src_idx =
                   (src_vid_relational * num_heads + head_idx) * hidden_xlen +
                   feat_idx;

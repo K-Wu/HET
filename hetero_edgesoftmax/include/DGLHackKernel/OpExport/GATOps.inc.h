@@ -41,10 +41,11 @@ void _FusedKernelImpl(at::Tensor &incsr_row_ptrs, at::Tensor &incsr_col_indices,
   int64_t incsr_num_rows = incsr_row_ptrs.numel() - 1;
   auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, incsr_num_rows);
 
+  // it is okay to pass in nullptrs as mapper data because !RelationalFlag
   HET_gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeKind::Enabled, false>
       <<<nblks, nthrs, 0, stream>>>(gdata, incsr_row_ptrs.data_ptr<Idx>(),
                                     incsr_col_indices.data_ptr<Idx>(), nullptr,
-                                    incsr_num_rows, nullptr, nullptr);
+                                    incsr_num_rows, {});
 
   // NB: updated to Type 2 Schedule:
   // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
@@ -53,11 +54,11 @@ void _FusedKernelImpl(at::Tensor &incsr_row_ptrs, at::Tensor &incsr_col_indices,
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
   auto [nblks2, nthrs2] =
       get_type2_schedule(gdata.num_heads, gdata.feat_src_xlen, incsr_num_rows);
+  // it is okay to pass in nullptrs as mapper data because !RelationalFlag
   HET_gatSumProdZipDivKernel<Idx, DType, CompactAsOfNodeKind::Enabled, false>
       <<<nblks2, nthrs2, 0, stream>>>(gdata, incsr_row_ptrs.data_ptr<Idx>(),
                                       incsr_col_indices.data_ptr<Idx>(),
-                                      nullptr, incsr_num_rows, nullptr,
-                                      nullptr);
+                                      nullptr, incsr_num_rows, {});
 }
 constexpr auto FusedKernelImpl = _FusedKernelImpl<int64_t, float>;
 }  // namespace IntegratedCSR
@@ -111,12 +112,12 @@ void _FusedKernelImpl(at::Tensor &outcsr_row_ptrs,
         outcsr_col_indices.data_ptr<Idx>(), nullptr, outcsr_num_rows, nullptr,
         nullptr);
   } else {
+    // it is okay to pass in nullptrs as mapper data because !RelationalFlag
     HET_fusedGatBackwardGradElErFeatSrcFused<
         Idx, DType, CompactAsOfNodeKind::Enabled, false>
         <<<nblks, nthrs, 0, stream>>>(gdata, outcsr_row_ptrs.data_ptr<Idx>(),
                                       outcsr_col_indices.data_ptr<Idx>(),
-                                      nullptr, outcsr_num_rows, nullptr,
-                                      nullptr);
+                                      nullptr, outcsr_num_rows, {});
   }
 }
 

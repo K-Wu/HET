@@ -33,8 +33,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _gatSumProdZipDivKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -58,8 +57,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
             }
             if constexpr (IsCompact(kind)) {
               feat_src_entry_id = find_relational_compact_as_of_node_index(
-                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, src_vid, etype_mapper_data);
 
             } else {
               // NB: we need to use edata_idx instead of eidx here
@@ -108,11 +106,10 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_gatSumProdZipDivKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices) {
+    ETypeMapperData<Idx, kind> etype_mapper_data) {
   _gatSumProdZipDivKernel<Idx, DType, kind, RelationalFlag, false, false>(
-      gdata, row_offsets, column_indices, etypes, num_rows,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
+      gdata, row_offsets, column_indices, etypes, num_rows, etype_mapper_data,
+      -1);
 }
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
@@ -123,8 +120,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -161,8 +157,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
             etype = etypes[eidx];
           }
           dst_vid_relational = find_relational_compact_as_of_node_index(
-              etype, dst_vid, unique_srcs_and_dests_rel_ptr,
-              unique_srcs_and_dests_node_indices);
+              etype, dst_vid, etype_mapper_data);
         }
         if constexpr (IsCompact(kind)) {
           if constexpr (RelationalFlag) {
@@ -176,8 +171,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
                   "should be non-reachable not implemented");
             }
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                etype, src_id, unique_srcs_and_dests_rel_ptr,
-                unique_srcs_and_dests_node_indices);
+                etype, src_id, etype_mapper_data);
             feat_off_src = src_vid_relational * num_heads + feat_idx;
             feat_off_dst = dst_vid_relational * num_heads + feat_idx;
           } else {
@@ -213,9 +207,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_gatExpLeakyReluSumKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices) {
+    ETypeMapperData<Idx, kind> etype_mapper_data) {
   _gatExpLeakyReluSumKernel<Idx, DType, kind, RelationalFlag, false, false>(
-      gdata, row_offsets, column_indices, etypes, num_rows,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
+      gdata, row_offsets, column_indices, etypes, num_rows, etype_mapper_data,
+      -1);
 }

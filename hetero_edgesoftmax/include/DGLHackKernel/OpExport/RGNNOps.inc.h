@@ -119,14 +119,18 @@ void _RelationalMatMul_separatecoo(
         grid_dim_y, num_heads);
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
     // TODO: KWU: allow more dtype options in this file
+    ETypeMapperData<int64_t, kind> etype_mapper_data{
+        .unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.data_ptr<int64_t>(),
+        .unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.data_ptr<int64_t>()};
     HET_RGNNFeatCompactFWProp<THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
                               WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y,
                               WORK_BLOCK_SIZE_K, int64_t, int64_t *,
                               InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
         node_feat.data_ptr<float>(), weights.data_ptr<float>(),
-        ret.data_ptr<float>(),
-        unique_srcs_and_dests_rel_ptrs.data_ptr<int64_t>(),
-        unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_input_dim,
+        ret.data_ptr<float>(), etype_mapper_data.unique_srcs_and_dests_rel_ptrs,
+        etype_mapper_data.unique_srcs_and_dests_node_indices, num_input_dim,
         num_output_per_head_dim, num_heads,
         thrust::raw_pointer_cast(
             dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
@@ -352,21 +356,22 @@ void inner_product_various_left_and_node_right(
                                           : nullptr;
     Idx *incsr_reltypes_data_ptr =
         incsr_reltypes.numel() > 0 ? incsr_reltypes.data_ptr<Idx>() : nullptr;
-    Idx *unique_srcs_and_dests_rel_ptrs_data_ptr =
-        unique_srcs_and_dests_rel_ptrs.numel() > 0
-            ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-            : nullptr;
-    Idx *unique_srcs_and_dests_node_indices_data_ptr =
-        unique_srcs_and_dests_node_indices.numel() > 0
-            ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-            : nullptr;
+
+    ETypeMapperData<Idx, kind> etype_mapper_data{
+        .unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.numel() > 0
+                ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
+                : nullptr,
+        .unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.numel() > 0
+                ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
+                : nullptr,
+    };
 
     HET_inner_product_fw_kernel<Idx, DType, kind, true, false, false>
         <<<nblks2, nthrs2, 0, stream>>>(
             gdata, incsr_row_ptr_data_ptr, incsr_col_indices_data_ptr,
-            incsr_reltypes_data_ptr, incsr_num_rows,
-            unique_srcs_and_dests_rel_ptrs_data_ptr,
-            unique_srcs_and_dests_node_indices_data_ptr);
+            incsr_reltypes_data_ptr, incsr_num_rows, etype_mapper_data);
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
     // separate coo
@@ -396,22 +401,22 @@ void inner_product_various_left_and_node_right(
         separate_coo_rel_ptrs.numel() > 0
             ? separate_coo_rel_ptrs.data_ptr<Idx>()
             : nullptr;
-    Idx *unique_srcs_and_dests_rel_ptrs_data_ptr =
-        unique_srcs_and_dests_rel_ptrs.numel() > 0
-            ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-            : nullptr;
-    Idx *unique_srcs_and_dests_node_indices_data_ptr =
-        unique_srcs_and_dests_node_indices.numel() > 0
-            ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-            : nullptr;
+    ETypeMapperData<Idx, kind> etype_mapper_data{
+        .unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.numel() > 0
+                ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
+                : nullptr,
+        .unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.numel() > 0
+                ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
+                : nullptr};
     if (gdata.feat_src_xlen / gdata.num_heads >= 32) {
       HET_inner_product_fw_kernel_edge_parallel<Idx, DType, kind, true, true,
                                                 false, true>
           <<<nblks_inner_product, nthrs_inner_product, 0, stream>>>(
               gdata, separate_coo_row_indices_data_ptr,
               separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
-              num_edges, unique_srcs_and_dests_rel_ptrs_data_ptr,
-              unique_srcs_and_dests_node_indices_data_ptr, num_relations);
+              num_edges, etype_mapper_data, num_relations);
     } else {
       assert(0 && "Not implemented");
       // HET_inner_product_fw_kernel_edge_parallel<Idx, DType,
@@ -564,13 +569,18 @@ void _BackwardRelationalMatMul_separatecoo(
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
     // NB: #head of node_feat is 1 when InputNumHeadOneFlag is true
     std::cout << gradout.numel() << std::endl;
+    ETypeMapperData<int64_t, CompactAsOfNodeKind::Enabled> etype_mapper_data{
+        .unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.data_ptr<int64_t>(),
+        .unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.data_ptr<int64_t>()};
     HET_RGNNDeltaNodeFeatInputCompactBWProp<
         COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
         int64_t, int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
         gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
         grad_node_feat.data_ptr<float>(),
-        unique_srcs_and_dests_rel_ptrs.data_ptr<int64_t>(),
-        unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_edges,
+        etype_mapper_data.unique_srcs_and_dests_rel_ptrs,
+        etype_mapper_data.unique_srcs_and_dests_node_indices, num_edges,
         num_output_per_head_dim, num_input_dim, num_heads,
         thrust::raw_pointer_cast(
             dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
@@ -581,8 +591,8 @@ void _BackwardRelationalMatMul_separatecoo(
         <<<nblks_outer_product, nthrs, 0, stream>>>(
             gradout.data_ptr<float>(), node_feat.data_ptr<float>(),
             grad_weights.data_ptr<float>(),
-            unique_srcs_and_dests_rel_ptrs.data_ptr<int64_t>(),
-            unique_srcs_and_dests_node_indices.data_ptr<int64_t>(), num_edges,
+            etype_mapper_data.unique_srcs_and_dests_rel_ptrs,
+            etype_mapper_data.unique_srcs_and_dests_node_indices, num_edges,
             num_input_dim, num_output_per_head_dim, num_heads,
             thrust::raw_pointer_cast(
                 dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
@@ -763,12 +773,17 @@ void inner_product_various_left_and_node_right(
     auto [nblks, nthrs] = get_type2_schedule(
         gdata.num_heads, gdata.feat_src_xlen, outcsr_num_rows);
 
+    ETypeMapperData<Idx, kind> etype_mapper_data{
+        .unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
+        .unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>()};
+
     HET_inner_product_bck_kernel<Idx, DType, kind, true, false>
         <<<nblks, nthrs, 0, stream>>>(
             gdata, outcsr_row_ptr.data_ptr<Idx>(),
             outcsr_col_indices.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
-            outcsr_num_rows, unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
-            unique_srcs_and_dests_node_indices.data_ptr<Idx>(),
+            outcsr_num_rows, etype_mapper_data,
             unique_srcs_and_dests_rel_ptrs.numel() - 1);
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
@@ -796,21 +811,20 @@ void inner_product_various_left_and_node_right(
         separate_coo_rel_ptrs.numel() > 0
             ? separate_coo_rel_ptrs.data_ptr<Idx>()
             : nullptr;
-    Idx *unique_srcs_and_dests_rel_ptrs_data_ptr =
-        unique_srcs_and_dests_rel_ptrs.numel() > 0
-            ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-            : nullptr;
-    Idx *unique_srcs_and_dests_node_indices_data_ptr =
-        unique_srcs_and_dests_node_indices.numel() > 0
-            ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-            : nullptr;
-
+    ETypeMapperData<Idx, kind> etype_mapper_data{
+        .unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.numel() > 0
+                ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
+                : nullptr,
+        .unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.numel() > 0
+                ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
+                : nullptr};
     HET_inner_product_bck_kernel_edge_parallel<Idx, DType, kind, true, true>
-        <<<nblks, nthrs, 0, stream>>>(
-            gdata, separate_coo_row_indices_data_ptr,
-            separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
-            num_edges, unique_srcs_and_dests_rel_ptrs_data_ptr,
-            unique_srcs_and_dests_node_indices_data_ptr, num_relations);
+        <<<nblks, nthrs, 0, stream>>>(gdata, separate_coo_row_indices_data_ptr,
+                                      separate_coo_col_indices_data_ptr,
+                                      separate_coo_rel_ptrs_data_ptr, num_edges,
+                                      etype_mapper_data, num_relations);
   } else {
     assert(0 && "Not implemented");
   }

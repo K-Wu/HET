@@ -11,8 +11,10 @@
 #include <thread>
 #include <tuple>
 #include <vector>
+
 #include "cuda.h"
 #include "cuda_runtime.h"
+#include "kernel_enums.h"
 
 #define _HOST_DEVICE_METHOD_QUALIFIER __host__ __device__
 
@@ -111,17 +113,19 @@ __device__ __forceinline__ Idx binary_search(Idx num_elements, const IdxPtr arr,
 // TODO: optimize when warp coorperatively work on to reduce the last 4-5 global
 // loads
 // TODO: figure out metadata caching to optimize the performance
-template <typename Idx, typename IdxPtr>
+template <typename Idx, CompactAsOfNodeKind kind>
 __device__ __forceinline__ Idx find_relational_compact_as_of_node_index(
-    Idx idx_relation, Idx idx_node, const IdxPtr unique_srcs_and_dests_rel_ptr,
-    const IdxPtr unique_srcs_and_dests_node_indices) {
-  Idx idx_relation_offset = unique_srcs_and_dests_rel_ptr[idx_relation];
+    Idx idx_relation, Idx idx_node,
+    ETypeMapperData<Idx, kind> etype_mapper_data) {
+  Idx idx_relation_offset =
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation];
   Idx idx_relation_plus_one_offset =
-      unique_srcs_and_dests_rel_ptr[idx_relation + 1];
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation + 1];
   return idx_relation_offset +
-         binary_search<Idx, IdxPtr>(
+         binary_search<Idx, Idx *>(
              idx_relation_plus_one_offset - idx_relation_offset,
-             &unique_srcs_and_dests_node_indices[idx_relation_offset],
+             &(etype_mapper_data
+                   .unique_srcs_and_dests_node_indices[idx_relation_offset]),
              idx_node);
 }
 

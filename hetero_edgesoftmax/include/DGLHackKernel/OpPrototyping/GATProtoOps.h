@@ -64,7 +64,7 @@ void FusedGatKernelImpl(
           static_cast<Idx *>(thrust::raw_pointer_cast(incsr.row_ptrs.data())),
           static_cast<Idx *>(
               thrust::raw_pointer_cast(incsr.col_indices.data())),
-          nullptr, incsr.num_rows, nullptr, nullptr);
+          nullptr, incsr.num_rows, {});
   nthrs_x = SeastarFindNumThreads(el_xlen, 64);
   nthrs_y = SeastarFindNumThreads(feat_src_xlen / el_xlen, MAX_NTHRS / nthrs_x);
   nblks_x = 1;
@@ -78,7 +78,7 @@ void FusedGatKernelImpl(
           static_cast<Idx *>(thrust::raw_pointer_cast(incsr.row_ptrs.data())),
           static_cast<Idx *>(
               thrust::raw_pointer_cast(incsr.col_indices.data())),
-          nullptr, incsr.num_rows, nullptr, nullptr);
+          nullptr, incsr.num_rows, {});
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());
   std::chrono::high_resolution_clock::time_point t2 =
@@ -151,21 +151,21 @@ void BackwardFusedGatKernelImpl(
         gdata,
         static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.row_ptrs.data())),
         static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.col_indices.data())),
-        nullptr, outcsr.num_rows, nullptr, nullptr);
+        nullptr, outcsr.num_rows, {});
 
     HET_fusedGatBackwardGradElEr<Idx, DType, CompactAsOfNodeKind::Enabled,
                                  false><<<nblks, nthrs>>>(
         gdata,
         static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.row_ptrs.data())),
         static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.col_indices.data())),
-        nullptr, outcsr.num_rows, nullptr, nullptr);
+        nullptr, outcsr.num_rows, {});
   } else {
     HET_fusedGatBackwardGradElErFeatSrcFused<
         Idx, DType, CompactAsOfNodeKind::Enabled, false><<<nblks, nthrs>>>(
         gdata,
         static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.row_ptrs.data())),
         static_cast<Idx *>(thrust::raw_pointer_cast(outcsr.col_indices.data())),
-        nullptr, outcsr.num_rows, nullptr, nullptr);
+        nullptr, outcsr.num_rows, {});
   }
   cuda_err_chk(cudaPeekAtLastError());
   cuda_err_chk(cudaDeviceSynchronize());

@@ -244,8 +244,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
     HgtDstOutData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    int64_t num_rows, ETypeMapperData<Idx, kind> etype_mapper_data,
+    int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.message_out_dim / num_heads;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -269,8 +269,7 @@ __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
             }
             if constexpr (IsCompact(kind)) {
               feat_src_entry_id = find_relational_compact_as_of_node_index(
-                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, src_vid, etype_mapper_data);
 
             } else {
               // NB: we need to use edata_idx instead of eidx here
@@ -423,8 +422,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    int64_t num_rows, ETypeMapperData<Idx, kind> etype_mapper_data,
+    int64_t num_relations) {
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
   if constexpr (OutputMuAppliedAttnScoreSwitch != 0 &&
@@ -473,8 +472,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
                   "should be non-reachable not implemented");
             }
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                etype, src_id, unique_srcs_and_dests_rel_ptr,
-                unique_srcs_and_dests_node_indices);
+                etype, src_id, etype_mapper_data);
             feat_off_src = src_vid_relational * num_heads + feat_idx;
           } else {
             feat_off_src = src_id * num_heads + feat_idx;
@@ -548,8 +546,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
                   }
                   Idx src_vid_relational =
                       find_relational_compact_as_of_node_index(
-                          etype, src_id, unique_srcs_and_dests_rel_ptr,
-                          unique_srcs_and_dests_node_indices);
+                          etype, src_id, etype_mapper_data);
                   feat_off_src = src_vid_relational * num_heads + feat_idx;
                 } else {
                   feat_off_src = src_id * num_heads + feat_idx;
@@ -589,8 +586,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_indices, const Idx *column_indices, const Idx *etypes,
-    int64_t num_edges, const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    int64_t num_edges, ETypeMapperData<Idx, kind> etype_mapper_data,
+    int64_t num_relations) {
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
   if constexpr (OutputMuAppliedAttnScoreSwitch != 0 &&
@@ -637,8 +634,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
                 "should be non-reachable not implemented");
           }
           Idx src_vid_relational = find_relational_compact_as_of_node_index(
-              etype, src_id, unique_srcs_and_dests_rel_ptr,
-              unique_srcs_and_dests_node_indices);
+              etype, src_id, etype_mapper_data);
           feat_off_src = src_vid_relational * num_heads + feat_idx;
         } else {
           feat_off_src = src_id * num_heads + feat_idx;
@@ -689,8 +685,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_indices, const Idx *column_indices, const Idx *etypes,
-    int64_t num_edges, const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    int64_t num_edges, ETypeMapperData<Idx, kind> etype_mapper_data,
+    int64_t num_relations) {
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
   Idx num_heads = gdata.num_heads;

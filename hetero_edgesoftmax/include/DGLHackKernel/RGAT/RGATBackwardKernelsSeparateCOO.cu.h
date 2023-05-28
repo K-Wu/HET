@@ -12,10 +12,8 @@ __device__ __forceinline__ void
 _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *etypes,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_rel_ptr_col,
-    const Idx *unique_srcs_and_dests_node_indices,
-    const Idx *unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data,
+    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
   constexpr bool ETypeRelPtrFlag = true;
   constexpr bool CompactAsOfNodeFlag = IsCompact(kind);
   constexpr bool DualUniqueNodeList = IsCompactWithDualList(kind);
@@ -66,17 +64,14 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
             }
             if constexpr (DualUniqueNodeList) {
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_rel_ptr_col,
-                  unique_srcs_and_dests_node_indices_col);
+                  etype, dst_vid, etype_mapper_data_col);
             } else {
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, dst_vid, etype_mapper_data);
             }
             er_idx = dst_vid_relational * num_heads + head_idx;
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                unique_srcs_and_dests_node_indices);
+                etype, src_vid, etype_mapper_data);
             el_idx = src_vid_relational * num_heads + head_idx;
             feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx;
@@ -112,15 +107,11 @@ __global__ void
 HET_fusedGatBackwardGradElErFeatSrcFused_relational_separate_coo(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *rel_ptrs,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_rel_ptr_col,
-    const Idx *unique_srcs_and_dests_node_indices,
-    const Idx *unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data,
+    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
   _fusedGatBackwardGradElErFeatSrcFused_edge_parallel<Idx, DType, kind, true>(
-      gdata, rel_ptrs, row_indices, col_indices, num_edges,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_rel_ptr_col,
-      unique_srcs_and_dests_node_indices,
-      unique_srcs_and_dests_node_indices_col, num_relations);
+      gdata, rel_ptrs, row_indices, col_indices, num_edges, etype_mapper_data,
+      etype_mapper_data, num_relations);
 }
 
 // edge-centric schedule cf. HET_fusedGatBackwardGradFeatSrc in
@@ -130,10 +121,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *etypes,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_rel_ptr_col,
-    const Idx *unique_srcs_and_dests_node_indices,
-    const Idx *unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data,
+    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
   constexpr bool ETypeRelPtrFlag = true;
   constexpr bool CompactAsOfNodeFlag = IsCompact(kind);
   constexpr bool DualUniqueNodeList = IsCompactWithDualList(kind);
@@ -171,18 +160,15 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
               etype = etypes[e];
             }
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                unique_srcs_and_dests_node_indices);
+                etype, src_vid, etype_mapper_data);
             feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx;
             if constexpr (DualUniqueNodeList) {
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_rel_ptr_col,
-                  unique_srcs_and_dests_node_indices_col);
+                  etype, dst_vid, etype_mapper_data_col);
             } else {
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, dst_vid, etype_mapper_data);
             }
           }
         }
@@ -205,10 +191,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *etypes,
     const Idx *row_indices, const Idx *column_indices, int64_t num_edges,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_rel_ptr_col,
-    const Idx *unique_srcs_and_dests_node_indices,
-    const Idx *unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data,
+    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
   constexpr bool ETypeRelPtrFlag = true;
   constexpr bool CompactAsOfNodeFlag = IsCompact(kind);
   constexpr bool DualUniqueNodeList = IsCompactWithDualList(kind);
@@ -259,18 +243,15 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
             }
             if constexpr (DualUniqueNodeList) {
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_rel_ptr_col,
-                  unique_srcs_and_dests_node_indices_col);
+                  etype, dst_vid, etype_mapper_data_col);
             } else {
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, dst_vid, etype_mapper_data);
             }
 
             er_idx = dst_vid_relational * num_heads + head_idx;
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                unique_srcs_and_dests_node_indices);
+                etype, src_vid, etype_mapper_data);
             el_idx = src_vid_relational * num_heads + head_idx;
             feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx;
@@ -297,28 +278,20 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_fusedGatBackwardGradFeatSrc_relational_separate_coo(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *rel_ptrs,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_rel_ptr_col,
-    const Idx *unique_srcs_and_dests_node_indices,
-    const Idx *unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data,
+    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
   _fusedGatBackwardGradFeatSrc_edge_parallel<Idx, DType, kind, true>(
-      gdata, rel_ptrs, row_indices, col_indices, num_edges,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_rel_ptr_col,
-      unique_srcs_and_dests_node_indices,
-      unique_srcs_and_dests_node_indices_col, num_relations);
+      gdata, rel_ptrs, row_indices, col_indices, num_edges, etype_mapper_data,
+      etype_mapper_data_col, num_relations);
 }
 
 template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_fusedGatBackwardGradElEr_relational_separate_coo(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *rel_ptrs,
     const Idx *row_indices, const Idx *column_indices, int64_t num_edges,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_rel_ptr_col,
-    const Idx *unique_srcs_and_dests_node_indices,
-    const Idx *unique_srcs_and_dests_node_indices_col, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data,
+    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
   _fusedGatBackwardGradElEr_edge_parallel<Idx, DType, kind, true>(
       gdata, rel_ptrs, row_indices, column_indices, num_edges,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_rel_ptr_col,
-      unique_srcs_and_dests_node_indices,
-      unique_srcs_and_dests_node_indices_col, num_relations);
+      etype_mapper_data, etype_mapper_data_col, num_relations);
 }

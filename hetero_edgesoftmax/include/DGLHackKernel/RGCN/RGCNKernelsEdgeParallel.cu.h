@@ -22,8 +22,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _rgcnNodeMeanAggregation_edge_parallel(
     RGCNData<Idx, DType> gdata, const Idx* etypes, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   constexpr bool ETypeRelPtrFlag = true;
   for (Idx eidx = blockIdx.y; eidx < num_edges; eidx += gridDim.y) {
     Idx dst_vid = col_indices[eidx];
@@ -75,10 +74,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_rgcnNodeMeanAggregation_edge_parallel(
     RGCNData<Idx, DType> gdata, const Idx* rel_ptrs, const Idx* row_indices,
     const Idx* col_indices, int64_t num_edges,
-    const Idx* unique_srcs_and_dests_rel_ptr,
-    const Idx* unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   _rgcnNodeMeanAggregation_edge_parallel<Idx, DType, kind, true, false>(
-      gdata, rel_ptrs, row_indices, col_indices, num_edges,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
+      gdata, rel_ptrs, row_indices, col_indices, num_edges, etype_mapper_data,
       num_relations);
 }

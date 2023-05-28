@@ -32,8 +32,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -81,12 +80,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
                 etype = etypes[e];
               }
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, dst_vid, etype_mapper_data);
               er_idx = dst_vid_relational * num_heads + head_idx;
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, src_vid, etype_mapper_data);
               el_idx = src_vid_relational * num_heads + head_idx;
 
               feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
@@ -136,12 +133,11 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_fusedGatBackwardGradElErFeatSrcFused(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices) {
+    ETypeMapperData<Idx, kind> etype_mapper_data) {
   _fusedGatBackwardGradElErFeatSrcFused<Idx, DType, kind, RelationalFlag,
-                                        false>(
-      gdata, row_offsets, column_indices, etypes, num_rows,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
+                                        false>(gdata, row_offsets,
+                                               column_indices, etypes, num_rows,
+                                               etype_mapper_data, -1);
 }
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
@@ -160,8 +156,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -197,13 +192,11 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
                 etype = etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, src_vid, etype_mapper_data);
               feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, dst_vid, etype_mapper_data);
             }
           }
           // TODO: maybe it's better to cache exp/sum to reduce mem traffic as
@@ -234,11 +227,10 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_fusedGatBackwardGradFeatSrc(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices) {
+    ETypeMapperData<Idx, kind> etype_mapper_data) {
   _fusedGatBackwardGradFeatSrc<Idx, DType, kind, RelationalFlag, false>(
-      gdata, row_offsets, column_indices, etypes, num_rows,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
+      gdata, row_offsets, column_indices, etypes, num_rows, etype_mapper_data,
+      -1);
 }
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
@@ -269,8 +261,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _fusedGatBackwardGradElEr(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -318,12 +309,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
                 etype = etypes[e];
               }
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, dst_vid, etype_mapper_data);
               er_idx = dst_vid_relational * num_heads + head_idx;
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, src_vid, etype_mapper_data);
               el_idx = src_vid_relational * num_heads + head_idx;
               feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;
@@ -357,9 +346,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_fusedGatBackwardGradElEr(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices) {
+    ETypeMapperData<Idx, kind> etype_mapper_data) {
   _fusedGatBackwardGradElEr<Idx, DType, kind, RelationalFlag, false>(
-      gdata, row_offsets, column_indices, etypes, num_rows,
-      unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
+      gdata, row_offsets, column_indices, etypes, num_rows, etype_mapper_data,
+      -1);
 }

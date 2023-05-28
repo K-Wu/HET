@@ -67,16 +67,19 @@ void _RelationalFusedGATKernel(
     int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
     auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, incsr_num_rows);
 
+    ETypeMapperData<Idx, CompactKind> etype_mapper_data;
+    if constexpr (CompactAsOfNodeFlag) {
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+      etype_mapper_data.unique_srcs_and_dests_node_indices =
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    }
+
     HET_gatExpLeakyReluSumKernel<Idx, DType, CompactKind, true>
-        <<<nblks, nthrs, 0, stream>>>(
-            gdata, incsr_row_ptr.data_ptr<Idx>(),
-            incsr_col_indices.data_ptr<Idx>(), incsr_reltypes.data_ptr<Idx>(),
-            incsr_num_rows,
-            CompactAsOfNodeFlag ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                                : nullptr,
-            CompactAsOfNodeFlag
-                ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-                : nullptr);
+        <<<nblks, nthrs, 0, stream>>>(gdata, incsr_row_ptr.data_ptr<Idx>(),
+                                      incsr_col_indices.data_ptr<Idx>(),
+                                      incsr_reltypes.data_ptr<Idx>(),
+                                      incsr_num_rows, etype_mapper_data);
 
     // NB: updated to Type 2 Schedule:
     // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
@@ -87,15 +90,10 @@ void _RelationalFusedGATKernel(
         gdata.num_heads, gdata.feat_src_xlen, incsr_num_rows);
 
     HET_gatSumProdZipDivKernel<Idx, DType, CompactKind, true>
-        <<<nblks2, nthrs2, 0, stream>>>(
-            gdata, incsr_row_ptr.data_ptr<Idx>(),
-            incsr_col_indices.data_ptr<Idx>(), incsr_reltypes.data_ptr<Idx>(),
-            incsr_num_rows,
-            CompactAsOfNodeFlag ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                                : nullptr,
-            CompactAsOfNodeFlag
-                ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-                : nullptr);
+        <<<nblks2, nthrs2, 0, stream>>>(gdata, incsr_row_ptr.data_ptr<Idx>(),
+                                        incsr_col_indices.data_ptr<Idx>(),
+                                        incsr_reltypes.data_ptr<Idx>(),
+                                        incsr_num_rows, etype_mapper_data);
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
     // separate coo
@@ -110,21 +108,28 @@ void _RelationalFusedGATKernel(
     // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
     auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, num_edges);
 
-    HET_gatExpLeakyReluSumKernel_relational_separate_coo<
-        Idx, DType, CompactKind><<<nblks, nthrs, 0, stream>>>(
-        gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
-        separate_coo_row_indices.data_ptr<Idx>(),
-        separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-        CompactAsOfNodeFlag ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                            : nullptr,
-        DualUniqueNodeList ? unique_srcs_and_dests_rel_ptrs_col.data_ptr<Idx>()
-                           : nullptr,
-        CompactAsOfNodeFlag ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-                            : nullptr,
-        DualUniqueNodeList
-            ? unique_srcs_and_dests_node_indices_col.data_ptr<Idx>()
-            : nullptr,
-        num_relations);
+    ETypeMapperData<Idx, CompactKind> etype_mapper_data;
+    if constexpr (CompactAsOfNodeFlag) {
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+      etype_mapper_data.unique_srcs_and_dests_node_indices =
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    }
+    ETypeMapperData<Idx, CompactKind> etype_mapper_data_col;
+    if constexpr (DualUniqueNodeList) {
+      etype_mapper_data_col.unique_srcs_and_dests_rel_ptrs =
+          unique_srcs_and_dests_rel_ptrs_col.data_ptr<Idx>();
+      etype_mapper_data_col.unique_srcs_and_dests_node_indices =
+          unique_srcs_and_dests_node_indices_col.data_ptr<Idx>();
+    }
+
+    HET_gatExpLeakyReluSumKernel_relational_separate_coo<Idx, DType,
+                                                         CompactKind>
+        <<<nblks, nthrs, 0, stream>>>(
+            gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
+            separate_coo_row_indices.data_ptr<Idx>(),
+            separate_coo_col_indices.data_ptr<Idx>(), num_edges,
+            etype_mapper_data, etype_mapper_data_col, num_relations);
 
     // NB: updated to Type 2 Schedule:
     // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
@@ -138,18 +143,7 @@ void _RelationalFusedGATKernel(
             gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
             separate_coo_row_indices.data_ptr<Idx>(),
             separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-            CompactAsOfNodeFlag ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                                : nullptr,
-            DualUniqueNodeList
-                ? unique_srcs_and_dests_rel_ptrs_col.data_ptr<Idx>()
-                : nullptr,
-            CompactAsOfNodeFlag
-                ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-                : nullptr,
-            DualUniqueNodeList
-                ? unique_srcs_and_dests_node_indices_col.data_ptr<Idx>()
-                : nullptr,
-            num_relations);
+            etype_mapper_data, etype_mapper_data_col, num_relations);
 
   } else {
     assert(0 && "Not implemented");
@@ -289,41 +283,30 @@ void _RelationalFusedGATKernel(
     int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
     auto [nblks, nthrs] = get_type2_schedule(
         gdata.num_heads, gdata.feat_src_xlen, outcsr_num_rows);
+    ETypeMapperData<Idx, CompactKind> etype_mapper_data;
+    if constexpr (CompactAsOfNodeFlag) {
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+      etype_mapper_data.unique_srcs_and_dests_node_indices =
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    }
     if constexpr (!FLAG_KERNEL_FUSED) {
       HET_fusedGatBackwardGradFeatSrc<Idx, DType, CompactKind, true>
-          <<<nblks, nthrs, 0, stream>>>(
-              gdata, outcsr_row_ptr.data_ptr<Idx>(),
-              outcsr_col_indices.data_ptr<Idx>(),
-              outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
-              CompactAsOfNodeFlag
-                  ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                  : nullptr,
-              CompactAsOfNodeFlag
-                  ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-                  : nullptr);
+          <<<nblks, nthrs, 0, stream>>>(gdata, outcsr_row_ptr.data_ptr<Idx>(),
+                                        outcsr_col_indices.data_ptr<Idx>(),
+                                        outcsr_reltypes.data_ptr<Idx>(),
+                                        outcsr_num_rows, etype_mapper_data);
       HET_fusedGatBackwardGradElEr<Idx, DType, CompactKind, true>
-          <<<nblks, nthrs, 0, stream>>>(
-              gdata, outcsr_row_ptr.data_ptr<Idx>(),
-              outcsr_col_indices.data_ptr<Idx>(),
-              outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
-              CompactAsOfNodeFlag
-                  ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                  : nullptr,
-              CompactAsOfNodeFlag
-                  ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-                  : nullptr);
+          <<<nblks, nthrs, 0, stream>>>(gdata, outcsr_row_ptr.data_ptr<Idx>(),
+                                        outcsr_col_indices.data_ptr<Idx>(),
+                                        outcsr_reltypes.data_ptr<Idx>(),
+                                        outcsr_num_rows, etype_mapper_data);
     } else {
       HET_fusedGatBackwardGradElErFeatSrcFused<Idx, DType, CompactKind, true>
-          <<<nblks, nthrs, 0, stream>>>(
-              gdata, outcsr_row_ptr.data_ptr<Idx>(),
-              outcsr_col_indices.data_ptr<Idx>(),
-              outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
-              CompactAsOfNodeFlag
-                  ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                  : nullptr,
-              CompactAsOfNodeFlag
-                  ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-                  : nullptr);
+          <<<nblks, nthrs, 0, stream>>>(gdata, outcsr_row_ptr.data_ptr<Idx>(),
+                                        outcsr_col_indices.data_ptr<Idx>(),
+                                        outcsr_reltypes.data_ptr<Idx>(),
+                                        outcsr_num_rows, etype_mapper_data);
     }
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
@@ -339,6 +322,20 @@ void _RelationalFusedGATKernel(
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
     auto [nblks, nthrs] =
         get_type2_schedule(gdata.num_heads, gdata.feat_src_xlen, num_edges);
+    ETypeMapperData<Idx, CompactKind> etype_mapper_data;
+    if constexpr (CompactAsOfNodeFlag) {
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+      etype_mapper_data.unique_srcs_and_dests_node_indices =
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    }
+    ETypeMapperData<Idx, CompactKind> etype_mapper_data_col;
+    if constexpr (DualUniqueNodeList) {
+      etype_mapper_data_col.unique_srcs_and_dests_rel_ptrs =
+          unique_srcs_and_dests_rel_ptrs_col.data_ptr<Idx>();
+      etype_mapper_data_col.unique_srcs_and_dests_node_indices =
+          unique_srcs_and_dests_node_indices_col.data_ptr<Idx>();
+    }
     if constexpr (!FLAG_KERNEL_FUSED) {
       HET_fusedGatBackwardGradFeatSrc_relational_separate_coo<Idx, DType,
                                                               CompactKind>
@@ -346,56 +343,21 @@ void _RelationalFusedGATKernel(
               gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
               separate_coo_row_indices.data_ptr<Idx>(),
               separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-              CompactAsOfNodeFlag
-                  ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                  : nullptr,
-              DualUniqueNodeList
-                  ? unique_srcs_and_dests_rel_ptrs_col.data_ptr<Idx>()
-                  : nullptr,
-              CompactAsOfNodeFlag
-                  ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-                  : nullptr,
-              DualUniqueNodeList
-                  ? unique_srcs_and_dests_node_indices_col.data_ptr<Idx>()
-                  : nullptr,
-              num_relations);
+              etype_mapper_data, etype_mapper_data_col, num_relations);
       HET_fusedGatBackwardGradElEr_relational_separate_coo<Idx, DType,
                                                            CompactKind>
           <<<nblks, nthrs, 0, stream>>>(
               gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
               separate_coo_row_indices.data_ptr<Idx>(),
               separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-              CompactAsOfNodeFlag
-                  ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                  : nullptr,
-              DualUniqueNodeList
-                  ? unique_srcs_and_dests_rel_ptrs_col.data_ptr<Idx>()
-                  : nullptr,
-              CompactAsOfNodeFlag
-                  ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-                  : nullptr,
-              DualUniqueNodeList
-                  ? unique_srcs_and_dests_node_indices_col.data_ptr<Idx>()
-                  : nullptr,
-              num_relations);
+              etype_mapper_data, etype_mapper_data_col, num_relations);
     } else {
       HET_fusedGatBackwardGradElErFeatSrcFused_relational_separate_coo<
           Idx, DType, CompactKind><<<nblks, nthrs, 0, stream>>>(
           gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
           separate_coo_row_indices.data_ptr<Idx>(),
           separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-          CompactAsOfNodeFlag ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                              : nullptr,
-          DualUniqueNodeList
-              ? unique_srcs_and_dests_rel_ptrs_col.data_ptr<Idx>()
-              : nullptr,
-          CompactAsOfNodeFlag
-              ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-              : nullptr,
-          DualUniqueNodeList
-              ? unique_srcs_and_dests_node_indices_col.data_ptr<Idx>()
-              : nullptr,
-          num_relations);
+          etype_mapper_data, etype_mapper_data_col, num_relations);
     }
   } else {
     assert(0 && "Not implemented");

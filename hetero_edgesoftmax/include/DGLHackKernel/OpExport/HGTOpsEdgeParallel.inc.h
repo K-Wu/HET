@@ -298,8 +298,8 @@ void full_graph_hetero_attention_ops(
       <<<nblks_type2, nthrs_type2, 0, stream>>>(
           gdata, incsr_row_ptr.data_ptr<int64_t>(),
           incsr_col_indices.data_ptr<int64_t>(),
-          incsr_reltypes.data_ptr<int64_t>(), incsr_row_ptr.numel() - 1,
-          nullptr, nullptr, num_relations);
+          incsr_reltypes.data_ptr<int64_t>(), incsr_row_ptr.numel() - 1, {},
+          num_relations);
 }
 
 void FullGraphFusedMessageCalcAndMeanAggregation(
