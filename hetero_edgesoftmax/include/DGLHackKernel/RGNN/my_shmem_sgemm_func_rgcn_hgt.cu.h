@@ -62,9 +62,6 @@ class _simplified_basic_MatMulKernel<
     // FIXME: check if we can reduce the use of norm by applying only at the end
 
     // Block row and column
-    // if constexpr(!DoHalfGradNormFlag){
-    //   assert(inner_product == nullptr);
-    // }
 
     // TODO: KWU: supercede blockIdx/threadIdx with pretended blockIdx and
     // threadIdx if in a mega-kernel
@@ -120,7 +117,6 @@ class _simplified_basic_MatMulKernel<
         inner_product_term_scatter_list = separate_coo_eids;
       }
     }
-    // Idx blockRow = blockIdx.y - blockIdxAlongRowBeg;
     int blockFeat = blockIdx.x;  // when OuterProductFlag==True, it is in [0,
                                  // output_dim//num_heads)
 
@@ -143,8 +139,7 @@ class _simplified_basic_MatMulKernel<
       // NB: blockTask == blockIdx.x / ceil_div( num_B_cols, BLOCK_SIZE)
 
       // Each thread block computes one sub-matrix Csub of C
-      // float* Csub = &C[blockRow * BLOCK_SIZE * num_B_cols + blockFeat *
-      // BLOCK_SIZE]; Each thread computes one element of Csub by accumulating
+      // Each thread computes one element of Csub by accumulating
       // results into Cvalue
       float Cvalue[COARSEN_DIVISOR_FACTOR] = {};
       /*partially loaded in the main loop*/
@@ -242,7 +237,6 @@ class _simplified_basic_MatMulKernel<
         __shared__ float Bs[RIGHT_REG_TILED_FLAG ? 1 : SHMEM_BLOCK_SIZE_K]
                            [RIGHT_REG_TILED_FLAG ? 1 : SHMEM_BLOCK_SIZE_X];
         float Bs_reg[RIGHT_REG_TILED_FLAG ? SHMEM_BLOCK_SIZE_K : 1];
-        // Bs_reg[e] == Bs[e][thIdxFeat_initial];
 
         if constexpr (DoInnerProductSwitch !=
                           MySGEMMInnerProductKind::Disabled &&
@@ -518,14 +512,6 @@ class _simplified_basic_MatMulKernel<
               // TODO: we may hide the global mem read latency by moving input
               // node feat load ahead at the cost of more shmem (copy async) or
               // more registers use
-
-              // atomicAdd(&inner_product[inner_product_term_scatter_list
-              //                                  [thIdxRow +
-              //                                   blockRow * SHMEM_BLOCK_SIZE +
-              //                                   blockRowJobEntryBeg] *
-              //                              num_heads +
-              //                          idx_head],
-              //           Cvalue * InnerProductTerm);
 
               unsigned int mask_size =
                   32 > SHMEM_BLOCK_SIZE_X ? SHMEM_BLOCK_SIZE_X : 32;

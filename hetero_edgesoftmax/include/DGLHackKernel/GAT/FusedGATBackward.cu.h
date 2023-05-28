@@ -6,21 +6,18 @@ template <typename Idx, typename DType>
 struct BackwardGatFusedData {
   // feat_size size along feature dimension
   Idx feat_src_xlen{0};
-  // Idx feat_src_hidden{0};
   Idx num_heads{0};
-  // Idx ret_xlen{0};
-  // num nodes
-  // Idx n{0};
   Idx *__restrict__ eids{nullptr};
   DType leaky_relu_slope;
   // Inputs
   DType *__restrict__ feat_src{nullptr}, *__restrict__ el{nullptr},
-      *__restrict__ er{nullptr};
+                                             *__restrict__ er{nullptr};
   DType *__restrict__ sum{nullptr}, *__restrict__ exp{nullptr},
-      *__restrict__ ret{nullptr};
+                                        *__restrict__ ret{nullptr};
   // Output
   DType *__restrict__ grad_out{nullptr}, *__restrict__ grad_feat_src{nullptr},
-      *__restrict__ grad_el{nullptr}, *__restrict__ grad_er{nullptr};
+                                             *__restrict__ grad_el{nullptr},
+                                                 *__restrict__ grad_er{nullptr};
 };
 
 template <typename DType>
@@ -77,7 +74,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
               // unique node index) el_idx is related to (relation, unique node
               // index) feat_src_offset is related to (relation, unique node
               // index)
-              // Idx etype = etypes[e];
               Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
                 etype = binary_search(num_relations, etypes, e);
@@ -95,11 +91,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
 
               feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;
-              // printf(
-              //     "src_vid %ld dst_vid %ld etype %ld src_vid_relational %ld "
-              //     "dst_vid_relational %ld \n",
-              //     src_vid, dst_vid, etype, src_vid_relational,
-              //     dst_vid_relational);
             }
           }
 
@@ -116,10 +107,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
                        gradLeaky(tmp_sum, gdata.leaky_relu_slope);
 
           atomicAdd(gdata.grad_er + er_idx, tmp2);
-          // Idx sum_vid = dst_vid;
-          // if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
-          //   sum_vid = dst_vid_relational;
-          // }
           if constexpr (!IsCompact(kind) || RelationalFlag) {
             atomicAdd(gdata.grad_el + el_idx, tmp2);
             atomicAdd(gdata.grad_feat_src + feat_src_offset,
@@ -133,8 +120,8 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
                         gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                        head_idx * hidden_xlen + feat_idx];
             s += tmp2;
-          }  // if constexpr (!CompactAsOfNodeFlag)
-        }    // for Idx e
+          }
+        }  // for Idx e
         if constexpr (IsCompact(kind) && !RelationalFlag) {
           gdata.grad_feat_src[feat_src_offset] = sfeatsrc;
           atomicAdd(gdata.grad_el + el_idx, s);
@@ -203,7 +190,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
                               head_idx * hidden_xlen + feat_idx;
           } else {  // CompactAsOfNodeFlag
             if constexpr (RelationalFlag) {
-              // Idx etype = etypes[e];
               Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
                 etype = binary_search(num_relations, etypes, e);
@@ -222,10 +208,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
           }
           // TODO: maybe it's better to cache exp/sum to reduce mem traffic as
           // well as redundant computation?
-          // Idx sum_vid = dst_vid;
-          // if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
-          //   sum_vid = dst_vid_relational;
-          // }
           if constexpr (!IsCompact(kind) || RelationalFlag) {
             atomicAdd(gdata.grad_feat_src + feat_src_offset,
                       gdata.exp[edata_idx * num_heads + head_idx] /
@@ -329,7 +311,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
               // unique node index) el_idx is related to (relation, unique node
               // index) feat_src_offset is related to (relation, unique node
               // index)
-              // Idx etype = etypes[e];
               Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
                 etype = binary_search(num_relations, etypes, e);
@@ -382,13 +363,3 @@ __global__ void HET_fusedGatBackwardGradElEr(
       gdata, row_offsets, column_indices, etypes, num_rows,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
 }
-
-// template <typename Idx, typename DType>
-// constexpr auto relational_fusedGatBackwardGradElEr_per_edge =
-//     HET_fusedGatBackwardGradElEr<Idx, DType, false, true>;
-// template <typename Idx, typename DType>
-// constexpr auto relational_fusedGatBackwardGradFeatSrc_per_edge =
-//     HET_fusedGatBackwardGradFeatSrc<Idx, DType, false, true>;
-// template <typename Idx, typename DType>
-// constexpr auto relational_fusedGatBackwardGradElErFeatSrcFused_per_edge =
-//     HET_fusedGatBackwardGradElErFeatSrcFused<Idx, DType, false, true>;

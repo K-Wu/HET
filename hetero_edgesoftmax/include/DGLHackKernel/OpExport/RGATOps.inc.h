@@ -39,7 +39,7 @@ void _RelationalFusedGATKernel(
       .feat_src_xlen = SeastarComputeXLength<>(feat_src),
       .num_heads = SeastarComputeXLength<>(el),
       .eids = nullptr,  // to be assigned later in if branches
-      .leaky_relu_slope = slope,
+      .leaky_relu_slope = static_cast<float>(slope),
       .feat_src = feat_src.data_ptr<DType>(),
       .el = el.data_ptr<DType>(),
       .er = er.data_ptr<DType>(),
@@ -260,7 +260,7 @@ void _RelationalFusedGATKernel(
       .feat_src_xlen = SeastarComputeXLength<>(feat_src),
       .num_heads = SeastarComputeXLength<>(el),
       .eids = nullptr,  // to be assigned later in if branches
-      .leaky_relu_slope = slope,
+      .leaky_relu_slope = static_cast<float>(slope),
       .feat_src = feat_src.data_ptr<DType>(),
       .el = el.data_ptr<DType>(),
       .er = er.data_ptr<DType>(),

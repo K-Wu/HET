@@ -90,7 +90,6 @@ __device__ __forceinline__ void Seastar_RgcnLayer1BackwardKernelNodePerWarp(
   Idx end = __ldg(ranges + node_idx + 1);
   Idx tx = threadIdx.x % 32;
   for (; tx < feat_len_x * feat_len_y; tx += 32) {
-    // Idx ty = tx / feat_len_x;
     Idx th = tx % feat_len_x;
     for (Idx ty = tx / feat_len_x; ty < feat_len_y;
          ty += blockDim.x / feat_len_y) {
@@ -122,7 +121,6 @@ __device__ __forceinline__ void Seastar_RgcnLayer1BackwardKernelNodePerBlock(
   Idx end = __ldg(ranges + node_idx + 1);
   Idx tx = threadIdx.x;
   for (; tx < feat_len_x * feat_len_y; tx += blockDim.x) {
-    // Idx ty = tx / feat_len_x;
     Idx th = tx % feat_len_x;
     for (Idx ty = tx / feat_len_x; ty < feat_len_y;
          ty += blockDim.x / feat_len_x) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+
 #include "kernel_enums.h"
 
 template <typename Idx, typename DType>
@@ -8,8 +9,6 @@ struct InnerProductData {
   // feat_size size along feature dimension
   Idx feat_src_xlen{0};
   Idx num_heads{0};
-  // num nodes
-  // Idx n{0};
   Idx *__restrict__ eids{nullptr};
   // Inputs
   DType *__restrict__ feat_src{nullptr}, *__restrict__ feat_dst{nullptr};
@@ -22,15 +21,13 @@ struct BackwardInnerProductData {
   // feat_size size along feature dimension
   Idx feat_src_xlen{0};
   Idx num_heads{0};
-  // num nodes
-  // Idx n{0};
   Idx *__restrict__ eids{nullptr};
   // Inputs
   DType *__restrict__ feat_src{nullptr}, *__restrict__ feat_dst{nullptr};
   DType *__restrict__ grad_inner_product{nullptr};
   // Output
-  DType *__restrict__ grad_feat_dst{nullptr},
-      *__restrict__ grad_feat_src{nullptr};
+  DType *__restrict__ grad_feat_dst{nullptr}, *__restrict__ grad_feat_src{
+                                                  nullptr};
 };
 
 // adapted from _gatSumProdZipDivKernel in
@@ -57,7 +54,6 @@ __global__ void HET_inner_product_fw_kernel(
           Idx feat_src_entry_id = -1;
           Idx edata_idx = gdata.eids[eidx];
           if constexpr (RelationalFlag) {
-            // Idx sum_idx = -1;
             if constexpr (IsCompact(kind)) {
               Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
@@ -84,11 +80,7 @@ __global__ void HET_inner_product_fw_kernel(
               // the node dimension may not be worth it.
               CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
                   FullCartesianFlag, "should be non-reachable not implemented");
-            }  // else {
-               // sum_idx = find_relational_compact_as_of_node_index(
-               //     etype, dst_vid, unique_srcs_and_dests_node_indices,
-               //     unique_srcs_and_dests_rel_ptr);
-            //}
+            }
 
             s += gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx] *
@@ -133,61 +125,40 @@ __global__ void HET_inner_product_bck_kernel(
          head_idx += blockDim.y) {
       for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
            feat_idx < hidden_xlen; feat_idx += blockDim.x * gridDim.x) {
-        // DType s = 0.;
         DType sfeatsrc = 0.;
         Idx feat_src_offset = -1;
-        // Idx el_idx = -1;
         if constexpr (IsCompact(kind) && !RelationalFlag) {
           // in this case, feat_src_offset is the same regardless of which
           // outgoing edge we deal with
           feat_src_offset =
               src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
-          // el_idx = src_vid * num_heads + head_idx;
         }
         for (Idx e = start_off; e < end_off; ++e) {
           Idx edata_idx = gdata.eids[e];
           Idx dst_vid = column_indices[e];
-          // Idx er_idx = -1;
-          // Idx dst_vid_relational = -1;
           if constexpr (!IsCompact(kind)) {
             // in this case, feat_src_offset, er_idx and el_idx are related to
             // edge id, regardless of the type of the edge
             feat_src_offset = edata_idx * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx;
-            // er_idx = edata_idx * num_heads + head_idx;
-            // el_idx = edata_idx * num_heads + head_idx;
           } else {  // CompactAsOfNodeFlag
-            // if constexpr (!RelationalFlag) {
-            //   er_idx = dst_vid * num_heads + head_idx;
-            // } else {  // RelationalFlag
             if constexpr (RelationalFlag) {
               // in this case, er_idx (sum's index) is related to (relation,
               // unique node index) el_idx is related to (relation, unique node
               // index) feat_src_offset is related to (relation, unique node
               // index)
-              // Idx etype = etypes[e];
               Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
                 etype = binary_search(num_relations, etypes, e);
               } else {
                 etype = etypes[e];
               }
-              // dst_vid_relational = find_relational_compact_as_of_node_index(
-              //     etype, dst_vid, unique_srcs_and_dests_rel_ptr,
-              //     unique_srcs_and_dests_node_indices);
-              // er_idx = dst_vid_relational * num_heads + head_idx;
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
                   etype, src_vid, unique_srcs_and_dests_rel_ptr,
                   unique_srcs_and_dests_node_indices);
-              // el_idx = src_vid_relational * num_heads + head_idx;
 
               feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;
-              // printf(
-              //     "src_vid %ld dst_vid %ld etype %ld src_vid_relational %ld "
-              //     "dst_vid_relational %ld \n",
-              //     src_vid, dst_vid, etype, src_vid_relational,
-              //     dst_vid_relational);
             }
           }
 
@@ -195,18 +166,6 @@ __global__ void HET_inner_product_bck_kernel(
 
           Idx dst_out_offset =
               dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
-          // DType grad_exp =
-          //     gdata.grad_out[dst_out_offset] *
-          //     (gdata.feat_src[feat_src_offset] - gdata.ret[dst_out_offset]) /
-          //     gdata.sum[dst_vid * num_heads + head_idx];
-          // DType tmp_sum = gdata.el[el_idx] + gdata.er[er_idx];
-          // DType tmp2 = grad_exp * gdata.exp[edge_offset] *
-          //              gradLeaky(tmp_sum, gdata.leaky_relu_slope);
-
-          // Idx sum_vid = dst_vid;
-          // if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
-          //   sum_vid = dst_vid_relational;
-          // }
           gdata.grad_feat_dst + (dst_vid * gdata.feat_src_xlen +
                                  head_idx * hidden_xlen + feat_idx) =
               gdata.grad_inner_product[edata_idx * num_heads + head_idx] *
@@ -221,9 +180,8 @@ __global__ void HET_inner_product_bck_kernel(
                 gdata.grad_inner_product[edata_idx * num_heads + head_idx] *
                 gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
                                head_idx * hidden_xlen + feat_idx];
-
-          }  // if constexpr (!CompactAsOfNodeFlag)
-        }    // for Idx e
+          }
+        }  // for Idx e
         if constexpr (IsCompact(kind) && !RelationalFlag) {
           gdata.grad_feat_src[feat_src_offset] = sfeatsrc;
         }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+
 #include "DGLHackKernel/GAT/FusedGAT.cu.h"
 #include "kernel_enums.h"
 
@@ -24,19 +25,14 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
     Idx dst_vid = col_indices[eidx];
 
     Idx src_vid = row_indices[eidx];
-    // for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y)
-    // { Idx start_off = *(row_offsets + dst_vid); Idx end_off = *(row_offsets +
-    // dst_vid + 1);
     for (Idx head_idx = threadIdx.y; head_idx < num_heads;
          head_idx += blockDim.y) {
       for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
            feat_idx < hidden_xlen; feat_idx += blockDim.x * gridDim.x) {
         DType s = 0.;
-        // for (Idx eidx = start_off; eidx < end_off; eidx++) {
         Idx feat_src_entry_id = -1;
         Idx edata_idx = gdata.eids[eidx];
         if constexpr (RelationalFlag) {
-          // Idx sum_idx = -1;
           Idx etype = -1;
           if constexpr (ETypeRelPtrFlag) {
             etype = binary_search(num_relations, etypes, eidx);
@@ -58,9 +54,6 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
             }
           } else {
             feat_src_entry_id = edata_idx;
-            // sum_idx = find_relational_compact_as_of_node_index(
-            //     etype, dst_vid, unique_srcs_and_dests_node_indices,
-            //     unique_srcs_and_dests_rel_ptr);
           }
           s += (gdata.exp[edata_idx * num_heads + head_idx] /
                 gdata.sum[dst_vid * num_heads + head_idx] *
@@ -86,10 +79,6 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
                         gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                        head_idx * hidden_xlen + feat_idx]);
         }
-
-        //}
-        // gdata.ret[dst_vid * gdata.feat_src_xlen + head_idx * hidden_xlen +
-        //           feat_idx] = s;
       }
     }
   }
@@ -130,10 +119,6 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
   Idx num_heads = gdata.num_heads;
   for (Idx eidx = ty; eidx < num_edges; eidx += blockDim.y * gridDim.y) {
     Idx dst_vid = col_indices[eidx];
-    // for (Idx dst_vid = ty; dst_vid < num_rows;
-    //     dst_vid += blockDim.y * gridDim.y;) {
-    // Idx start_off = *(row_offsets + dst_vid);
-    // Idx end_off = *(row_offsets + dst_vid + 1);
 
     for (Idx feat_idx = tx; feat_idx < num_heads;
          feat_idx += blockDim.x * gridDim.x) {
@@ -142,18 +127,14 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
       if constexpr (CompactAsOfNodeFlag) {
         feat_off_dst = dst_vid * num_heads + feat_idx;
       }
-      // er[threadIdx.x] = gdata.er[feat_off_dst];
-      //__syncthreads();
       // 2. Do the computation
       DType sum = 0.;
-      // for (Idx eidx = start_off; eidx < end_off; ++eidx) {
       Idx src_id = *(row_indices + eidx);
       Idx feat_off_src = -1;
       Idx edata_idx = gdata.eids[eidx];
       Idx dst_vid_relational = -1;
       if constexpr (CompactAsOfNodeFlag) {
         if constexpr (RelationalFlag) {
-          // Idx etype = etypes[eidx];
           Idx etype = -1;
           if constexpr (ETypeRelPtrFlag) {
             etype = binary_search(num_relations, etypes, eidx);
@@ -190,8 +171,6 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
         feat_off_src = edata_idx * num_heads + feat_idx;
         feat_off_dst = edata_idx * num_heads + feat_idx;
       }
-      // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] + er[threadIdx.x],
-      // gdata.leaky_relu_slope);
       DType tmp =
           gatLeakyReluExp(gdata.el[feat_off_src] + gdata.er[feat_off_dst],
                           gdata.leaky_relu_slope);
@@ -202,7 +181,6 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
       sum += tmp;
       //}
       if constexpr (!RelationalFlag) {
-        // gdata.sum[Idx(dst_vid * num_heads) + feat_idx] = sum;
         atomicAdd(&gdata.sum[Idx(dst_vid * num_heads) + feat_idx], sum);
       }
     }

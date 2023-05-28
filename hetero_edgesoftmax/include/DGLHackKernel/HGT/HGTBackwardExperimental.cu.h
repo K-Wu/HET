@@ -45,7 +45,6 @@ __global__ void HET_HGTBackwardFusedGradientSmFirstPartGradientAImpl(
           agg1 += sigma * msg_ele * delta_t_neighbour_ele;
         }
         DType inner_agg = sigma * (1 - sigma) * msg_ele * delta_t_neighbour_ele;
-// agg += g*w*n;
 #pragma unroll
         for (int i_reduction = 16; i_reduction > 0;
              i_reduction = i_reduction / 2) {
@@ -108,7 +107,7 @@ __global__ void HET_HGTBackwardGradientAImpl(
                               tidx_head * feat_dim_per_head + tidx_ele_in_head);
         DType sigma = __ldg(sigmas + eid * num_heads + tidx_head);
         DType inner_agg = sigma * (1 - sigma) * msg_ele * delta_t_neighbour_ele;
-// agg += g*w*n;
+
 #pragma unroll
         for (int i_reduction = 16; i_reduction > 0;
              i_reduction = i_reduction / 2) {
@@ -170,7 +169,6 @@ __global__ void HET_HGTBackwardGradientSmFirstPartImpl(
         } else {
           agg1 += sigma * msg_ele * delta_t_neighbour_ele;
         }
-        // atomicAdd();
       }
       atomicAdd(grad_sm_first_stage +
                     blockIdx.x * n_rel_types * num_heads * feat_dim_per_head +

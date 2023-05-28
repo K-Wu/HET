@@ -80,10 +80,6 @@ class _simplified_basic_MatMulKernel<
 
     // FIXME: check if we can reduce the use of norm by applying only at the end
 
-    // Block row and column
-    // if constexpr(!DoHalfGradNormFlag){
-    //   assert(inner_product == nullptr);
-    // }
     CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
         HGT_INSTEAD_OF_RGCN_FLAG && !HGT_INSTEAD_OF_RGCN_FLAG,
         "double buffer version is obsolete and should be updated to align with "

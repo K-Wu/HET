@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+
 #include "DGLHackKernel/GAT/FusedGATBackward.cu.h"
 
 // edge-centric schedule cf. HET_fusedGatBackwardGradElErFeatSrcFused in
@@ -21,10 +22,6 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx e = blockIdx.y; e < num_edges; e += gridDim.y) {
-    // for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y)
-    // {
-    // Idx start_off = row_offsets[src_vid];
-    // Idx end_off = row_offsets[src_vid + 1];
     Idx src_vid = row_indices[e];
     Idx edata_idx = gdata.eids[e];
     Idx dst_vid = col_indices[e];
@@ -44,7 +41,6 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
               src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
           el_idx = src_vid * num_heads + head_idx;
         }
-        // for (Idx e = start_off; e < end_off; ++e) {
         Idx er_idx = -1;
         Idx dst_vid_relational = -1;
         if constexpr (!CompactAsOfNodeFlag) {
@@ -62,7 +58,6 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
             // unique node index) el_idx is related to (relation, unique node
             // index) feat_src_offset is related to (relation, unique node
             // index)
-            // Idx etype = etypes[e];
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, e);
@@ -101,29 +96,12 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
                      gradLeaky(tmp_sum, gdata.leaky_relu_slope);
 
         atomicAdd(gdata.grad_er + er_idx, tmp2);
-        // Idx sum_vid = dst_vid;
-        // if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
-        //   sum_vid = dst_vid_relational;
-        // }
-        // if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
         atomicAdd(gdata.grad_el + el_idx, tmp2);
         atomicAdd(gdata.grad_feat_src + feat_src_offset,
                   gdata.exp[edata_idx * num_heads + head_idx] /
                       gdata.sum[dst_vid * num_heads + head_idx] *
                       gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                      head_idx * hidden_xlen + feat_idx]);
-        //   } else {
-        //     sfeatsrc += gdata.exp[edata_idx * num_heads + head_idx] /
-        //                 gdata.sum[sum_vid * num_heads + head_idx] *
-        //                 gdata.grad_out[dst_vid * gdata.feat_src_xlen +
-        //                                head_idx * hidden_xlen + feat_idx];
-        //     s += tmp2;
-        //   }  // if constexpr (!CompactAsOfNodeFlag)
-        //}    // for Idx e
-        // if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
-        //   gdata.grad_feat_src[feat_src_offset] = sfeatsrc;
-        //   atomicAdd(gdata.grad_el + el_idx, s);
-        // }
       }  // while feat_idx
     }    // while head_idx
   }      // while src_vid
@@ -166,10 +144,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
 
     Idx edata_idx = gdata.eids[e];
     Idx dst_vid = col_indices[e];
-    // for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y)
-    // {
-    // Idx start_off = row_offsets[src_vid];
-    // Idx end_off = row_offsets[src_vid + 1];
     for (Idx head_idx = threadIdx.y; head_idx < num_heads;
          head_idx += blockDim.y) {
       for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -182,7 +156,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
           feat_src_offset =
               src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
         }
-        // for (Idx e = start_off; e < end_off; ++e) {
         Idx dst_vid_relational = -1;
         if constexpr (!CompactAsOfNodeFlag) {
           // in this case, feat_src_offset, er_idx and el_idx are related to
@@ -191,7 +164,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
                             head_idx * hidden_xlen + feat_idx;
         } else {  // CompactAsOfNodeFlag
           if constexpr (RelationalFlag) {
-            // Idx etype = etypes[e];
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, e);
@@ -216,26 +188,11 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
         }
         // TODO: maybe it's better to cache exp/sum to reduce mem traffic as
         // well as redundant computation?
-        // Idx sum_vid = dst_vid;
-        // if constexpr (RelationalFlag && CompactAsOfNodeFlag) {
-        //   sum_vid = dst_vid_relational;
-        // }
-        // if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
         atomicAdd(gdata.grad_feat_src + feat_src_offset,
                   gdata.exp[edata_idx * num_heads + head_idx] /
                       gdata.sum[dst_vid * num_heads + head_idx] *
                       gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                      head_idx * hidden_xlen + feat_idx]);
-        //   } else {  // CompactAsOfNodeFlag && !RelationalFlag
-        //     s += gdata.exp[edata_idx * num_heads + head_idx] /
-        //          gdata.sum[sum_vid * num_heads + head_idx] *
-        //          gdata.grad_out[dst_vid * gdata.feat_src_xlen +
-        //                         head_idx * hidden_xlen + feat_idx];
-        //   }
-        //}
-        // if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
-        //   gdata.grad_feat_src[feat_src_offset] = s;
-        // }
       }
     }
   }
@@ -262,10 +219,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
 
     Idx edata_idx = gdata.eids[e];
     Idx dst_vid = column_indices[e];
-    // for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y)
-    // {
-    //  Idx start_off = row_offsets[src_vid];
-    // Idx end_off = row_offsets[src_vid + 1];
     for (Idx head_idx = threadIdx.y; head_idx < num_heads;
          head_idx += blockDim.y) {
       for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -280,7 +233,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
               src_vid * gdata.feat_src_xlen + head_idx * hidden_xlen + feat_idx;
           el_idx = src_vid * num_heads + head_idx;
         }
-        // for (Idx e = start_off; e < end_off; ++e) {
         Idx edge_offset = gdata.eids[e] * num_heads + head_idx;
         Idx er_idx = -1;
         Idx dst_vid_relational = -1;
@@ -299,7 +251,6 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
             // unique node index) el_idx is related to (relation, unique node
             // index) feat_src_offset is related to (relation, unique node
             // index)
-            // Idx etype = etypes[e];
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, e);
@@ -336,13 +287,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
                      gradLeaky(tmp_sum, gdata.leaky_relu_slope);
         s += tmp2;
         atomicAdd(gdata.grad_er + er_idx, tmp2);
-        // if constexpr (!CompactAsOfNodeFlag || RelationalFlag) {
         atomicAdd(gdata.grad_el + el_idx, tmp2);
-        //}
-        //}
-        // if constexpr (CompactAsOfNodeFlag && !RelationalFlag) {
-        //   atomicAdd(gdata.grad_el + el_idx, s);
-        // }
       }
     }
   }

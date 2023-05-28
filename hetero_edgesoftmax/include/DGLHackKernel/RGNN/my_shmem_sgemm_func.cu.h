@@ -90,7 +90,6 @@ class _basic_MatMulKernel<
       assert((blockDim.z == num_heads));
     }
 
-    // Idx blockRow = blockIdx.y - blockIdxAlongRowBeg;
     int blockFeat = blockIdx.x;  // when OuterProductFlag==True, it is in [0,
                                  // output_dim//num_heads)
 
@@ -161,7 +160,6 @@ class _basic_MatMulKernel<
         __shared__ float Bs[RIGHT_REG_TILED_FLAG ? 1 : SHMEM_BLOCK_SIZE_K]
                            [RIGHT_REG_TILED_FLAG ? 1 : SHMEM_BLOCK_SIZE_X];
         float Bs_reg[RIGHT_REG_TILED_FLAG ? SHMEM_BLOCK_SIZE_K : 1];
-        // Bs_reg[e] == Bs[e][thIdxFeat_initial];
 
         // Get sub-matrix Bsub of B
         // Load Asub and Bsub from device memory to
@@ -441,11 +439,6 @@ __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
                               Idx input_dim, Idx output_per_head_dim,
                               int num_heads, int *accum_num_blocks_per_relation,
                               Idx num_relations) {
-  //   constexpr int THREAD_BLOCK_DIM_X =
-  //       COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  //   constexpr int THREAD_BLOCK_DIM_Y =
-  //       COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-
   // (input, weight, output) are 1, NH, NH or NH, NH, NH depending on whether
   // A_num_head_one_flag is true. NH is num_heads
   Idx idx_block_assignment = blockIdx.y;
@@ -542,11 +535,6 @@ __global__ void HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
     IdxPtr A_rel_ptr, IdxPtr AC_eid_gather_scatter_list, Idx input_dim,
     Idx output_per_head_dim, int num_heads, int *accum_num_blocks_per_relation,
     Idx num_relations) {
-  //   constexpr int THREAD_BLOCK_DIM_X =
-  //       COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  //   constexpr int THREAD_BLOCK_DIM_Y =
-  //       COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);

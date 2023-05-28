@@ -73,7 +73,7 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
       } else {
         // if COO, just index the row_idx directly
         row_idx = row_indices_or_row_ptrs[edge_idx];
-      }  // if constexpr (CSRInsteadOfCOOFlag) {
+      }
       if constexpr (BinarySearchToGetEtypeNodeOffsetFlag) {
         unique_node_index_for_curr_etype = binary_search<Idx, Idx *>(
             etype_unique_node_offsets[etype + 1] -
@@ -98,62 +98,15 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
     Idx featid = threadIdx.x % warpSize;
 
     for (; featid < inout_feat_dim; featid += warpSize) {
-      Idx head_id = featid / (inout_feat_dim /
-                              num_heads);  // featid / NODE_INPUT_DIM_PER_HEAD;
+      Idx head_id = featid / (inout_feat_dim / num_heads);
       // NodeAggregates should be initialized to 0 before this kernel launch
-      atomicAdd(
-          &NodeAggregates[col_idx * inout_feat_dim + featid],
-          EdgeMessage[head_id * (inout_feat_dim / num_heads) +
-                      featid % (inout_feat_dim / num_heads)] *
-              EdgeAttnScore[head_id]);  // featid % NODE_INPUT_DIM_PER_HEAD];
+      atomicAdd(&NodeAggregates[col_idx * inout_feat_dim + featid],
+                EdgeMessage[head_id * (inout_feat_dim / num_heads) +
+                            featid % (inout_feat_dim / num_heads)] *
+                    EdgeAttnScore[head_id]);
     }
   }
 }
-
-// // TODO: KWU: merge all kernels with the same semantic but different
-// arguments
-// // TODO: KWU: merge these following two kernels by using struct as an
-// argument
-// __global__ void HET_HGTTriviallyEdgeParallelVanillaNodeMeanAggregation(
-//     int64_t *col_idxes, int64_t *etypes, int64_t *eids, float *EdgeMessages,
-//     float *EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
-//     int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
-//     float *NodeAggregates) {
-//   _HGTTriviallyEdgeParallelNodeMeanAggregation<
-//       int64_t, float,
-//       /* EdgeMessagesCompactAsOfNodeFlag = */ CompactAsOfNodeKind::Disabled,
-//       /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ false, float
-//       *,
-//       /*flag not applicable*/ false, /*flag not applicable*/ false>(
-//       col_idxes, etypes, eids, EdgeMessages, EdgeAttnScores, num_nodes,
-//       num_edges, num_etypes, num_heads, inout_feat_dim, NodeAggregates,
-//       nullptr, nullptr, nullptr);
-// }
-
-// __global__ void
-// HET_HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation(
-//     int64_t *col_idxes, int64_t *etypes, int64_t *eids, float *EdgeMessages,
-//     float *EdgeAttnScores, int64_t num_nodes, int64_t num_edges,
-//     int64_t num_etypes, int64_t num_heads, int64_t inout_feat_dim,
-//     float *NodeAggregates, int64_t *ETypeUniqueIndexToNodeIndexMap,
-//     int64_t *etype_unique_node_offsets, int64_t *row_indices) {
-//   _HGTTriviallyEdgeParallelNodeMeanAggregation<
-//       int64_t, float,
-//       /* EdgeMessagesCompactAsOfNodeFlag = */ CompactAsOfNodeKind::Enabled,
-//       /* EdgeMessagesIndirectionOffsetInsteadOf2DArrayFlag = */ true, float
-//       *,
-//       /*BinarySearchToGetEtypeNodeOffsetFlag = */ true,
-//       /*CSRInsteadOfCOOFlag = */ false>(
-//       col_idxes, etypes, eids, EdgeMessages, EdgeAttnScores, num_nodes,
-//       num_edges, num_etypes, num_heads, inout_feat_dim, NodeAggregates,
-//       ETypeUniqueIndexToNodeIndexMap, etype_unique_node_offsets,
-//       row_indices);
-// }
-
-// constexpr auto HET_HGTTriviallyEdgeParallelVanillaNodeMeanAggregation =
-// HGTTriviallyEdgeParallelNodeMeanAggregation<int, float, false, float *>;
-// constexpr auto HET_HGTTriviallyEdgeParallelCompactAsOfNodeNodeMeanAggregation
-// = HGTTriviallyEdgeParallelNodeMeanAggregation<int, float, true, float **>;
 
 // We need to use separate coo at this moment
 // this kernel can be used for either sW in edge attention computation (vanilla
@@ -177,10 +130,6 @@ __global__ void HET_EdgeMessageGeneration(
     assert(0 &&
            "WORK_ASSIGNMENT_INDEX_FLAG is not supported in "
            "HET_EdgeMessageGeneration");
-    // int beg_edge_entry_idx = beg_edge_entry_idxes_vect[blockIdx.x];
-    // stride = num_blocks_xdim_for_same_relation_per_block_vect[blockIdx.x] *
-    //             COARSE_SGEMM_EDGES_PER_BLOCK;
-    // relation_idx = blockid_relation_id_vect[blockIdx.x];
   } else {
     relation_idx =
         binary_search<Idx, Idx *>(num_etypes, etype_block_offsets, blockIdx.x);
@@ -261,8 +210,6 @@ struct HgtDstOutData<Idx, DType, 0> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ edgesoftmax_sum_per_node{nullptr},
       *__restrict__ message{nullptr}, *__restrict__ ret{nullptr};
-  // DType *mu_softmax_applied_unnormalized_attn_score{nullptr};
-  // DType* normalized_attn_score{nullptr};
   DType *__restrict__ mu{nullptr}, *__restrict__ unnormalized_attn_score{
                                        nullptr};
 };
@@ -275,8 +222,6 @@ struct HgtDstOutData<Idx, DType, 1> {
   DType *__restrict__ edgesoftmax_sum_per_node{nullptr},
       *__restrict__ message{nullptr}, *__restrict__ ret{nullptr};
   DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
-  // DType* normalized_attn_score{nullptr};
-  // DType* mu{nullptr}, *unnormalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
@@ -286,9 +231,6 @@ struct HgtDstOutData<Idx, DType, 2> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ message{nullptr}, *__restrict__ ret{nullptr};
   DType *__restrict__ normalized_attn_score{nullptr};
-  // DType *edgesoftmax_sum_per_node{nullptr};
-  // DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
-  // DType* mu{nullptr}, *unnormalized_attn_score{nullptr};
 };
 
 // based on _gatSumProdZipDivKernel originally from seastar dgl-hack
@@ -319,7 +261,6 @@ __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
           Idx feat_src_entry_id = -1;
           Idx edata_idx = gdata.eids[eidx];
           if constexpr (RelationalFlag) {
-            // Idx sum_idx = -1;
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, eidx);
@@ -343,11 +284,7 @@ __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
               // the node dimension may not be worth it.
               CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
                   FullCartesianFlag, "should be non-reachable not implemented");
-            }  // else {
-            //   sum_idx = find_relational_compact_as_of_node_index(
-            //       etype, dst_vid, unique_srcs_and_dests_node_indices,
-            //       unique_srcs_and_dests_rel_ptr);
-            // }
+            }
             // NB: e_xlen is the number of heads, feat_src_xlen is
             // message_out_dim, hidden_xlen is message_out_dim//num_heads
 
@@ -441,8 +378,6 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 0> {
   DType *__restrict__ mu{nullptr},
       *__restrict__ unnormalized_attn_score{nullptr},
           *__restrict__ edgesoftmax_sum_per_node{nullptr};
-  // DType* mu_softmax_applied_unnormalized_attn_score{nullptr};
-  // DType* normalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
@@ -453,7 +388,6 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 1> {
       *__restrict__ unnormalized_attn_score{nullptr},
           *__restrict__ edgesoftmax_sum_per_node{nullptr};
   DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
-  // DType* normalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
@@ -491,7 +425,6 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
     const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
     int64_t num_rows, const Idx *unique_srcs_and_dests_rel_ptr,
     const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  // extern __shared__ DType er[];
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
   if constexpr (OutputMuAppliedAttnScoreSwitch != 0 &&
@@ -514,16 +447,11 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
 
     for (Idx feat_idx = tx; feat_idx < num_heads;
          feat_idx += blockDim.x * gridDim.x) {
-      // 1. Load dstnation vertex into shared memory
-      // er[threadIdx.x] = gdata.er[feat_off_dst];
-      //__syncthreads();
-      // 2. Do the computation
       DType sum = 0.;
       for (Idx eidx = start_off; eidx < end_off; ++eidx) {
         Idx src_id = *(column_indices + eidx);
         Idx feat_off_src = -1;
         Idx edata_idx = gdata.eids[eidx];
-        // Idx dst_vid_relational = -1;
         Idx etype = -1;
         DType mu = 1.0;
         if constexpr (RelationalFlag) {
@@ -532,13 +460,9 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
           } else {
             etype = etypes[eidx];
           }
-          // dst_vid_relational = find_relational_compact_as_of_node_index(
-          //    etype, dst_vid, unique_srcs_and_dests_node_indices,
-          //    unique_srcs_and_dests_rel_ptr);
         }
         if constexpr (IsCompact(kind)) {
           if constexpr (RelationalFlag) {
-            // Idx etype = etypes[eidx];
             if constexpr (FullCartesianFlag) {
               // NB: This is the case where we have the data stored in
               // (relation, node) but do not compress the (relation, node)
@@ -565,8 +489,6 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
           mu = gdata.mu[feat_idx];
         }
 
-        // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] +
-        // er[threadIdx.x], gdata.leaky_relu_slope);
         // TODO: we need to determine where to calculate expf as the
         // non-linearity of edgesoftmax
         DType tmp = expf(gdata.unnormalized_attn_score[feat_off_src] * mu);
@@ -615,7 +537,6 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
               Idx etype = -1;
               if constexpr (IsCompact(kind)) {
                 if constexpr (RelationalFlag) {
-                  // Idx etype = etypes[eidx];
                   if constexpr (FullCartesianFlag) {
                     // NB: This is the case where we have the data stored in
                     // (relation, node) but do not compress the (relation, node)
@@ -670,7 +591,6 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
     const Idx *row_indices, const Idx *column_indices, const Idx *etypes,
     int64_t num_edges, const Idx *unique_srcs_and_dests_rel_ptr,
     const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  // extern __shared__ DType er[];
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
   if constexpr (OutputMuAppliedAttnScoreSwitch != 0 &&
@@ -687,24 +607,14 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
   }
   Idx num_heads = gdata.num_heads;
   for (Idx eidx = ty; eidx < num_edges; eidx += blockDim.y * gridDim.y) {
-    // for (Idx dst_vid = ty; dst_vid < num_rows;
-    //     dst_vid += blockDim.y * gridDim.y) {
     Idx dst_vid = *(row_indices + eidx);
-    // Idx start_off = *(row_offsets + dst_vid);
-    // Idx end_off = *(row_offsets + dst_vid + 1);
 
     for (Idx feat_idx = tx; feat_idx < num_heads;
          feat_idx += blockDim.x * gridDim.x) {
-      // 1. Load dstnation vertex into shared memory
-      // er[threadIdx.x] = gdata.er[feat_off_dst];
-      //__syncthreads();
-      // 2. Do the computation
       DType sum = 0.;
-      // for (Idx eidx = start_off; eidx < end_off; ++eidx) {
       Idx src_id = *(column_indices + eidx);
       Idx feat_off_src = -1;
       Idx edata_idx = gdata.eids[eidx];
-      // Idx dst_vid_relational = -1;
       Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
                       // !RelationalFlag, the default value is set as 0
       DType mu;
@@ -714,13 +624,9 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
         } else {
           etype = etypes[eidx];
         }
-        // dst_vid_relational = find_relational_compact_as_of_node_index(
-        //    etype, dst_vid, unique_srcs_and_dests_node_indices,
-        //    unique_srcs_and_dests_rel_ptr);
       }
       if constexpr (IsCompact(kind)) {
         if constexpr (RelationalFlag) {
-          // Idx etype = etypes[eidx];
           if constexpr (FullCartesianFlag) {
             // NB: This is the case where we have the data stored in
             // (relation, node) but do not compress the (relation, node)
@@ -746,8 +652,6 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
       } else {
         mu = gdata.mu[feat_idx];
       }
-      // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] +
-      // er[threadIdx.x], gdata.leaky_relu_slope);
       // TODO: we need to determine where to calculate expf as the
       // non-linearity of edgesoftmax
       DType tmp = expf(gdata.unnormalized_attn_score[feat_off_src] * mu);

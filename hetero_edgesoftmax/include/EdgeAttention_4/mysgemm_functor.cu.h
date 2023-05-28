@@ -1,6 +1,7 @@
 #pragma once
 // #include "cuda.h"
 #include <cuda_runtime.h>
+
 #include "utils.cu.h"
 
 template <bool scatter_col_flag, int OUT_DIM>
@@ -65,7 +66,6 @@ class mysgemm_functor {
       int *B_col_second_gather_list, int B_col_second_gather_list_length,
       int *C_col_scatter_list, int BcolBias) {
     assert(0 && "not implemented");
-    // static_assert(0, "not implemented");
   }
 };
 
@@ -268,9 +268,6 @@ class mysgemm_functor<512, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
     // each thread should load 8/(TILE_SZ_RATIO / TILE_NUM_HEAD) times per
     // iteration
 
-    // INSERT KERNEL CODE HERE
-
-    // int ArowIdx = blockIdx.y * TILE_SZ_A + threadIdx.x;
     int ArowIdx = threadIdx.x / 32 * 16 + ((threadIdx.x % 32) < 16
                                                ? ((threadIdx.x % 32))
                                                : ((threadIdx.x % 32) - 16));
@@ -1489,9 +1486,9 @@ class mysgemm_functor<128, 8, OUT_DIM, NUM_HEADS, B_col_gather_flag,
 #undef A
     // refactor the following 4 macros soly used in this kernel into constexprs
     // expressed in template integers
-    //#undef TILE_NUM_HEAD
-    //#undef TILE_SZ_RATIO
-    //#undef TILE_SZ_B
-    //#undef TILE_SZ_A
+    // #undef TILE_NUM_HEAD
+    // #undef TILE_SZ_RATIO
+    // #undef TILE_SZ_B
+    // #undef TILE_SZ_A
   }
 };

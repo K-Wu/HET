@@ -27,7 +27,6 @@ __device__ __forceinline__ void Seastar_RgcnLayer0KernelNodePerBlock(
           __ldg(weight + type_id * ntypes * feat_len + src_id * feat_len + tx);
       DType n = __ldg(norm + eid);
       agg_val += w * n;
-      // printf("w:%f norm:%f agg_val:%f\n", w, n, agg_val);
     }
     ret[node_idx * feat_len + tx] = agg_val;
   }
@@ -51,7 +50,6 @@ __device__ __forceinline__ void Seastar_RgcnLayer0KernelNodePerWarp(
           __ldg(weight + type_id * ntypes * feat_len + src_id * feat_len + tx);
       DType n = __ldg(norm + eid);
       agg_val += w * n;
-      // printf("w:%f norm:%f agg_val:%f\n", w, n, agg_val);
     }
     ret[node_idx * feat_len + tx] = agg_val;
   }
@@ -104,7 +102,6 @@ __device__ __forceinline__ void Seastar_RgcnLayer1KernelNodePerWarp(
   Idx lane_idx = threadIdx.x % 32;
   for (int feat_idx = lane_idx; feat_idx < feat_len_x * feat_len_y;
        feat_idx += 32) {
-    // Idx ty = feat_idx / feat_len_x;
     Idx th = feat_idx % feat_len_x;
     DType agg_val = 0.;
     DType w = 0.;
@@ -135,7 +132,6 @@ __device__ __forceinline__ void Seastar_RgcnLayer1KernelNodePerBlock(
   Idx beg = __ldg(ranges + node_idx);
   Idx end = __ldg(ranges + node_idx + 1);
   Idx tx = threadIdx.x;
-  // Idx ty = threadIdx.x / feat_len_x;
   Idx th = threadIdx.x % feat_len_x;
   DType agg_val = 0.;
   DType w = 0.;
@@ -155,7 +151,6 @@ __device__ __forceinline__ void Seastar_RgcnLayer1KernelNodePerBlock(
     }
   }
   ret[node_idx * feat_len_x + th] = agg_val;
-  // atomicAdd(ret + node_idx * feat_len_x + th, agg_val);
 }
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
@@ -251,7 +246,6 @@ __global__ void HET_Seastar_RgcnLayer1COOKernelImpl(
     edge_end += 1;
   }
   for (Idx edge_idx = edge_beg; edge_idx < edge_end; edge_idx++) {
-    // if (warp_idx < num_edges) {
     Seastar_RgcnLayer1COOKernelEdgePerWarp(
         dst_ids, src_ids, eids, types, hidden, weight, norm, ret, num_edges,
         feat_len_y, feat_len_x, ntypes, /*node_idx = */ edge_idx);

@@ -1,5 +1,6 @@
 #pragma once
 #include <cuda_runtime.h>
+
 #include "kernel_enums.h"
 
 // FIXME: check if RGAT needs different a vector for different etypes
@@ -7,16 +8,12 @@ template <typename Idx, typename DType>
 struct GatFusedData {
   // feat_size size along feature dimension
   Idx feat_src_xlen{0};
-  // Idx feat_src_hidden{0};
   Idx num_heads{0};
-  // Idx ret_xlen{0};
-  // num nodes
-  // Idx n{0};
   Idx *__restrict__ eids{nullptr};
   DType leaky_relu_slope;
   // Inputs
   DType *__restrict__ feat_src{nullptr}, *__restrict__ el{nullptr},
-      *__restrict__ er{nullptr};
+                                             *__restrict__ er{nullptr};
   // Intermediates
   DType *__restrict__ sum{nullptr}, *__restrict__ exp{nullptr};
   // Output
@@ -53,7 +50,6 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
           Idx feat_src_entry_id = -1;
           Idx edata_idx = gdata.eids[eidx];
           if constexpr (RelationalFlag) {
-            // Idx sum_idx = -1;
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               etype = binary_search(num_relations, etypes, eidx);
@@ -79,11 +75,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
               // the node dimension may not be worth it.
               CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
                   FullCartesianFlag, "should be non-reachable not implemented");
-            }  // else {
-               // sum_idx = find_relational_compact_as_of_node_index(
-               //     etype, dst_vid, unique_srcs_and_dests_node_indices,
-               //     unique_srcs_and_dests_rel_ptr);
-            //}
+            }
 
             s += (gdata.exp[edata_idx * num_heads + head_idx] /
                   gdata.sum[dst_vid * num_heads + head_idx] *
@@ -133,7 +125,6 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
     const Idx *unique_srcs_and_dests_rel_ptr,
     const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
-  // extern __shared__ DType er[];
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -155,8 +146,6 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
       if constexpr (IsCompact(kind)) {
         feat_off_dst = dst_vid * num_heads + feat_idx;
       }
-      // er[threadIdx.x] = gdata.er[feat_off_dst];
-      //__syncthreads();
       // 2. Do the computation
       DType sum = 0.;
       for (Idx eidx = start_off; eidx < end_off; ++eidx) {
@@ -177,7 +166,6 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
         }
         if constexpr (IsCompact(kind)) {
           if constexpr (RelationalFlag) {
-            // Idx etype = etypes[eidx];
             if constexpr (FullCartesianFlag) {
               // NB: This is the case where we have the data stored in
               // (relation, node) but do not compress the (relation, node)
@@ -200,8 +188,6 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
           feat_off_src = edata_idx * num_heads + feat_idx;
           feat_off_dst = edata_idx * num_heads + feat_idx;
         }
-        // DType tmp = gatLeakyReluExp(gdata.el[feat_off_src] + er[threadIdx.x],
-        // gdata.leaky_relu_slope);
         DType tmp =
             gatLeakyReluExp(gdata.el[feat_off_src] + gdata.er[feat_off_dst],
                             gdata.leaky_relu_slope);
@@ -233,10 +219,3 @@ __global__ void HET_gatExpLeakyReluSumKernel(
       gdata, row_offsets, column_indices, etypes, num_rows,
       unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices, -1);
 }
-
-// template <typename Idx, typename DType>
-// constexpr auto relational_gatExpLeakyReluSumKernel_per_edge =
-//     HET_gatExpLeakyReluSumKernel<Idx, DType, false, false, false>;
-// template <typename Idx, typename DType>
-// constexpr auto relational_gatSumProdZipDivKernel_per_edge =
-//     HET_gatSumProdZipDivKernel<Idx, DType, false, false>;
