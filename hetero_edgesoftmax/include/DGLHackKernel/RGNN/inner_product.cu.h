@@ -37,8 +37,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_inner_product_fw_kernel(
     InnerProductData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -63,8 +62,7 @@ __global__ void HET_inner_product_fw_kernel(
               }
 
               feat_src_entry_id = find_relational_compact_as_of_node_index(
-                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, src_vid, edata_idx, etype_mapper_data);
 
             } else {
               // NB: we need to use edata_idx instead of eidx here
@@ -114,8 +112,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_inner_product_bck_kernel(
     BackwardInnerProductData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const Idx *unique_srcs_and_dests_rel_ptr,
-    const Idx *unique_srcs_and_dests_node_indices, int64_t num_relations) {
+    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -154,8 +151,7 @@ __global__ void HET_inner_product_bck_kernel(
                 etype = etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, unique_srcs_and_dests_rel_ptr,
-                  unique_srcs_and_dests_node_indices);
+                  etype, src_vid, edata_idx, etype_mapper_data);
 
               feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;

@@ -57,7 +57,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
             }
             if constexpr (IsCompact(kind)) {
               feat_src_entry_id = find_relational_compact_as_of_node_index(
-                  etype, src_vid, etype_mapper_data);
+                  etype, src_vid, edata_idx, etype_mapper_data);
 
             } else {
               // NB: we need to use edata_idx instead of eidx here
@@ -156,8 +156,12 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
           } else {
             etype = etypes[eidx];
           }
-          dst_vid_relational = find_relational_compact_as_of_node_index(
-              etype, dst_vid, etype_mapper_data);
+          if constexpr (IsCompact(kind)) {
+            dst_vid_relational = find_relational_compact_as_of_node_index(
+                etype, dst_vid, edata_idx, etype_mapper_data);
+          } else {
+            dst_vid_relational = dst_vid;
+          }
         }
         if constexpr (IsCompact(kind)) {
           if constexpr (RelationalFlag) {
@@ -171,7 +175,7 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
                   "should be non-reachable not implemented");
             }
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                etype, src_id, etype_mapper_data);
+                etype, src_id, edata_idx, etype_mapper_data);
             feat_off_src = src_vid_relational * num_heads + feat_idx;
             feat_off_dst = dst_vid_relational * num_heads + feat_idx;
           } else {

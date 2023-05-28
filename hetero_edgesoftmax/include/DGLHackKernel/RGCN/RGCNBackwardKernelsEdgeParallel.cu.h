@@ -55,7 +55,7 @@ __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
             etype = etypes[e];
           }
           Idx src_vid_relational = find_relational_compact_as_of_node_index(
-              etype, src_vid, etype_mapper_data);
+              etype, src_vid, edata_idx, etype_mapper_data);
           feat_src_offset = src_vid_relational * gdata.feat_src_xlen + feat_idx;
         }
       }

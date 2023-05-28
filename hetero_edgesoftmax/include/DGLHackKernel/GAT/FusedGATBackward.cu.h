@@ -80,10 +80,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
                 etype = etypes[e];
               }
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, etype_mapper_data);
+                  etype, dst_vid, edata_idx, etype_mapper_data);
               er_idx = dst_vid_relational * num_heads + head_idx;
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, etype_mapper_data);
+                  etype, src_vid, edata_idx, etype_mapper_data);
               el_idx = src_vid_relational * num_heads + head_idx;
 
               feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
@@ -192,11 +192,11 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
                 etype = etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, etype_mapper_data);
+                  etype, src_vid, edata_idx, etype_mapper_data);
               feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, etype_mapper_data);
+                  etype, dst_vid, edata_idx, etype_mapper_data);
             }
           }
           // TODO: maybe it's better to cache exp/sum to reduce mem traffic as
@@ -309,10 +309,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
                 etype = etypes[e];
               }
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, etype_mapper_data);
+                  etype, dst_vid, edata_idx, etype_mapper_data);
               er_idx = dst_vid_relational * num_heads + head_idx;
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, etype_mapper_data);
+                  etype, src_vid, edata_idx, etype_mapper_data);
               el_idx = src_vid_relational * num_heads + head_idx;
               feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx;

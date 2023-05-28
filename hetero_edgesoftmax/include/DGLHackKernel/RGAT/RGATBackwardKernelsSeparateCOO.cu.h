@@ -64,14 +64,14 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
             }
             if constexpr (DualUniqueNodeList) {
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, etype_mapper_data_col);
+                  etype, dst_vid, edata_idx, etype_mapper_data_col);
             } else {
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, etype_mapper_data);
+                  etype, dst_vid, edata_idx, etype_mapper_data);
             }
             er_idx = dst_vid_relational * num_heads + head_idx;
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                etype, src_vid, etype_mapper_data);
+                etype, src_vid, edata_idx, etype_mapper_data);
             el_idx = src_vid_relational * num_heads + head_idx;
             feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx;
@@ -160,15 +160,15 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
               etype = etypes[e];
             }
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                etype, src_vid, etype_mapper_data);
+                etype, src_vid, edata_idx, etype_mapper_data);
             feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx;
             if constexpr (DualUniqueNodeList) {
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, etype_mapper_data_col);
+                  etype, dst_vid, edata_idx, etype_mapper_data_col);
             } else {
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, etype_mapper_data);
+                  etype, dst_vid, edata_idx, etype_mapper_data);
             }
           }
         }
@@ -243,15 +243,15 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
             }
             if constexpr (DualUniqueNodeList) {
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, etype_mapper_data_col);
+                  etype, dst_vid, edata_idx, etype_mapper_data_col);
             } else {
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, etype_mapper_data);
+                  etype, dst_vid, edata_idx, etype_mapper_data);
             }
 
             er_idx = dst_vid_relational * num_heads + head_idx;
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                etype, src_vid, etype_mapper_data);
+                etype, src_vid, edata_idx, etype_mapper_data);
             el_idx = src_vid_relational * num_heads + head_idx;
             feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx;

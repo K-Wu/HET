@@ -39,7 +39,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
           }
           if constexpr (CompactAsOfNodeFlag) {
             feat_src_entry_id = find_relational_compact_as_of_node_index(
-                etype, src_vid, etype_mapper_data);
+                etype, src_vid, edata_idx, etype_mapper_data);
             if constexpr (FullCartesianFlag) {
               // NB: This is the case where we have the data stored in
               // (relation, node) but do not compress the (relation, node)
@@ -133,13 +133,13 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
             etype = etypes[eidx];
           }
           Idx src_vid_relational = find_relational_compact_as_of_node_index(
-              etype, src_id, etype_mapper_data);
+              etype, src_id, edata_idx, etype_mapper_data);
           if constexpr (DualUniqueNodeList) {
             dst_vid_relational = find_relational_compact_as_of_node_index(
-                etype, dst_vid, etype_mapper_data_col);
+                etype, dst_vid, edata_idx, etype_mapper_data_col);
           } else {
             dst_vid_relational = find_relational_compact_as_of_node_index(
-                etype, dst_vid, etype_mapper_data);
+                etype, dst_vid, edata_idx, etype_mapper_data);
           }
           feat_off_src = src_vid_relational * num_heads + feat_idx;
           feat_off_dst = dst_vid_relational * num_heads + feat_idx;

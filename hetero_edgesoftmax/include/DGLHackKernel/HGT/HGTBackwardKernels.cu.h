@@ -110,7 +110,7 @@ __global__ void HET__hgtQVectType2BackwardKernel(
                 etype = etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, etype_mapper_data);
+                  etype, src_vid, edata_idx, etype_mapper_data);
               k_inner_product_offset =
                   src_vid_relational * (gdata.k_vect_dim_per_head * num_heads) +
                   head_idx * hidden_xlen + feat_idx;
@@ -288,11 +288,11 @@ HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
                 etype = etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, etype_mapper_data);
+                  etype, src_vid, edata_idx, etype_mapper_data);
               message_src_offset = src_vid_relational * gdata.message_src_xlen +
                                    head_idx * hidden_xlen + feat_idx;
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, etype_mapper_data);
+                  etype, dst_vid, edata_idx, etype_mapper_data);
             }
           }
 
@@ -461,7 +461,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
               }
               edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, etype_mapper_data);
+                  etype, src_vid, edata_idx, etype_mapper_data);
               message_src_idx =
                   (src_vid_relational * num_heads + head_idx) * hidden_xlen +
                   feat_idx;
@@ -593,10 +593,10 @@ __global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
                 etype = etypes[e];
               }
               dst_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, dst_vid, etype_mapper_data);
+                  etype, dst_vid, edata_idx, etype_mapper_data);
               edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                  etype, src_vid, etype_mapper_data);
+                  etype, src_vid, edata_idx, etype_mapper_data);
               message_src_idx =
                   (src_vid_relational * num_heads + head_idx) * hidden_xlen +
                   feat_idx;

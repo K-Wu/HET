@@ -38,7 +38,7 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
             }
 
             feat_src_entry_id = find_relational_compact_as_of_node_index(
-                etype, src_vid, etype_mapper_data);
+                etype, src_vid, edata_idx, etype_mapper_data);
 
           } else {
             // NB: we need to use edata_idx instead of eidx here
@@ -140,7 +140,7 @@ __global__ void HET_inner_product_bck_kernel_edge_parallel(
               etype = etypes[e];
             }
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
-                etype, src_vid, etype_mapper_data);
+                etype, src_vid, edata_idx, etype_mapper_data);
 
             feat_src_offset = src_vid_relational * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx;

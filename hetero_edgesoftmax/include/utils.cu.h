@@ -115,18 +115,22 @@ __device__ __forceinline__ Idx binary_search(Idx num_elements, const IdxPtr arr,
 // TODO: figure out metadata caching to optimize the performance
 template <typename Idx, CompactAsOfNodeKind kind>
 __device__ __forceinline__ Idx find_relational_compact_as_of_node_index(
-    Idx idx_relation, Idx idx_node,
+    Idx idx_relation, Idx idx_node, Idx idx_edata,
     ETypeMapperData<Idx, kind> etype_mapper_data) {
-  Idx idx_relation_offset =
-      etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation];
-  Idx idx_relation_plus_one_offset =
-      etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation + 1];
-  return idx_relation_offset +
-         binary_search<Idx, Idx *>(
-             idx_relation_plus_one_offset - idx_relation_offset,
-             &(etype_mapper_data
-                   .unique_srcs_and_dests_node_indices[idx_relation_offset]),
-             idx_node);
+  if constexpr (IsBinarySearch(kind)) {
+    Idx idx_relation_offset =
+        etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation];
+    Idx idx_relation_plus_one_offset =
+        etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation + 1];
+    return idx_relation_offset +
+           binary_search<Idx, Idx *>(
+               idx_relation_plus_one_offset - idx_relation_offset,
+               &(etype_mapper_data
+                     .unique_srcs_and_dests_node_indices[idx_relation_offset]),
+               idx_node);
+  } else {
+    return etype_mapper_data.edata_idx_to_inverse_idx[idx_edata];
+  }
 }
 
 template <typename Idx>

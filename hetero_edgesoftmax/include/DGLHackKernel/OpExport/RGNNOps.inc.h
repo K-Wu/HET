@@ -368,10 +368,13 @@ void inner_product_various_left_and_node_right(
                 : nullptr,
     };
 
+    // FIXME: we need to pass in the number of relations
+    assert(0 && "we need to pass in the number of relations!!\n");
     HET_inner_product_fw_kernel<Idx, DType, kind, true, false, false>
         <<<nblks2, nthrs2, 0, stream>>>(
             gdata, incsr_row_ptr_data_ptr, incsr_col_indices_data_ptr,
-            incsr_reltypes_data_ptr, incsr_num_rows, etype_mapper_data);
+            incsr_reltypes_data_ptr, incsr_num_rows, etype_mapper_data,
+            /*num_relations!*/ -1);
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
                        !CSRRatherThanCOOFlag) {
     // separate coo
@@ -401,15 +404,15 @@ void inner_product_various_left_and_node_right(
         separate_coo_rel_ptrs.numel() > 0
             ? separate_coo_rel_ptrs.data_ptr<Idx>()
             : nullptr;
-    ETypeMapperData<Idx, kind> etype_mapper_data{
-        .unique_srcs_and_dests_rel_ptrs =
-            unique_srcs_and_dests_rel_ptrs.numel() > 0
-                ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                : nullptr,
-        .unique_srcs_and_dests_node_indices =
-            unique_srcs_and_dests_node_indices.numel() > 0
-                ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-                : nullptr};
+    ETypeMapperData<Idx, kind> etype_mapper_data;
+    if constexpr (IsCompact(kind) && IsBinarySearch(kind)) {
+      assert(unique_srcs_and_dests_rel_ptrs.numel() > 0);
+      assert(unique_srcs_and_dests_node_indices.numel() > 0);
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+      etype_mapper_data.unique_srcs_and_dests_node_indices =
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    }
     if (gdata.feat_src_xlen / gdata.num_heads >= 32) {
       HET_inner_product_fw_kernel_edge_parallel<Idx, DType, kind, true, true,
                                                 false, true>
@@ -811,15 +814,15 @@ void inner_product_various_left_and_node_right(
         separate_coo_rel_ptrs.numel() > 0
             ? separate_coo_rel_ptrs.data_ptr<Idx>()
             : nullptr;
-    ETypeMapperData<Idx, kind> etype_mapper_data{
-        .unique_srcs_and_dests_rel_ptrs =
-            unique_srcs_and_dests_rel_ptrs.numel() > 0
-                ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                : nullptr,
-        .unique_srcs_and_dests_node_indices =
-            unique_srcs_and_dests_node_indices.numel() > 0
-                ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-                : nullptr};
+    ETypeMapperData<Idx, kind> etype_mapper_data;
+    if constexpr (IsCompact(kind) && IsBinarySearch(kind)) {
+      assert(unique_srcs_and_dests_rel_ptrs.numel() > 0);
+      assert(unique_srcs_and_dests_node_indices.numel() > 0);
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+      etype_mapper_data.unique_srcs_and_dests_node_indices =
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    }
     HET_inner_product_bck_kernel_edge_parallel<Idx, DType, kind, true, true>
         <<<nblks, nthrs, 0, stream>>>(gdata, separate_coo_row_indices_data_ptr,
                                       separate_coo_col_indices_data_ptr,
