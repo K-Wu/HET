@@ -28,6 +28,9 @@ def RGAT_parse_args() -> argparse.Namespace:
     add_generic_RGNN_args(parser, "RGAT.json", {})
     parser.add_argument("--multiply_among_weights_first_flag", action="store_true")
     parser.add_argument("--gat_edge_parallel_flag", action="store_true", default=True)
+    parser.add_argument(
+        "--compact_direct_indexing_flag", action="store_true", default=False
+    )
     args = parser.parse_args()
     return args
 
@@ -70,6 +73,7 @@ def RGAT_get_our_model(
         dropout=args.dropout,
         use_self_loop=True,
         compact_as_of_node_flag=args.compact_as_of_node_flag,
+        compact_direct_indexing_flag=args.compact_direct_indexing_flag,
         multiply_among_weights_first_flag=args.multiply_among_weights_first_flag,
         gat_edge_parallel_flag=args.gat_edge_parallel_flag,
     )

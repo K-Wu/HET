@@ -24,6 +24,9 @@ def HGT_parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--multiply_among_weights_first_flag", action="store_true", default=False
     )
+    parser.add_argument(
+        "--compact_direct_indexing_flag", action="store_true", default=False
+    )
     args = parser.parse_args()
     return args
 
@@ -82,6 +85,7 @@ def HGT_get_our_model(
         multiply_among_weights_first_flag=args.multiply_among_weights_first_flag,
         hgt_fused_attn_score_flag=args.hgt_fused_attn_score_flag,
         compact_as_of_node_flag=args.compact_as_of_node_flag,
+        compact_direct_indexing_flag=args.compact_direct_indexing_flag,
         fused_message_mean_aggregation_flag=args.fused_message_mean_aggregation_flag,
     )
     print(embed_layer)

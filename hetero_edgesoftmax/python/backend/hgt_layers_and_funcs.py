@@ -267,6 +267,8 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             gradout.contiguous(),
         )
 
+        # TODO: use coo instead
+        # TODO: rename this function, this class and the function calling this class as SeparateCOO
         K.backward_hgt_full_graph_enorm_to_unnormalized_attn_score_csr(
             incsr_row_ptrs,
             incsr_col_indices,

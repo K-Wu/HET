@@ -52,6 +52,7 @@ class HET_RelationalAttLayer(nn.Module):
         activation=None,
         self_loop: bool = False,
         compact_as_of_node_flag: bool = False,
+        compact_direct_indexing_flag: bool = False,
         multiply_among_weights_first_flag: bool = False,
         gat_edge_parallel_flag: bool = False,
         dropout=0.5,
@@ -66,6 +67,7 @@ class HET_RelationalAttLayer(nn.Module):
         self.activation = activation
         self.self_loop = self_loop
         self.compact_as_of_node_flag = compact_as_of_node_flag
+        self.compact_direct_indexing_flag = compact_direct_indexing_flag
         self.multiply_among_weights_first_flag = multiply_among_weights_first_flag
         self.gat_edge_parallel_flag = gat_edge_parallel_flag
         self.leaky_relu_slope = leaky_relu_slope
@@ -205,6 +207,7 @@ class HET_RelationalAttLayer(nn.Module):
                     el_compact,
                     er_compact,
                     self.leaky_relu_slope,
+                    self.compact_direct_indexing_flag,
                 )  # NB: kernel modified to enalbe single side
             else:
                 raise NotImplementedError(
@@ -334,6 +337,7 @@ class HET_RelationalGATEncoder(nn.Module):
         use_self_loop: bool = True,
         last_layer_act: bool = False,
         compact_as_of_node_flag: bool = False,
+        compact_direct_indexing_flag: bool = False,
         multiply_among_weights_first_flag: bool = False,
         gat_edge_parallel_flag: bool = False,
     ):
@@ -349,6 +353,7 @@ class HET_RelationalGATEncoder(nn.Module):
         self.use_self_loop = use_self_loop
         self.last_layer_act = last_layer_act
         self.compact_as_of_node_flag = compact_as_of_node_flag
+        self.compact_direct_indexing_flag = compact_direct_indexing_flag
         self.multiply_among_weights_first_flag = multiply_among_weights_first_flag
         self.gat_edge_parallel_flag = gat_edge_parallel_flag
         self.init_encoder()
@@ -368,6 +373,7 @@ class HET_RelationalGATEncoder(nn.Module):
                     self_loop=self.use_self_loop,
                     dropout=self.dropout,
                     compact_as_of_node_flag=self.compact_as_of_node_flag,
+                    compact_direct_indexing_flag=self.compact_direct_indexing_flag,
                     multiply_among_weights_first_flag=self.multiply_among_weights_first_flag,
                     gat_edge_parallel_flag=self.gat_edge_parallel_flag,
                 )

@@ -58,7 +58,7 @@ class RgnnRelationalMatmul(th.autograd.Function):
                 "separate_coo_node_indices": separate_coo_node_indices,
                 "separate_coo_eids": separate_coo_eids,
             },
-            0,  # CompactAsOfNode:Disabled
+            0,  # CompactAsOfNodeKind:Disabled
             th.transpose(weights, 2, 3).contiguous(),
             inputs,
             gradout.contiguous(),
@@ -160,7 +160,7 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
                 "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptrs,
                 "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_indices,
             },
-            1,  # CompactAsOfNode:Enabled
+            1,  # CompactAsOfNodeKind:Enabled
             weight,
             node_feat,
             ret,
@@ -284,9 +284,9 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
             {
                 "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptrs,
                 "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_indices,
-                "separate_rel_ptrs": separate_coo_rel_ptrs,
             },
-            1,  # CompactAsOfNode::Enabled
+            1,  # CompactAsOfNodeKind::Enabled
+            separate_coo_rel_ptrs,
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,
@@ -319,9 +319,9 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
             {
                 "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptrs,
                 "unique_srcs_and_dests_node_indices": unique_srcs_and_dests_node_indices,
-                "separate_rel_ptrs": separate_coo_rel_ptrs,
             },
-            1,  # CompactAsOfNode::Enabled
+            1,  # CompactAsOfNodeKind::Enabled
+            separate_coo_rel_ptrs,
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,
@@ -336,10 +336,87 @@ class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
         # fmt: on
 
 
+class RgnnInnerProductNodeCompactAndNodeWithDirectIndexing(th.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        edata_index_to_inverse_index,
+        separate_coo_rel_ptrs,
+        separate_coo_eids,
+        separate_coo_row_indices,
+        separate_coo_col_indices,
+        left_node_compact_data,
+        right_node_vectors,
+        ret,
+    ):
+        ctx.save_for_backward(
+            edata_index_to_inverse_index,
+            separate_coo_rel_ptrs,
+            separate_coo_eids,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            left_node_compact_data,
+            right_node_vectors,
+            ret,
+        )
+        K.rgnn_inner_product_right_node_separatecoo(
+            {
+                "edata_idx_to_inverse_idx": edata_index_to_inverse_index,
+            },
+            2,  # CompactAsOfNodeKind::EnabledWithDirectIndexing
+            separate_coo_rel_ptrs,
+            separate_coo_eids,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            left_node_compact_data,
+            right_node_vectors,
+            ret,
+        )
+        return ret
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            edata_index_to_inverse_index,
+            separate_coo_rel_ptrs,
+            separate_coo_eids,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            left_node_compact_data,
+            right_node_vectors,
+            ret,
+        ) = ctx.saved_tensors
+        grad_left_node_compact_data = th.zeros_like(
+            left_node_compact_data, memory_format=th.contiguous_format
+        )
+        grad_right_node_vectors = th.zeros_like(
+            right_node_vectors, memory_format=th.contiguous_format
+        )
+        K.backward_inner_product_right_node_separatecoo(
+            {
+                "edata_idx_to_inverse_idx": edata_index_to_inverse_index,
+            },
+            2,  # CompactAsOfNodeKind::EnabledWithDirectIndexing
+            separate_coo_rel_ptrs,
+            separate_coo_eids,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            left_node_compact_data,
+            right_node_vectors,
+            gradout.contiguous(),
+            grad_left_node_compact_data,
+            grad_right_node_vectors,
+        )
+        # fmt: off
+        return None, None, None, None,  None, grad_left_node_compact_data, grad_right_node_vectors, None
+        # fmt: on
+
+
 class RgnnInnerProductEdgeAndNode(th.autograd.Function):
     @staticmethod
     def forward(
         ctx,
+        separate_coo_rel_ptrs,
         separate_coo_eids,
         separate_coo_row_indices,
         separate_coo_col_indices,
@@ -348,6 +425,7 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
         ret,
     ):
         ctx.save_for_backward(
+            separate_coo_rel_ptrs,
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,
@@ -357,7 +435,8 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
         )
         K.rgnn_inner_product_right_node_separatecoo(
             {},
-            0,  # CompactAsOfNode::Disabled
+            0,  # CompactAsOfNodeKind::Disabled
+            separate_coo_rel_ptrs,
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,
@@ -370,6 +449,7 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
     @staticmethod
     def backward(ctx, gradout):
         (
+            separate_coo_rel_ptrs,
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,
@@ -386,6 +466,7 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
         K.backward_inner_product_right_node_separatecoo(
             dict(),
             0,  # CompactAsOfNodeKind::Disabled
+            separate_coo_rel_ptrs,
             separate_coo_eids,
             separate_coo_row_indices,
             separate_coo_col_indices,
@@ -397,12 +478,12 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
         )
         # FIXME: check if there is bug here
         # fmt: off
-        return None, None, None, grad_left_edge_data, grad_right_node_vectors, None
+        return None, None, None,  None, grad_left_edge_data, grad_right_node_vectors, None
         # fmt: on
 
 
 # TODO: use g as argument instead of separate tensors
-# merge the following two functions
+# TODO: merge the following two functions
 def rgnn_inner_product_node_compact_and_node(
     unique_srcs_and_dests_rel_ptrs,
     unique_srcs_and_dests_node_indices,
@@ -433,8 +514,37 @@ def rgnn_inner_product_node_compact_and_node(
     )
 
 
+def rgnn_inner_product_node_compact_and_node_with_direct_indexing(
+    edata_index_to_inverse_index,
+    separate_coo_rel_ptrs,
+    separate_coo_eids,
+    separate_coo_row_indices,
+    separate_coo_col_indices,
+    left_node_compact_data,
+    right_node_vectors,
+):
+    # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
+    ret = th.zeros(
+        [separate_coo_rel_ptrs[-1], right_node_vectors.size(1)],
+        dtype=right_node_vectors.dtype,
+        device=right_node_vectors.device,
+        requires_grad=True,
+    )
+    return RgnnInnerProductNodeCompactAndNodeWithDirectIndexing.apply(
+        edata_index_to_inverse_index,
+        separate_coo_rel_ptrs,
+        separate_coo_eids,
+        separate_coo_row_indices,
+        separate_coo_col_indices,
+        left_node_compact_data,
+        right_node_vectors,
+        ret,
+    )
+
+
 # TODO: use g as argument instead of separate tensors
 def rgnn_inner_product_edge_and_node(
+    separate_coo_rel_ptrs,
     separate_coo_eids,
     separate_coo_row_indices,
     separate_coo_col_indices,
@@ -449,6 +559,7 @@ def rgnn_inner_product_edge_and_node(
         requires_grad=True,
     )
     return RgnnInnerProductEdgeAndNode.apply(
+        separate_coo_rel_ptrs,
         separate_coo_eids,
         separate_coo_row_indices,
         separate_coo_col_indices,

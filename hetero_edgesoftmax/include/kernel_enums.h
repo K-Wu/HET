@@ -6,9 +6,9 @@ enum class CompactAsOfNodeKind {
   Disabled = 0,
   // by default we need to use binary search to locate the row
   Enabled,
-  EnabledWithDualList,
   // when enabled, we can use direct index instead to locate the row
   EnabledWithDirectIndexing,
+  EnabledWithDualList,
   EnabledWithDualListWithDirectIndexing
 };
 

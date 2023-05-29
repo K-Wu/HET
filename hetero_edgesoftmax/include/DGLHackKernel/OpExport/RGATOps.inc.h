@@ -27,14 +27,14 @@ void _RelationalFusedGATKernel(
     at::Tensor &unique_srcs_and_dests_rel_ptrs,
     at::Tensor &unique_srcs_and_dests_rel_ptrs_col,
     at::Tensor &unique_srcs_and_dests_node_indices,
-    at::Tensor &unique_srcs_and_dests_node_indices_col, at::Tensor &feat_src,
+    at::Tensor &unique_srcs_and_dests_node_indices_col,
+    at::Tensor &edata_idx_to_inverse_idx,
+    at::Tensor &edata_idx_to_inverse_idx_col, at::Tensor &feat_src,
     at::Tensor &el, at::Tensor &er, at::Tensor &sum, at::Tensor &exp,
     at::Tensor &ret, double slope) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   // NB: in this case gdata.n, calculation is removed since el is now per edge
   // rather than per node
-  constexpr bool CompactAsOfNodeFlag = IsCompact(CompactKind);
-  constexpr bool DualUniqueNodeList = IsCompactWithDualList(CompactKind);
   GatFusedData<Idx, DType> gdata{
       .feat_src_xlen = SeastarComputeXLength<>(feat_src),
       .num_heads = SeastarComputeXLength<>(el),
@@ -51,7 +51,7 @@ void _RelationalFusedGATKernel(
                 CSRRatherThanCOOFlag) {
     CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(IntegratedFormatRatherThanSeparateFlag &&
                                           CSRRatherThanCOOFlag &&
-                                          DualUniqueNodeList,
+                                          IsCompactWithDualList(CompactKind),
                                       "not implemented");
     // Integrated CSR
     gdata.eids = incsr_eids.data_ptr<Idx>();
@@ -68,11 +68,15 @@ void _RelationalFusedGATKernel(
     auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, incsr_num_rows);
 
     ETypeMapperData<Idx, CompactKind> etype_mapper_data;
-    if constexpr (CompactAsOfNodeFlag) {
-      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
-          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
-      etype_mapper_data.unique_srcs_and_dests_node_indices =
-          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    if constexpr (IsCompact(CompactKind)) {
+      if constexpr (CompactKind == CompactAsOfNodeKind::Enabled) {
+        etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+        etype_mapper_data.unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+      } else {
+        assert(0 && "unrecognized compact kind");
+      }
     }
 
     HET_gatExpLeakyReluSumKernel<Idx, DType, CompactKind, true>
@@ -109,18 +113,28 @@ void _RelationalFusedGATKernel(
     auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, num_edges);
 
     ETypeMapperData<Idx, CompactKind> etype_mapper_data;
-    if constexpr (CompactAsOfNodeFlag) {
-      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
-          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
-      etype_mapper_data.unique_srcs_and_dests_node_indices =
-          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    if constexpr (IsCompact(CompactKind)) {
+      if constexpr (IsBinarySearch(CompactKind)) {
+        etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+        etype_mapper_data.unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+      } else {
+        etype_mapper_data.edata_idx_to_inverse_idx =
+            edata_idx_to_inverse_idx.data_ptr<Idx>();
+      }
     }
     ETypeMapperData<Idx, CompactKind> etype_mapper_data_col;
-    if constexpr (DualUniqueNodeList) {
-      etype_mapper_data_col.unique_srcs_and_dests_rel_ptrs =
-          unique_srcs_and_dests_rel_ptrs_col.data_ptr<Idx>();
-      etype_mapper_data_col.unique_srcs_and_dests_node_indices =
-          unique_srcs_and_dests_node_indices_col.data_ptr<Idx>();
+    if constexpr (IsCompactWithDualList(CompactKind)) {
+      if constexpr (IsBinarySearch(CompactKind)) {
+        etype_mapper_data_col.unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs_col.data_ptr<Idx>();
+        etype_mapper_data_col.unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices_col.data_ptr<Idx>();
+      } else {
+        etype_mapper_data_col.edata_idx_to_inverse_idx =
+            edata_idx_to_inverse_idx_col.data_ptr<Idx>();
+      }
     }
 
     HET_gatExpLeakyReluSumKernel_relational_separate_coo<Idx, DType,
@@ -150,55 +164,78 @@ void _RelationalFusedGATKernel(
   }
 }
 
-void RelationalFusedGATKernelCompactAsOfNode_edge_parallel_separatecoo_dual_unique_node_list(
-    at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
-    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
-    at::Tensor &unique_srcs_and_dests_rel_ptrs,
-    at::Tensor &unique_srcs_and_dests_rel_ptrs_col,
-    at::Tensor &unique_srcs_and_dests_node_indices_row,
-    at::Tensor &unique_srcs_and_dests_node_indices_col, at::Tensor &feat_src,
-    at::Tensor &el, at::Tensor &er, at::Tensor &sum, at::Tensor &exp,
-    at::Tensor &ret, double slope) {
-  at::Tensor dummy_tensor;
-  _RelationalFusedGATKernel<
-      int64_t, float, CompactAsOfNodeKind::EnabledWithDualList, false, false>(
-      separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
-      separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
-      dummy_tensor, unique_srcs_and_dests_rel_ptrs,
-      unique_srcs_and_dests_rel_ptrs_col,
-      unique_srcs_and_dests_node_indices_row,
-      unique_srcs_and_dests_node_indices_col, feat_src, el, er, sum, exp, ret,
-      slope);
-}
-
 void RelationalFusedGATKernel_edge_parallel_separatecoo(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
-    bool CompactAsOfNodeFlag,
-    torch::Dict<std::string, at::Tensor> unique_srcs_and_dests,
+    int64_t IntKind, torch::Dict<std::string, at::Tensor> args_tensor_dict,
     at::Tensor &feat_src, at::Tensor &el, at::Tensor &er, at::Tensor &sum,
     at::Tensor &exp, at::Tensor &ret, double slope) {
   at::Tensor dummy_tensor;
-  if (CompactAsOfNodeFlag) {
+  auto CompactKind = static_cast<CompactAsOfNodeKind>(IntKind);
+  if (CompactKind ==
+      CompactAsOfNodeKind::EnabledWithDualListWithDirectIndexing) {
+    at::Tensor edata_idx_to_inverse_idx_row =
+        args_tensor_dict.at("edata_idx_to_inverse_idx_row");
+    at::Tensor edata_idx_to_inverse_idx_col =
+        args_tensor_dict.at("edata_idx_to_inverse_idx_col");
+    _RelationalFusedGATKernel<
+        int64_t, float,
+        CompactAsOfNodeKind::EnabledWithDualListWithDirectIndexing, false,
+        false>(separate_coo_eids, separate_coo_rel_ptrs,
+               separate_coo_row_indices, separate_coo_col_indices, dummy_tensor,
+               dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor,
+               dummy_tensor, dummy_tensor, dummy_tensor,
+               edata_idx_to_inverse_idx_row, edata_idx_to_inverse_idx_col,
+               feat_src, el, er, sum, exp, ret, slope);
+  } else if (CompactKind == CompactAsOfNodeKind::EnabledWithDirectIndexing) {
+    at::Tensor edata_idx_to_inverse_idx =
+        args_tensor_dict.at("edata_idx_to_inverse_idx");
+    _RelationalFusedGATKernel<int64_t, float,
+                              CompactAsOfNodeKind::EnabledWithDirectIndexing,
+                              false, false>(
+        separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+        separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+        dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor,
+        edata_idx_to_inverse_idx, dummy_tensor, feat_src, el, er, sum, exp, ret,
+        slope);
+  } else if (CompactKind == CompactAsOfNodeKind::EnabledWithDualList) {
+    at::Tensor unique_srcs_and_dests_rel_ptrs =
+        args_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
+    at::Tensor unique_srcs_and_dests_rel_ptrs_col =
+        args_tensor_dict.at("unique_srcs_and_dests_rel_ptrs_col");
+    at::Tensor unique_srcs_and_dests_node_indices_row =
+        args_tensor_dict.at("unique_srcs_and_dests_node_indices_row");
+    at::Tensor unique_srcs_and_dests_node_indices_col =
+        args_tensor_dict.at("unique_srcs_and_dests_node_indices_col");
+    _RelationalFusedGATKernel<
+        int64_t, float, CompactAsOfNodeKind::EnabledWithDualList, false, false>(
+        separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+        separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+        dummy_tensor, unique_srcs_and_dests_rel_ptrs,
+        unique_srcs_and_dests_rel_ptrs_col,
+        unique_srcs_and_dests_node_indices_row,
+        unique_srcs_and_dests_node_indices_col, dummy_tensor, dummy_tensor,
+        feat_src, el, er, sum, exp, ret, slope);
+  } else if (CompactKind == CompactAsOfNodeKind::Enabled) {
     // CompactAsOfNode
     at::Tensor unique_srcs_and_dests_rel_ptrs =
-        unique_srcs_and_dests.at("rel_ptrs");
+        args_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
-        unique_srcs_and_dests.at("node_indices");
+        args_tensor_dict.at("unique_srcs_and_dests_node_indices");
     _RelationalFusedGATKernel<int64_t, float, CompactAsOfNodeKind::Enabled,
                               false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
         dummy_tensor, unique_srcs_and_dests_rel_ptrs, dummy_tensor,
-        unique_srcs_and_dests_node_indices, dummy_tensor, feat_src, el, er, sum,
-        exp, ret, slope);
+        unique_srcs_and_dests_node_indices, dummy_tensor, dummy_tensor,
+        dummy_tensor, feat_src, el, er, sum, exp, ret, slope);
   } else {
     _RelationalFusedGATKernel<int64_t, float, CompactAsOfNodeKind::Disabled,
                               false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
         dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor,
-        feat_src, el, er, sum, exp, ret, slope);
+        dummy_tensor, dummy_tensor, feat_src, el, er, sum, exp, ret, slope);
   }
 }
 
@@ -216,16 +253,16 @@ void RelationalFusedGATKernel_integratedcsr(
         dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, incsr_row_ptr,
         incsr_col_indices, incsr_eids, incsr_reltypes,
         unique_srcs_and_dests_rel_ptrs, dummy_tensor,
-        unique_srcs_and_dests_node_indices, dummy_tensor, feat_src, el, er, sum,
-        exp, ret, slope);
+        unique_srcs_and_dests_node_indices, dummy_tensor, dummy_tensor,
+        dummy_tensor, feat_src, el, er, sum, exp, ret, slope);
   } else {
     _RelationalFusedGATKernel<int64_t, float, CompactAsOfNodeKind::Disabled,
                               true, true>(
         dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, incsr_row_ptr,
         incsr_col_indices, incsr_eids, incsr_reltypes,
         unique_srcs_and_dests_rel_ptrs, dummy_tensor,
-        unique_srcs_and_dests_node_indices, dummy_tensor, feat_src, el, er, sum,
-        exp, ret, slope);
+        unique_srcs_and_dests_node_indices, dummy_tensor, dummy_tensor,
+        dummy_tensor, feat_src, el, er, sum, exp, ret, slope);
   }
 }
 }  // namespace FwProp
@@ -242,13 +279,13 @@ void _RelationalFusedGATKernel(
     at::Tensor &unique_srcs_and_dests_rel_ptrs,
     at::Tensor &unique_srcs_and_dests_rel_ptrs_col,
     at::Tensor &unique_srcs_and_dests_node_indices,
-    at::Tensor &unique_srcs_and_dests_node_indices_col, at::Tensor &feat_src,
+    at::Tensor &unique_srcs_and_dests_node_indices_col,
+    at::Tensor &edata_idx_to_inverse_idx,
+    at::Tensor &edata_idx_to_inverse_idx_col, at::Tensor &feat_src,
     at::Tensor &el, at::Tensor &er, at::Tensor &sum, at::Tensor &exp,
     at::Tensor &ret, at::Tensor &gradout, at::Tensor &grad_feat_src,
     at::Tensor &grad_el, at::Tensor &grad_er, double slope) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  constexpr bool CompactAsOfNodeFlag = IsCompact(CompactKind);
-  constexpr bool DualUniqueNodeList = IsCompactWithDualList(CompactKind);
 
   BackwardGatFusedData<Idx, DType> gdata{
       .feat_src_xlen = SeastarComputeXLength<>(feat_src),
@@ -269,8 +306,8 @@ void _RelationalFusedGATKernel(
   if constexpr (IntegratedFormatRatherThanSeparateFlag &&
                 CSRRatherThanCOOFlag) {
     CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-        DualUniqueNodeList && IntegratedFormatRatherThanSeparateFlag &&
-            CSRRatherThanCOOFlag,
+        IsCompactWithDualList(CompactKind) &&
+            IntegratedFormatRatherThanSeparateFlag && CSRRatherThanCOOFlag,
         "DualUniqueNodeList && IntegratedFormatRatherThanSeparateFlag&& "
         "CSRRatherThanCOOFlag");
     // Integrated CSR
@@ -284,7 +321,7 @@ void _RelationalFusedGATKernel(
     auto [nblks, nthrs] = get_type2_schedule(
         gdata.num_heads, gdata.feat_src_xlen, outcsr_num_rows);
     ETypeMapperData<Idx, CompactKind> etype_mapper_data;
-    if constexpr (CompactAsOfNodeFlag) {
+    if constexpr (IsCompact(CompactKind)) {
       etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
           unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
       etype_mapper_data.unique_srcs_and_dests_node_indices =
@@ -323,18 +360,28 @@ void _RelationalFusedGATKernel(
     auto [nblks, nthrs] =
         get_type2_schedule(gdata.num_heads, gdata.feat_src_xlen, num_edges);
     ETypeMapperData<Idx, CompactKind> etype_mapper_data;
-    if constexpr (CompactAsOfNodeFlag) {
-      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
-          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
-      etype_mapper_data.unique_srcs_and_dests_node_indices =
-          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    if constexpr (IsCompact(CompactKind)) {
+      if constexpr (IsBinarySearch(CompactKind)) {
+        etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+        etype_mapper_data.unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+      } else {
+        etype_mapper_data.edata_idx_to_inverse_idx =
+            edata_idx_to_inverse_idx.data_ptr<Idx>();
+      }
     }
     ETypeMapperData<Idx, CompactKind> etype_mapper_data_col;
-    if constexpr (DualUniqueNodeList) {
-      etype_mapper_data_col.unique_srcs_and_dests_rel_ptrs =
-          unique_srcs_and_dests_rel_ptrs_col.data_ptr<Idx>();
-      etype_mapper_data_col.unique_srcs_and_dests_node_indices =
-          unique_srcs_and_dests_node_indices_col.data_ptr<Idx>();
+    if constexpr (IsCompactWithDualList(CompactKind)) {
+      if constexpr (IsBinarySearch(CompactKind)) {
+        etype_mapper_data_col.unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs_col.data_ptr<Idx>();
+        etype_mapper_data_col.unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices_col.data_ptr<Idx>();
+      } else {
+        etype_mapper_data_col.edata_idx_to_inverse_idx =
+            edata_idx_to_inverse_idx_col.data_ptr<Idx>();
+      }
     }
     if constexpr (!FLAG_KERNEL_FUSED) {
       HET_fusedGatBackwardGradFeatSrc_relational_separate_coo<Idx, DType,
@@ -380,16 +427,18 @@ void RelationalFusedGATKernel_integratedcsr(
         dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, outcsr_row_ptr,
         outcsr_col_indices, outcsr_eids, outcsr_reltypes,
         unique_srcs_and_dests_rel_ptrs, dummy_tensor,
-        unique_srcs_and_dests_node_indices, dummy_tensor, feat_src, el, er, sum,
-        exp, ret, gradout, grad_feat_src, grad_el, grad_er, slope);
+        unique_srcs_and_dests_node_indices, dummy_tensor, dummy_tensor,
+        dummy_tensor, feat_src, el, er, sum, exp, ret, gradout, grad_feat_src,
+        grad_el, grad_er, slope);
   } else {
     _RelationalFusedGATKernel<int64_t, float, true,
                               CompactAsOfNodeKind::Enabled, true, true>(
         dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, outcsr_row_ptr,
         outcsr_col_indices, outcsr_eids, outcsr_reltypes,
         unique_srcs_and_dests_rel_ptrs, dummy_tensor,
-        unique_srcs_and_dests_node_indices, dummy_tensor, feat_src, el, er, sum,
-        exp, ret, gradout, grad_feat_src, grad_el, grad_er, slope);
+        unique_srcs_and_dests_node_indices, dummy_tensor, dummy_tensor,
+        dummy_tensor, feat_src, el, er, sum, exp, ret, gradout, grad_feat_src,
+        grad_el, grad_er, slope);
   }
 }
 
@@ -403,7 +452,37 @@ void RelationalFusedGATKernel_edge_parallel_separatecoo(
     double slope) {
   at::Tensor dummy_tensor;
   auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
-  if (Kind == CompactAsOfNodeKind::EnabledWithDualList) {
+  if (Kind == CompactAsOfNodeKind::EnabledWithDirectIndexing) {
+    at::Tensor edata_idx_to_inverse_idx =
+        unique_srcs_and_dests.at("edata_idx_to_inverse_idx");
+
+    _RelationalFusedGATKernel<int64_t, float, true,
+                              CompactAsOfNodeKind::EnabledWithDirectIndexing,
+                              false, false>(
+        separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+        separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+        dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor,
+        edata_idx_to_inverse_idx, dummy_tensor, feat_src, el, er, sum, exp, ret,
+        gradout, grad_feat_src, grad_el, grad_er, slope);
+
+  } else if (Kind ==
+             CompactAsOfNodeKind::EnabledWithDualListWithDirectIndexing) {
+    at::Tensor edata_idx_to_inverse_idx_row =
+        unique_srcs_and_dests.at("edata_idx_to_inverse_idx_row");
+    at::Tensor edata_idx_to_inverse_idx_col =
+        unique_srcs_and_dests.at("edata_idx_to_inverse_idx_col");
+
+    _RelationalFusedGATKernel<
+        int64_t, float, true,
+        CompactAsOfNodeKind::EnabledWithDualListWithDirectIndexing, false,
+        false>(
+        separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+        separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+        dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor,
+        edata_idx_to_inverse_idx_row, edata_idx_to_inverse_idx_col, feat_src,
+        el, er, sum, exp, ret, gradout, grad_feat_src, grad_el, grad_er, slope);
+
+  } else if (Kind == CompactAsOfNodeKind::EnabledWithDualList) {
     at::Tensor unique_srcs_and_dests_rel_ptrs =
         unique_srcs_and_dests.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_rel_ptrs_col =
@@ -420,8 +499,9 @@ void RelationalFusedGATKernel_edge_parallel_separatecoo(
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
         dummy_tensor, unique_srcs_and_dests_rel_ptrs,
         unique_srcs_and_dests_rel_ptrs_col, unique_srcs_and_dests_node_indices,
-        unique_srcs_and_dests_node_indices_col, feat_src, el, er, sum, exp, ret,
-        gradout, grad_feat_src, grad_el, grad_er, slope);
+        unique_srcs_and_dests_node_indices_col, dummy_tensor, dummy_tensor,
+        feat_src, el, er, sum, exp, ret, gradout, grad_feat_src, grad_el,
+        grad_er, slope);
   } else if (Kind == CompactAsOfNodeKind::Enabled) {
     at::Tensor unique_srcs_and_dests_rel_ptrs =
         unique_srcs_and_dests.at("unique_srcs_and_dests_rel_ptrs");
@@ -432,16 +512,17 @@ void RelationalFusedGATKernel_edge_parallel_separatecoo(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
         dummy_tensor, unique_srcs_and_dests_rel_ptrs, dummy_tensor,
-        unique_srcs_and_dests_node_indices, dummy_tensor, feat_src, el, er, sum,
-        exp, ret, gradout, grad_feat_src, grad_el, grad_er, slope);
+        unique_srcs_and_dests_node_indices, dummy_tensor, dummy_tensor,
+        dummy_tensor, feat_src, el, er, sum, exp, ret, gradout, grad_feat_src,
+        grad_el, grad_er, slope);
   } else if (Kind == CompactAsOfNodeKind::Disabled) {
     _RelationalFusedGATKernel<int64_t, float, false,
                               CompactAsOfNodeKind::Disabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
         dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor,
-        feat_src, el, er, sum, exp, ret, gradout, grad_feat_src, grad_el,
-        grad_er, slope);
+        dummy_tensor, dummy_tensor, feat_src, el, er, sum, exp, ret, gradout,
+        grad_feat_src, grad_el, grad_er, slope);
   } else {
     printf("%ld\n", IntKind);
     throw std::runtime_error("Invalid CompactAsOfNodeKind");
@@ -466,9 +547,9 @@ TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
   m.def("backward_relational_fused_gat_separate_coo",
         RGAT::BckProp::RelationalFusedGATKernel_edge_parallel_separatecoo);
   // clang-format off
-  m.def(
-      "relational_fused_gat_kernel_compact_as_of_node_separate_coo_dual_unique_node_list",
-      RGAT::FwProp::
-          RelationalFusedGATKernelCompactAsOfNode_edge_parallel_separatecoo_dual_unique_node_list);
+  // m.def(
+  //     "relational_fused_gat_kernel_compact_as_of_node_separate_coo_dual_unique_node_list",
+  //     RGAT::FwProp::
+  //         RelationalFusedGATKernelCompactAsOfNode_edge_parallel_separatecoo_dual_unique_node_list);
   // clang-format on
 }

@@ -110,6 +110,8 @@ __device__ __forceinline__ Idx binary_search(Idx num_elements, const IdxPtr arr,
   return lo;
 }
 
+// TODO: is there a way to map from (src idx, etype) instead of edge idx to (row
+// index in the compact tensor)?
 // TODO: optimize when warp coorperatively work on to reduce the last 4-5 global
 // loads
 // TODO: figure out metadata caching to optimize the performance

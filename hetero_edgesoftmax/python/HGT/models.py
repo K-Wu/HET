@@ -27,11 +27,13 @@ class HET_HGTLayerHetero(nn.Module):
         multiply_among_weights_first_flag=False,
         hgt_fused_attn_score_flag=False,
         compact_as_of_node_flag=False,
+        compact_direct_indexing_flag=False,
         fused_message_mean_aggregation_flag=False,
     ):
         super(HET_HGTLayerHetero, self).__init__()
         self.hgt_fused_attn_score_flag = hgt_fused_attn_score_flag
         self.compact_as_of_node_flag = compact_as_of_node_flag
+        self.compact_direct_indexing_flag = compact_direct_indexing_flag
         self.fused_message_mean_aggregation_flag = fused_message_mean_aggregation_flag
 
         self.in_dim = in_dim
@@ -174,16 +176,36 @@ class HET_HGTLayerHetero(nn.Module):
                         False,
                     )
                 )  # NB: use single side instead without need to modify kernel
-                attn_score = B.rgnn_inner_product_node_compact_and_node(
-                    separate_unique_node_indices_dict_single_sided["rel_ptrs_col"],
-                    separate_unique_node_indices_dict_single_sided["node_indices_col"],
-                    separate_coo_original_dict["rel_ptrs"],
-                    separate_coo_original_dict["eids"],
-                    separate_coo_original_dict["row_indices"],
-                    separate_coo_original_dict["col_indices"],
-                    attn_weight_dst_product_compact,
-                    k,
-                )  # NB: use single side instead without need to modify kernel
+                if not self.compact_direct_indexing_flag:
+                    attn_score = B.rgnn_inner_product_node_compact_and_node(
+                        separate_unique_node_indices_dict_single_sided["rel_ptrs_col"],
+                        separate_unique_node_indices_dict_single_sided[
+                            "node_indices_col"
+                        ],
+                        separate_coo_original_dict["rel_ptrs"],
+                        separate_coo_original_dict["eids"],
+                        separate_coo_original_dict["row_indices"],
+                        separate_coo_original_dict["col_indices"],
+                        attn_weight_dst_product_compact,
+                        k,
+                    )  # NB: use single side instead without need to modify kernel
+                else:
+                    separate_unique_node_indices_dict_single_sided_inverse_idx = (
+                        G.get_separate_unique_node_indices_single_sided_inverse_idx()
+                    )
+                    attn_score = (
+                        B.rgnn_inner_product_node_compact_and_node_with_direct_indexing(
+                            separate_unique_node_indices_dict_single_sided_inverse_idx[
+                                "inverse_indices_col"
+                            ],
+                            separate_coo_original_dict["rel_ptrs"],
+                            separate_coo_original_dict["eids"],
+                            separate_coo_original_dict["row_indices"],
+                            separate_coo_original_dict["col_indices"],
+                            attn_weight_dst_product_compact,
+                            k,
+                        )
+                    )  # NB: use single side instead without need to modify kernel
             else:
                 separate_coo_original_dict = G.get_separate_coo_original()
                 # with nvtx.annotate("hector_op_category = edgewise mm", color="cyan"):
@@ -197,6 +219,7 @@ class HET_HGTLayerHetero(nn.Module):
                 )
                 # with nvtx.annotate("hector_op_category = edgewise elementwise", color="cyan"):
                 attn_score = B.rgnn_inner_product_edge_and_node(
+                    separate_coo_original_dict["rel_ptrs"],
                     separate_coo_original_dict["eids"],
                     separate_coo_original_dict["row_indices"],
                     separate_coo_original_dict["col_indices"],
@@ -260,6 +283,7 @@ class HET_HGT_DGLHetero(nn.Module):
         multiply_among_weights_first_flag=False,
         hgt_fused_attn_score_flag=False,
         compact_as_of_node_flag=False,
+        compact_direct_indexing_flag=False,
         fused_message_mean_aggregation_flag=False,
     ):  # ,h_dim
         super(HET_HGT_DGLHetero, self).__init__()
@@ -279,6 +303,7 @@ class HET_HGT_DGLHetero(nn.Module):
             multiply_among_weights_first_flag=multiply_among_weights_first_flag,
             hgt_fused_attn_score_flag=hgt_fused_attn_score_flag,
             compact_as_of_node_flag=compact_as_of_node_flag,
+            compact_direct_indexing_flag=compact_direct_indexing_flag,
             fused_message_mean_aggregation_flag=fused_message_mean_aggregation_flag,
         )
         # self.layer1 = HET_HGTLayerHetero(

@@ -320,7 +320,8 @@ void inner_product_various_left_and_node_right(
     at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_indices,
     at::Tensor &incsr_eids, at::Tensor &incsr_reltypes,
     at::Tensor &unique_srcs_and_dests_rel_ptrs,
-    at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &feat_src,
+    at::Tensor &unique_srcs_and_dests_node_indices,
+    at::Tensor &edata_idx_to_inverse_idx, at::Tensor &feat_src,
     at::Tensor &feat_dst, at::Tensor &edge_inner_product) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   // NB: in this case gdata.n, calculation is removed since el is now per edge
@@ -357,16 +358,22 @@ void inner_product_various_left_and_node_right(
     Idx *incsr_reltypes_data_ptr =
         incsr_reltypes.numel() > 0 ? incsr_reltypes.data_ptr<Idx>() : nullptr;
 
-    ETypeMapperData<Idx, kind> etype_mapper_data{
-        .unique_srcs_and_dests_rel_ptrs =
-            unique_srcs_and_dests_rel_ptrs.numel() > 0
-                ? unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>()
-                : nullptr,
-        .unique_srcs_and_dests_node_indices =
-            unique_srcs_and_dests_node_indices.numel() > 0
-                ? unique_srcs_and_dests_node_indices.data_ptr<Idx>()
-                : nullptr,
-    };
+    ETypeMapperData<Idx, kind> etype_mapper_data;
+
+    if constexpr (kind == CompactAsOfNodeKind::EnabledWithDirectIndexing) {
+      assert(edata_idx_to_inverse_idx.numel() > 0);
+      etype_mapper_data.edata_idx_to_inverse_idx =
+          edata_idx_to_inverse_idx.data_ptr<Idx>();
+    } else if constexpr (kind == CompactAsOfNodeKind::Enabled) {
+      assert(unique_srcs_and_dests_rel_ptrs.numel() > 0);
+      assert(unique_srcs_and_dests_node_indices.numel() > 0);
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+      etype_mapper_data.unique_srcs_and_dests_node_indices =
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    } else {
+      assert(kind == CompactAsOfNodeKind::Disabled);
+    }
 
     // FIXME: we need to pass in the number of relations
     assert(0 && "we need to pass in the number of relations!!\n");
@@ -405,13 +412,21 @@ void inner_product_various_left_and_node_right(
             ? separate_coo_rel_ptrs.data_ptr<Idx>()
             : nullptr;
     ETypeMapperData<Idx, kind> etype_mapper_data;
-    if constexpr (IsCompact(kind) && IsBinarySearch(kind)) {
-      assert(unique_srcs_and_dests_rel_ptrs.numel() > 0);
-      assert(unique_srcs_and_dests_node_indices.numel() > 0);
-      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
-          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
-      etype_mapper_data.unique_srcs_and_dests_node_indices =
-          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    if constexpr (IsCompact(kind)) {
+      if constexpr (IsBinarySearch(kind)) {
+        assert(unique_srcs_and_dests_rel_ptrs.numel() > 0);
+        assert(unique_srcs_and_dests_node_indices.numel() > 0);
+        etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+        etype_mapper_data.unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+      } else {
+        assert(edata_idx_to_inverse_idx.numel() > 0);
+        etype_mapper_data.edata_idx_to_inverse_idx =
+            edata_idx_to_inverse_idx.data_ptr<Idx>();
+      }
+    } else {
+      assert(kind == CompactAsOfNodeKind::Disabled);
     }
     if (gdata.feat_src_xlen / gdata.num_heads >= 32) {
       HET_inner_product_fw_kernel_edge_parallel<Idx, DType, kind, true, true,
@@ -438,37 +453,51 @@ void inner_product_various_left_and_node_right(
 
 void inner_product_right_node_separatecoo(
     torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
-    at::Tensor &separate_coo_eids, at::Tensor &separate_coo_row_indices,
-    at::Tensor &separate_coo_col_indices, at::Tensor &left_side_data,
-    at::Tensor &right_node_vectors, at::Tensor &edge_inner_product) {
+    at::Tensor &separate_coo_rel_ptrs, at::Tensor &separate_coo_eids,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
+    at::Tensor &left_side_data, at::Tensor &right_node_vectors,
+    at::Tensor &edge_inner_product) {
   cudaMemsetAsync(edge_inner_product.data_ptr<float>(), 0,
                   edge_inner_product.numel() * sizeof(float),
                   c10::cuda::getCurrentCUDAStream());
   at::Tensor dummy_tensor;
   auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
-  if (Kind == CompactAsOfNodeKind::Enabled) {
+  if (Kind == CompactAsOfNodeKind::EnabledWithDirectIndexing) {
+    at::Tensor edata_idx_to_inverse_idx =
+        arg_tensor_dict.at("edata_idx_to_inverse_idx");
+    // at::Tensor separate_coo_rel_ptrs =
+    // arg_tensor_dict.at("separate_rel_ptrs");
+    inner_product_various_left_and_node_right<
+        int64_t, float, CompactAsOfNodeKind::EnabledWithDirectIndexing, false,
+        false>(separate_coo_eids, separate_coo_rel_ptrs,
+               separate_coo_row_indices, separate_coo_col_indices, dummy_tensor,
+               dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor,
+               dummy_tensor, edata_idx_to_inverse_idx, left_side_data,
+               right_node_vectors, edge_inner_product);
+  } else if (Kind == CompactAsOfNodeKind::Enabled) {
     // originally inner_product_node_compact_and_node_separatecoo
     // left_side_data is left_node_compact_data
     at::Tensor unique_srcs_and_dests_rel_ptrs =
         arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
-    at::Tensor separate_coo_rel_ptrs = arg_tensor_dict.at("separate_rel_ptrs");
+    // at::Tensor separate_coo_rel_ptrs =
+    // arg_tensor_dict.at("separate_rel_ptrs");
     inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
         dummy_tensor, unique_srcs_and_dests_rel_ptrs,
-        unique_srcs_and_dests_node_indices, left_side_data, right_node_vectors,
-        edge_inner_product);
+        unique_srcs_and_dests_node_indices, dummy_tensor, left_side_data,
+        right_node_vectors, edge_inner_product);
   } else if (Kind == CompactAsOfNodeKind::Disabled) {
     // originally inner_product_edge_and_node_separatecoo
     // left_side_data is left_edge_data
     inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Disabled, false, false>(
-        separate_coo_eids, dummy_tensor, separate_coo_row_indices,
+        separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
-        dummy_tensor, dummy_tensor, dummy_tensor, left_side_data,
+        dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, left_side_data,
         right_node_vectors, edge_inner_product);
   } else {
     assert(0 && "Not implemented");
@@ -749,7 +778,8 @@ void inner_product_various_left_and_node_right(
     at::Tensor &outcsr_row_ptr, at::Tensor &outcsr_col_indices,
     at::Tensor &outcsr_eids, at::Tensor &outcsr_reltypes,
     at::Tensor &unique_srcs_and_dests_rel_ptrs,
-    at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &feat_src,
+    at::Tensor &unique_srcs_and_dests_node_indices,
+    at::Tensor &edata_idx_to_inverse_idx, at::Tensor &feat_src,
     at::Tensor &feat_dst, at::Tensor &grad_inner_product,
     at::Tensor &grad_feat_src, at::Tensor &grad_feat_dst) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
@@ -776,11 +806,22 @@ void inner_product_various_left_and_node_right(
     auto [nblks, nthrs] = get_type2_schedule(
         gdata.num_heads, gdata.feat_src_xlen, outcsr_num_rows);
 
-    ETypeMapperData<Idx, kind> etype_mapper_data{
-        .unique_srcs_and_dests_rel_ptrs =
-            unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
-        .unique_srcs_and_dests_node_indices =
-            unique_srcs_and_dests_node_indices.data_ptr<Idx>()};
+    ETypeMapperData<Idx, kind> etype_mapper_data;
+    if constexpr (kind == CompactAsOfNodeKind::EnabledWithDirectIndexing) {
+      assert(edata_idx_to_inverse_idx.numel() > 0);
+      etype_mapper_data.edata_idx_to_inverse_idx =
+          edata_idx_to_inverse_idx.data_ptr<Idx>();
+    }
+    if constexpr (kind == CompactAsOfNodeKind::Enabled) {
+      assert(unique_srcs_and_dests_rel_ptrs.numel() > 0);
+      assert(unique_srcs_and_dests_node_indices.numel() > 0);
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
+      etype_mapper_data.unique_srcs_and_dests_node_indices =
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    } else {
+      assert(kind == CompactAsOfNodeKind::Disabled);
+    }
 
     HET_inner_product_bck_kernel<Idx, DType, kind, true, false>
         <<<nblks, nthrs, 0, stream>>>(
@@ -815,13 +856,21 @@ void inner_product_various_left_and_node_right(
             ? separate_coo_rel_ptrs.data_ptr<Idx>()
             : nullptr;
     ETypeMapperData<Idx, kind> etype_mapper_data;
-    if constexpr (IsCompact(kind) && IsBinarySearch(kind)) {
-      assert(unique_srcs_and_dests_rel_ptrs.numel() > 0);
-      assert(unique_srcs_and_dests_node_indices.numel() > 0);
-      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
-          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
-      etype_mapper_data.unique_srcs_and_dests_node_indices =
-          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    if constexpr (IsCompact(kind)) {
+      if constexpr (IsBinarySearch(kind)) {
+        assert(unique_srcs_and_dests_rel_ptrs.numel() > 0);
+        assert(unique_srcs_and_dests_node_indices.numel() > 0);
+        etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+        etype_mapper_data.unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+      } else {
+        assert(edata_idx_to_inverse_idx.numel() > 0);
+        etype_mapper_data.edata_idx_to_inverse_idx =
+            edata_idx_to_inverse_idx.data_ptr<Idx>();
+      }
+    } else {
+      assert(kind == CompactAsOfNodeKind::Disabled);
     }
     HET_inner_product_bck_kernel_edge_parallel<Idx, DType, kind, true, true>
         <<<nblks, nthrs, 0, stream>>>(gdata, separate_coo_row_indices_data_ptr,
@@ -835,14 +884,27 @@ void inner_product_various_left_and_node_right(
 
 void inner_product_right_node_separatecoo(
     torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
-    at::Tensor &separate_coo_eids, at::Tensor &separate_coo_row_indices,
-    at::Tensor &separate_coo_col_indices, at::Tensor &left_side_data,
-    at::Tensor &right_node_vectors, at::Tensor &grad_inner_product,
-    at::Tensor &grad_left_side_data, at::Tensor &grad_right_node_vectors) {
+    at::Tensor &separate_coo_rel_ptrs, at::Tensor &separate_coo_eids,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
+    at::Tensor &left_side_data, at::Tensor &right_node_vectors,
+    at::Tensor &grad_inner_product, at::Tensor &grad_left_side_data,
+    at::Tensor &grad_right_node_vectors) {
   at::Tensor dummy_tensor;
   auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
-
-  if (Kind == CompactAsOfNodeKind::Enabled) {
+  if (Kind == CompactAsOfNodeKind::EnabledWithDirectIndexing) {
+    at::Tensor edata_idx_to_inverse_idx =
+        arg_tensor_dict.at("edata_idx_to_inverse_idx");
+    // at::Tensor separate_coo_rel_ptrs =
+    // arg_tensor_dict.at("separate_rel_ptrs");
+    inner_product_various_left_and_node_right<
+        int64_t, float, CompactAsOfNodeKind::EnabledWithDirectIndexing, false,
+        false>(separate_coo_eids, separate_coo_rel_ptrs,
+               separate_coo_row_indices, separate_coo_col_indices, dummy_tensor,
+               dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor,
+               dummy_tensor, edata_idx_to_inverse_idx, left_side_data,
+               right_node_vectors, grad_inner_product, grad_left_side_data,
+               grad_right_node_vectors);
+  } else if (Kind == CompactAsOfNodeKind::Enabled) {
     // originally inner_product_node_compact_and_node_separatecoo
     // left_side_data is left_node_compact_data
     // grad_left_side_data is grad_left_node_compact_data
@@ -850,23 +912,25 @@ void inner_product_right_node_separatecoo(
         arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
-    at::Tensor separate_coo_rel_ptrs = arg_tensor_dict.at("separate_rel_ptrs");
+    // at::Tensor separate_coo_rel_ptrs =
+    // arg_tensor_dict.at("separate_rel_ptrs");
     inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
         dummy_tensor, unique_srcs_and_dests_rel_ptrs,
-        unique_srcs_and_dests_node_indices, left_side_data, right_node_vectors,
-        grad_inner_product, grad_left_side_data, grad_right_node_vectors);
+        unique_srcs_and_dests_node_indices, dummy_tensor, left_side_data,
+        right_node_vectors, grad_inner_product, grad_left_side_data,
+        grad_right_node_vectors);
   } else if (Kind == CompactAsOfNodeKind::Disabled) {
     // originally inner_product_edge_and_node_separatecoo
     // left_side_data is left_edge_data
     // grad_left_side_data is grad_left_edge_data
     inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Disabled, false, false>(
-        separate_coo_eids, dummy_tensor, separate_coo_row_indices,
+        separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
-        dummy_tensor, dummy_tensor, dummy_tensor, left_side_data,
+        dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, left_side_data,
         right_node_vectors, grad_inner_product, grad_left_side_data,
         grad_right_node_vectors);
   } else {

@@ -180,6 +180,8 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
     for (Idx head_idx = blockIdx.x * blockDim.x + threadIdx.x;
          head_idx < num_heads; head_idx += blockDim.x * gridDim.x) {
       DType sum_incoming_edges_product_softmax_score = 0.;
+      // TODO: add a separatecoo version for all kernels using binary_search,
+      // i.e., csr
       for (int stage_idx = 0; stage_idx < 2; stage_idx += 1) {
         // stage 1 accumulates the sum of Si * delta Si
         // stage 2 caclulate delta a and delta mu for this edge
