@@ -388,6 +388,7 @@ class HET_RelationalGATEncoder(nn.Module):
                 activation=F.relu if self.last_layer_act else None,
                 self_loop=self.use_self_loop,
                 compact_as_of_node_flag=self.compact_as_of_node_flag,
+                compact_direct_indexing_flag=self.compact_direct_indexing_flag,
                 multiply_among_weights_first_flag=self.multiply_among_weights_first_flag,
                 gat_edge_parallel_flag=self.gat_edge_parallel_flag,
             )

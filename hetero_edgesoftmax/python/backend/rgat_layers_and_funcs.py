@@ -139,7 +139,7 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeList(
             separate_coo_rel_ptrs,
             separate_coo_row_indices,
             separate_coo_col_indices,
-            3,  # CompactAsOfNodeKind::EnabledWithDualUniqueNodeList
+            3,  # CompactAsOfNodeKind::EnabledWithDualList
             {
                 "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_rel_ptr_row,
                 "unique_srcs_and_dests_rel_ptrs_col": separate_unique_node_indices_rel_ptr_col,
@@ -249,7 +249,7 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeListDirectIndexi
             separate_coo_rel_ptrs,
             separate_coo_row_indices,
             separate_coo_col_indices,
-            4,  # CompactAsOfNodeKind::EnabledWithDirectIndexingWithDualUniqueNodeList
+            4,  # CompactAsOfNodeKind::EnabledWithDualListWithDirectIndexing
             {
                 "edata_idx_to_inverse_idx_row": inverse_indices_row,
                 "edata_idx_to_inverse_idx_col": inverse_indices_col,
@@ -290,7 +290,7 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeListDirectIndexi
             separate_coo_rel_ptrs,
             separate_coo_row_indices,
             separate_coo_col_indices,
-            4,  # C++ enum class CompactAsOfNodeKind::EnabledWithDirectIndexingWithDualList
+            4,  # C++ enum class CompactAsOfNodeKind::EnabledWithDualListWithDirectIndexing
             {
                 "edata_idx_to_inverse_idx_row": inverse_indices_row,
                 "edata_idx_to_inverse_idx_col": inverse_indices_col,
@@ -807,7 +807,7 @@ def relational_fused_gat_compact_as_of_node_separate_coo_single_sided(
     el_compact,
     er_compact,
     negative_slope,
-    compaact_direct_indexing_flag,
+    compact_direct_indexing_flag,
 ):
     separate_coo_dict = g.get_separate_coo_original()
 
@@ -820,7 +820,7 @@ def relational_fused_gat_compact_as_of_node_separate_coo_single_sided(
         device=feat_compact.device,
         memory_format=th.contiguous_format,
     )
-    if compaact_direct_indexing_flag:
+    if compact_direct_indexing_flag:
         separate_unique_node_indices_single_sided_inverse_idx = (
             g.get_separate_unique_node_indices_single_sided_inverse_idx()
         )
