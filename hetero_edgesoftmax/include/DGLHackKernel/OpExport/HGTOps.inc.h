@@ -303,12 +303,61 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
   auto [nblks, nthrs] =
       get_type1_schedule(gdata.num_heads, incsr_row_ptr.numel() - 1);
 
+  // TODO: expose a separate coo version
   HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel<Idx, DType, true,
-                                                            false>
+                                                            true>
       <<<nblks, nthrs, 0, stream>>>(gdata, incsr_row_ptr.data_ptr<Idx>(),
                                     incsr_col_indices.data_ptr<Idx>(),
                                     incsr_reltypes.data_ptr<Idx>(),
                                     incsr_row_ptr.numel() - 1, num_relations);
+}
+
+template <typename Idx, typename DType>
+void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore_SeparateCOO(
+    at::Tensor &row_indices, at::Tensor &col_indices, at::Tensor &eids,
+    at::Tensor &separate_reltypes, at::Tensor &unnormalized_attn_score,
+    at::Tensor &normalized_attn_score, at::Tensor &grad_normalized_attn_score,
+    at::Tensor &mu, at::Tensor &grad_unnormalized_attn_score,
+    at::Tensor &grad_mu, at::Tensor &sum_incoming_edges_product_softmax_score) {
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
+  // preparing gdata
+  // based on OutputMuAppliedAttnScoreSwitch==2 in
+  // HET::TorchExport::HGT::BckProp::IntegratedCSR::_full_graph_edge_softmax_ops
+  BackwardNormToUnNormalizedAttnScoreData<Idx, DType> gdata{
+      .num_heads = grad_normalized_attn_score.size(
+          grad_normalized_attn_score.ndimension() - 1),
+      .eids = eids.data_ptr<Idx>(),
+      .grad_normalized_attn_score =
+          grad_normalized_attn_score.data_ptr<DType>(),
+      .normalized_attn_score = normalized_attn_score.data_ptr<DType>(),
+      .grad_mu = grad_mu.data_ptr<DType>(),
+      .mu = mu.data_ptr<DType>(),
+      .unnormalized_attn_score = unnormalized_attn_score.data_ptr<DType>(),
+      .grad_unnormalized_attn_score =
+          grad_unnormalized_attn_score.data_ptr<DType>()};
+
+  Idx num_relations = mu.numel() / gdata.num_heads;
+  // Idx num_rows = sum_incoming_edges_product_softmax_score.numel() /
+  // gdata.num_heads;
+  Idx num_edges = eids.numel();
+
+  // preparing kernel launch configuration
+  // NB: Type 1 Schedule:
+  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
+  // head -> blockIdx.x * blockDim.x + threadIdx.x;
+  // edge -> blockIdx.y * blockDim.y + threadIdx.y;
+  auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, num_edges);
+
+  HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO<
+      Idx, DType, true, true, 0><<<nblks, nthrs, 0, stream>>>(
+      gdata, row_indices.data_ptr<Idx>(), col_indices.data_ptr<Idx>(),
+      separate_reltypes.data_ptr<Idx>(), num_edges, num_relations,
+      sum_incoming_edges_product_softmax_score.data_ptr<DType>());
+  HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO<
+      Idx, DType, true, true, 1><<<nblks, nthrs, 0, stream>>>(
+      gdata, row_indices.data_ptr<Idx>(), col_indices.data_ptr<Idx>(),
+      separate_reltypes.data_ptr<Idx>(), num_edges, num_relations,
+      sum_incoming_edges_product_softmax_score.data_ptr<DType>());
 }
 
 template <typename Idx, typename DType,
@@ -591,4 +640,8 @@ TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
         HGT::BckProp::IntegratedCSR::
             full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore<int64_t,
                                                                   float>);
+  m.def("backward_hgt_full_graph_enorm_to_unnormalized_attn_score_separate_coo",
+        HGT::BckProp::IntegratedCSR::
+            full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore_SeparateCOO<
+                int64_t, float>);
 }

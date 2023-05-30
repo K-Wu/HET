@@ -234,9 +234,87 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
                 delta_a_for_curr_edge;
 
             atomicAdd(gdata.grad_mu + etype * num_heads + head_idx,
-                      delta_a_for_curr_edge);
+                      delta_mu_for_curr_edge);
           }
         }
+      }
+    }
+  }
+}
+
+// Type 1 Schedule:
+// https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
+
+// head -> blockIdx.x * blockDim.x + threadIdx.x;
+// edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
+template <typename Idx, typename DType,  // CompactAsOfNodeKind kind,
+          bool RelationalFlag, bool ETypeRelPtrFlag, int IDX_STAGE>
+__global__ void
+HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO(
+    BackwardNormToUnNormalizedAttnScoreData<Idx, DType> gdata,
+    const Idx *row_indices, const Idx *column_indices, const Idx *etypes,
+    int64_t num_edges, int64_t num_relations,
+    DType *sum_incoming_edges_product_softmax_score) {
+  Idx num_heads = gdata.num_heads;  // originally e_xlen
+
+  // stage 1 accumulates the sum of Si * delta Si
+  // stage 2 caclulate delta a and delta mu for this edge
+  // synchronization is done using kernel barrier, i.e., stage_idx is passed as
+  // an argument
+  for (Idx e = threadIdx.y; e < num_edges; e += blockDim.y * gridDim.y) {
+    Idx src_vid = row_indices[e];
+    Idx dst_vid = column_indices[e];
+    Idx edata_idx = gdata.eids[e];
+    Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
+                    // !RelationalFlag, the default value is set as 0
+
+    if constexpr (RelationalFlag) {
+      if constexpr (ETypeRelPtrFlag) {
+        etype = binary_search(num_relations, etypes, e);
+      } else {
+        etype = etypes[e];
+      }
+    }
+    for (Idx head_idx = threadIdx.x; head_idx < num_heads;
+         head_idx += blockDim.x * gridDim.x) {
+      // Compact as of node is irrelevant here as the data are edge-wise
+      Idx edge_offset = gdata.eids[e] * num_heads + head_idx;
+      DType mu = 1.0f;
+
+      if constexpr (RelationalFlag) {
+        mu = gdata.mu[etype * num_heads + head_idx];
+      } else {
+        mu = gdata.mu[head_idx];
+      }
+      if constexpr (IDX_STAGE == 0) {
+        atomicAdd(
+            &sum_incoming_edges_product_softmax_score[src_vid * num_heads +
+                                                      head_idx],
+            gdata.grad_normalized_attn_score[edge_offset] *
+                gdata.normalized_attn_score[edge_offset]);
+      } else {
+        // delta a_j = (-Sum_{i, including i==j} Si*Sj*deltaSi + Sj *
+        // deltaSj) * mu_j.
+        // delta mu_j = (-Sum_{i, including i==j} Si*Sj*deltaSi + Sj *
+        // deltaSj) * a_j.
+        DType normalized_attn_score = gdata.normalized_attn_score[edge_offset];
+        DType curr_sum_incoming_edges_product_softmax_score =
+            sum_incoming_edges_product_softmax_score[src_vid * num_heads +
+                                                     head_idx];
+
+        DType delta_a_for_curr_edge =
+            (-curr_sum_incoming_edges_product_softmax_score +
+             gdata.grad_normalized_attn_score[edge_offset]) *
+            normalized_attn_score * mu;
+        DType delta_mu_for_curr_edge =
+            (-curr_sum_incoming_edges_product_softmax_score +
+             gdata.grad_normalized_attn_score[edge_offset]) *
+            normalized_attn_score;
+
+        gdata.grad_unnormalized_attn_score[edge_offset] = delta_a_for_curr_edge;
+
+        atomicAdd(gdata.grad_mu + etype * num_heads + head_idx,
+                  delta_mu_for_curr_edge);
       }
     }
   }

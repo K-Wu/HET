@@ -139,7 +139,7 @@ def hgt_full_graph_hetero_attention_ops_coo(
     )
 
 
-class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
+class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCOO(
     th.autograd.Function
 ):
     @staticmethod
@@ -267,27 +267,50 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR(
             gradout.contiguous(),
         )
 
-        # TODO: use coo instead
+        # expose the unused csr as a choice
         # TODO: rename this function, this class and the function calling this class as SeparateCOO
-        K.backward_hgt_full_graph_enorm_to_unnormalized_attn_score_csr(
-            incsr_row_ptrs,
-            incsr_col_indices,
-            incsr_eids,
-            incsr_reltypes,
-            unnormalized_attn_score,
-            normalized_attn_score,
-            grad_normalized_attn_score,
-            mu,
-            grad_unnormalized_attn_score,
-            grad_mu,
-        )
+        if 0:
+            K.backward_hgt_full_graph_enorm_to_unnormalized_attn_score_csr(
+                incsr_row_ptrs,
+                incsr_col_indices,
+                incsr_eids,
+                incsr_reltypes,
+                unnormalized_attn_score,
+                normalized_attn_score,
+                grad_normalized_attn_score,
+                mu,
+                grad_unnormalized_attn_score,
+                grad_mu,
+            )
+        else:
+            num_nodes = incsr_row_ptrs.shape[0] - 1
+            num_heads = unnormalized_attn_score.shape[1]
+            sum_incoming_edges_product_softmax_score = th.zeros(
+                [num_nodes, num_heads],
+                dtype=normalized_attn_score.dtype,
+                device=incsr_row_ptrs.device,
+            ).contiguous()
+            K.backward_hgt_full_graph_enorm_to_unnormalized_attn_score_separate_coo(
+                separate_coo_row_indices,
+                separate_coo_col_indices,
+                separate_coo_eids,
+                separate_coo_relptrs,
+                unnormalized_attn_score,
+                normalized_attn_score,
+                grad_normalized_attn_score,
+                mu,
+                grad_unnormalized_attn_score,
+                grad_mu,
+                sum_incoming_edges_product_softmax_score,
+            )
+
         # fmt: off
         return None,None,None,None,None,None,None,None,grad_message_generation_weight,grad_input,grad_unnormalized_attn_score,None,grad_mu,None,None,None
         # fmt: on
 
 
 # TODO: use g as argument instead of separate tensors
-def hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
+def hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_coo(
     separate_coo_relptrs,
     separate_coo_row_indices,
     separate_coo_col_indices,
@@ -328,7 +351,7 @@ def hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
         unnormalized_attn_score, memory_format=th.contiguous_format
     )
 
-    return HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCSR.apply(
+    return HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCOO.apply(
         incsr_row_ptrs,
         incsr_col_indices,
         incsr_eids,

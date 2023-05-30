@@ -231,7 +231,7 @@ class HET_HGTLayerHetero(nn.Module):
 
         if self.fused_message_mean_aggregation_flag:
             separate_coo_original_dict = G.get_separate_coo_original()
-            new_h = B.hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_csr(
+            new_h = B.hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_coo(
                 separate_coo_original_dict["rel_ptrs"],
                 separate_coo_original_dict["row_indices"],
                 separate_coo_original_dict["col_indices"],
