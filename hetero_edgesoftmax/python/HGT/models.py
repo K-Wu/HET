@@ -159,83 +159,69 @@ class HET_HGTLayerHetero(nn.Module):
             )  # shape (num_edges, n_heads)
         else:
             if self.compact_as_of_node_flag:
-                separate_coo_original_dict = G.get_separate_coo_original()
                 separate_unique_node_indices_dict_single_sided = (
                     G.get_separate_unique_node_indices_single_sided()
                 )
 
                 # NB: the todo here to implement single-sided matmul for compact_as_of_node_flag does not make sense
-                attn_weight_dst_product_compact = (
-                    B.rgnn_relational_matmul_compact_as_of_node(
-                        separate_unique_node_indices_dict_single_sided["rel_ptrs_col"],
-                        separate_unique_node_indices_dict_single_sided[
+                attn_weight_dst_product_compact = B.rgnn_relational_matmul(
+                    {
+                        "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_dict_single_sided[
+                            "rel_ptrs_col"
+                        ],
+                        "unique_srcs_and_dests_node_indices": separate_unique_node_indices_dict_single_sided[
                             "node_indices_col"
                         ],
-                        relation_att_weight,
-                        q,
-                        False,
-                    )
+                    },
+                    relation_att_weight,
+                    q,
+                    False,
+                    1,  # CompactAsOfNodeKind::Enabled
                 )  # NB: use single side instead without need to modify kernel
+
+                # TODO: update after the API fuse
                 if not self.compact_direct_indexing_flag:
-                    attn_score = B.rgnn_inner_product_node_compact_and_node(
-                        separate_unique_node_indices_dict_single_sided["rel_ptrs_col"],
-                        separate_unique_node_indices_dict_single_sided[
-                            "node_indices_col"
-                        ],
-                        separate_coo_original_dict["rel_ptrs"],
-                        separate_coo_original_dict["eids"],
-                        separate_coo_original_dict["row_indices"],
-                        separate_coo_original_dict["col_indices"],
+                    attn_score = B.rgnn_inner_product_right_node(
+                        G,
                         attn_weight_dst_product_compact,
                         k,
+                        1,  # CompactAsOfNodeKind::Enabled
                     )  # NB: use single side instead without need to modify kernel
                 else:
-                    separate_unique_node_indices_dict_single_sided_inverse_idx = (
-                        G.get_separate_unique_node_indices_single_sided_inverse_idx()
-                    )
-                    attn_score = (
-                        B.rgnn_inner_product_node_compact_and_node_with_direct_indexing(
-                            separate_unique_node_indices_dict_single_sided_inverse_idx[
-                                "inverse_indices_col"
-                            ],
-                            separate_coo_original_dict["rel_ptrs"],
-                            separate_coo_original_dict["eids"],
-                            separate_coo_original_dict["row_indices"],
-                            separate_coo_original_dict["col_indices"],
-                            attn_weight_dst_product_compact,
-                            k,
-                        )
+                    attn_score = B.rgnn_inner_product_right_node(
+                        G,
+                        attn_weight_dst_product_compact,
+                        k,
+                        2,  # CompactAsOfNodeKind::EnabledWithDirectIndexing
                     )  # NB: use single side instead without need to modify kernel
             else:
                 separate_coo_original_dict = G.get_separate_coo_original()
                 # with nvtx.annotate("hector_op_category = edgewise mm", color="cyan"):
                 attn_weight_dst_product_per_edge = B.rgnn_relational_matmul(
-                    separate_coo_original_dict["rel_ptrs"],
-                    separate_coo_original_dict["col_indices"],
-                    separate_coo_original_dict["eids"],
+                    {
+                        "separate_coo_rel_ptrs": separate_coo_original_dict["rel_ptrs"],
+                        "separate_coo_node_indices": separate_coo_original_dict[
+                            "col_indices"
+                        ],
+                        "separate_coo_eids": separate_coo_original_dict["eids"],
+                    },
                     relation_att_weight,
                     q,
                     False,
+                    0,  # CompactAsOfNodeKind::Disabled
                 )
                 # with nvtx.annotate("hector_op_category = edgewise elementwise", color="cyan"):
-                attn_score = B.rgnn_inner_product_edge_and_node(
-                    separate_coo_original_dict["rel_ptrs"],
-                    separate_coo_original_dict["eids"],
-                    separate_coo_original_dict["row_indices"],
-                    separate_coo_original_dict["col_indices"],
+                attn_score = B.rgnn_inner_product_right_node(
+                    G,
                     attn_weight_dst_product_per_edge,
                     k,
+                    0,  # CompactAsOfNodeKind::Disabled
                 )
 
         # NB: the scaling is: attn_score = relation_pri / self.sqrt_dk * attn_score
 
         if self.fused_message_mean_aggregation_flag:
-            separate_coo_original_dict = G.get_separate_coo_original()
             new_h = B.hgt_full_graph_message_calc_edge_softmax_and_message_mean_aggregation_coo(
-                separate_coo_original_dict["rel_ptrs"],
-                separate_coo_original_dict["row_indices"],
-                separate_coo_original_dict["col_indices"],
-                separate_coo_original_dict["eids"],
                 relation_msg_weight,
                 v,
                 G,
@@ -245,12 +231,17 @@ class HET_HGTLayerHetero(nn.Module):
         else:
             separate_coo_original_dict = G.get_separate_coo_original()
             message_per_edge = B.rgnn_relational_matmul(
-                separate_coo_original_dict["rel_ptrs"],
-                separate_coo_original_dict["row_indices"],
-                separate_coo_original_dict["eids"],
+                {
+                    "separate_coo_rel_ptrs": separate_coo_original_dict["rel_ptrs"],
+                    "separate_coo_node_indices": separate_coo_original_dict[
+                        "row_indices"
+                    ],
+                    "separate_coo_eids": separate_coo_original_dict["eids"],
+                },
                 relation_msg_weight,
                 v,
                 False,
+                0,  # CompactAsOfNodeKind::Disabled
             )  # shape (num_edges, n_heads, d_k)
             new_h = B.hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
                 G,

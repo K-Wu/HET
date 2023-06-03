@@ -234,6 +234,7 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
       num_ntypes, num_input_dim, num_output_dim);
 }
 
+// TODO: check if the two folloing could be merged into one
 void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
                                          at::Tensor &weights,
                                          at::Tensor &inputs, at::Tensor &ret) {
@@ -314,7 +315,7 @@ void RelationalMatMul_separatecoo(
 template </*int XPU, */ typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool IntegratedFormatRatherThanSeparateFlag,
           bool CSRRatherThanCOOFlag>
-void inner_product_various_left_and_node_right(
+void _inner_product_various_left_and_node_right(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
     at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_indices,
@@ -467,7 +468,7 @@ void inner_product_right_node_separatecoo(
         arg_tensor_dict.at("edata_idx_to_inverse_idx");
     // at::Tensor separate_coo_rel_ptrs =
     // arg_tensor_dict.at("separate_rel_ptrs");
-    inner_product_various_left_and_node_right<
+    _inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::EnabledWithDirectIndexing, false,
         false>(separate_coo_eids, separate_coo_rel_ptrs,
                separate_coo_row_indices, separate_coo_col_indices, dummy_tensor,
@@ -483,7 +484,7 @@ void inner_product_right_node_separatecoo(
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
     // at::Tensor separate_coo_rel_ptrs =
     // arg_tensor_dict.at("separate_rel_ptrs");
-    inner_product_various_left_and_node_right<
+    _inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
@@ -493,7 +494,7 @@ void inner_product_right_node_separatecoo(
   } else if (Kind == CompactAsOfNodeKind::Disabled) {
     // originally inner_product_edge_and_node_separatecoo
     // left_side_data is left_edge_data
-    inner_product_various_left_and_node_right<
+    _inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Disabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
@@ -507,6 +508,85 @@ void inner_product_right_node_separatecoo(
 }  // namespace FwProp
 
 namespace BckProp {
+
+template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
+          int WORK_BLOCK_SIZE>
+void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
+                                          at::Tensor &weights_transposed,
+                                          at::Tensor &node_feat_input,
+                                          at::Tensor &grad_node_feat_output,
+                                          at::Tensor &grad_weights,
+                                          at::Tensor &grad_node_feat_input) {
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
+  assert(weights_transposed.size(1) == 1 && "assertion n_head == 1 failed");
+  const int64_t num_input_dim = weights_transposed.size(3);
+  const int64_t num_output_dim =
+      weights_transposed.size(2);  // weight shape (num_ntypes,
+                                   // in_feat, out_feat)
+  int64_t num_ntypes = ntype_offset_ptrs.numel() - 1;
+  int64_t num_nodes = node_feat_input.size(0);
+
+  constexpr int THREADING_BLOCK_SIZE_X =
+      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+  constexpr int THREADING_BLOCK_SIZE_Y =
+      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+
+  int grid_dim_y = std::min(
+      ceil_div<>(num_nodes, (int64_t)WORK_BLOCK_SIZE),
+      (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
+                        // case the total number of blocks is slightly larger
+                        // due to relationship with very few workloads
+  std::vector<int> num_blocks_assignment_for_same_ntype_vect,
+      num_blocks_assignment_for_all_prev_ntype_vect;
+
+  at::Tensor ntype_offset_ptrs_cpu_contiguous =
+      ntype_offset_ptrs.cpu().contiguous();
+  std::tie(num_blocks_assignment_for_same_ntype_vect,
+           num_blocks_assignment_for_all_prev_ntype_vect) =
+      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
+          grid_dim_y, num_ntypes, WORK_BLOCK_SIZE,
+          ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>(),
+          ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>() + num_ntypes +
+              1);
+
+  grid_dim_y = num_blocks_assignment_for_all_prev_ntype_vect.back();
+
+  thrust::device_vector<int> dev_num_blocks_assignment_for_same_ntype_vect(
+      num_blocks_assignment_for_same_ntype_vect.begin(),
+      num_blocks_assignment_for_same_ntype_vect.end());
+  thrust::device_vector<int> dev_num_blocks_assignment_for_all_prev_ntype_vect(
+      num_blocks_assignment_for_all_prev_ntype_vect.begin(),
+      num_blocks_assignment_for_all_prev_ntype_vect.end());
+  // NB: my shmem sgemm matmul scheme
+  // in NoScatterGather scenario, there is no such thing as multi-headed
+  const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), grid_dim_y,
+                   1);
+  const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
+  HET_RGNNMatmulNoScatterGatherListFwOrBwProp<
+      COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
+      int64_t, int64_t *><<<nblks, nthrs, 0, stream>>>(
+      grad_node_feat_output.data_ptr<float>(),
+      weights_transposed.data_ptr<float>(),
+      grad_node_feat_input.data_ptr<float>(),
+      ntype_offset_ptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
+      num_ntypes, num_output_dim, num_input_dim);
+  // NB: my shmem sgemm matmul scheme
+  const dim3 nblks_outer_product(
+      ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
+      ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), grid_dim_y);
+  HET_RGNNDeltaWeightNoScatterGatherListBWProp<
+      COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
+      int64_t, int64_t *><<<nblks_outer_product, nthrs, 0, stream>>>(
+      node_feat_input.data_ptr<float>(),
+      grad_node_feat_output.data_ptr<float>(), grad_weights.data_ptr<float>(),
+      ntype_offset_ptrs.data_ptr<int64_t>(), num_input_dim, num_output_dim,
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
+      num_ntypes);
+}
+
 template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
           int WORK_BLOCK_SIZE, CompactAsOfNodeKind kind,
           bool ACGatherScatterListIdenticalFlag, bool InputNumHeadOneFlag>
@@ -699,6 +779,18 @@ void _BackwardRelationalMatMul_separatecoo(
   }
 }
 
+// TODO: check if the two folloing could be merged into one
+void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
+                                         at::Tensor &weights_transposed,
+                                         at::Tensor &node_feat_input,
+                                         at::Tensor &grad_node_feat_output,
+                                         at::Tensor &grad_node_feat_input,
+                                         at::Tensor &grad_weights) {
+  _RelationalMatmulNoScatterGatherList<true, true, 32>(
+      ntype_offset_ptrs, weights_transposed, node_feat_input,
+      grad_node_feat_output, grad_weights, grad_node_feat_input);
+}
+
 void RelationalMatMul_separatecoo(
     torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
     at::Tensor &weights_transposed, at::Tensor &node_feat, at::Tensor &gradout,
@@ -772,7 +864,7 @@ void RelationalMatMul_separatecoo(
 template </*int XPU, */ typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool IntegratedFormatRatherThanSeparateFlag,
           bool CSRRatherThanCOOFlag>
-void inner_product_various_left_and_node_right(
+void _inner_product_various_left_and_node_right(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
     at::Tensor &outcsr_row_ptr, at::Tensor &outcsr_col_indices,
@@ -896,7 +988,7 @@ void inner_product_right_node_separatecoo(
         arg_tensor_dict.at("edata_idx_to_inverse_idx");
     // at::Tensor separate_coo_rel_ptrs =
     // arg_tensor_dict.at("separate_rel_ptrs");
-    inner_product_various_left_and_node_right<
+    _inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::EnabledWithDirectIndexing, false,
         false>(separate_coo_eids, separate_coo_rel_ptrs,
                separate_coo_row_indices, separate_coo_col_indices, dummy_tensor,
@@ -914,7 +1006,7 @@ void inner_product_right_node_separatecoo(
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
     // at::Tensor separate_coo_rel_ptrs =
     // arg_tensor_dict.at("separate_rel_ptrs");
-    inner_product_various_left_and_node_right<
+    _inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
@@ -926,7 +1018,7 @@ void inner_product_right_node_separatecoo(
     // originally inner_product_edge_and_node_separatecoo
     // left_side_data is left_edge_data
     // grad_left_side_data is grad_left_edge_data
-    inner_product_various_left_and_node_right<
+    _inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Disabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
@@ -936,95 +1028,6 @@ void inner_product_right_node_separatecoo(
   } else {
     assert(0 && "Not implemented");
   }
-}
-
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int WORK_BLOCK_SIZE>
-void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
-                                          at::Tensor &weights_transposed,
-                                          at::Tensor &node_feat_input,
-                                          at::Tensor &grad_node_feat_output,
-                                          at::Tensor &grad_weights,
-                                          at::Tensor &grad_node_feat_input) {
-  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  assert(weights_transposed.size(1) == 1 && "assertion n_head == 1 failed");
-  const int64_t num_input_dim = weights_transposed.size(3);
-  const int64_t num_output_dim =
-      weights_transposed.size(2);  // weight shape (num_ntypes,
-                                   // in_feat, out_feat)
-  int64_t num_ntypes = ntype_offset_ptrs.numel() - 1;
-  int64_t num_nodes = node_feat_input.size(0);
-
-  constexpr int THREADING_BLOCK_SIZE_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  constexpr int THREADING_BLOCK_SIZE_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-
-  int grid_dim_y = std::min(
-      ceil_div<>(num_nodes, (int64_t)WORK_BLOCK_SIZE),
-      (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
-                        // case the total number of blocks is slightly larger
-                        // due to relationship with very few workloads
-  std::vector<int> num_blocks_assignment_for_same_ntype_vect,
-      num_blocks_assignment_for_all_prev_ntype_vect;
-
-  at::Tensor ntype_offset_ptrs_cpu_contiguous =
-      ntype_offset_ptrs.cpu().contiguous();
-  std::tie(num_blocks_assignment_for_same_ntype_vect,
-           num_blocks_assignment_for_all_prev_ntype_vect) =
-      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
-          grid_dim_y, num_ntypes, WORK_BLOCK_SIZE,
-          ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>(),
-          ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>() + num_ntypes +
-              1);
-
-  grid_dim_y = num_blocks_assignment_for_all_prev_ntype_vect.back();
-
-  thrust::device_vector<int> dev_num_blocks_assignment_for_same_ntype_vect(
-      num_blocks_assignment_for_same_ntype_vect.begin(),
-      num_blocks_assignment_for_same_ntype_vect.end());
-  thrust::device_vector<int> dev_num_blocks_assignment_for_all_prev_ntype_vect(
-      num_blocks_assignment_for_all_prev_ntype_vect.begin(),
-      num_blocks_assignment_for_all_prev_ntype_vect.end());
-  // NB: my shmem sgemm matmul scheme
-  // in NoScatterGather scenario, there is no such thing as multi-headed
-  const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), grid_dim_y,
-                   1);
-  const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
-  HET_RGNNMatmulNoScatterGatherListFwOrBwProp<
-      COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-      int64_t, int64_t *><<<nblks, nthrs, 0, stream>>>(
-      grad_node_feat_output.data_ptr<float>(),
-      weights_transposed.data_ptr<float>(),
-      grad_node_feat_input.data_ptr<float>(),
-      ntype_offset_ptrs.data_ptr<int64_t>(),
-      thrust::raw_pointer_cast(
-          dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
-      num_ntypes, num_output_dim, num_input_dim);
-  // NB: my shmem sgemm matmul scheme
-  const dim3 nblks_outer_product(
-      ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
-      ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), grid_dim_y);
-  HET_RGNNDeltaWeightNoScatterGatherListBWProp<
-      COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-      int64_t, int64_t *><<<nblks_outer_product, nthrs, 0, stream>>>(
-      node_feat_input.data_ptr<float>(),
-      grad_node_feat_output.data_ptr<float>(), grad_weights.data_ptr<float>(),
-      ntype_offset_ptrs.data_ptr<int64_t>(), num_input_dim, num_output_dim,
-      thrust::raw_pointer_cast(
-          dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
-      num_ntypes);
-}
-
-void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
-                                         at::Tensor &weights_transposed,
-                                         at::Tensor &node_feat_input,
-                                         at::Tensor &grad_node_feat_output,
-                                         at::Tensor &grad_weights,
-                                         at::Tensor &grad_node_feat_input) {
-  _RelationalMatmulNoScatterGatherList<true, true, 32>(
-      ntype_offset_ptrs, weights_transposed, node_feat_input,
-      grad_node_feat_output, grad_weights, grad_node_feat_input);
 }
 
 }  // namespace BckProp

@@ -80,7 +80,6 @@ class RgnnRelationalMatmulNoScatterGatherList(th.autograd.Function):
         inputs,
         ret,
     ):
-
         K.rgnn_relational_matmul_no_scatter_gather_list(
             ntype_offset_ptrs,
             weights,
@@ -106,34 +105,12 @@ class RgnnRelationalMatmulNoScatterGatherList(th.autograd.Function):
             th.transpose(weights, 2, 3).contiguous(),
             inputs,
             gradout.contiguous(),
-            grad_weight,
             grad_input,
+            grad_weight,
         )
         # fmt: off
         return None,  grad_weight, grad_input, None
         # fmt: on
-
-
-def rgnn_relational_matmul_no_scatter_gather_list(
-    ntype_offset_ptrs,
-    weights,
-    inputs,
-):
-    ret = th.zeros(
-        (
-            inputs.size(0),
-            weights.size(3),
-        ),  # [num_items, out_feats]
-        dtype=weights.dtype,
-        device=weights.device,
-        # requires_grad=True,
-    )
-    return RgnnRelationalMatmulNoScatterGatherList.apply(
-        ntype_offset_ptrs,
-        weights,
-        inputs,
-        ret,
-    )
 
 
 class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
@@ -198,61 +175,6 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
         # fmt: off
         return None, None, grad_weight, grad_node_feat, None, None
         # fmt: on
-
-
-# TODO: use g as argument instead of separate tensors
-# TODO: merge this with rgnn_relational_matmul_compact_as_of_node
-def rgnn_relational_matmul(
-    separate_coo_relptrs,
-    separate_coo_node_indices,
-    separate_coo_eids,
-    weights,
-    inputs,
-    input_num_head_one_flag,
-):
-    ret = th.zeros(
-        (
-            separate_coo_node_indices.numel(),
-            weights.size(1),
-            weights.size(3),
-        ),  # [num_items, num_heads, out_feats//num_heads]
-        dtype=weights.dtype,
-        device=weights.device,
-        requires_grad=True,
-    ).contiguous()
-    return RgnnRelationalMatmul.apply(
-        separate_coo_relptrs,
-        separate_coo_node_indices,
-        separate_coo_eids,
-        weights.contiguous(),
-        inputs.contiguous(),
-        ret,
-        input_num_head_one_flag,
-    )
-
-
-# TODO: use g as argument instead of separate tensors
-def rgnn_relational_matmul_compact_as_of_node(
-    unique_srcs_and_dests_rel_ptrs,
-    unique_srcs_and_dests_node_indices,
-    weight,
-    node_feat,
-    input_num_head_one_flag,
-):
-    ret = th.zeros(
-        (int(unique_srcs_and_dests_rel_ptrs[-1]), weight.size(1), weight.size(3)),
-        dtype=weight.dtype,
-        device=weight.device,
-        requires_grad=True,
-    )
-    return RgnnRelationalMatmulCompactAsOfNode.apply(
-        unique_srcs_and_dests_rel_ptrs,
-        unique_srcs_and_dests_node_indices,
-        weight,
-        node_feat,
-        ret,
-        input_num_head_one_flag,
-    )
 
 
 class RgnnInnerProductNodeCompactAndNode(th.autograd.Function):
@@ -482,88 +404,150 @@ class RgnnInnerProductEdgeAndNode(th.autograd.Function):
         # fmt: on
 
 
-# TODO: use g as argument instead of separate tensors
-# TODO: merge the following two functions
-def rgnn_inner_product_node_compact_and_node(
-    unique_srcs_and_dests_rel_ptrs,
-    unique_srcs_and_dests_node_indices,
-    separate_coo_rel_ptrs,
-    separate_coo_eids,
-    separate_coo_row_indices,
-    separate_coo_col_indices,
-    left_node_compact_data,
-    right_node_vectors,
+# TODO: add direct indexing support
+# TODO: merge this with rgnn_relational_matmul_compact_as_of_node
+def rgnn_relational_matmul(
+    arg_tensor_dict, weights, inputs, input_num_head_one_flag, compact_as_of_node_kind
 ):
-    # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
+    if compact_as_of_node_kind == 1:  # CompactAsOfNodeKind::Enabled
+        ret = th.zeros(
+            (
+                int(arg_tensor_dict["unique_srcs_and_dests_rel_ptrs"][-1]),
+                weights.size(1),
+                weights.size(3),
+            ),
+            dtype=weights.dtype,
+            device=weights.device,
+            requires_grad=True,
+        )
+        return RgnnRelationalMatmulCompactAsOfNode.apply(
+            arg_tensor_dict["unique_srcs_and_dests_rel_ptrs"],
+            arg_tensor_dict["unique_srcs_and_dests_node_indices"],
+            weights,
+            inputs,  # originally node_feat
+            ret,
+            input_num_head_one_flag,
+        )
+
+    elif compact_as_of_node_kind == 0:  # CompactAsOfNodeKind::Disabled
+        ret = th.zeros(
+            (
+                arg_tensor_dict["separate_coo_node_indices"].numel(),
+                weights.size(1),
+                weights.size(3),
+            ),  # [num_items, num_heads, out_feats//num_heads]
+            dtype=weights.dtype,
+            device=weights.device,
+            requires_grad=True,
+        ).contiguous()
+        return RgnnRelationalMatmul.apply(
+            arg_tensor_dict["separate_coo_rel_ptrs"],
+            arg_tensor_dict["separate_coo_node_indices"],
+            arg_tensor_dict["separate_coo_eids"],
+            weights.contiguous(),
+            inputs.contiguous(),
+            ret,
+            input_num_head_one_flag,
+        )
+    else:
+        raise NotImplementedError
+
+
+def rgnn_relational_matmul_no_scatter_gather_list(
+    ntype_offset_ptrs,
+    weights,
+    inputs,
+):
     ret = th.zeros(
-        [separate_coo_rel_ptrs[-1], right_node_vectors.size(1)],
-        dtype=right_node_vectors.dtype,
-        device=right_node_vectors.device,
-        requires_grad=True,
+        (
+            inputs.size(0),
+            weights.size(3),
+        ),  # [num_items, out_feats]
+        dtype=weights.dtype,
+        device=weights.device,
+        # requires_grad=True,
     )
-    return RgnnInnerProductNodeCompactAndNode.apply(
-        unique_srcs_and_dests_rel_ptrs,
-        unique_srcs_and_dests_node_indices,
-        separate_coo_rel_ptrs,
-        separate_coo_eids,
-        separate_coo_row_indices,
-        separate_coo_col_indices,
-        left_node_compact_data,
-        right_node_vectors,
+    return RgnnRelationalMatmulNoScatterGatherList.apply(
+        ntype_offset_ptrs,
+        weights,
+        inputs,
         ret,
     )
 
 
-def rgnn_inner_product_node_compact_and_node_with_direct_indexing(
-    edata_index_to_inverse_index,
-    separate_coo_rel_ptrs,
-    separate_coo_eids,
-    separate_coo_row_indices,
-    separate_coo_col_indices,
-    left_node_compact_data,
+def rgnn_inner_product_right_node(
+    graph,
+    left_side_data,
     right_node_vectors,
+    compact_as_of_node_kind,
 ):
-    # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
-    ret = th.zeros(
-        [separate_coo_rel_ptrs[-1], right_node_vectors.size(1)],
-        dtype=right_node_vectors.dtype,
-        device=right_node_vectors.device,
-        requires_grad=True,
-    )
-    return RgnnInnerProductNodeCompactAndNodeWithDirectIndexing.apply(
-        edata_index_to_inverse_index,
-        separate_coo_rel_ptrs,
-        separate_coo_eids,
-        separate_coo_row_indices,
-        separate_coo_col_indices,
-        left_node_compact_data,
-        right_node_vectors,
-        ret,
-    )
-
-
-# TODO: use g as argument instead of separate tensors
-def rgnn_inner_product_edge_and_node(
-    separate_coo_rel_ptrs,
-    separate_coo_eids,
-    separate_coo_row_indices,
-    separate_coo_col_indices,
-    left_edge_data,
-    right_node_vectors,
-):
-    # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
-    ret = th.zeros(
-        [separate_coo_eids.numel(), right_node_vectors.size(1)],
-        dtype=right_node_vectors.dtype,
-        device=right_node_vectors.device,
-        requires_grad=True,
-    )
-    return RgnnInnerProductEdgeAndNode.apply(
-        separate_coo_rel_ptrs,
-        separate_coo_eids,
-        separate_coo_row_indices,
-        separate_coo_col_indices,
-        left_edge_data,
-        right_node_vectors,
-        ret,
-    )
+    if compact_as_of_node_kind == 0:  # CompactAsOfNodeKind::Disabled
+        left_edge_data = left_side_data
+        separate_coo_original_dict = graph.get_separate_coo_original()
+        # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
+        ret = th.zeros(
+            [separate_coo_original_dict["eids"].numel(), right_node_vectors.size(1)],
+            dtype=right_node_vectors.dtype,
+            device=right_node_vectors.device,
+            requires_grad=True,
+        )
+        return RgnnInnerProductEdgeAndNode.apply(
+            separate_coo_original_dict["rel_ptrs"],
+            separate_coo_original_dict["eids"],
+            separate_coo_original_dict["row_indices"],
+            separate_coo_original_dict["col_indices"],
+            left_edge_data,
+            right_node_vectors,
+            ret,
+        )
+    elif compact_as_of_node_kind == 1:  # CompactAsOfNodeKind::Enabled
+        left_node_compact_data = left_side_data
+        separate_coo_original_dict = graph.get_separate_coo_original()
+        separate_unique_node_indices_dict_single_sided = (
+            graph.get_separate_unique_node_indices_single_sided()
+        )
+        # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
+        ret = th.zeros(
+            [separate_coo_original_dict["rel_ptrs"][-1], right_node_vectors.size(1)],
+            dtype=right_node_vectors.dtype,
+            device=right_node_vectors.device,
+            requires_grad=True,
+        )
+        return RgnnInnerProductNodeCompactAndNode.apply(
+            separate_unique_node_indices_dict_single_sided["rel_ptrs_col"],
+            separate_unique_node_indices_dict_single_sided["node_indices_col"],
+            separate_coo_original_dict["rel_ptrs"],
+            separate_coo_original_dict["eids"],
+            separate_coo_original_dict["row_indices"],
+            separate_coo_original_dict["col_indices"],
+            left_node_compact_data,
+            right_node_vectors,
+            ret,
+        )
+    elif compact_as_of_node_kind == 2:  # CompactAsOfNodeKind::EnabledWIthDirectIndexing
+        left_node_compact_data = left_side_data
+        separate_unique_node_indices_dict_single_sided_inverse_idx = (
+            graph.get_separate_unique_node_indices_single_sided_inverse_idx()
+        )
+        separate_coo_original_dict = graph.get_separate_coo_original()
+        # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
+        ret = th.zeros(
+            [separate_coo_original_dict["rel_ptrs"][-1], right_node_vectors.size(1)],
+            dtype=right_node_vectors.dtype,
+            device=right_node_vectors.device,
+            requires_grad=True,
+        )
+        return RgnnInnerProductNodeCompactAndNodeWithDirectIndexing.apply(
+            separate_unique_node_indices_dict_single_sided_inverse_idx[
+                "inverse_indices_col"
+            ],
+            separate_coo_original_dict["rel_ptrs"],
+            separate_coo_original_dict["eids"],
+            separate_coo_original_dict["row_indices"],
+            separate_coo_original_dict["col_indices"],
+            left_node_compact_data,
+            right_node_vectors,
+            ret,
+        )
+    else:
+        raise NotImplementedError

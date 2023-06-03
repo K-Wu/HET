@@ -174,7 +174,7 @@ def HET_RGNN_train_full_graph(
         th.cuda.synchronize()
         # nvtx.pop_range()
 
-        # FIXME: should be # edges when training full graph
+        # TODO: should be # edges when training full graph
         # total_loss += loss.item() * args.batch_size
 
         # result = test(g, model, node_embed, labels, device, split_idx, args)
@@ -300,7 +300,7 @@ def RGNN_train_full_graph(
         backward_prop_end.record()
         th.cuda.synchronize()
 
-        # FIXME: should be # edges when training full graph
+        # TODO: should be # edges when training full graph
         total_loss += loss.item() * args.batch_size
 
         # result = test(g, model, node_embed, labels, device, split_idx, args)

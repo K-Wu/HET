@@ -517,17 +517,13 @@ class RgcnLayer1SeparateCoo(th.autograd.Function):
         )
 
 
-# TODO: use g as argument instead of separate tensors
 def rgcn_layer1_separate_coo(
-    separate_coo_rel_ptrs,
-    separate_coo_eids,
-    separate_coo_row_indices,
-    separate_coo_col_indices,
     graph,
     x,
     weight,
     norm,
 ):
+    separate_coo_original_dict = graph.get_separate_coo_original()
     outcsr_dict = graph.get_out_csr()
     ret = th.zeros(
         (graph.get_num_nodes(), weight.size(2)),
@@ -540,10 +536,10 @@ def rgcn_layer1_separate_coo(
     outcsr_eids = outcsr_dict["eids"]
     outcsr_reltypes = outcsr_dict["rel_types"]
     return RgcnLayer1SeparateCoo.apply(
-        separate_coo_rel_ptrs,
-        separate_coo_eids,
-        separate_coo_row_indices,
-        separate_coo_col_indices,
+        separate_coo_original_dict["rel_ptrs"],
+        separate_coo_original_dict["eids"],
+        separate_coo_original_dict["row_indices"],
+        separate_coo_original_dict["col_indices"],
         outcsr_row_ptr,
         outcsr_col_indices,
         outcsr_eids,

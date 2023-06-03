@@ -275,24 +275,26 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
                 separate_unique_node_indices_single_sided = (
                     g.get_separate_unique_node_indices_single_sided()
                 )
-                feat_compact_src = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_indices_single_sided["rel_ptrs_row"],
-                    separate_unique_node_indices_single_sided["node_indices_row"],
+                feat_compact_src = B.rgnn_relational_matmul(
+                    {
+                        "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
+                            "rel_ptrs_row"
+                        ],
+                        "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
+                            "node_indices_row"
+                        ],
+                    },
                     weight,
                     x,
                     True,
+                    1,  # CompactAsOfNodeKind::Enabled
                 )
                 feat_compact_src = feat_compact_src.squeeze(1)
                 node_repr = B.rgcn_node_mean_aggregation_compact_as_of_node_separate_coo_single_sided(
                     g, feat_compact_src, norm
                 )  # NB: use single side instead without need to modify kernel
             else:
-                separate_coo_original_dict = g.get_separate_coo_original()
                 node_repr = B.rgcn_layer1_separate_coo(
-                    separate_coo_original_dict["rel_ptrs"],
-                    separate_coo_original_dict["eids"],
-                    separate_coo_original_dict["row_indices"],
-                    separate_coo_original_dict["col_indices"],
                     g,
                     x,
                     weight,

@@ -148,47 +148,82 @@ class HET_RelationalAttLayer(nn.Module):
                 separate_unique_node_indices_single_sided = (
                     g.get_separate_unique_node_indices_single_sided()
                 )
-                feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_indices_single_sided["rel_ptrs_row"],
-                    separate_unique_node_indices_single_sided["node_indices_row"],
+                feat_compact = B.rgnn_relational_matmul(
+                    {
+                        "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
+                            "rel_ptrs_row"
+                        ],
+                        "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
+                            "node_indices_row"
+                        ],
+                    },
                     self.conv_weights,
                     inputs,
                     True,  # fixme: check if this is correct
+                    1,  # CompactAsOfNodeKind::Enabled
                 )  # NB: use single side instead without need to modify kernel
-                el_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_indices_single_sided["rel_ptrs_row"],
-                    separate_unique_node_indices_single_sided["node_indices_row"],
+                el_compact = B.rgnn_relational_matmul(
+                    {
+                        "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
+                            "rel_ptrs_row"
+                        ],
+                        "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
+                            "node_indices_row"
+                        ],
+                    },
                     product_of_conv_weights_attn_l,
                     inputs,
                     True,
+                    1,  # CompactAsOfNodeKind::Enabled
                 )  # NB: use single side instead without need to modify kernel
-                er_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_indices_single_sided["rel_ptrs_col"],
-                    separate_unique_node_indices_single_sided["node_indices_col"],
+                er_compact = B.rgnn_relational_matmul(
+                    {
+                        "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
+                            "rel_ptrs_col"
+                        ],
+                        "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
+                            "node_indices_col"
+                        ],
+                    },
                     product_of_conv_weights_attn_r,
                     inputs,
                     True,
+                    1,  # CompactAsOfNodeKind::Enabled
                 )  # NB: use single side instead without need to modify kernel
             else:
                 separate_unique_node_indices_single_sided = (
                     g.get_separate_unique_node_indices_single_sided()
                 )
                 # NB: no need to distinguish feat_compact_src and feat_compact_dst because in our case all datasets are added with inverse edges
-                feat_compact = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_indices_single_sided["rel_ptrs_row"],
-                    separate_unique_node_indices_single_sided["node_indices_row"],
+                feat_compact = B.rgnn_relational_matmul(
+                    {
+                        "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
+                            "rel_ptrs_row"
+                        ],
+                        "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
+                            "node_indices_row"
+                        ],
+                    },
                     self.conv_weights,
                     inputs,
                     True,
+                    1,  # CompactAsOfNodeKind::Enabled
                 )  # NB: use single side instead without need to modify kernel
-                feat_compact_dst = B.rgnn_relational_matmul_compact_as_of_node(
-                    separate_unique_node_indices_single_sided["rel_ptrs_col"],
-                    separate_unique_node_indices_single_sided["node_indices_col"],
+                feat_compact_dst = B.rgnn_relational_matmul(
+                    {
+                        "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
+                            "rel_ptrs_col"
+                        ],
+                        "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
+                            "node_indices_col"
+                        ],
+                    },
                     self.conv_weights,
                     inputs,
                     True,
+                    1,  # CompactAsOfNodeKind::Enabled
                 )  # NB: use single side instead without need to modify kernel
-                # FIXME: the following two lines should be implemented with relational_inner_product_compact_and_weight
+                # TODO: for performance, the following two lines may as well be implemented with relational_inner_product_compact_and_weight
                 el_compact = B.rgnn_relational_matmul_no_scatter_gather_list(
                     separate_unique_node_indices_single_sided["rel_ptrs_row"],
                     self.attn_l.unsqueeze(-1),
@@ -225,21 +260,29 @@ class HET_RelationalAttLayer(nn.Module):
             separate_coo_original_dict = g.get_separate_coo_original()
             # with nvtx.annotate("hector_op_category = edgewise mm", color="cyan"):
             feat_src_per_edge = B.rgnn_relational_matmul(
-                separate_coo_original_dict["rel_ptrs"],
-                separate_coo_original_dict["row_indices"],
-                separate_coo_original_dict["eids"],
+                {
+                    "separate_coo_rel_ptrs": separate_coo_original_dict["rel_ptrs"],
+                    "separate_coo_node_indices": separate_coo_original_dict[
+                        "row_indices"
+                    ],
+                    "separate_coo_eids": separate_coo_original_dict["eids"],
+                },
                 self.conv_weights,
                 inputs,
                 True,
+                0,  # CompactAsOfNodeKind::Disabled
             )
             # with nvtx.annotate("hector_op_category = edgewise inner prod", color="cyan"):
             el = B.rgnn_relational_matmul(
-                separate_coo_original_dict["rel_ptrs"],
-                separate_coo_original_dict["eids"],
-                separate_coo_original_dict["eids"],
+                {
+                    "separate_coo_rel_ptrs": separate_coo_original_dict["rel_ptrs"],
+                    "separate_coo_node_indices": separate_coo_original_dict["eids"],
+                    "separate_coo_eids": separate_coo_original_dict["eids"],
+                },
                 self.attn_l.unsqueeze(-1),
                 feat_src_per_edge,
                 False,
+                0,  # CompactAsOfNodeKind::Disabled
             )
 
             if self.multiply_among_weights_first_flag:
@@ -253,30 +296,43 @@ class HET_RelationalAttLayer(nn.Module):
                 ).view(-1, self.n_heads, self.in_feat, 1)
                 # with nvtx.annotate("hector_op_category = edgewise (lin op fused) mm", color="cyan"):
                 er = B.rgnn_relational_matmul(
-                    separate_coo_original_dict["rel_ptrs"],
-                    separate_coo_original_dict["col_indices"],
-                    separate_coo_original_dict["eids"],
+                    {
+                        "separate_coo_rel_ptrs": separate_coo_original_dict["rel_ptrs"],
+                        "separate_coo_node_indices": separate_coo_original_dict[
+                            "col_indices"
+                        ],
+                        "separate_coo_eids": separate_coo_original_dict["eids"],
+                    },
                     product_of_conv_weights_attn_r,
                     inputs,
                     False,
+                    0,  # CompactAsOfNodeKind::Disabled
                 )
             else:
                 separate_coo_original_dict = g.get_separate_coo_original()
                 feat_dst_per_edge = B.rgnn_relational_matmul(
-                    separate_coo_original_dict["rel_ptrs"],
-                    separate_coo_original_dict["col_indices"],
-                    separate_coo_original_dict["eids"],
+                    {
+                        "separate_coo_rel_ptrs": separate_coo_original_dict["rel_ptrs"],
+                        "separate_coo_node_indices": separate_coo_original_dict[
+                            "col_indices"
+                        ],
+                        "separate_coo_eids": separate_coo_original_dict["eids"],
+                    },
                     self.conv_weights,
                     inputs,
                     True,
+                    0,  # CompactAsOfNodeKind::Disabled
                 )
                 er = B.rgnn_relational_matmul(
-                    separate_coo_original_dict["rel_ptrs"],
-                    separate_coo_original_dict["eids"],
-                    separate_coo_original_dict["eids"],
+                    {
+                        "separate_coo_rel_ptrs": separate_coo_original_dict["rel_ptrs"],
+                        "separate_coo_node_indices": separate_coo_original_dict["eids"],
+                        "separate_coo_eids": separate_coo_original_dict["eids"],
+                    },
                     self.attn_r.unsqueeze(-1),
                     feat_dst_per_edge,
                     False,
+                    0,  # CompactAsOfNodeKind::Disabled
                 )
 
             # with nvtx.annotate("hector_op_category = weighted aggregation", color="cyan"):

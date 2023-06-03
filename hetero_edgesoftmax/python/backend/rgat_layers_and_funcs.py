@@ -5,6 +5,225 @@ import torch as th
 from ..kernels import K
 
 
+class RelationalFusedGatCSR(th.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        incsr_row_ptr,
+        incsr_col_indices,
+        incsr_eids,
+        incsr_reltypes,
+        outcsr_row_ptr,
+        outcsr_col_indices,
+        outcsr_eids,
+        outcsr_reltypes,
+        unique_srcs_and_dests_rel_ptr,
+        unique_srcs_and_dests_node_indices,
+        feat_src,
+        el,
+        er,
+        s,
+        exp,
+        ret,
+        slope,
+    ):
+        ctx.save_for_backward(
+            incsr_row_ptr,
+            incsr_col_indices,
+            incsr_eids,
+            incsr_reltypes,
+            outcsr_row_ptr,
+            outcsr_col_indices,
+            outcsr_eids,
+            outcsr_reltypes,
+            unique_srcs_and_dests_rel_ptr,
+            unique_srcs_and_dests_node_indices,
+            feat_src,
+            el,
+            er,
+            s,
+            exp,
+            ret,
+        )
+        ctx.slope = slope
+        K.relational_fused_gat_kernel_csr(
+            incsr_row_ptr,
+            incsr_col_indices,
+            incsr_eids,
+            incsr_reltypes,
+            unique_srcs_and_dests_rel_ptr,
+            unique_srcs_and_dests_node_indices,
+            feat_src,
+            el,
+            er,
+            s,
+            exp,
+            ret,
+            slope,
+        )
+        return ret
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            incsr_row_ptr,
+            incsr_col_indices,
+            incsr_eids,
+            incsr_reltypes,
+            outcsr_row_ptr,
+            outcsr_col_indices,
+            outcsr_eids,
+            outcsr_reltypes,
+            unique_srcs_and_dests_rel_ptr,
+            unique_srcs_and_dests_node_indices,
+            feat_src,
+            el,
+            er,
+            s,
+            exp,
+            ret,
+        ) = ctx.saved_tensors
+        slope = ctx.slope
+        grad_el = th.zeros_like(el, memory_format=th.contiguous_format)
+        grad_er = th.zeros_like(er, memory_format=th.contiguous_format)
+        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
+
+        K.backward_relational_fused_gat_csr(
+            outcsr_row_ptr,
+            outcsr_col_indices,
+            outcsr_eids,
+            outcsr_reltypes,
+            unique_srcs_and_dests_rel_ptr,
+            unique_srcs_and_dests_node_indices,
+            feat_src,
+            el,
+            er,
+            s,
+            exp,
+            ret,
+            gradout,
+            grad_feat_src,
+            grad_el,
+            grad_er,
+            slope,
+        )
+        # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
+        # fmt: off
+        return None, None, None, None, None, None, None, None, None, None, grad_feat_src, grad_el, grad_er, None, None, None, None,
+        # fmt: on
+
+
+class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        unique_srcs_and_dests_rel_ptr,
+        unique_srcs_and_dests_node_indices,
+        incsr_row_ptr,
+        incsr_col_indices,
+        incsr_eids,
+        incsr_reltypes,
+        outcsr_row_ptr,
+        outcsr_col_indices,
+        outcsr_eids,
+        outcsr_reltypes,
+        feat_compact,
+        el_compact,
+        er_compact,
+        s,
+        exp,
+        ret,
+        slope,
+    ):
+        ctx.save_for_backward(
+            unique_srcs_and_dests_rel_ptr,
+            unique_srcs_and_dests_node_indices,
+            incsr_row_ptr,
+            incsr_col_indices,
+            incsr_eids,
+            incsr_reltypes,
+            outcsr_row_ptr,
+            outcsr_col_indices,
+            outcsr_eids,
+            outcsr_reltypes,
+            feat_compact,
+            el_compact,
+            er_compact,
+            s,
+            exp,
+            ret,
+        )
+        ctx.slope = slope
+        K.relational_fused_gat_csr(
+            incsr_row_ptr,
+            incsr_col_indices,
+            incsr_eids,
+            incsr_reltypes,
+            unique_srcs_and_dests_rel_ptr,
+            unique_srcs_and_dests_node_indices,
+            feat_compact,
+            el_compact,
+            er_compact,
+            s,
+            exp,
+            ret,
+            slope,
+            True,
+        )
+        return ret
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            unique_srcs_and_dests_rel_ptr,
+            unique_srcs_and_dests_node_indices,
+            incsr_row_ptr,
+            incsr_col_indices,
+            incsr_eids,
+            incsr_reltypes,
+            outcsr_row_ptr,
+            outcsr_col_indices,
+            outcsr_eids,
+            outcsr_reltypes,
+            feat_compact,
+            el_compact,
+            er_compact,
+            s,
+            exp,
+            ret,
+        ) = ctx.saved_tensors
+        slope = ctx.slope
+        grad_el_compact = th.zeros_like(el_compact, memory_format=th.contiguous_format)
+        grad_er_compact = th.zeros_like(er_compact, memory_format=th.contiguous_format)
+        grad_feat_compact = th.zeros_like(
+            feat_compact, memory_format=th.contiguous_format
+        )
+
+        K.backward_relational_fused_gat_csr(
+            outcsr_row_ptr,
+            outcsr_col_indices,
+            outcsr_eids,
+            outcsr_reltypes,
+            unique_srcs_and_dests_rel_ptr,
+            unique_srcs_and_dests_node_indices,
+            feat_compact,
+            el_compact,
+            er_compact,
+            s,
+            exp,
+            ret,
+            gradout,
+            grad_feat_compact,
+            grad_el_compact,
+            grad_er_compact,
+            slope,
+            True,
+        )
+        # fmt: off
+        return None, None, None, None, None, None, None, None, None, None, grad_feat_compact, grad_el_compact, grad_er_compact, None, None, None, None
+        # fmt: on
+
+
 class RelationalFusedGatSeparateCOO(th.autograd.Function):
     @staticmethod
     def forward(
@@ -415,114 +634,6 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOO(th.autograd.Function):
         # fmt: on
 
 
-class RelationalFusedGatCSR(th.autograd.Function):
-    @staticmethod
-    def forward(
-        ctx,
-        incsr_row_ptr,
-        incsr_col_indices,
-        incsr_eids,
-        incsr_reltypes,
-        outcsr_row_ptr,
-        outcsr_col_indices,
-        outcsr_eids,
-        outcsr_reltypes,
-        unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices,
-        feat_src,
-        el,
-        er,
-        s,
-        exp,
-        ret,
-        slope,
-    ):
-        ctx.save_for_backward(
-            incsr_row_ptr,
-            incsr_col_indices,
-            incsr_eids,
-            incsr_reltypes,
-            outcsr_row_ptr,
-            outcsr_col_indices,
-            outcsr_eids,
-            outcsr_reltypes,
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices,
-            feat_src,
-            el,
-            er,
-            s,
-            exp,
-            ret,
-        )
-        ctx.slope = slope
-        K.relational_fused_gat_kernel_csr(
-            incsr_row_ptr,
-            incsr_col_indices,
-            incsr_eids,
-            incsr_reltypes,
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices,
-            feat_src,
-            el,
-            er,
-            s,
-            exp,
-            ret,
-            slope,
-        )
-        return ret
-
-    @staticmethod
-    def backward(ctx, gradout):
-        (
-            incsr_row_ptr,
-            incsr_col_indices,
-            incsr_eids,
-            incsr_reltypes,
-            outcsr_row_ptr,
-            outcsr_col_indices,
-            outcsr_eids,
-            outcsr_reltypes,
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices,
-            feat_src,
-            el,
-            er,
-            s,
-            exp,
-            ret,
-        ) = ctx.saved_tensors
-        slope = ctx.slope
-        grad_el = th.zeros_like(el, memory_format=th.contiguous_format)
-        grad_er = th.zeros_like(er, memory_format=th.contiguous_format)
-        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
-
-        K.backward_relational_fused_gat_csr(
-            outcsr_row_ptr,
-            outcsr_col_indices,
-            outcsr_eids,
-            outcsr_reltypes,
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices,
-            feat_src,
-            el,
-            er,
-            s,
-            exp,
-            ret,
-            gradout,
-            grad_feat_src,
-            grad_el,
-            grad_er,
-            slope,
-        )
-        # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
-        # fmt: off
-        return None, None, None, None, None, None, None, None, None, None, grad_feat_src, grad_el, grad_er, None, None, None, None,
-        # fmt: on
-
-
 def relational_fused_gat_csr(graph, feat_src, el, er, slope):
     # NB: notice that in rgcn, in-adjacency list is used and therefore, we input the transposed adj list to forward propagation, and the original to backward propagation.
     incsr_dict = graph.get_in_csr()
@@ -556,117 +667,6 @@ def relational_fused_gat_csr(graph, feat_src, el, er, slope):
         ret,
         slope,
     )
-
-
-class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
-    @staticmethod
-    def forward(
-        ctx,
-        unique_srcs_and_dests_rel_ptr,
-        unique_srcs_and_dests_node_indices,
-        incsr_row_ptr,
-        incsr_col_indices,
-        incsr_eids,
-        incsr_reltypes,
-        outcsr_row_ptr,
-        outcsr_col_indices,
-        outcsr_eids,
-        outcsr_reltypes,
-        feat_compact,
-        el_compact,
-        er_compact,
-        s,
-        exp,
-        ret,
-        slope,
-    ):
-        ctx.save_for_backward(
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices,
-            incsr_row_ptr,
-            incsr_col_indices,
-            incsr_eids,
-            incsr_reltypes,
-            outcsr_row_ptr,
-            outcsr_col_indices,
-            outcsr_eids,
-            outcsr_reltypes,
-            feat_compact,
-            el_compact,
-            er_compact,
-            s,
-            exp,
-            ret,
-        )
-        ctx.slope = slope
-        K.relational_fused_gat_csr(
-            incsr_row_ptr,
-            incsr_col_indices,
-            incsr_eids,
-            incsr_reltypes,
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices,
-            feat_compact,
-            el_compact,
-            er_compact,
-            s,
-            exp,
-            ret,
-            slope,
-            True,
-        )
-        return ret
-
-    @staticmethod
-    def backward(ctx, gradout):
-        (
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices,
-            incsr_row_ptr,
-            incsr_col_indices,
-            incsr_eids,
-            incsr_reltypes,
-            outcsr_row_ptr,
-            outcsr_col_indices,
-            outcsr_eids,
-            outcsr_reltypes,
-            feat_compact,
-            el_compact,
-            er_compact,
-            s,
-            exp,
-            ret,
-        ) = ctx.saved_tensors
-        slope = ctx.slope
-        grad_el_compact = th.zeros_like(el_compact, memory_format=th.contiguous_format)
-        grad_er_compact = th.zeros_like(er_compact, memory_format=th.contiguous_format)
-        grad_feat_compact = th.zeros_like(
-            feat_compact, memory_format=th.contiguous_format
-        )
-
-        K.backward_relational_fused_gat_csr(
-            outcsr_row_ptr,
-            outcsr_col_indices,
-            outcsr_eids,
-            outcsr_reltypes,
-            unique_srcs_and_dests_rel_ptr,
-            unique_srcs_and_dests_node_indices,
-            feat_compact,
-            el_compact,
-            er_compact,
-            s,
-            exp,
-            ret,
-            gradout,
-            grad_feat_compact,
-            grad_el_compact,
-            grad_er_compact,
-            slope,
-            True,
-        )
-        # fmt: off
-        return None, None, None, None, None, None, None, None, None, None, grad_feat_compact, grad_el_compact, grad_er_compact, None, None, None, None
-        # fmt: on
 
 
 def relational_fused_gat_compact_as_of_node(
