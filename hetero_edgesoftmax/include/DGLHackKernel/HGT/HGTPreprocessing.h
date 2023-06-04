@@ -1,7 +1,7 @@
 #pragma once
-#include <map>
-
 #include <cuda_runtime.h>
+
+#include <map>
 
 template <class T, class OtherContainerType>
 thrust::device_vector<T *> GetDeviceVectorOfPointersToArrays(
@@ -113,13 +113,13 @@ struct HGTLayerExecPreprocessedData {
     assert(dest_node_to_unique_index_per_relation_d.size() != 0);
   }
 
-  thrust::device_vector<int *>
-      &get_unique_indices_to_column_indices_per_relation_d() {
+  thrust::device_vector<int *> &
+  get_unique_indices_to_column_indices_per_relation_d() {
     CheckPointerArrayValidity();
     return unique_indices_to_column_indices_per_relation_d;
   }
-  const thrust::device_vector<int *>
-      &get_unique_indices_to_column_indices_per_relation_d() const {
+  const thrust::device_vector<int *> &
+  get_unique_indices_to_column_indices_per_relation_d() const {
     CheckPointerArrayValidity();
     return unique_indices_to_column_indices_per_relation_d;
   }
@@ -127,8 +127,8 @@ struct HGTLayerExecPreprocessedData {
     CheckPointerArrayValidity();
     return dest_node_to_unique_index_per_relation_d;
   }
-  const thrust::device_vector<int *>
-      &get_dest_node_to_unique_index_per_relation_d() const {
+  const thrust::device_vector<int *> &
+  get_dest_node_to_unique_index_per_relation_d() const {
     CheckPointerArrayValidity();
     return dest_node_to_unique_index_per_relation_d;
   }
@@ -229,10 +229,6 @@ std::shared_ptr<HGTLayerExecPreprocessedData> HGTLayerPreprocessing(
     std::vector<cusp::coo_matrix<
         int, int, cusp::device_memory>::column_indices_array_type>
         coo_matrices_column_indices) {
-  // constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
-  // constexpr int COARSE_SGEMM_BLOCKSIZE = (TILE_SZ_A);
-  // constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
-
   // generating preprocessed metadata:
   // dest_node_to_unique_index_per_relation_d,
   // unique_indices_to_column_indices_per_relation_d,

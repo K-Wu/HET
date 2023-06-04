@@ -243,11 +243,11 @@ void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
   _RelationalMatmulNoScatterGatherList<32>(ntype_offset_ptrs, weights, inputs,
                                            ret);
 }
-
-void RelationalMatMul_separatecoo(
-    torch::Dict<std::string, at::Tensor> args_tensor_dict, int64_t IntKind,
-    at::Tensor &weights, at::Tensor &node_feat, at::Tensor &ret,
-    bool InputNumHeadOneFlag) {
+namespace SeparateCOO {
+void RelationalMatMul(torch::Dict<std::string, at::Tensor> args_tensor_dict,
+                      int64_t IntKind, at::Tensor &weights,
+                      at::Tensor &node_feat, at::Tensor &ret,
+                      bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   // TODO: KWU: simplify the PyThon API so that we don't need to have two APIs
   // for num_heads==1 vs. num_heads>1 if separate_coo_node_indices and
@@ -306,6 +306,7 @@ void RelationalMatMul_separatecoo(
     assert(0 && "Invalid CompactAsOfNodeKind");
   }
 }
+}  // namespace SeparateCOO
 
 // NB: We may refer to (edge parallel version)
 // HET_HGTExpermentalEdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel
@@ -454,12 +455,15 @@ void _inner_product_various_left_and_node_right(
   }
 }
 
-void inner_product_right_node_separatecoo(
-    torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
-    at::Tensor &separate_coo_rel_ptrs, at::Tensor &separate_coo_eids,
-    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
-    at::Tensor &left_side_data, at::Tensor &right_node_vectors,
-    at::Tensor &edge_inner_product) {
+namespace SeparateCOO {
+void InnerProductRightNode(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
+                           int64_t IntKind, at::Tensor &separate_coo_rel_ptrs,
+                           at::Tensor &separate_coo_eids,
+                           at::Tensor &separate_coo_row_indices,
+                           at::Tensor &separate_coo_col_indices,
+                           at::Tensor &left_side_data,
+                           at::Tensor &right_node_vectors,
+                           at::Tensor &edge_inner_product) {
   cudaMemsetAsync(edge_inner_product.data_ptr<float>(), 0,
                   edge_inner_product.numel() * sizeof(float),
                   c10::cuda::getCurrentCUDAStream());
@@ -468,8 +472,6 @@ void inner_product_right_node_separatecoo(
   if (Kind == CompactAsOfNodeKind::EnabledWithDirectIndexing) {
     at::Tensor edata_idx_to_inverse_idx =
         arg_tensor_dict.at("edata_idx_to_inverse_idx");
-    // at::Tensor separate_coo_rel_ptrs =
-    // arg_tensor_dict.at("separate_rel_ptrs");
     _inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::EnabledWithDirectIndexing, false,
         false>(separate_coo_eids, separate_coo_rel_ptrs,
@@ -484,8 +486,6 @@ void inner_product_right_node_separatecoo(
         arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
-    // at::Tensor separate_coo_rel_ptrs =
-    // arg_tensor_dict.at("separate_rel_ptrs");
     _inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
@@ -506,7 +506,7 @@ void inner_product_right_node_separatecoo(
     assert(0 && "Not implemented");
   }
 }
-
+}  // namespace SeparateCOO
 }  // namespace FwProp
 
 namespace BckProp {
@@ -800,12 +800,12 @@ void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
       ntype_offset_ptrs, weights_transposed, node_feat_input,
       grad_node_feat_output, grad_weights, grad_node_feat_input);
 }
-
-void RelationalMatMul_separatecoo(
-    torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
-    at::Tensor &weights_transposed, at::Tensor &node_feat, at::Tensor &gradout,
-    at::Tensor &grad_node_feat, at::Tensor &grad_weights,
-    bool InputNumHeadOneFlag) {
+namespace SeparateCOO {
+void RelationalMatMul(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
+                      int64_t IntKind, at::Tensor &weights_transposed,
+                      at::Tensor &node_feat, at::Tensor &gradout,
+                      at::Tensor &grad_node_feat, at::Tensor &grad_weights,
+                      bool InputNumHeadOneFlag) {
   at::Tensor dummy_tensor;
   auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
   if (Kind == CompactAsOfNodeKind::Enabled) {
@@ -867,7 +867,7 @@ void RelationalMatMul_separatecoo(
     assert(0 && "invalid CompactAsOfNodeKind");
   }
 }
-
+}  // namespace SeparateCOO
 // NB: We may rely on HGTCompactAsOfNodesEdgeAttentionSecondStage in
 // [[hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTForwardKernels.cu.h]]
 // adapted from _RelationalFusedGATKernel in
@@ -985,7 +985,8 @@ void _inner_product_various_left_and_node_right(
   }
 }
 
-void inner_product_right_node_separatecoo(
+namespace SeparateCOO {
+void InnerProductRightNode(
     torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
     at::Tensor &separate_coo_rel_ptrs, at::Tensor &separate_coo_eids,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
@@ -997,8 +998,6 @@ void inner_product_right_node_separatecoo(
   if (Kind == CompactAsOfNodeKind::EnabledWithDirectIndexing) {
     at::Tensor edata_idx_to_inverse_idx =
         arg_tensor_dict.at("edata_idx_to_inverse_idx");
-    // at::Tensor separate_coo_rel_ptrs =
-    // arg_tensor_dict.at("separate_rel_ptrs");
     _inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::EnabledWithDirectIndexing, false,
         false>(separate_coo_eids, separate_coo_rel_ptrs,
@@ -1015,8 +1014,6 @@ void inner_product_right_node_separatecoo(
         arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
-    // at::Tensor separate_coo_rel_ptrs =
-    // arg_tensor_dict.at("separate_rel_ptrs");
     _inner_product_various_left_and_node_right<
         int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
@@ -1040,7 +1037,7 @@ void inner_product_right_node_separatecoo(
     assert(0 && "Not implemented");
   }
 }
-
+}  // namespace SeparateCOO
 }  // namespace BckProp
 }  // namespace RGNN
 }  // namespace TorchExport
@@ -1050,16 +1047,16 @@ using namespace HET::TorchExport;
 TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
   // kernels for generic hetero-gnn use declaration
   // RGNN Relational GEMM
-  m.def("rgnn_relational_matmul", RGNN::FwProp::RelationalMatMul_separatecoo);
+  m.def("rgnn_relational_matmul", RGNN::FwProp::SeparateCOO::RelationalMatMul);
   m.def("backward_rgnn_relational_matmul",
-        RGNN::BckProp::RelationalMatMul_separatecoo);
+        RGNN::BckProp::SeparateCOO::RelationalMatMul);
   m.def("rgnn_relational_matmul_no_scatter_gather_list",
         RGNN::FwProp::RelationalMatmulNoScatterGatherList);
   m.def("backward_rgnn_relational_matmul_no_scatter_gather_list",
         RGNN::BckProp::RelationalMatmulNoScatterGatherList);
   // RGNN innerproduct
   m.def("rgnn_inner_product_right_node_separatecoo",
-        RGNN::FwProp::inner_product_right_node_separatecoo);
+        RGNN::FwProp::SeparateCOO::InnerProductRightNode);
   m.def("backward_inner_product_right_node_separatecoo",
-        RGNN::BckProp::inner_product_right_node_separatecoo);
+        RGNN::BckProp::SeparateCOO::InnerProductRightNode);
 }
