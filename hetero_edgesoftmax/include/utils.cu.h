@@ -110,6 +110,16 @@ __device__ __forceinline__ Idx binary_search(Idx num_elements, const IdxPtr arr,
   return lo;
 }
 
+template <typename Idx, typename IdxPtr>
+__device__ __forceinline__ Idx linear_search(Idx num_elements, const IdxPtr arr,
+                                             Idx target, Idx resume_from) {
+  for (Idx lo = resume_from; lo < num_elements; lo += 1) {
+    if (arr[lo] > target) {
+      return lo - 1;
+    }
+  }
+}
+
 // TODO: is there a way to map from (src idx, etype) instead of edge idx to (row
 // index in the compact tensor)?
 // TODO: optimize when warp coorperatively work on to reduce the last 4-5 global

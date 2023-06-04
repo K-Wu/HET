@@ -14,6 +14,9 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
     ETypeMapperData<Idx, kind> etype_mapper_data,
     ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+  constexpr bool EtypeRelPtrIndexSearch = true;
+  Idx resume_from = 0;
+
   constexpr bool ETypeRelPtrFlag = true;
   constexpr bool CompactAsOfNodeFlag = IsCompact(kind);
   constexpr bool DualUniqueNodeList = IsCompactWithDualList(kind);
@@ -58,7 +61,13 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
             // index)
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
-              etype = binary_search(num_relations, etypes, e);
+              if constexpr (EtypeRelPtrIndexSearch) {
+                etype = linear_search(num_relations, etypes, e, resume_from);
+                resume_from = etype;
+              } else {
+                etype = binary_search(num_relations, etypes, e);
+              }
+
             } else {
               etype = etypes[e];
             }
@@ -123,6 +132,9 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
     ETypeMapperData<Idx, kind> etype_mapper_data,
     ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+  constexpr bool EtypeRelPtrIndexSearch = true;
+  Idx resume_from = 0;
+
   constexpr bool ETypeRelPtrFlag = true;
   constexpr bool CompactAsOfNodeFlag = IsCompact(kind);
   constexpr bool DualUniqueNodeList = IsCompactWithDualList(kind);
@@ -155,7 +167,12 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
           if constexpr (RelationalFlag) {
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
-              etype = binary_search(num_relations, etypes, e);
+              if constexpr (EtypeRelPtrIndexSearch) {
+                etype = linear_search(num_relations, etypes, e, resume_from);
+                resume_from = etype;
+              } else {
+                etype = binary_search(num_relations, etypes, e);
+              }
             } else {  // !ETypeRelPtrFlag
               etype = etypes[e];
             }
@@ -193,6 +210,9 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
     const Idx *row_indices, const Idx *column_indices, int64_t num_edges,
     ETypeMapperData<Idx, kind> etype_mapper_data,
     ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+  constexpr bool EtypeRelPtrIndexSearch = true;
+  Idx resume_from = 0;
+
   constexpr bool ETypeRelPtrFlag = true;
   constexpr bool CompactAsOfNodeFlag = IsCompact(kind);
   constexpr bool DualUniqueNodeList = IsCompactWithDualList(kind);
@@ -237,7 +257,12 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
             // index)
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
-              etype = binary_search(num_relations, etypes, e);
+              if constexpr (EtypeRelPtrIndexSearch) {
+                etype = linear_search(num_relations, etypes, e, resume_from);
+                resume_from = etype;
+              } else {
+                etype = binary_search(num_relations, etypes, e);
+              }
             } else {
               etype = etypes[e];
             }

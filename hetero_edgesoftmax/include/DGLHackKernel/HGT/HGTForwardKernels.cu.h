@@ -590,6 +590,10 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
     int64_t num_relations) {
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
+
+  constexpr bool EtypeRelPtrIndexSearch = true;
+  Idx resume_from = 0;
+
   if constexpr (OutputMuAppliedAttnScoreSwitch != 0 &&
                 OutputMuAppliedAttnScoreSwitch != 1 &&
                 OutputMuAppliedAttnScoreSwitch != 2 &&
@@ -617,7 +621,13 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
       DType mu;
       if constexpr (RelationalFlag) {
         if constexpr (ETypeRelPtrFlag) {
-          etype = binary_search(num_relations, etypes, eidx);
+          if constexpr (EtypeRelPtrIndexSearch) {
+            etype = linear_search(num_relations, etypes, eidx, resume_from);
+            resume_from = etype;
+          } else {
+            etype = binary_search(num_relations, etypes, eidx);
+          }
+
         } else {
           etype = etypes[eidx];
         }
@@ -687,6 +697,9 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
     const Idx *row_indices, const Idx *column_indices, const Idx *etypes,
     int64_t num_edges, ETypeMapperData<Idx, kind> etype_mapper_data,
     int64_t num_relations) {
+  constexpr bool EtypeRelPtrIndexSearch = true;
+  Idx resume_from = 0;
+
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
   Idx num_heads = gdata.num_heads;
@@ -712,7 +725,12 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
           if constexpr (RelationalFlag) {
             Idx etype;
             if constexpr (ETypeRelPtrFlag) {
-              etype = binary_search(num_relations, etypes, eidx);
+              if constexpr (EtypeRelPtrIndexSearch) {
+                etype = linear_search(num_relations, etypes, eidx, resume_from);
+                resume_from = etype;
+              } else {
+                etype = binary_search(num_relations, etypes, eidx);
+              }
             } else {
               etype = etypes[eidx];
             }

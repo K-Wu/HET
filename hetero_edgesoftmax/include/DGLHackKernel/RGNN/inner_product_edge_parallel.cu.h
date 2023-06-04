@@ -14,6 +14,9 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
     InnerProductData<Idx, DType> gdata, const Idx *row_indices,
     const Idx *column_indices, const Idx *etypes, int64_t num_edges,
     ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+  constexpr bool EtypeRelPtrIndexSearch = true;
+  Idx resume_from = 0;
+
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx eidx = blockIdx.y; eidx < num_edges; eidx += gridDim.y) {
@@ -32,7 +35,12 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
           if constexpr (IsCompact(kind)) {
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
-              etype = binary_search(num_relations, etypes, eidx);
+              if constexpr (EtypeRelPtrIndexSearch) {
+                etype = linear_search(num_relations, etypes, eidx, resume_from);
+                resume_from = etype;
+              } else {
+                etype = binary_search(num_relations, etypes, eidx);
+              }
             } else {
               etype = etypes[eidx];
             }
@@ -104,6 +112,9 @@ __global__ void HET_inner_product_bck_kernel_edge_parallel(
     BackwardInnerProductData<Idx, DType> gdata, const Idx *row_indices,
     const Idx *column_indices, const Idx *etypes, int64_t num_edges,
     ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+  constexpr bool EtypeRelPtrIndexSearch = true;
+  Idx resume_from = 0;
+
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx e = blockIdx.y; e < num_edges; e += gridDim.y) {
@@ -135,7 +146,12 @@ __global__ void HET_inner_product_bck_kernel_edge_parallel(
             // index)
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
-              etype = binary_search(num_relations, etypes, e);
+              if constexpr (EtypeRelPtrIndexSearch) {
+                etype = linear_search(num_relations, etypes, e, resume_from);
+                resume_from = etype;
+              } else {
+                etype = binary_search(num_relations, etypes, e);
+              }
             } else {
               etype = etypes[e];
             }

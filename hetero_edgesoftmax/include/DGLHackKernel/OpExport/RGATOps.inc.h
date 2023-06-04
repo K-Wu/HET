@@ -239,6 +239,7 @@ void RelationalFusedGATKernel_edge_parallel_separatecoo(
   }
 }
 
+// TODO: pass in direct indexing
 void RelationalFusedGATKernel_integratedcsr(
     at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_indices,
     at::Tensor &incsr_eids, at::Tensor &incsr_reltypes,
@@ -411,6 +412,7 @@ void _RelationalFusedGATKernel(
   }
 }
 
+// TODO: pass in direct indexing
 void RelationalFusedGATKernel_integratedcsr(
     at::Tensor &outcsr_row_ptr, at::Tensor &outcsr_col_indices,
     at::Tensor &outcsr_eids, at::Tensor &outcsr_reltypes,
