@@ -10,14 +10,14 @@
 // updater) requires atomicflag, and seems reasonable. Is there any optimization
 // possible?
 // TODO: use gather instead of scatter to remove atomicFlag
-template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
           MySGEMMGatherKind AGatherKind, MySGEMMGatherKind BGatherKind,
           MySGEMMGatherKind CScatterKind, bool AtomicUpdateFlag, typename Idx,
           typename IdxPtr, MySGEMMNumHeadKind numHeadKind,
           CompactAsOfNodeKind compactKind>
-class _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
+class _basic_MatMulKernel<false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
                           SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y,
                           SHMEM_BLOCK_SIZE_K, OuterProductFlag, AGatherKind,
                           BGatherKind, CScatterKind, AtomicUpdateFlag, Idx,
@@ -59,27 +59,27 @@ class _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
     // always input and B the gradient output feature. It is safe to pass
     // num_A_cols as in_dim.
 
-    constexpr bool RIGHT_REG_TILED_FLAG = THREAD_BLOCK_DIM_Y == 1;
+    constexpr bool RIGHT_REG_TILED_FLAG = THREADING_BLOCK_SIZE_Y == 1;
 
     constexpr int COARSEN_DIVISOR_FACTOR =
         (SHMEM_BLOCK_SIZE_X * SHMEM_BLOCK_SIZE_Y) /
-        (THREAD_BLOCK_DIM_X * THREAD_BLOCK_DIM_Y);
-    static_assert(SHMEM_BLOCK_SIZE_Y % THREAD_BLOCK_DIM_Y == 0, "");
-    static_assert(SHMEM_BLOCK_SIZE_X % THREAD_BLOCK_DIM_X == 0, "");
+        (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y);
+    static_assert(SHMEM_BLOCK_SIZE_Y % THREADING_BLOCK_SIZE_Y == 0, "");
+    static_assert(SHMEM_BLOCK_SIZE_X % THREADING_BLOCK_SIZE_X == 0, "");
 
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_A =
-        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X / THREAD_BLOCK_DIM_X /
-        THREAD_BLOCK_DIM_Y;
+        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X / THREADING_BLOCK_SIZE_X /
+        THREADING_BLOCK_SIZE_Y;
     static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X) %
-                          (THREAD_BLOCK_DIM_X * THREAD_BLOCK_DIM_Y) ==
+                          (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y) ==
                       0,
                   "");
 
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_B =
-        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y / THREAD_BLOCK_DIM_X /
-        THREAD_BLOCK_DIM_Y;
+        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y / THREADING_BLOCK_SIZE_X /
+        THREADING_BLOCK_SIZE_Y;
     static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y) %
-                          (THREAD_BLOCK_DIM_X * THREAD_BLOCK_DIM_Y) ==
+                          (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y) ==
                       0,
                   "");
 
@@ -126,7 +126,7 @@ class _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
       int thIdxFeat_initial = threadIdx.x;
       if constexpr (COARSEN_DIVISOR_FACTOR > 1) {
         // redo the thread indexing
-        int thIdx = threadIdx.y * THREAD_BLOCK_DIM_X + threadIdx.x;
+        int thIdx = threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x;
         thIdxRow_initial = thIdx / SHMEM_BLOCK_SIZE_X;
         thIdxFeat_initial = thIdx % SHMEM_BLOCK_SIZE_X;
       }
@@ -175,16 +175,17 @@ class _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
             // scheme is a transpose in the fly. that is why both thIdxRow and m
             // need to be used during indexing the row
             int SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT =
-                THREAD_BLOCK_DIM_X * THREAD_BLOCK_DIM_Y / SHMEM_BLOCK_SIZE_K;
+                THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y /
+                SHMEM_BLOCK_SIZE_K;
             int thIdxRow_A_outer_product =
-                (threadIdx.y * THREAD_BLOCK_DIM_X + threadIdx.x) %
+                (threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x) %
                     SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT +
                 loadLoopIdx *
                     (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR_LOAD_A);
             static_assert(
                 SHMEM_BLOCK_SIZE_Y % COARSEN_DIVISOR_FACTOR_LOAD_A == 0, "");
             int thIdxFeat_A_outer_product =
-                (threadIdx.y * THREAD_BLOCK_DIM_X + threadIdx.x) /
+                (threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x) /
                 SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT;
 
             // Get sub-matrix Asub of A
@@ -462,27 +463,24 @@ __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
 }
 
 // for HGT nodewise linear layers
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+          int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
+          typename Idx, typename IdxPtr>
 __global__ void HET_RGNNMatmulNoScatterGatherListFwOrBwProp(
     float *node_feat_input, float *weights, float *linear_projected_node_feat,
     IdxPtr ntype_ptrs, int *accum_num_blocks_per_ntype, Idx num_ntypes,
     Idx input_dim, Idx output_dim) {
-  constexpr int THREAD_BLOCK_DIM_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  constexpr int THREAD_BLOCK_DIM_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_ntype = binary_search<int, int *>(
       num_ntypes, accum_num_blocks_per_ntype, idx_block_assignment);
-  _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
-                      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, false,
-                      MySGEMMGatherKind::Disabled, MySGEMMGatherKind::Disabled,
-                      // This function is kind of exceptional: we need to assert
-                      // all the three num_heads are 1
-                      MySGEMMGatherKind::Disabled, false, Idx, IdxPtr,
-                      MySGEMMNumHeadKind::AssertAllAreOnes,
-                      CompactAsOfNodeKind::Disabled>::
+  _basic_MatMulKernel<
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, false, MySGEMMGatherKind::Disabled,
+      MySGEMMGatherKind::Disabled,
+      // This function is kind of exceptional: we need to assert
+      // all the three num_heads are 1
+      MySGEMMGatherKind::Disabled, false, Idx, IdxPtr,
+      MySGEMMNumHeadKind::AssertAllAreOnes, CompactAsOfNodeKind::Disabled>::
       execute_function(node_feat_input, weights, linear_projected_node_feat,
                        nullptr, nullptr, nullptr, {}, 0,
                        ntype_ptrs[idx_ntype + 1] - ntype_ptrs[idx_ntype],
@@ -493,28 +491,24 @@ __global__ void HET_RGNNMatmulNoScatterGatherListFwOrBwProp(
 }
 
 // for HGT nodewise linear layers
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+          int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
+          typename Idx, typename IdxPtr>
 __global__ void HET_RGNNDeltaWeightNoScatterGatherListBWProp(
     float *node_feat_input, float *delta_feat, float *delta_weight,
     IdxPtr ntype_ptrs, Idx A_input_dim, Idx B_delta_output_dim,
     int *accum_num_blocks_per_ntype, Idx num_ntypes) {
-  constexpr int THREAD_BLOCK_DIM_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  constexpr int THREAD_BLOCK_DIM_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-
   Idx idx_block_assignment = blockIdx.z;
   Idx idx_ntype = binary_search<int, int *>(
       num_ntypes, accum_num_blocks_per_ntype, idx_block_assignment);
-  _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
-                      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, true,
-                      MySGEMMGatherKind::Disabled, MySGEMMGatherKind::Disabled,
-                      MySGEMMGatherKind::Disabled, true, Idx,
-                      // This function is kind of exceptional: we need to assert
-                      // all the three num_heads are 1
-                      IdxPtr, MySGEMMNumHeadKind::AssertAllAreOnes,
-                      CompactAsOfNodeKind::Disabled>::
+  _basic_MatMulKernel<
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, true, MySGEMMGatherKind::Disabled,
+      MySGEMMGatherKind::Disabled, MySGEMMGatherKind::Disabled, true, Idx,
+      // This function is kind of exceptional: we need to assert
+      // all the three num_heads are 1
+      IdxPtr, MySGEMMNumHeadKind::AssertAllAreOnes,
+      CompactAsOfNodeKind::Disabled>::
       execute_function(
           node_feat_input, delta_feat,
           &delta_weight[idx_ntype * A_input_dim * B_delta_output_dim], nullptr,
@@ -562,8 +556,9 @@ __global__ void HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
 }
 
 template <
-    int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y, int WORK_BLOCK_SIZE_X,
-    int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K, typename Idx, typename IdxPtr,
+    int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+    int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
+    typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
 __global__ void __launch_bounds__(256, 3) HET_RGNNFeatCompactFWProp(
     float *node_feat_input, float *weight, float *node_feat_per_edge,
@@ -574,7 +569,7 @@ __global__ void __launch_bounds__(256, 3) HET_RGNNFeatCompactFWProp(
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<
-      false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, WORK_BLOCK_SIZE_X,
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
       WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, false, MySGEMMGatherKind::Basic,
       MySGEMMGatherKind::Disabled,
       // NB: no need to scatter C
@@ -600,8 +595,9 @@ __global__ void __launch_bounds__(256, 3) HET_RGNNFeatCompactFWProp(
 }
 
 template <
-    bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-    int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr,
+    int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+    int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
+    typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaNodeFeatInputBWProp(
     float *delta_feat_per_edge, float *weight_transposed,
@@ -609,22 +605,17 @@ __global__ void HET_RGNNDeltaNodeFeatInputBWProp(
     IdxPtr C_col_row_idx_scatter_list, Idx delta_output_per_head_dim,
     Idx delta_input_dim, int num_heads, int *accum_num_blocks_per_relation,
     Idx num_relations) {
-  constexpr int THREAD_BLOCK_DIM_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  constexpr int THREAD_BLOCK_DIM_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
+  _basic_MatMulKernel<false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
                       // (delta_feat, weight, delta_input) are NH, NH, 1 or NH,
                       // NH, NH depending on whether C_num_head_one_flag is
                       // true. NH is num_heads
-                      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, false,
-                      MySGEMMGatherKind::Basic, MySGEMMGatherKind::Disabled,
-                      MySGEMMGatherKind::Basic, true, Idx, IdxPtr,
-                      MySGEMMNumHeadKind::AssertCNumIsOne,
+                      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K,
+                      false, MySGEMMGatherKind::Basic,
+                      MySGEMMGatherKind::Disabled, MySGEMMGatherKind::Basic,
+                      true, Idx, IdxPtr, MySGEMMNumHeadKind::AssertCNumIsOne,
                       CompactAsOfNodeKind::Disabled>::
       execute_function(
           delta_feat_per_edge,
@@ -642,8 +633,9 @@ __global__ void HET_RGNNDeltaNodeFeatInputBWProp(
 }
 
 template <
-    bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-    int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr,
+    int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+    int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
+    typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaWeightBWProp(
     float *node_feat_input, float *delta_feat_per_edge, float *delta_weight,
@@ -651,17 +643,12 @@ __global__ void HET_RGNNDeltaWeightBWProp(
     IdxPtr B_eid_gather_list, Idx A_delta_input_dim,
     Idx B_delta_output_per_head_dim, int num_heads,
     int *accum_num_blocks_per_relation, Idx num_relations) {
-  constexpr int THREAD_BLOCK_DIM_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  constexpr int THREAD_BLOCK_DIM_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-
   Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<
-      false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, WORK_BLOCK_SIZE,
-      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, true, MySGEMMGatherKind::Basic,
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, true, MySGEMMGatherKind::Basic,
       MySGEMMGatherKind::Basic, MySGEMMGatherKind::Disabled, true, Idx, IdxPtr,
       MySGEMMNumHeadKind::AssertANumIsOne, CompactAsOfNodeKind::Disabled>::
       execute_function(
@@ -678,25 +665,21 @@ __global__ void HET_RGNNDeltaWeightBWProp(
 }
 
 template <
-    bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-    int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr,
+    int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+    int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
+    typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaWeightBWPropACGatherScatterListIdentical(
     float *node_feat_input, float *delta_feat_per_edge, float *delta_weight,
     IdxPtr A_rel_ptr, IdxPtr AB_eid_gather_list, Idx A_delta_input_dim,
     Idx B_delta_output_per_head_dim, int num_heads,
     int *accum_num_blocks_per_relation, Idx num_relations) {
-  constexpr int THREAD_BLOCK_DIM_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  constexpr int THREAD_BLOCK_DIM_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-
   Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _basic_MatMulKernel<
-      false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, WORK_BLOCK_SIZE,
-      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, true, MySGEMMGatherKind::Basic,
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, true, MySGEMMGatherKind::Basic,
       MySGEMMGatherKind::Basic, MySGEMMGatherKind::Disabled, true, Idx, IdxPtr,
       // (delta_feat, weight, delta_input) are NH, NH, 1 or NH,
       // NH, NH depending on whether C_num_head_one_flag is
@@ -717,31 +700,27 @@ __global__ void HET_RGNNDeltaWeightBWPropACGatherScatterListIdentical(
 
 // blockDim.y == ceil_div(A_col_row_idx_gather_list.size(), BLOCK_SIZE)
 template <
-    bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-    int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr,
+    int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+    int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
+    typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaWeightCompactBWProp(
     float *delta_feat_compact, float *feat_input, float *delta_weight,
     ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
     Idx num_edges, Idx A_delta_input_dim, Idx B_delta_output_per_head_dim,
     int num_heads, int *accum_num_blocks_per_relation, Idx num_relations) {
-  constexpr int THREAD_BLOCK_DIM_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  constexpr int THREAD_BLOCK_DIM_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-
   Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
-                      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, true,
-                      MySGEMMGatherKind::Basic, MySGEMMGatherKind::Disabled,
-                      MySGEMMGatherKind::Disabled, true, Idx,
-                      // (delta_feat, weight, delta_input) are NH, NH, 1 or NH,
-                      // NH, NH depending on whether C_num_head_one_flag is
-                      // true. NH is num_heads
-                      IdxPtr, MySGEMMNumHeadKind::AssertCNumIsOne,
-                      CompactAsOfNodeKind::Enabled>::
+  _basic_MatMulKernel<
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, true, MySGEMMGatherKind::Basic,
+      MySGEMMGatherKind::Disabled, MySGEMMGatherKind::Disabled, true, Idx,
+      // (delta_feat, weight, delta_input) are NH, NH, 1 or NH,
+      // NH, NH depending on whether C_num_head_one_flag is
+      // true. NH is num_heads
+      IdxPtr, MySGEMMNumHeadKind::AssertCNumIsOne,
+      CompactAsOfNodeKind::Enabled>::
       execute_function(
           feat_input, delta_feat_compact,
           &delta_weight[idx_relation * (InputNumHeadOneFlag ? num_heads : 1) *
@@ -759,30 +738,26 @@ __global__ void HET_RGNNDeltaWeightCompactBWProp(
 }
 
 template <
-    bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-    int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr,
+    int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+    int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
+    typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical(
     float *delta_feat_per_edge, float *weight_transposed,
     float *delta_node_input, IdxPtr A_C_eid_gather_scatter_list,
     IdxPtr A_rel_ptr, Idx delta_output_per_head_dim, Idx delta_input_dim,
     int num_heads, int *accum_num_blocks_per_relation, Idx num_relations) {
-  constexpr int THREAD_BLOCK_DIM_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  constexpr int THREAD_BLOCK_DIM_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
+  _basic_MatMulKernel<false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
                       // (delta_feat, weight, delta_input) are NH, NH, 1 or NH,
                       // NH, NH depending on whether C_num_head_one_flag is
                       // true. NH is num_heads
-                      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, false,
-                      MySGEMMGatherKind::Basic, MySGEMMGatherKind::Disabled,
-                      MySGEMMGatherKind::Basic, true, Idx, IdxPtr,
-                      MySGEMMNumHeadKind::AssertCNumIsOne,
+                      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K,
+                      false, MySGEMMGatherKind::Basic,
+                      MySGEMMGatherKind::Disabled, MySGEMMGatherKind::Basic,
+                      true, Idx, IdxPtr, MySGEMMNumHeadKind::AssertCNumIsOne,
                       CompactAsOfNodeKind::Disabled>::
       execute_function(
           delta_feat_per_edge,
@@ -801,8 +776,9 @@ __global__ void HET_RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical(
 
 // blockDim.y == ceil_div(A_col_row_idx_gather_list.size(), BLOCK_SIZE)
 template <
-    bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-    int WORK_BLOCK_SIZE, typename Idx, typename IdxPtr,
+    int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+    int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
+    typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
     float *delta_feat_compact, float *weight_transpose,
@@ -810,22 +786,17 @@ __global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
     ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
     Idx num_edges, Idx delta_output_per_head_dim, Idx delta_input_dim,
     int num_heads, int *accum_num_blocks_per_relation, Idx num_relations) {
-  constexpr int THREAD_BLOCK_DIM_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-  constexpr int THREAD_BLOCK_DIM_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
-
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
+  _basic_MatMulKernel<false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
                       // (delta_feat, weight, delta_input) are NH, NH, 1 or NH,
                       // NH, NH depending on whether C_num_head_one_flag is
                       // true. NH is num_heads
-                      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, false,
-                      MySGEMMGatherKind::Disabled, MySGEMMGatherKind::Disabled,
-                      MySGEMMGatherKind::Basic, true, Idx, IdxPtr,
-                      MySGEMMNumHeadKind::AssertCNumIsOne,
+                      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K,
+                      false, MySGEMMGatherKind::Disabled,
+                      MySGEMMGatherKind::Disabled, MySGEMMGatherKind::Basic,
+                      true, Idx, IdxPtr, MySGEMMNumHeadKind::AssertCNumIsOne,
                       CompactAsOfNodeKind::Enabled>::
       execute_function(
           delta_feat_compact,

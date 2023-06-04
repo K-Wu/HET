@@ -11,8 +11,8 @@ enum class MySGEMMInnerProductKind {
   EnabledAndSkipOutputC
 };
 
-template <bool DOUBLE_BUFFER_FLAG, int THREAD_BLOCK_DIM_X,
-          int THREAD_BLOCK_DIM_Y, int SHMEM_BLOCK_SIZE_X,
+template <bool DOUBLE_BUFFER_FLAG, int THREADING_BLOCK_SIZE_X,
+          int THREADING_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_X,
           int SHMEM_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_K, typename Idx,
           typename IdxPtr, bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
           MySGEMMInnerProductKind DoInnerProductSwitch,
@@ -32,7 +32,7 @@ class _simplified_basic_MatMulKernel {
   }
 };
 
-template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr,
           bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
@@ -40,7 +40,7 @@ template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
           bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag,
           bool AtomicUpdateFlag>
 class _simplified_basic_MatMulKernel<
-    true, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, SHMEM_BLOCK_SIZE_X,
+    true, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X,
     SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr,
     HGT_INSTEAD_OF_RGCN_FLAG, OuterProductFlag, DoInnerProductSwitch,
     InnerProductGatherListNodeInsteadOfEdge, NoEdgeNormFlag, AtomicUpdateFlag> {

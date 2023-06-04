@@ -73,8 +73,8 @@ __device__ __forceinline__ float &GetRowMajorElement(
   }
 }
 
-template <bool DOUBLE_BUFFER_FLAG, int THREAD_BLOCK_DIM_X,
-          int THREAD_BLOCK_DIM_Y, int SHMEM_BLOCK_SIZE_X,
+template <bool DOUBLE_BUFFER_FLAG, int THREADING_BLOCK_SIZE_X,
+          int THREADING_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_X,
           int SHMEM_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
           MySGEMMGatherKind AGatherKind, MySGEMMGatherKind BGatherKind,
           MySGEMMGatherKind CScatterKind, bool AtomicUpdateFlag, typename Idx,
@@ -92,14 +92,14 @@ class _basic_MatMulKernel {
 };
 
 // the double buffer version
-template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
           MySGEMMGatherKind AGatherKind, MySGEMMGatherKind BGatherKind,
           MySGEMMGatherKind CScatterKind, bool AtomicUpdateFlag, typename Idx,
           typename IdxPtr, MySGEMMNumHeadKind numHeadKind,
           CompactAsOfNodeKind compactKind>
-class _basic_MatMulKernel<true, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
+class _basic_MatMulKernel<true, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
                           SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y,
                           SHMEM_BLOCK_SIZE_K, OuterProductFlag, AGatherKind,
                           BGatherKind, CScatterKind, AtomicUpdateFlag, Idx,

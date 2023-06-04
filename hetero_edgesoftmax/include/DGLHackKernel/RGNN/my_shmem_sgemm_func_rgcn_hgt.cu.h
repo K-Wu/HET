@@ -11,7 +11,7 @@
 // NB: KWU: add register tiling (left matrix uses shmem tiling and right
 // matrix uses register tiling) X, Y stands for the grid/block dimension name
 // and corresponds to B column and A row, respectively
-template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr,
           bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
@@ -19,7 +19,7 @@ template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
           bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag,
           bool AtomicUpdateFlag>
 class _simplified_basic_MatMulKernel<
-    false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, SHMEM_BLOCK_SIZE_X,
+    false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X,
     SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr,
     HGT_INSTEAD_OF_RGCN_FLAG, OuterProductFlag, DoInnerProductSwitch,
     InnerProductGatherListNodeInsteadOfEdge, NoEdgeNormFlag, AtomicUpdateFlag> {
@@ -68,27 +68,27 @@ class _simplified_basic_MatMulKernel<
 
     constexpr bool INNER_PROD_LOAD_SOURCE_INTO_SHMEM = true;
 
-    constexpr bool RIGHT_REG_TILED_FLAG = THREAD_BLOCK_DIM_Y == 1;
+    constexpr bool RIGHT_REG_TILED_FLAG = THREADING_BLOCK_SIZE_Y == 1;
 
     constexpr int COARSEN_DIVISOR_FACTOR =
         (SHMEM_BLOCK_SIZE_X * SHMEM_BLOCK_SIZE_Y) /
-        (THREAD_BLOCK_DIM_X * THREAD_BLOCK_DIM_Y);
-    static_assert(SHMEM_BLOCK_SIZE_Y % THREAD_BLOCK_DIM_Y == 0, "");
-    static_assert(SHMEM_BLOCK_SIZE_X % THREAD_BLOCK_DIM_X == 0, "");
+        (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y);
+    static_assert(SHMEM_BLOCK_SIZE_Y % THREADING_BLOCK_SIZE_Y == 0, "");
+    static_assert(SHMEM_BLOCK_SIZE_X % THREADING_BLOCK_SIZE_X == 0, "");
 
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_A =
-        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X / THREAD_BLOCK_DIM_X /
-        THREAD_BLOCK_DIM_Y;
+        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X / THREADING_BLOCK_SIZE_X /
+        THREADING_BLOCK_SIZE_Y;
     static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X) %
-                          (THREAD_BLOCK_DIM_X * THREAD_BLOCK_DIM_Y) ==
+                          (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y) ==
                       0,
                   "");
 
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_B =
-        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y / THREAD_BLOCK_DIM_X /
-        THREAD_BLOCK_DIM_Y;
+        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y / THREADING_BLOCK_SIZE_X /
+        THREADING_BLOCK_SIZE_Y;
     static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y) %
-                          (THREAD_BLOCK_DIM_X * THREAD_BLOCK_DIM_Y) ==
+                          (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y) ==
                       0,
                   "");
     if constexpr (!HGT_INSTEAD_OF_RGCN_FLAG) {
@@ -166,7 +166,7 @@ class _simplified_basic_MatMulKernel<
                : 1]
           [(DoInnerProductSwitch != MySGEMMInnerProductKind::Disabled &&
             INNER_PROD_LOAD_SOURCE_INTO_SHMEM)
-               ? THREAD_BLOCK_DIM_X * THREAD_BLOCK_DIM_Y
+               ? THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y
                : 1];
       // transposed to [element_idx][thread_idx] to reduce bank conflict
 
@@ -175,7 +175,7 @@ class _simplified_basic_MatMulKernel<
       int thIdxFeat_initial = threadIdx.x;
       if constexpr (COARSEN_DIVISOR_FACTOR > 1) {
         // redo the thread indexing
-        int thIdx = threadIdx.y * THREAD_BLOCK_DIM_X + threadIdx.x;
+        int thIdx = threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x;
         thIdxRow_initial = thIdx / SHMEM_BLOCK_SIZE_X;
         thIdxFeat_initial = thIdx % SHMEM_BLOCK_SIZE_X;
       }
@@ -251,7 +251,7 @@ class _simplified_basic_MatMulKernel<
             bool WriteCInRangeFlag =
                 thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y < numARows &&
                 blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols;
-            InnerProductTerm_shmem[m][threadIdx.y * THREAD_BLOCK_DIM_X +
+            InnerProductTerm_shmem[m][threadIdx.y * THREADING_BLOCK_SIZE_X +
                                       threadIdx.x] =
                 WriteCInRangeFlag
                     ? input_node_feat_for_inner_product
@@ -276,16 +276,17 @@ class _simplified_basic_MatMulKernel<
             // scheme is a transpose in the fly. that is why both thIdxRow and m
             // need to be used during indexing the row
             int SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT =
-                THREAD_BLOCK_DIM_X * THREAD_BLOCK_DIM_Y / SHMEM_BLOCK_SIZE_K;
+                THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y /
+                SHMEM_BLOCK_SIZE_K;
             int thIdxRow_A_outer_product =
-                (threadIdx.y * THREAD_BLOCK_DIM_X + threadIdx.x) %
+                (threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x) %
                     SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT +
                 loadLoopIdx *
                     (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR_LOAD_A);
             static_assert(
                 SHMEM_BLOCK_SIZE_Y % COARSEN_DIVISOR_FACTOR_LOAD_A == 0, "");
             int thIdxFeat_A_outer_product =
-                (threadIdx.y * THREAD_BLOCK_DIM_X + threadIdx.x) /
+                (threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x) /
                 SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT;
 
             float enorm =
@@ -519,11 +520,9 @@ class _simplified_basic_MatMulKernel<
               float curr_inner_product_term;
               if (INNER_PROD_LOAD_SOURCE_INTO_SHMEM &&
                   storeLoopIdx >= inner_prod_source_reg_ele_num) {
-                curr_inner_product_term =
-                    InnerProductTerm_shmem[storeLoopIdx -
-                                           inner_prod_source_reg_ele_num]
-                                          [threadIdx.y * THREAD_BLOCK_DIM_X +
-                                           threadIdx.x];
+                curr_inner_product_term = InnerProductTerm_shmem
+                    [storeLoopIdx - inner_prod_source_reg_ele_num]
+                    [threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x];
               } else {
                 curr_inner_product_term = InnerProductTerm[storeLoopIdx];
               }
@@ -550,8 +549,9 @@ class _simplified_basic_MatMulKernel<
   }
 };
 
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
 __global__ void __launch_bounds__(256, 3)
     HET_RGCNMatmulNoScatterGatherListFwProp(
         float *node_feat_input, float *weights,
@@ -566,10 +566,9 @@ __global__ void __launch_bounds__(256, 3)
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<
-      false, COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, Idx, IdxPtr, false,
-      false, MySGEMMInnerProductKind::Disabled, false, false, false>::
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X,
+      SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, false, false,
+      MySGEMMInnerProductKind::Disabled, false, false, false>::
       // no need to use atomic update here
       execute_function(
           node_feat_input, &weights[idx_relation * input_dim * output_dim],
@@ -584,8 +583,9 @@ __global__ void __launch_bounds__(256, 3)
           separate_coo_rel_ptrs[idx_relation], input_dim, output_dim, 1);
 }
 
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
 __global__ void __launch_bounds__(256, 3)
     HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
         float *node_feat_input, float *delta_linear_projected_node_feat,
@@ -599,10 +599,9 @@ __global__ void __launch_bounds__(256, 3)
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<
-      false, COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, Idx, IdxPtr, false,
-      true, MySGEMMInnerProductKind::Disabled, false, false,
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X,
+      SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, false, true,
+      MySGEMMInnerProductKind::Disabled, false, false,
       true>::execute_function(node_feat_input, delta_linear_projected_node_feat,
                               &delta_weights[idx_relation * delta_output_dim *
                                              delta_input_dim],
@@ -618,8 +617,9 @@ __global__ void __launch_bounds__(256, 3)
                               delta_output_dim, delta_input_dim, 1);
 }
 
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
 __global__ void __launch_bounds__(256, 3)
     HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
         float *delta_linear_projected_node_feat, float *weights_transposed,
@@ -634,10 +634,9 @@ __global__ void __launch_bounds__(256, 3)
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<
-      false, COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, Idx, IdxPtr, false,
-      false, MySGEMMInnerProductKind::Disabled, true, false, false>::
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X,
+      SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, false, false,
+      MySGEMMInnerProductKind::Disabled, true, false, false>::
       // TODO: no need to use atomic update here
       execute_function(delta_linear_projected_node_feat,
                        &weights_transposed[idx_relation * delta_output_dim *
@@ -657,8 +656,9 @@ __global__ void __launch_bounds__(256, 3)
 // delta weight: A feat_input, B delta_feat_out, C delta_weight,
 // delta in: A delta_feat_out, B weight_transposed, C delta_feat_in,
 
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
 __global__ void __launch_bounds__(256, 3)
     HET_HGTMessageGenerationAndAccumulationFwProp(
         float *node_feat_input, float *weights,
@@ -673,10 +673,9 @@ __global__ void __launch_bounds__(256, 3)
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<
-      false, COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, Idx, IdxPtr, true,
-      false, MySGEMMInnerProductKind::Disabled, false, false, false>::
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X,
+      SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, true, false,
+      MySGEMMInnerProductKind::Disabled, false, false, false>::
       // no need to use atomic update here
       execute_function(
           node_feat_input,
@@ -694,8 +693,9 @@ __global__ void __launch_bounds__(256, 3)
 }
 
 // FIXME: no coarsening for delta weight
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
 __global__ void HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp(
     float *node_feat_input, float *delta_linear_projected_node_feat,
     float *delta_weights, float *edge_norm, IdxPtr separate_coo_row_idx,
@@ -710,10 +710,9 @@ __global__ void HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp(
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<
-      false, COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, Idx, IdxPtr, true,
-      true, MySGEMMInnerProductKind::Disabled, false, false,
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X,
+      SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, true, true,
+      MySGEMMInnerProductKind::Disabled, false, false,
       true>::execute_function(node_feat_input, delta_linear_projected_node_feat,
                               &delta_weights[idx_relation * num_heads *
                                              input_dim * delta_output_dim],
@@ -729,8 +728,9 @@ __global__ void HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp(
                               delta_output_dim, num_heads);
 }
 
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
 __global__ void
 HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
     float *delta_linear_projected_node_feat, float *weights_transposed,
@@ -746,10 +746,9 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<
-      false, COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, Idx, IdxPtr, true,
-      false, MySGEMMInnerProductKind::Enabled, false, false, true>::
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X,
+      SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, true, false,
+      MySGEMMInnerProductKind::Enabled, false, false, true>::
       execute_function(delta_linear_projected_node_feat,
                        &weights_transposed[idx_relation * num_heads *
                                            delta_output_dim * delta_input_dim],
@@ -766,11 +765,11 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
 }
 
 // TODO: kwu: add a reg tiled version here
-template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(THREAD_BLOCK_DIM_Y == 1 ? 64 : 256,
-                                  THREAD_BLOCK_DIM_Y == 1 ? 8 : 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 8 : 3)
     HET_HGTFusedAttnScoreFwProp(
         float *applied_klinear_node_features,
         float *applied_qlinear_node_features, float *attn_score_weight,
@@ -785,11 +784,11 @@ __global__ void __launch_bounds__(THREAD_BLOCK_DIM_Y == 1 ? 64 : 256,
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   // NB: should be mode 1 since we need to output inner product for bck prop use
-  _simplified_basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
-                                 SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y,
-                                 SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, true, false,
-                                 MySGEMMInnerProductKind::Enabled, false, true,
-                                 false>::  // no need to use atomic update here
+  _simplified_basic_MatMulKernel<
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X,
+      SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, true, false,
+      MySGEMMInnerProductKind::Enabled, false, true,
+      false>::  // no need to use atomic update here
       execute_function(
           applied_klinear_node_features,
           &attn_score_weight[idx_relation * num_heads * fw_output_dim_per_head *
@@ -808,8 +807,9 @@ __global__ void __launch_bounds__(THREAD_BLOCK_DIM_Y == 1 ? 64 : 256,
 
 // delta_k = delta_inner_product*weight_transposed =
 // delta_attn_score*q*weight_transposed
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
 __global__ void HET_HGTFusedAttnScoreDeltaKVectBckProp(
     float *applied_qlinear_node_features, float *attn_score_weight_transposed,
     float *delta_applied_klinear_node_features, float *grad_attn_score,
@@ -824,10 +824,9 @@ __global__ void HET_HGTFusedAttnScoreDeltaKVectBckProp(
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<
-      false, COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, Idx, IdxPtr, true,
-      false, MySGEMMInnerProductKind::Disabled, false, false, true>::
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X,
+      SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, true, false,
+      MySGEMMInnerProductKind::Disabled, false, false, true>::
       execute_function(applied_qlinear_node_features,
                        &attn_score_weight_transposed[idx_relation * num_heads *
                                                      fw_output_dim_per_head *
@@ -846,8 +845,9 @@ __global__ void HET_HGTFusedAttnScoreDeltaKVectBckProp(
 }
 
 // delta_weight=delta_attn_score*inner_product_transposed
-template <bool COARSEN_FACTOR_2_FLAG_X, bool COARSEN_FACTOR_2_FLAG_Y,
-          int SHMEM_BLOCK_SIZE, typename Idx, typename IdxPtr>
+template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
 __global__ void HET_HGTFusedAttnScoreDeltaWeightBckProp(
     float *applied_klinear_node_features, float *applied_qlinear_node_features,
     float *grad_attn_score_weight, float *grad_attn_score,
@@ -863,10 +863,9 @@ __global__ void HET_HGTFusedAttnScoreDeltaWeightBckProp(
   int idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
   _simplified_basic_MatMulKernel<
-      false, COARSEN_FACTOR_2_FLAG_X ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      COARSEN_FACTOR_2_FLAG_Y ? SHMEM_BLOCK_SIZE / 2 : SHMEM_BLOCK_SIZE,
-      SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, SHMEM_BLOCK_SIZE, Idx, IdxPtr, true,
-      true, MySGEMMInnerProductKind::Disabled, false, false,
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X,
+      SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, true, true,
+      MySGEMMInnerProductKind::Disabled, false, false,
       true>::execute_function(applied_klinear_node_features,
                               applied_qlinear_node_features,
                               &grad_attn_score_weight[idx_relation * num_heads *

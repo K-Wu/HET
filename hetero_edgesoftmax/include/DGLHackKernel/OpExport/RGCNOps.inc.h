@@ -104,9 +104,9 @@ void Layer1_SeparateCOO(at::Tensor &separate_coo_relptrs,
                    grid_dim_y, 1);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
   // TODO: KWU: allow more dtype options in this file
-  HET_RGCNMatmulNoScatterGatherListFwProp<COARSEN_FACTOR_2_FLAG_X,
-                                          COARSEN_FACTOR_2_FLAG_Y,
-                                          WORK_BLOCK_SIZE, int64_t, int64_t *>
+  HET_RGCNMatmulNoScatterGatherListFwProp<
+      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE,
+      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, int64_t, int64_t *>
       <<<nblks, nthrs, 0, stream>>>(
           node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
           node_feat_output.data_ptr<float>(), edge_norm.data_ptr<float>(),
@@ -372,19 +372,20 @@ void Layer1_SeparateCOO(
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
 
   HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp<
-      COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
-      int64_t, int64_t *><<<nblks, nthrs, 0, stream>>>(
-      delta_node_feat_output.data_ptr<float>(),
-      weights_transposed.data_ptr<float>(),
-      delta_node_feat_input.data_ptr<float>(), edge_norm.data_ptr<float>(),
-      grad_edge_norm.data_ptr<float>(), node_feat_input.data_ptr<float>(),
-      separate_coo_row_indices.data_ptr<int64_t>(),
-      separate_coo_col_indices.data_ptr<int64_t>(),
-      separate_coo_eids.data_ptr<int64_t>(),
-      separate_coo_relptrs.data_ptr<int64_t>(),
-      thrust::raw_pointer_cast(
-          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-      num_relations, num_fw_output_dim, num_fw_input_dim);
+      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE,
+      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, int64_t, int64_t *>
+      <<<nblks, nthrs, 0, stream>>>(
+          delta_node_feat_output.data_ptr<float>(),
+          weights_transposed.data_ptr<float>(),
+          delta_node_feat_input.data_ptr<float>(), edge_norm.data_ptr<float>(),
+          grad_edge_norm.data_ptr<float>(), node_feat_input.data_ptr<float>(),
+          separate_coo_row_indices.data_ptr<int64_t>(),
+          separate_coo_col_indices.data_ptr<int64_t>(),
+          separate_coo_eids.data_ptr<int64_t>(),
+          separate_coo_relptrs.data_ptr<int64_t>(),
+          thrust::raw_pointer_cast(
+              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+          num_relations, num_fw_output_dim, num_fw_input_dim);
 
   constexpr int WORK_BLOCK_SIZE_OUTPROD = 32;
   constexpr bool COARSEN_FACTOR_2_FLAG_X_OUTPROD = true;
@@ -422,8 +423,9 @@ void Layer1_SeparateCOO(
   const dim3 nthrs_outer_product(THREADING_BLOCK_SIZE_X_OUTPROD,
                                  THREADING_BLOCK_SIZE_Y_OUTPROD);
   HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp<
-      COARSEN_FACTOR_2_FLAG_X_OUTPROD, COARSEN_FACTOR_2_FLAG_Y_OUTPROD,
-      WORK_BLOCK_SIZE_OUTPROD, int64_t,
+      THREADING_BLOCK_SIZE_X_OUTPROD, THREADING_BLOCK_SIZE_Y_OUTPROD,
+      WORK_BLOCK_SIZE_OUTPROD, WORK_BLOCK_SIZE_OUTPROD, WORK_BLOCK_SIZE_OUTPROD,
+      int64_t,
       int64_t *><<<nblks_outer_product, nthrs_outer_product, 0, stream>>>(
       node_feat_input.data_ptr<float>(),
       delta_node_feat_output.data_ptr<float>(), delta_weights.data_ptr<float>(),
