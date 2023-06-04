@@ -256,6 +256,8 @@ HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO(
     int64_t num_edges, int64_t num_relations,
     DType *sum_incoming_edges_product_softmax_score) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
+  constexpr bool EtypeRelPtrIndexSearch = true;
+  Idx resume_from = 0;
 
   // stage 1 accumulates the sum of Si * delta Si
   // stage 2 caclulate delta a and delta mu for this edge
@@ -270,7 +272,12 @@ HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO(
 
     if constexpr (RelationalFlag) {
       if constexpr (ETypeRelPtrFlag) {
-        etype = binary_search(num_relations, etypes, e);
+        if constexpr (EtypeRelPtrIndexSearch) {
+          etype = linear_search(num_relations, etypes, e, resume_from);
+          resume_from = etype;
+        } else {
+          etype = binary_search(num_relations, etypes, e);
+        }
       } else {
         etype = etypes[e];
       }
