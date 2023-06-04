@@ -129,8 +129,7 @@ void _RelationalMatMul_separatecoo(
                               WORK_BLOCK_SIZE_K, int64_t, int64_t *,
                               InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
         node_feat.data_ptr<float>(), weights.data_ptr<float>(),
-        ret.data_ptr<float>(), etype_mapper_data.unique_srcs_and_dests_rel_ptrs,
-        etype_mapper_data.unique_srcs_and_dests_node_indices, num_input_dim,
+        ret.data_ptr<float>(), etype_mapper_data, num_input_dim,
         num_output_per_head_dim, num_heads,
         thrust::raw_pointer_cast(
             dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
@@ -690,9 +689,7 @@ void _BackwardRelationalMatMul_separatecoo(
         COARSEN_FACTOR_2_FLAG_X, COARSEN_FACTOR_2_FLAG_Y, WORK_BLOCK_SIZE,
         int64_t, int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
         gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
-        grad_node_feat.data_ptr<float>(),
-        etype_mapper_data.unique_srcs_and_dests_rel_ptrs,
-        etype_mapper_data.unique_srcs_and_dests_node_indices, num_edges,
+        grad_node_feat.data_ptr<float>(), etype_mapper_data, num_edges,
         num_output_per_head_dim, num_input_dim, num_heads,
         thrust::raw_pointer_cast(
             dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
@@ -702,9 +699,7 @@ void _BackwardRelationalMatMul_separatecoo(
                                      int64_t, int64_t *, InputNumHeadOneFlag>
         <<<nblks_outer_product, nthrs, 0, stream>>>(
             gradout.data_ptr<float>(), node_feat.data_ptr<float>(),
-            grad_weights.data_ptr<float>(),
-            etype_mapper_data.unique_srcs_and_dests_rel_ptrs,
-            etype_mapper_data.unique_srcs_and_dests_node_indices, num_edges,
+            grad_weights.data_ptr<float>(), etype_mapper_data, num_edges,
             num_input_dim, num_output_per_head_dim, num_heads,
             thrust::raw_pointer_cast(
                 dev_num_blocks_assignment_for_all_prev_relation_vect.data()),

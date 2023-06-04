@@ -12,6 +12,15 @@ enum class CompactAsOfNodeKind {
   EnabledWithDualListWithDirectIndexing
 };
 
+constexpr CompactAsOfNodeKind getRidDualList(CompactAsOfNodeKind kind_) {
+  return kind_ == CompactAsOfNodeKind::EnabledWithDualList
+             ? CompactAsOfNodeKind::Enabled
+             : (kind_ == CompactAsOfNodeKind::
+                             EnabledWithDualListWithDirectIndexing
+                    ? CompactAsOfNodeKind::EnabledWithDirectIndexing
+                    : kind_);
+}
+
 // TODO: an working example of template alias is at
 // https://godbolt.org/z/3YfEK6W3f
 template <typename Idx, CompactAsOfNodeKind kind>

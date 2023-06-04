@@ -1,6 +1,7 @@
 #pragma once
 #include <cuda_runtime.h>
 // #include "cuda.h"
+#include "kernel_enums.h"
 #include "my_shmem_sgemm_func_functor.cu.h"
 #include "utils.cu.h"
 
@@ -14,11 +15,13 @@ template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
           int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
           MySGEMMGatherKind AGatherKind, MySGEMMGatherKind BGatherKind,
           MySGEMMGatherKind CScatterKind, bool AtomicUpdateFlag, typename Idx,
-          typename IdxPtr, MySGEMMNumHeadKind numHeadKind>
-class _basic_MatMulKernel<
-    false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, SHMEM_BLOCK_SIZE_X,
-    SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, OuterProductFlag, AGatherKind,
-    BGatherKind, CScatterKind, AtomicUpdateFlag, Idx, IdxPtr, numHeadKind> {
+          typename IdxPtr, MySGEMMNumHeadKind numHeadKind,
+          CompactAsOfNodeKind compactKind>
+class _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
+                          SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y,
+                          SHMEM_BLOCK_SIZE_K, OuterProductFlag, AGatherKind,
+                          BGatherKind, CScatterKind, AtomicUpdateFlag, Idx,
+                          IdxPtr, numHeadKind, compactKind> {
  public:
   // vanilla tiled shmem gemm code from
   // http://www.shodor.org/media/content//petascale/materials/UPModules/matrixMultiplication/moduleDocument.pdf
@@ -30,9 +33,9 @@ class _basic_MatMulKernel<
   // C = A * B (all are row-major matrices)
   __device__ __forceinline__ static void execute_function(
       float *A, float *B, float *C, IdxPtr A_gather_list, IdxPtr B_gather_list,
-      IdxPtr C_scatter_list, IdxPtr unique_srcs_and_dests_rel_ptr,
-      IdxPtr unique_srcs_and_dests_node_indices, Idx idx_relation, Idx numARows,
-      Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
+      IdxPtr C_scatter_list,
+      ETypeMapperData<Idx, compactKind> etype_mapper_data, Idx idx_relation,
+      Idx numARows, Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
       Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, int num_heads) {
     // num_B_cols is output_dim//num_heads as forward propagation weight,
     // output_dim//num_heads as backward propagation weight, and in_feat_dim as
@@ -193,9 +196,8 @@ class _basic_MatMulKernel<
                      numARows &&
                  blockRow * SHMEM_BLOCK_SIZE_Y + thIdxRow_A_outer_product <
                      num_A_cols)
-                    ? GetRowMajorElement<Idx, IdxPtr, AGatherKind>(
-                          A, A_gather_list, unique_srcs_and_dests_rel_ptr,
-                          unique_srcs_and_dests_node_indices, idx_relation,
+                    ? GetRowMajorElement<Idx, IdxPtr, AGatherKind, compactKind>(
+                          A, A_gather_list, etype_mapper_data, idx_relation,
                           thIdxFeat_A_outer_product + (m)*SHMEM_BLOCK_SIZE_K +
                               blockRowJobEntryBeg,
                           idx_head,
@@ -219,9 +221,8 @@ class _basic_MatMulKernel<
                      numARows &&
                  blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols &&
                  idx_head < num_heads)
-                    ? GetRowMajorElement<Idx, IdxPtr, BGatherKind>(
-                          B, B_gather_list, unique_srcs_and_dests_rel_ptr,
-                          unique_srcs_and_dests_node_indices, idx_relation,
+                    ? GetRowMajorElement<Idx, IdxPtr, BGatherKind, compactKind>(
+                          B, B_gather_list, etype_mapper_data, idx_relation,
                           (m)*SHMEM_BLOCK_SIZE_K + blockRowJobEntryBeg +
                               thIdxRow,
                           B_num_head_one_flag ? 0 : idx_head,
@@ -248,9 +249,8 @@ class _basic_MatMulKernel<
                 (thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y < numARows &&
                  m * SHMEM_BLOCK_SIZE_K + thIdxFeat < num_A_cols &&
                  idx_head < num_heads)
-                    ? GetRowMajorElement<Idx, IdxPtr, AGatherKind>(
-                          A, A_gather_list, unique_srcs_and_dests_rel_ptr,
-                          unique_srcs_and_dests_node_indices, idx_relation,
+                    ? GetRowMajorElement<Idx, IdxPtr, AGatherKind, compactKind>(
+                          A, A_gather_list, etype_mapper_data, idx_relation,
                           thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y +
                               blockRowJobEntryBeg,
                           A_num_head_one_flag ? 0 : idx_head,
@@ -295,9 +295,9 @@ class _basic_MatMulKernel<
                   (m * SHMEM_BLOCK_SIZE_K + thIdxRow < num_A_cols &&
                    blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols &&
                    idx_head < num_heads)
-                      ? GetRowMajorElement<Idx, IdxPtr, BGatherKind>(
-                            B, B_gather_list, unique_srcs_and_dests_rel_ptr,
-                            unique_srcs_and_dests_node_indices, idx_relation,
+                      ? GetRowMajorElement<Idx, IdxPtr, BGatherKind,
+                                           compactKind>(
+                            B, B_gather_list, etype_mapper_data, idx_relation,
                             m * SHMEM_BLOCK_SIZE_K + thIdxRow,
                             B_num_head_one_flag ? 0 : idx_head,
                             blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat,
@@ -376,9 +376,8 @@ class _basic_MatMulKernel<
           if (WriteCInRangeFlag) {
             auto val_locally_accumulated = Cvalue[storeLoopIdx];
             auto &ref_to_global_mem_elem =
-                GetRowMajorElement<Idx, IdxPtr, CScatterKind>(
-                    C, C_scatter_list, unique_srcs_and_dests_rel_ptr,
-                    unique_srcs_and_dests_node_indices, idx_relation,
+                GetRowMajorElement<Idx, IdxPtr, CScatterKind, compactKind>(
+                    C, C_scatter_list, etype_mapper_data, idx_relation,
                     thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y +
                         blockRowJobEntryBeg,
                     C_num_head_one_flag ? 0 : idx_head,
@@ -444,17 +443,17 @@ __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
-                      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K,
-                      false, MySGEMMGatherKind::Basic,
-                      MySGEMMGatherKind::Disabled, MySGEMMGatherKind::Basic,
-                      false, Idx, IdxPtr, MySGEMMNumHeadKind::AssertANumIsOne>::
+  _basic_MatMulKernel<
+      false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, false, MySGEMMGatherKind::Basic,
+      MySGEMMGatherKind::Disabled, MySGEMMGatherKind::Basic, false, Idx, IdxPtr,
+      MySGEMMNumHeadKind::AssertANumIsOne, CompactAsOfNodeKind::Disabled>::
       execute_function(
           node_feat_input,
           &weight[idx_relation * (InputNumHeadOneFlag ? num_heads : 1) *
                   input_dim * output_per_head_dim],
           node_feat_per_edge, A_col_row_idx_gather_list, nullptr,
-          C_eid_scatter_list, nullptr, nullptr, idx_relation,
+          C_eid_scatter_list, {}, idx_relation,
           A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
           accum_num_blocks_per_relation[idx_relation],
           (accum_num_blocks_per_relation[idx_relation + 1] -
@@ -482,9 +481,10 @@ __global__ void HET_RGNNMatmulNoScatterGatherListFwOrBwProp(
                       // This function is kind of exceptional: we need to assert
                       // all the three num_heads are 1
                       MySGEMMGatherKind::Disabled, false, Idx, IdxPtr,
-                      MySGEMMNumHeadKind::AssertAllAreOnes>::
+                      MySGEMMNumHeadKind::AssertAllAreOnes,
+                      CompactAsOfNodeKind::Disabled>::
       execute_function(node_feat_input, weights, linear_projected_node_feat,
-                       nullptr, nullptr, nullptr, nullptr, nullptr, 0,
+                       nullptr, nullptr, nullptr, {}, 0,
                        ntype_ptrs[idx_ntype + 1] - ntype_ptrs[idx_ntype],
                        accum_num_blocks_per_ntype[idx_ntype],
                        (accum_num_blocks_per_ntype[idx_ntype + 1] -
@@ -513,11 +513,12 @@ __global__ void HET_RGNNDeltaWeightNoScatterGatherListBWProp(
                       MySGEMMGatherKind::Disabled, true, Idx,
                       // This function is kind of exceptional: we need to assert
                       // all the three num_heads are 1
-                      IdxPtr, MySGEMMNumHeadKind::AssertAllAreOnes>::
+                      IdxPtr, MySGEMMNumHeadKind::AssertAllAreOnes,
+                      CompactAsOfNodeKind::Disabled>::
       execute_function(
           node_feat_input, delta_feat,
           &delta_weight[idx_ntype * A_input_dim * B_delta_output_dim], nullptr,
-          nullptr, nullptr, nullptr, nullptr, idx_ntype,
+          nullptr, nullptr, {}, idx_ntype,
           ntype_ptrs[idx_ntype + 1] - ntype_ptrs[idx_ntype],
           accum_num_blocks_per_ntype[idx_ntype],
           (accum_num_blocks_per_ntype[idx_ntype + 1] -
@@ -545,13 +546,14 @@ __global__ void HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
       // (input, weight, output) are 1, NH, NH or NH, NH, NH
       // depending on whether A_num_head_one_flag is true. NH is
       // num_heads
-      IdxPtr, MySGEMMNumHeadKind::AssertANumIsOne>::
+      IdxPtr, MySGEMMNumHeadKind::AssertANumIsOne,
+      CompactAsOfNodeKind::Disabled>::
       execute_function(
           node_feat_input,
           &weight[idx_relation * (InputNumHeadOneFlag ? num_heads : 1) *
                   input_dim * output_per_head_dim],
           node_feat_per_edge, AC_eid_gather_scatter_list, nullptr,
-          AC_eid_gather_scatter_list, nullptr, nullptr, idx_relation,
+          AC_eid_gather_scatter_list, {}, idx_relation,
           A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
           accum_num_blocks_per_relation[idx_relation],
           (accum_num_blocks_per_relation[idx_relation + 1] -
@@ -563,14 +565,11 @@ template <
     int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y, int WORK_BLOCK_SIZE_X,
     int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K, typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void __launch_bounds__(256, 3)
-    HET_RGNNFeatCompactFWProp(float *node_feat_input, float *weight,
-                              float *node_feat_per_edge,
-                              IdxPtr unique_srcs_and_dests_rel_ptr,
-                              IdxPtr unique_srcs_and_dests_node_indices,
-                              Idx input_dim, Idx output_per_head_dim,
-                              int num_heads, int *accum_num_blocks_per_relation,
-                              Idx num_relations) {
+__global__ void __launch_bounds__(256, 3) HET_RGNNFeatCompactFWProp(
+    float *node_feat_input, float *weight, float *node_feat_per_edge,
+    ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
+    Idx input_dim, Idx output_per_head_dim, int num_heads,
+    int *accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -582,21 +581,22 @@ __global__ void __launch_bounds__(256, 3)
       // (input, weight, output) are 1, NH, NH or NH, NH, NH depending
       // on whether A_num_head_one_flag is true. NH is num_heads
       MySGEMMGatherKind::Disabled, false, Idx, IdxPtr,
-      MySGEMMNumHeadKind::AssertANumIsOne>::
+      MySGEMMNumHeadKind::AssertANumIsOne, CompactAsOfNodeKind::Enabled>::
       execute_function(
           node_feat_input,
           &weight[idx_relation * (InputNumHeadOneFlag ? num_heads : 1) *
                   input_dim * output_per_head_dim],
-          node_feat_per_edge, unique_srcs_and_dests_node_indices, nullptr,
-          unique_srcs_and_dests_node_indices, unique_srcs_and_dests_rel_ptr,
-          unique_srcs_and_dests_node_indices, idx_relation,
-          unique_srcs_and_dests_rel_ptr[idx_relation + 1] -
-              unique_srcs_and_dests_rel_ptr[idx_relation],
+          node_feat_per_edge,
+          etype_mapper_data.unique_srcs_and_dests_node_indices, nullptr,
+          etype_mapper_data.unique_srcs_and_dests_node_indices,
+          etype_mapper_data, idx_relation,
+          etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation + 1] -
+              etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation],
           accum_num_blocks_per_relation[idx_relation],
           (accum_num_blocks_per_relation[idx_relation + 1] -
            accum_num_blocks_per_relation[idx_relation]),
-          unique_srcs_and_dests_rel_ptr[idx_relation], input_dim,
-          output_per_head_dim, num_heads);
+          etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation],
+          input_dim, output_per_head_dim, num_heads);
 }
 
 template <
@@ -624,14 +624,15 @@ __global__ void HET_RGNNDeltaNodeFeatInputBWProp(
                       WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, false,
                       MySGEMMGatherKind::Basic, MySGEMMGatherKind::Disabled,
                       MySGEMMGatherKind::Basic, true, Idx, IdxPtr,
-                      MySGEMMNumHeadKind::AssertCNumIsOne>::
+                      MySGEMMNumHeadKind::AssertCNumIsOne,
+                      CompactAsOfNodeKind::Disabled>::
       execute_function(
           delta_feat_per_edge,
           &weight_transposed[idx_relation *
                              (InputNumHeadOneFlag ? num_heads : 1) *
                              delta_input_dim * delta_output_per_head_dim],
           delta_node_input, A_eid_gather_list, nullptr,
-          C_col_row_idx_scatter_list, nullptr, nullptr, idx_relation,
+          C_col_row_idx_scatter_list, {}, idx_relation,
           A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
           accum_num_blocks_per_relation[idx_relation],
           (accum_num_blocks_per_relation[idx_relation + 1] -
@@ -658,18 +659,17 @@ __global__ void HET_RGNNDeltaWeightBWProp(
   Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
-                      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, true,
-                      MySGEMMGatherKind::Basic, MySGEMMGatherKind::Basic,
-                      MySGEMMGatherKind::Disabled, true, Idx, IdxPtr,
-                      MySGEMMNumHeadKind::AssertANumIsOne>::
+  _basic_MatMulKernel<
+      false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, WORK_BLOCK_SIZE,
+      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, true, MySGEMMGatherKind::Basic,
+      MySGEMMGatherKind::Basic, MySGEMMGatherKind::Disabled, true, Idx, IdxPtr,
+      MySGEMMNumHeadKind::AssertANumIsOne, CompactAsOfNodeKind::Disabled>::
       execute_function(
           node_feat_input, delta_feat_per_edge,
           &delta_weight[idx_relation * (InputNumHeadOneFlag ? num_heads : 1) *
                         B_delta_output_per_head_dim * A_delta_input_dim],
-          A_col_row_idx_gather_list, B_eid_gather_list, nullptr, nullptr,
-          nullptr, idx_relation,
-          A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
+          A_col_row_idx_gather_list, B_eid_gather_list, nullptr, {},
+          idx_relation, A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
           accum_num_blocks_per_relation[idx_relation],
           (accum_num_blocks_per_relation[idx_relation + 1] -
            accum_num_blocks_per_relation[idx_relation]),
@@ -694,20 +694,20 @@ __global__ void HET_RGNNDeltaWeightBWPropACGatherScatterListIdentical(
   Idx idx_block_assignment = blockIdx.z / num_heads;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
-  _basic_MatMulKernel<false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
-                      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, true,
-                      MySGEMMGatherKind::Basic, MySGEMMGatherKind::Basic,
-                      MySGEMMGatherKind::Disabled, true, Idx, IdxPtr,
-                      // (delta_feat, weight, delta_input) are NH, NH, 1 or NH,
-                      // NH, NH depending on whether C_num_head_one_flag is
-                      // true. NH is num_heads
-                      MySGEMMNumHeadKind::AssertCNumIsOne>::
+  _basic_MatMulKernel<
+      false, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, WORK_BLOCK_SIZE,
+      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, true, MySGEMMGatherKind::Basic,
+      MySGEMMGatherKind::Basic, MySGEMMGatherKind::Disabled, true, Idx, IdxPtr,
+      // (delta_feat, weight, delta_input) are NH, NH, 1 or NH,
+      // NH, NH depending on whether C_num_head_one_flag is
+      // true. NH is num_heads
+      MySGEMMNumHeadKind::AssertCNumIsOne, CompactAsOfNodeKind::Disabled>::
       execute_function(
           node_feat_input, delta_feat_per_edge,
           &delta_weight[idx_relation * (InputNumHeadOneFlag ? num_heads : 1) *
                         B_delta_output_per_head_dim * A_delta_input_dim],
-          AB_eid_gather_list, AB_eid_gather_list, nullptr, nullptr, nullptr,
-          idx_relation, A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
+          AB_eid_gather_list, AB_eid_gather_list, nullptr, {}, idx_relation,
+          A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
           accum_num_blocks_per_relation[idx_relation],
           (accum_num_blocks_per_relation[idx_relation + 1] -
            accum_num_blocks_per_relation[idx_relation]),
@@ -722,10 +722,9 @@ template <
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaWeightCompactBWProp(
     float *delta_feat_compact, float *feat_input, float *delta_weight,
-    IdxPtr unique_srcs_and_dests_rel_ptr,
-    IdxPtr unique_srcs_and_dests_node_indices, Idx num_edges,
-    Idx A_delta_input_dim, Idx B_delta_output_per_head_dim, int num_heads,
-    int *accum_num_blocks_per_relation, Idx num_relations) {
+    ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
+    Idx num_edges, Idx A_delta_input_dim, Idx B_delta_output_per_head_dim,
+    int num_heads, int *accum_num_blocks_per_relation, Idx num_relations) {
   constexpr int THREAD_BLOCK_DIM_X =
       COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
   constexpr int THREAD_BLOCK_DIM_Y =
@@ -741,22 +740,22 @@ __global__ void HET_RGNNDeltaWeightCompactBWProp(
                       // (delta_feat, weight, delta_input) are NH, NH, 1 or NH,
                       // NH, NH depending on whether C_num_head_one_flag is
                       // true. NH is num_heads
-                      IdxPtr, MySGEMMNumHeadKind::AssertCNumIsOne>::
+                      IdxPtr, MySGEMMNumHeadKind::AssertCNumIsOne,
+                      CompactAsOfNodeKind::Enabled>::
       execute_function(
           feat_input, delta_feat_compact,
           &delta_weight[idx_relation * (InputNumHeadOneFlag ? num_heads : 1) *
                         B_delta_output_per_head_dim * A_delta_input_dim],
-          unique_srcs_and_dests_node_indices,
-          unique_srcs_and_dests_node_indices, nullptr,
-          unique_srcs_and_dests_rel_ptr, unique_srcs_and_dests_node_indices,
-          idx_relation,
-          unique_srcs_and_dests_rel_ptr[idx_relation + 1] -
-              unique_srcs_and_dests_rel_ptr[idx_relation],
+          etype_mapper_data.unique_srcs_and_dests_node_indices,
+          etype_mapper_data.unique_srcs_and_dests_node_indices, nullptr,
+          etype_mapper_data, idx_relation,
+          etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation + 1] -
+              etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation],
           accum_num_blocks_per_relation[idx_relation],
           (accum_num_blocks_per_relation[idx_relation + 1] -
            accum_num_blocks_per_relation[idx_relation]),
-          unique_srcs_and_dests_rel_ptr[idx_relation], A_delta_input_dim,
-          B_delta_output_per_head_dim, num_heads);
+          etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation],
+          A_delta_input_dim, B_delta_output_per_head_dim, num_heads);
 }
 
 template <
@@ -783,14 +782,15 @@ __global__ void HET_RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical(
                       WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, false,
                       MySGEMMGatherKind::Basic, MySGEMMGatherKind::Disabled,
                       MySGEMMGatherKind::Basic, true, Idx, IdxPtr,
-                      MySGEMMNumHeadKind::AssertCNumIsOne>::
+                      MySGEMMNumHeadKind::AssertCNumIsOne,
+                      CompactAsOfNodeKind::Disabled>::
       execute_function(
           delta_feat_per_edge,
           &weight_transposed[idx_relation *
                              (InputNumHeadOneFlag ? num_heads : 1) *
                              delta_input_dim * delta_output_per_head_dim],
           delta_node_input, A_C_eid_gather_scatter_list, nullptr,
-          A_C_eid_gather_scatter_list, nullptr, nullptr, idx_relation,
+          A_C_eid_gather_scatter_list, {}, idx_relation,
           A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
           accum_num_blocks_per_relation[idx_relation],
           (accum_num_blocks_per_relation[idx_relation + 1] -
@@ -806,10 +806,10 @@ template <
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
 __global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
     float *delta_feat_compact, float *weight_transpose,
-    float *delta_node_feat_input, IdxPtr unique_srcs_and_dests_rel_ptr,
-    IdxPtr unique_srcs_and_dests_node_indices, Idx num_edges,
-    Idx delta_output_per_head_dim, Idx delta_input_dim, int num_heads,
-    int *accum_num_blocks_per_relation, Idx num_relations) {
+    float *delta_node_feat_input,
+    ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
+    Idx num_edges, Idx delta_output_per_head_dim, Idx delta_input_dim,
+    int num_heads, int *accum_num_blocks_per_relation, Idx num_relations) {
   constexpr int THREAD_BLOCK_DIM_X =
       COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
   constexpr int THREAD_BLOCK_DIM_Y =
@@ -825,21 +825,23 @@ __global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
                       WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, false,
                       MySGEMMGatherKind::Disabled, MySGEMMGatherKind::Disabled,
                       MySGEMMGatherKind::Basic, true, Idx, IdxPtr,
-                      MySGEMMNumHeadKind::AssertCNumIsOne>::
+                      MySGEMMNumHeadKind::AssertCNumIsOne,
+                      CompactAsOfNodeKind::Enabled>::
       execute_function(
           delta_feat_compact,
           &weight_transpose[idx_relation *
                             (InputNumHeadOneFlag ? num_heads : 1) *
                             delta_output_per_head_dim * delta_input_dim],
-          delta_node_feat_input, unique_srcs_and_dests_node_indices, nullptr,
-          unique_srcs_and_dests_node_indices, unique_srcs_and_dests_rel_ptr,
-          unique_srcs_and_dests_node_indices, idx_relation,
-          unique_srcs_and_dests_rel_ptr[idx_relation + 1] -
-              unique_srcs_and_dests_rel_ptr[idx_relation],
+          delta_node_feat_input,
+          etype_mapper_data.unique_srcs_and_dests_node_indices, nullptr,
+          etype_mapper_data.unique_srcs_and_dests_node_indices,
+          etype_mapper_data, idx_relation,
+          etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation + 1] -
+              etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation],
           accum_num_blocks_per_relation[idx_relation],
           (accum_num_blocks_per_relation[idx_relation + 1] -
            accum_num_blocks_per_relation[idx_relation]),
-          unique_srcs_and_dests_rel_ptr[idx_relation],
+          etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation],
           delta_output_per_head_dim, delta_input_dim, num_heads);
 }
 

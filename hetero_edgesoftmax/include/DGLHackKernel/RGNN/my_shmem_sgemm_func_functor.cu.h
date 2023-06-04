@@ -44,20 +44,21 @@ __device__ __forceinline__ float &GetRowMajorElementAdvancedBinarySearch(
       idx_feat);
 }
 
-template <typename Idx, typename IdxPtr, MySGEMMGatherKind kind>
+template <typename Idx, typename IdxPtr, MySGEMMGatherKind kind,
+          CompactAsOfNodeKind compactKind>
 __device__ __forceinline__ float &GetRowMajorElement(
     float *matrix_data, IdxPtr gather_scatter_list,
-    IdxPtr unique_srcs_and_dests_rel_ptr,
-    IdxPtr unique_srcs_and_dests_node_indices, Idx idx_relation, Idx idx_row,
-    Idx idx_head, Idx idx_feat, int num_heads, Idx feat_dim_per_head) {
+    ETypeMapperData<Idx, compactKind> etype_mapper_data, Idx idx_relation,
+    Idx idx_row, Idx idx_head, Idx idx_feat, int num_heads,
+    Idx feat_dim_per_head) {
   if constexpr (kind == MySGEMMGatherKind::TwoOrderBinarySearch ||
                 kind == MySGEMMGatherKind::TwoOrderDirectIndexing) {
     Idx idx_node = gather_scatter_list[idx_row];
     if constexpr (kind == MySGEMMGatherKind::TwoOrderBinarySearch) {
       return GetRowMajorElementAdvancedBinarySearch<Idx, IdxPtr>(
-          matrix_data, unique_srcs_and_dests_rel_ptr,
-          unique_srcs_and_dests_node_indices, idx_relation, idx_node, idx_head,
-          idx_feat, num_heads, feat_dim_per_head);
+          matrix_data, etype_mapper_data.unique_srcs_and_dests_rel_ptr,
+          etype_mapper_data.unique_srcs_and_dests_node_indices, idx_relation,
+          idx_node, idx_head, idx_feat, num_heads, feat_dim_per_head);
     } else {
       // return GetRowMajorElementBasic<false, Idx, IdxPtr>(
       //    matrix_data, nullptr, num_heads, feat_dim_per_head, idx_node,
@@ -77,7 +78,8 @@ template <bool DOUBLE_BUFFER_FLAG, int THREAD_BLOCK_DIM_X,
           int SHMEM_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
           MySGEMMGatherKind AGatherKind, MySGEMMGatherKind BGatherKind,
           MySGEMMGatherKind CScatterKind, bool AtomicUpdateFlag, typename Idx,
-          typename IdxPtr, MySGEMMNumHeadKind numHeadKind>
+          typename IdxPtr, MySGEMMNumHeadKind numHeadKind,
+          CompactAsOfNodeKind compactKind>
 class _basic_MatMulKernel {
   __device__ __forceinline__ static void execute_function(
       float *A, float *B, float *C, IdxPtr A_gather_list, IdxPtr B_gather_list,
@@ -95,11 +97,13 @@ template <int THREAD_BLOCK_DIM_X, int THREAD_BLOCK_DIM_Y,
           int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
           MySGEMMGatherKind AGatherKind, MySGEMMGatherKind BGatherKind,
           MySGEMMGatherKind CScatterKind, bool AtomicUpdateFlag, typename Idx,
-          typename IdxPtr, MySGEMMNumHeadKind numHeadKind>
-class _basic_MatMulKernel<
-    true, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y, SHMEM_BLOCK_SIZE_X,
-    SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, OuterProductFlag, AGatherKind,
-    BGatherKind, CScatterKind, AtomicUpdateFlag, Idx, IdxPtr, numHeadKind> {
+          typename IdxPtr, MySGEMMNumHeadKind numHeadKind,
+          CompactAsOfNodeKind compactKind>
+class _basic_MatMulKernel<true, THREAD_BLOCK_DIM_X, THREAD_BLOCK_DIM_Y,
+                          SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y,
+                          SHMEM_BLOCK_SIZE_K, OuterProductFlag, AGatherKind,
+                          BGatherKind, CScatterKind, AtomicUpdateFlag, Idx,
+                          IdxPtr, numHeadKind, compactKind> {
  public:
   __device__ __forceinline__ static void execute_function(
       float *A, float *B, float *C, IdxPtr A_gather_list, IdxPtr B_gather_list,
