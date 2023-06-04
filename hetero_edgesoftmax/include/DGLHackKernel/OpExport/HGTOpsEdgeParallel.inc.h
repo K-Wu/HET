@@ -36,20 +36,22 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
     /*at::Tensor& relation_pri, */ at::Tensor &node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
 
-  constexpr int WORK_BLOCK_SIZE = 32;
-  constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
-  constexpr bool COARSEN_FACTOR_2_FLAG_Y = true;
+  constexpr bool REG_TILING_FLAG = true;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
   constexpr int THREADING_BLOCK_SIZE_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
+
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = weights.size(1);
   const int64_t num_input_dim = weights.size(2);
   const int64_t num_output_dim = weights.size(3);
   int64_t num_edges = separate_coo_eids.numel();
-  int grid_dim_y =
-      std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE), (int64_t)32768);
+  int grid_dim_y = std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
+                            (int64_t)32768);
   at::Tensor separate_coo_relptrs_cpu_contiguous =
       separate_coo_relptrs.cpu().contiguous();
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
@@ -58,7 +60,7 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
   std::tie(num_blocks_assignment_for_same_relation_vect,
            num_blocks_assignment_for_all_prev_relation_vect) =
       get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
-          grid_dim_y, num_relations, WORK_BLOCK_SIZE,
+          grid_dim_y, num_relations, WORK_BLOCK_SIZE_Y,
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
               num_relations + 1);
@@ -69,13 +71,13 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
           num_blocks_assignment_for_all_prev_relation_vect.end());
   // NB: my shmem sgemm matmul scheme
-  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
+  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE_X),
                    grid_dim_y, num_heads);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
   // TODO: KWU: allow more dtype options in this file
   HET_HGTMessageGenerationAndAccumulationFwProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE,
-      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, int64_t, int64_t *>
+      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
       <<<nblks, nthrs, 0, stream>>>(
           node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
           node_feat_output.data_ptr<float>(),
@@ -116,8 +118,7 @@ void full_graph_hetero_attention_ops(
   // NB: configuration irrelavant to whether use reg tiled or not
   constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
   constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
-  constexpr int WORK_BLOCK_SIZE_K =
-      REG_TILING_FLAG ? 16 : 32;  // TODO: KWU: change to 8
+  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
 
   int grid_dim_y = std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
                             (int64_t)4096);
@@ -190,21 +191,23 @@ void full_graph_hetero_attention_ops(
   // inner_product and back prop of W*t via RGNN relational_matmul
 
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  constexpr int WORK_BLOCK_SIZE = 32;
-  constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
-  constexpr bool COARSEN_FACTOR_2_FLAG_Y = true;
+
+  constexpr bool REG_TILING_FLAG = true;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
   constexpr int THREADING_BLOCK_SIZE_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
 
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = attn_score_weight_transposed.size(1);
   const int64_t num_fw_input_dim = attn_score_weight_transposed.size(3);
   const int64_t num_fw_output_dim = attn_score_weight_transposed.size(2);
   int64_t num_edges = separate_coo_eids.numel();
-  int grid_dim_y =
-      std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE), (int64_t)32768);
+  int grid_dim_y = std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
+                            (int64_t)32768);
   at::Tensor separate_coo_relptrs_cpu_contiguous =
       separate_coo_relptrs.cpu().contiguous();
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
@@ -212,7 +215,7 @@ void full_graph_hetero_attention_ops(
   std::tie(num_blocks_assignment_for_same_relation_vect,
            num_blocks_assignment_for_all_prev_relation_vect) =
       get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
-          grid_dim_y, num_relations, WORK_BLOCK_SIZE,
+          grid_dim_y, num_relations, WORK_BLOCK_SIZE_Y,
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
               num_relations + 1);
@@ -225,14 +228,14 @@ void full_graph_hetero_attention_ops(
   // NB: my shmem sgemm matmul scheme
   // NB: fw_input_dim is the actual delta_k feat dimension and therefore used to
   // determine nblks.x
-  const dim3 nblks(ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE),
+  const dim3 nblks(ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE_X),
                    grid_dim_y, num_heads);
   // NB: delta_weight's feature is (num_heads, num_fw_input_dim,
   // num_fw_output_dim) and therefore nblks_outer_product.x is determined by
   // num_fw_output_dim
   const dim3 nblks_outer_product(
-      ceil_div<>(num_fw_output_dim, (long)WORK_BLOCK_SIZE),
-      ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE),
+      ceil_div<>(num_fw_output_dim, (long)WORK_BLOCK_SIZE_X),
+      ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE_Y),
       num_heads * grid_dim_y);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
 
@@ -242,8 +245,8 @@ void full_graph_hetero_attention_ops(
   // delta_weight=delta_inner_product*k=delta_attn_score*q*k
 
   HET_HGTFusedAttnScoreDeltaKVectBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE,
-      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, int64_t, int64_t *>
+      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
       <<<nblks, nthrs, 0, stream>>>(
           applied_qlinear_node_features.data_ptr<float>(),
           attn_score_weight_transposed.data_ptr<float>(),
@@ -256,8 +259,8 @@ void full_graph_hetero_attention_ops(
               dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
           num_relations, num_fw_input_dim, num_fw_output_dim, num_heads);
   HET_HGTFusedAttnScoreDeltaWeightBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE,
-      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, int64_t, int64_t *>
+      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
       <<<nblks_outer_product, nthrs, 0, stream>>>(
           applied_klinear_node_features.data_ptr<float>(),
           applied_qlinear_node_features.data_ptr<float>(),
@@ -312,21 +315,22 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
     at::Tensor &grad_node_feat_input, at::Tensor &grad_weights,
     at::Tensor &grad_edge_norm, at::Tensor &grad_node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  constexpr int WORK_BLOCK_SIZE = 32;
-  constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
-  constexpr bool COARSEN_FACTOR_2_FLAG_Y = true;
+  constexpr bool REG_TILING_FLAG = true;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
   constexpr int THREADING_BLOCK_SIZE_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
 
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = weights_transposed.size(1);
   const int64_t num_input_dim = weights_transposed.size(3);
   const int64_t num_output_dim = weights_transposed.size(2);
   int64_t num_edges = separate_coo_eids.numel();
-  int grid_dim_y =
-      std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE), (int64_t)4096);
+  int grid_dim_y = std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
+                            (int64_t)4096);
   at::Tensor separate_coo_relptrs_cpu_contiguous =
       separate_coo_relptrs.cpu().contiguous();
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
@@ -334,7 +338,7 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
   std::tie(num_blocks_assignment_for_same_relation_vect,
            num_blocks_assignment_for_all_prev_relation_vect) =
       get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
-          grid_dim_y, num_relations, WORK_BLOCK_SIZE,
+          grid_dim_y, num_relations, WORK_BLOCK_SIZE_Y,
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
               num_relations + 1);
@@ -346,15 +350,16 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
           num_blocks_assignment_for_all_prev_relation_vect.end());
   // NB: my shmem sgemm matmul scheme
   // NB: nblks.x should be num_input_dim
-  const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), grid_dim_y,
-                   num_heads);
+  const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE_X),
+                   grid_dim_y, num_heads);
   const dim3 nblks_outer_product(
-      ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
-      ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE), num_heads * grid_dim_y);
+      ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE_X),
+      ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE_Y),
+      num_heads * grid_dim_y);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
   HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE,
-      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, int64_t, int64_t *>
+      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
       <<<nblks, nthrs, 0, stream>>>(
           grad_node_feat_output.data_ptr<float>(),
           weights_transposed.data_ptr<float>(),
@@ -369,8 +374,8 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
               dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
           num_relations, num_output_dim, num_input_dim, num_heads);
   HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE,
-      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, int64_t, int64_t *>
+      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
       <<<nblks_outer_product, nthrs, 0, stream>>>(
           node_feat_input.data_ptr<float>(),
           grad_node_feat_output.data_ptr<float>(),

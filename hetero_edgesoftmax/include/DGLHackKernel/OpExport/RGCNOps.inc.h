@@ -65,20 +65,20 @@ void Layer1_SeparateCOO(at::Tensor &separate_coo_relptrs,
                         at::Tensor &node_feat_input, at::Tensor &weights,
                         at::Tensor &edge_norm, at::Tensor &node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  constexpr int WORK_BLOCK_SIZE = 32;
-  constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
-
-  constexpr bool COARSEN_FACTOR_2_FLAG_Y = true;
+  constexpr bool REG_TILING_FLAG = true;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
   constexpr int THREADING_BLOCK_SIZE_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_input_dim = weights.size(1);
   const int64_t num_output_dim = weights.size(2);
   int64_t num_edges = separate_coo_eids.numel();
-  int grid_dim_y =
-      std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE), (int64_t)32768);
+  int grid_dim_y = std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
+                            (int64_t)32768);
   at::Tensor separate_coo_relptrs_cpu_contiguous =
       separate_coo_relptrs.cpu().contiguous();
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
@@ -86,7 +86,7 @@ void Layer1_SeparateCOO(at::Tensor &separate_coo_relptrs,
   std::tie(num_blocks_assignment_for_same_relation_vect,
            num_blocks_assignment_for_all_prev_relation_vect) =
       get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
-          grid_dim_y, num_relations, WORK_BLOCK_SIZE,
+          grid_dim_y, num_relations, WORK_BLOCK_SIZE_Y,
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
               num_relations + 1);
@@ -100,13 +100,13 @@ void Layer1_SeparateCOO(at::Tensor &separate_coo_relptrs,
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
           num_blocks_assignment_for_all_prev_relation_vect.end());
   // NB: my shmem sgemm matmul scheme
-  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE),
+  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE_X),
                    grid_dim_y, 1);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
   // TODO: KWU: allow more dtype options in this file
   HET_RGCNMatmulNoScatterGatherListFwProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE,
-      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, int64_t, int64_t *>
+      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
       <<<nblks, nthrs, 0, stream>>>(
           node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
           node_feat_output.data_ptr<float>(), edge_norm.data_ptr<float>(),
@@ -336,19 +336,20 @@ void Layer1_SeparateCOO(
     at::Tensor &delta_node_feat_input, at::Tensor &delta_node_feat_output,
     at::Tensor &delta_weights) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  constexpr int WORK_BLOCK_SIZE = 32;
-  constexpr bool COARSEN_FACTOR_2_FLAG_X = true;
-  constexpr bool COARSEN_FACTOR_2_FLAG_Y = true;
+  constexpr bool REG_TILING_FLAG = true;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
-      COARSEN_FACTOR_2_FLAG_X ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
   constexpr int THREADING_BLOCK_SIZE_Y =
-      COARSEN_FACTOR_2_FLAG_Y ? WORK_BLOCK_SIZE / 2 : WORK_BLOCK_SIZE;
+      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_fw_input_dim = weights_transposed.size(2);
   const int64_t num_fw_output_dim = weights_transposed.size(1);
   int64_t num_edges = separate_coo_eids.numel();
-  int grid_dim_y =
-      std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE), (int64_t)32768);
+  int grid_dim_y = std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
+                            (int64_t)32768);
   at::Tensor separate_coo_relptrs_cpu_contiguous =
       separate_coo_relptrs.cpu().contiguous();
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
@@ -356,7 +357,7 @@ void Layer1_SeparateCOO(
   std::tie(num_blocks_assignment_for_same_relation_vect,
            num_blocks_assignment_for_all_prev_relation_vect) =
       get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
-          grid_dim_y, num_relations, WORK_BLOCK_SIZE,
+          grid_dim_y, num_relations, WORK_BLOCK_SIZE_Y,
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
               num_relations + 1);
@@ -367,13 +368,13 @@ void Layer1_SeparateCOO(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
           num_blocks_assignment_for_all_prev_relation_vect.end());
   // NB: my shmem sgemm matmul scheme
-  const dim3 nblks(ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE),
+  const dim3 nblks(ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE_X),
                    grid_dim_y, 1);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
 
   HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE,
-      WORK_BLOCK_SIZE, WORK_BLOCK_SIZE, int64_t, int64_t *>
+      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
       <<<nblks, nthrs, 0, stream>>>(
           delta_node_feat_output.data_ptr<float>(),
           weights_transposed.data_ptr<float>(),
@@ -387,23 +388,25 @@ void Layer1_SeparateCOO(
               dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
           num_relations, num_fw_output_dim, num_fw_input_dim);
 
-  constexpr int WORK_BLOCK_SIZE_OUTPROD = 32;
-  constexpr bool COARSEN_FACTOR_2_FLAG_X_OUTPROD = true;
-  constexpr bool COARSEN_FACTOR_2_FLAG_Y_OUTPROD = true;
-  constexpr int THREADING_BLOCK_SIZE_X_OUTPROD =
-      COARSEN_FACTOR_2_FLAG_X_OUTPROD ? WORK_BLOCK_SIZE_OUTPROD / 2
-                                      : WORK_BLOCK_SIZE_OUTPROD;
-  constexpr int THREADING_BLOCK_SIZE_Y_OUTPROD =
-      COARSEN_FACTOR_2_FLAG_Y_OUTPROD ? WORK_BLOCK_SIZE_OUTPROD / 2
-                                      : WORK_BLOCK_SIZE_OUTPROD;
-  int grid_dim_y_outprod = std::min(
-      ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_OUTPROD), (int64_t)32768);
+  constexpr bool REG_TILING_FLAG_OUTPROD = true;
+  constexpr int WORK_BLOCK_SIZE_OUTPROD_X = REG_TILING_FLAG_OUTPROD ? 64 : 32;
+  constexpr int WORK_BLOCK_SIZE_OUTPROD_Y = REG_TILING_FLAG_OUTPROD ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_OUTPROD_K = REG_TILING_FLAG_OUTPROD ? 8 : 32;
+  constexpr int THREADING_BLOCK_SIZE_OUTPROD_X =
+      REG_TILING_FLAG_OUTPROD ? WORK_BLOCK_SIZE_OUTPROD_X
+                              : WORK_BLOCK_SIZE_OUTPROD_X / 2;
+  constexpr int THREADING_BLOCK_SIZE_OUTPROD_Y =
+      REG_TILING_FLAG_OUTPROD ? 1 : WORK_BLOCK_SIZE_OUTPROD_Y / 2;
+
+  int grid_dim_y_outprod =
+      std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_OUTPROD_Y),
+               (int64_t)32768);
   std::vector<int> num_blocks_assignment_for_same_relation_vect_outprod,
       num_blocks_assignment_for_all_prev_relation_vect_outprod;
   std::tie(num_blocks_assignment_for_same_relation_vect_outprod,
            num_blocks_assignment_for_all_prev_relation_vect_outprod) =
       get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
-          grid_dim_y_outprod, num_relations, WORK_BLOCK_SIZE_OUTPROD,
+          grid_dim_y_outprod, num_relations, WORK_BLOCK_SIZE_OUTPROD_Y,
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
           separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
               num_relations + 1);
@@ -416,16 +419,16 @@ void Layer1_SeparateCOO(
           num_blocks_assignment_for_all_prev_relation_vect_outprod.end());
 
   const dim3 nblks_outer_product(
-      ceil_div<>(num_fw_output_dim, (long)WORK_BLOCK_SIZE_OUTPROD),
-      ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE_OUTPROD),
+      ceil_div<>(num_fw_output_dim, (long)WORK_BLOCK_SIZE_OUTPROD_X),
+      ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE_OUTPROD_Y),
       1 * grid_dim_y_outprod);  // In NoScatterGather scenario, there is no such
                                 // thing as multi-headed
-  const dim3 nthrs_outer_product(THREADING_BLOCK_SIZE_X_OUTPROD,
-                                 THREADING_BLOCK_SIZE_Y_OUTPROD);
+  const dim3 nthrs_outer_product(THREADING_BLOCK_SIZE_OUTPROD_X,
+                                 THREADING_BLOCK_SIZE_OUTPROD_Y);
   HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp<
-      THREADING_BLOCK_SIZE_X_OUTPROD, THREADING_BLOCK_SIZE_Y_OUTPROD,
-      WORK_BLOCK_SIZE_OUTPROD, WORK_BLOCK_SIZE_OUTPROD, WORK_BLOCK_SIZE_OUTPROD,
-      int64_t,
+      THREADING_BLOCK_SIZE_OUTPROD_X, THREADING_BLOCK_SIZE_OUTPROD_Y,
+      WORK_BLOCK_SIZE_OUTPROD_X, WORK_BLOCK_SIZE_OUTPROD_Y,
+      WORK_BLOCK_SIZE_OUTPROD_K, int64_t,
       int64_t *><<<nblks_outer_product, nthrs_outer_product, 0, stream>>>(
       node_feat_input.data_ptr<float>(),
       delta_node_feat_output.data_ptr<float>(), delta_weights.data_ptr<float>(),
