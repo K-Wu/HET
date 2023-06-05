@@ -8,5 +8,5 @@ from https://stackoverflow.com/questions/68401650/how-can-i-make-a-pytorch-exten
 
 NB: This contains wrapper versions for python api export originally implemented at [[hetero_edgesoftmax/include/DGLHackKernel/RGCN/SeastarRGCNKernels.cu.h]]. Please update accordingly whenever there is update.
 
-NB: torch builtin by default uses int64_t and single-precision floatNB: let's establish a convention of namespace hierarchy, i.e., HET::TorchExport::ModelName::FwOrBwProp::FullGraphOrMinibatch::FormatSpecificationsEGIntegratedCSR::ComputeScheduleSpecificationsEGEdgeParallel::KernelName_VariantName
+NB: torch builtin by default uses int64_t and single-precision floatNB: let's establish a convention of namespace hierarchy, i.e., HET::TorchExport::ModelName::FwOrBckProp::FullGraphOrMinibatch::FormatSpecificationsEGIntegratedCSR::ComputeScheduleSpecificationsEGEdgeParallel::KernelName_VariantName
 In specific case where there is one level/field of namespace missing, e.g., FullGraphOrMinibatch, we can just skip and move to the next inner level.

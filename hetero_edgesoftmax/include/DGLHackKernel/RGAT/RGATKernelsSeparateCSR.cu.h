@@ -14,7 +14,7 @@ __global__ void
 HET_gatSumProdZipDivKernel_relational_separate_csr_vertex_parallel(
     GatFusedData<Idx, DType> gdata, const Idx *rel_ptrs, const Idx *row_offsets,
     const Idx *col_indices, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   _gatSumProdZipDivKernel<Idx, DType, kind, true, true>(
       gdata, row_offsets, col_indices, rel_ptrs, num_rows, etype_mapper_data,
       num_relations);
@@ -29,7 +29,7 @@ __global__ void
 HET_gatExpLeakyReluSumKernel_relational_separate_csr_vertex_parallel(
     GatFusedData<Idx, DType> gdata, const Idx *rel_ptrs, const Idx *row_offsets,
     const Idx *col_indices, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   _gatExpLeakyReluSumKernel<Idx, DType, kind, true, true, false>(
       gdata, row_offsets, col_indices, rel_ptrs, num_rows, etype_mapper_data,
       num_relations);

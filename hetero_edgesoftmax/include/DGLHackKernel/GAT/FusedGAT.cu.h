@@ -33,7 +33,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _gatSumProdZipDivKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -106,7 +106,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_gatSumProdZipDivKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   _gatSumProdZipDivKernel<Idx, DType, kind, RelationalFlag, false, false>(
       gdata, row_offsets, column_indices, etypes, num_rows, etype_mapper_data,
       -1);
@@ -120,7 +120,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -211,7 +211,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_gatExpLeakyReluSumKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   _gatExpLeakyReluSumKernel<Idx, DType, kind, RelationalFlag, false, false>(
       gdata, row_offsets, column_indices, etypes, num_rows, etype_mapper_data,
       -1);

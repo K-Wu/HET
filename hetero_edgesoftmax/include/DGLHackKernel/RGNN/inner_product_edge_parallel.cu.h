@@ -13,7 +13,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_inner_product_fw_kernel_edge_parallel(
     InnerProductData<Idx, DType> gdata, const Idx *row_indices,
     const Idx *column_indices, const Idx *etypes, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -111,7 +111,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_inner_product_bck_kernel_edge_parallel(
     BackwardInnerProductData<Idx, DType> gdata, const Idx *row_indices,
     const Idx *column_indices, const Idx *etypes, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 

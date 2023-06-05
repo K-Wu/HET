@@ -46,7 +46,7 @@ class RelationalFusedGatCSR(th.autograd.Function):
             ret,
         )
         ctx.slope = slope
-        K.relational_fused_gat_kernel_csr(
+        K.relational_fused_gat_csr(
             incsr_row_ptr,
             incsr_col_indices,
             incsr_eids,

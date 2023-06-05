@@ -39,7 +39,7 @@ class FusedGat(th.autograd.Function):
         )
         # non-tensor arguments should be stored separately see torch repo torch\autograd\function.py
         ctx.slope = slope
-        K.fused_gat_kernel_csr(
+        K.fused_gat_csr(
             incsr_row_ptrs,
             incsr_col_indices,
             incsr_eids,

@@ -1,6 +1,7 @@
 #pragma once
 #include "cuda.h"
 #include "cuda_runtime.h"
+#include "utils.cu.h"
 
 enum class CompactAsOfNodeKind {
   Disabled = 0,
@@ -72,3 +73,47 @@ __device__ __host__ __forceinline__ constexpr bool IsBinarySearch(
 // using vec_t = std::vector<T, custom_allocator<T>>;
 // vec_t<int>           vi;
 // vec_t<std::string>   vs;
+
+template <typename Idx, bool ETypeRelPtrFlag>
+struct ETypeData {
+  CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
+      (std::is_same<Idx, std::int32_t>::value ||
+       !std::is_same<Idx, std::int32_t>::value),
+      "the program should use partial specialization of this structure");
+};
+
+template <typename Idx>
+struct ETypeData<Idx, true> {
+  Idx *__restrict__ etypes{nullptr};
+  int64_t num_relations;
+};
+
+template <typename Idx>
+struct ETypeData<Idx, false> {
+  Idx *__restrict__ etypes{nullptr};
+};
+
+// TODO: is there a way to map from (src idx, etype) instead of edge idx to (row
+// index in the compact tensor)?
+// TODO: optimize when warp coorperatively work on to reduce the last 4-5 global
+// loads
+// TODO: figure out metadata caching to optimize the performance
+template <typename Idx, CompactAsOfNodeKind kind>
+__device__ __forceinline__ Idx find_relational_compact_as_of_node_index(
+    Idx idx_relation, Idx idx_node, Idx idx_edata,
+    ETypeMapperData<Idx, kind> etype_mapper_data) {
+  if constexpr (IsBinarySearch(kind)) {
+    Idx idx_relation_offset =
+        etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation];
+    Idx idx_relation_plus_one_offset =
+        etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation + 1];
+    return idx_relation_offset +
+           binary_search<Idx, Idx *>(
+               idx_relation_plus_one_offset - idx_relation_offset,
+               &(etype_mapper_data
+                     .unique_srcs_and_dests_node_indices[idx_relation_offset]),
+               idx_node);
+  } else {
+    return etype_mapper_data.edata_idx_to_inverse_idx[idx_edata];
+  }
+}

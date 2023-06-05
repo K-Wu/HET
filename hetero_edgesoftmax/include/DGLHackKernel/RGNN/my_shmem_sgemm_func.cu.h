@@ -34,9 +34,12 @@ class _basic_MatMulKernel<false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
   __device__ __forceinline__ static void execute_function(
       float *A, float *B, float *C, IdxPtr A_gather_list, IdxPtr B_gather_list,
       IdxPtr C_scatter_list,
-      ETypeMapperData<Idx, compactKind> etype_mapper_data, Idx idx_relation,
-      Idx numARows, Idx blockIdxAlongRowBeg, Idx strideNumBlocksAlongRow,
-      Idx blockRowJobEntryBeg, Idx num_A_cols, Idx num_B_cols, int num_heads) {
+      // TODO: remove etype_mapper_data as the two_order acccess scheme is never
+      // used.
+      const ETypeMapperData<Idx, compactKind> etype_mapper_data,
+      Idx idx_relation, Idx numARows, Idx blockIdxAlongRowBeg,
+      Idx strideNumBlocksAlongRow, Idx blockRowJobEntryBeg, Idx num_A_cols,
+      Idx num_B_cols, int num_heads) {
     // num_B_cols is output_dim//num_heads as forward propagation weight,
     // output_dim//num_heads as backward propagation weight, and in_feat_dim as
     // features or delta features. num_A_cols is input_dim as forward
@@ -432,7 +435,7 @@ template <
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
 __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
                                   THREADING_BLOCK_SIZE_Y == 1 ? 8 : 3)
-    HET_RGNNFeatPerEdgeFWProp(float *node_feat_input, float *weight,
+    HET_RGNNFeatPerEdgeFwProp(float *node_feat_input, float *weight,
                               float *node_feat_per_edge,
                               IdxPtr A_col_row_idx_gather_list,
                               IdxPtr A_rel_ptr, IdxPtr C_eid_scatter_list,
@@ -466,7 +469,7 @@ __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
           typename Idx, typename IdxPtr>
-__global__ void HET_RGNNMatmulNoScatterGatherListFwOrBwProp(
+__global__ void HET_RGNNMatmulNoScatterGatherListFwOrBckProp(
     float *node_feat_input, float *weights, float *linear_projected_node_feat,
     IdxPtr ntype_ptrs, int *accum_num_blocks_per_ntype, Idx num_ntypes,
     Idx input_dim, Idx output_dim) {
@@ -494,7 +497,7 @@ __global__ void HET_RGNNMatmulNoScatterGatherListFwOrBwProp(
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
           typename Idx, typename IdxPtr>
-__global__ void HET_RGNNDeltaWeightNoScatterGatherListBWProp(
+__global__ void HET_RGNNDeltaWeightNoScatterGatherListBckProp(
     float *node_feat_input, float *delta_feat, float *delta_weight,
     IdxPtr ntype_ptrs, Idx A_input_dim, Idx B_delta_output_dim,
     int *accum_num_blocks_per_ntype, Idx num_ntypes) {
@@ -525,7 +528,7 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void HET_RGNNFeatPerEdgeFWPropACGatherScatterListIdentical(
+__global__ void HET_RGNNFeatPerEdgeFwPropACGatherScatterListIdentical(
     float *node_feat_input, float *weight, float *node_feat_per_edge,
     IdxPtr A_rel_ptr, IdxPtr AC_eid_gather_scatter_list, Idx input_dim,
     Idx output_per_head_dim, int num_heads, int *accum_num_blocks_per_relation,
@@ -560,9 +563,9 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void __launch_bounds__(256, 3) HET_RGNNFeatCompactFWProp(
+__global__ void __launch_bounds__(256, 3) HET_RGNNFeatCompactFwProp(
     float *node_feat_input, float *weight, float *node_feat_per_edge,
-    ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
+    const ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
     Idx input_dim, Idx output_per_head_dim, int num_heads,
     int *accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
@@ -599,7 +602,7 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void HET_RGNNDeltaNodeFeatInputBWProp(
+__global__ void HET_RGNNDeltaNodeFeatInputBckProp(
     float *delta_feat_per_edge, float *weight_transposed,
     float *delta_node_input, IdxPtr A_eid_gather_list, IdxPtr A_rel_ptr,
     IdxPtr C_col_row_idx_scatter_list, Idx delta_output_per_head_dim,
@@ -637,7 +640,7 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void HET_RGNNDeltaWeightBWProp(
+__global__ void HET_RGNNDeltaWeightBckProp(
     float *node_feat_input, float *delta_feat_per_edge, float *delta_weight,
     IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
     IdxPtr B_eid_gather_list, Idx A_delta_input_dim,
@@ -669,7 +672,7 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void HET_RGNNDeltaWeightBWPropACGatherScatterListIdentical(
+__global__ void HET_RGNNDeltaWeightBckPropACGatherScatterListIdentical(
     float *node_feat_input, float *delta_feat_per_edge, float *delta_weight,
     IdxPtr A_rel_ptr, IdxPtr AB_eid_gather_list, Idx A_delta_input_dim,
     Idx B_delta_output_per_head_dim, int num_heads,
@@ -704,9 +707,9 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void HET_RGNNDeltaWeightCompactBWProp(
+__global__ void HET_RGNNDeltaWeightCompactBckProp(
     float *delta_feat_compact, float *feat_input, float *delta_weight,
-    ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
+    const ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
     Idx num_edges, Idx A_delta_input_dim, Idx B_delta_output_per_head_dim,
     int num_heads, int *accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.z / num_heads;
@@ -742,7 +745,7 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void HET_RGNNDeltaNodeFeatInputBWPropACGatherScatterListIdentical(
+__global__ void HET_RGNNDeltaNodeFeatInputBckPropACGatherScatterListIdentical(
     float *delta_feat_per_edge, float *weight_transposed,
     float *delta_node_input, IdxPtr A_C_eid_gather_scatter_list,
     IdxPtr A_rel_ptr, Idx delta_output_per_head_dim, Idx delta_input_dim,
@@ -780,10 +783,10 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void HET_RGNNDeltaNodeFeatInputCompactBWProp(
+__global__ void HET_RGNNDeltaNodeFeatInputCompactBckProp(
     float *delta_feat_compact, float *weight_transpose,
     float *delta_node_feat_input,
-    ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
+    const ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
     Idx num_edges, Idx delta_output_per_head_dim, Idx delta_input_dim,
     int num_heads, int *accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;

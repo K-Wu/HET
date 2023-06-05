@@ -12,8 +12,9 @@ __device__ __forceinline__ void
 _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *etypes,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data,
-    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data,
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
+    int64_t num_relations) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -116,8 +117,9 @@ __global__ void
 HET_fusedGatBackwardGradElErFeatSrcFused_relational_separate_coo(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *rel_ptrs,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data,
-    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data,
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
+    int64_t num_relations) {
   _fusedGatBackwardGradElErFeatSrcFused_edge_parallel<Idx, DType, kind, true>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges, etype_mapper_data,
       etype_mapper_data, num_relations);
@@ -130,8 +132,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *etypes,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data,
-    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data,
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
+    int64_t num_relations) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -208,8 +211,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *etypes,
     const Idx *row_indices, const Idx *column_indices, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data,
-    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data,
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
+    int64_t num_relations) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -303,8 +307,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_fusedGatBackwardGradFeatSrc_relational_separate_coo(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *rel_ptrs,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data,
-    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data,
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
+    int64_t num_relations) {
   _fusedGatBackwardGradFeatSrc_edge_parallel<Idx, DType, kind, true>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges, etype_mapper_data,
       etype_mapper_data_col, num_relations);
@@ -314,8 +319,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_fusedGatBackwardGradElEr_relational_separate_coo(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *rel_ptrs,
     const Idx *row_indices, const Idx *column_indices, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data,
-    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data,
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
+    int64_t num_relations) {
   _fusedGatBackwardGradElEr_edge_parallel<Idx, DType, kind, true>(
       gdata, rel_ptrs, row_indices, column_indices, num_edges,
       etype_mapper_data, etype_mapper_data_col, num_relations);

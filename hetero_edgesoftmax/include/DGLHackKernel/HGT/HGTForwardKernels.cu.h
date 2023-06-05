@@ -244,7 +244,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
     HgtDstOutData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, ETypeMapperData<Idx, kind> etype_mapper_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data,
     int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.message_out_dim / num_heads;
@@ -422,7 +422,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, ETypeMapperData<Idx, kind> etype_mapper_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data,
     int64_t num_relations) {
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
@@ -586,7 +586,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_indices, const Idx *column_indices, const Idx *etypes,
-    int64_t num_edges, ETypeMapperData<Idx, kind> etype_mapper_data,
+    int64_t num_edges, const ETypeMapperData<Idx, kind> etype_mapper_data,
     int64_t num_relations) {
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
@@ -695,7 +695,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_indices, const Idx *column_indices, const Idx *etypes,
-    int64_t num_edges, ETypeMapperData<Idx, kind> etype_mapper_data,
+    int64_t num_edges, const ETypeMapperData<Idx, kind> etype_mapper_data,
     int64_t num_relations) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;

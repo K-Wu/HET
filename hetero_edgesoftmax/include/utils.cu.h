@@ -14,7 +14,6 @@
 
 #include "cuda.h"
 #include "cuda_runtime.h"
-#include "kernel_enums.h"
 
 #define _HOST_DEVICE_METHOD_QUALIFIER __host__ __device__
 
@@ -117,31 +116,6 @@ __device__ __forceinline__ Idx linear_search(Idx num_elements, const IdxPtr arr,
     if (arr[lo] > target) {
       return lo - 1;
     }
-  }
-}
-
-// TODO: is there a way to map from (src idx, etype) instead of edge idx to (row
-// index in the compact tensor)?
-// TODO: optimize when warp coorperatively work on to reduce the last 4-5 global
-// loads
-// TODO: figure out metadata caching to optimize the performance
-template <typename Idx, CompactAsOfNodeKind kind>
-__device__ __forceinline__ Idx find_relational_compact_as_of_node_index(
-    Idx idx_relation, Idx idx_node, Idx idx_edata,
-    ETypeMapperData<Idx, kind> etype_mapper_data) {
-  if constexpr (IsBinarySearch(kind)) {
-    Idx idx_relation_offset =
-        etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation];
-    Idx idx_relation_plus_one_offset =
-        etype_mapper_data.unique_srcs_and_dests_rel_ptrs[idx_relation + 1];
-    return idx_relation_offset +
-           binary_search<Idx, Idx *>(
-               idx_relation_plus_one_offset - idx_relation_offset,
-               &(etype_mapper_data
-                     .unique_srcs_and_dests_node_indices[idx_relation_offset]),
-               idx_node);
-  } else {
-    return etype_mapper_data.edata_idx_to_inverse_idx[idx_edata];
   }
 }
 

@@ -131,7 +131,7 @@ constexpr auto FusedKernelImpl = _FusedKernelImpl<int64_t, float, true>;
 using namespace HET::TorchExport;
 TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
   // Fused GAT CSR Declaration
-  m.def("fused_gat_kernel_csr", RGCN::FwProp::IntegratedCSR::FusedKernelImpl);
+  m.def("fused_gat_csr", RGCN::FwProp::IntegratedCSR::FusedKernelImpl);
   m.def("backward_fused_gat_csr",
         RGCN::BckProp::IntegratedCSR::FusedKernelImpl);
 }

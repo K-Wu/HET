@@ -22,7 +22,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
     BackwardRGCNData<Idx, DType> gdata, const Idx *etypes,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   constexpr bool EtypeRelPtrIndexSearch = false;
   Idx resume_from = 0;
 
@@ -82,7 +82,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_rgcnBackwardNodeMeanAggregation_edge_parallel(
     BackwardRGCNData<Idx, DType> gdata, const Idx *rel_ptrs,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   _rgcnBackwardNodeMeanAggregation_edge_parallel<Idx, DType, kind, true>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges, etype_mapper_data,
       num_relations);

@@ -532,7 +532,7 @@ void RelationalFusedGAT(at::Tensor &separate_coo_eids,
         dummy_tensor, feat_src, el, er, sum, exp, ret, gradout, grad_feat_src,
         grad_el, grad_er, slope);
   } else if (Kind == CompactAsOfNodeKind::Disabled) {
-    _RelationalFusedGAT<int64_t, float, false, CompactAsOfNodeKind::Disabled,
+    _RelationalFusedGAT<int64_t, float, true, CompactAsOfNodeKind::Disabled,
                         false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
@@ -555,7 +555,7 @@ using namespace HET::TorchExport;
 TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
   // RGAT Declaration
   // RGAT Relational SpMM
-  m.def("relational_fused_gat_kernel_csr",
+  m.def("relational_fused_gat_csr",
         RGAT::FwProp::IntegratedCSR::RelationalFusedGAT);
   m.def("backward_relational_fused_gat_csr",
         RGAT::BckProp::IntegratedCSR::RelationalFusedGAT);

@@ -12,8 +12,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
     GatFusedData<Idx, DType> gdata, const Idx *etypes, const Idx *row_indices,
     const Idx *col_indices, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data,
-    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data,
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
+    int64_t num_relations) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -94,8 +95,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_gatSumProdZipDivKernel_relational_separate_coo(
     GatFusedData<Idx, DType> gdata, const Idx *rel_ptrs, const Idx *row_indices,
     const Idx *col_indices, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data,
-    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data,
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
+    int64_t num_relations) {
   _gatSumProdZipDivKernel_edge_parallel<Idx, DType, kind, true, false>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges, etype_mapper_data,
       etype_mapper_data_col, num_relations);
@@ -108,8 +110,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
     GatFusedData<Idx, DType> gdata, const Idx *etypes, const Idx *row_indices,
     const Idx *col_indices, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data,
-    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data,
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
+    int64_t num_relations) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -196,8 +199,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_gatExpLeakyReluSumKernel_relational_separate_coo(
     GatFusedData<Idx, DType> gdata, const Idx *rel_ptrs, const Idx *row_indices,
     const Idx *col_indices, int64_t num_edges,
-    ETypeMapperData<Idx, kind> etype_mapper_data,
-    ETypeMapperData<Idx, kind> etype_mapper_data_col, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data,
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
+    int64_t num_relations) {
   _gatExpLeakyReluSumKernel_edge_parallel<Idx, DType, kind, true, false>(
       gdata, rel_ptrs, row_indices, col_indices, num_edges, etype_mapper_data,
       etype_mapper_data_col, num_relations);

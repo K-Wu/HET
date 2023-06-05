@@ -32,7 +32,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -133,7 +133,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_fusedGatBackwardGradElErFeatSrcFused(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   _fusedGatBackwardGradElErFeatSrcFused<Idx, DType, kind, RelationalFlag,
                                         false>(gdata, row_offsets,
                                                column_indices, etypes, num_rows,
@@ -156,7 +156,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -227,7 +227,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_fusedGatBackwardGradFeatSrc(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   _fusedGatBackwardGradFeatSrc<Idx, DType, kind, RelationalFlag, false>(
       gdata, row_offsets, column_indices, etypes, num_rows, etype_mapper_data,
       -1);
@@ -261,7 +261,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __device__ __forceinline__ void _fusedGatBackwardGradElEr(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -346,7 +346,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET_fusedGatBackwardGradElEr(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   _fusedGatBackwardGradElEr<Idx, DType, kind, RelationalFlag, false>(
       gdata, row_offsets, column_indices, etypes, num_rows, etype_mapper_data,
       -1);

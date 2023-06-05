@@ -8,7 +8,7 @@
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
 struct BackwardHGTMessageData {
   CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
-      UseMuAppliedAttnScoreSwitch == 0 || !UseMuAppliedAttnScoreSwitch != 0,
+      UseMuAppliedAttnScoreSwitch == 0 || UseMuAppliedAttnScoreSwitch != 0,
       "the program should use partial specialization of this structure");
 };
 
@@ -78,7 +78,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET__hgtQVectType2BackwardKernel(
     BackwardToDeltaQData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.k_vect_dim_per_head;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -337,7 +337,7 @@ __global__ void
 HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
     BackwardHGTMessageData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, ETypeMapperData<Idx, kind> etype_mapper_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data,
     int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
@@ -492,7 +492,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
     BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreSwitch>
         gdata,
     const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, ETypeMapperData<Idx, kind> etype_mapper_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data,
     int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
@@ -624,7 +624,7 @@ __global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
         gdata,
     DType *grad_message_src, const Idx *row_offsets, const Idx *column_indices,
     const Idx *etypes, int64_t num_rows,
-    ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {

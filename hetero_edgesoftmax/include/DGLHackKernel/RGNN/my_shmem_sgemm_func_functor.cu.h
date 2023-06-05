@@ -48,7 +48,7 @@ template <typename Idx, typename IdxPtr, MySGEMMGatherKind kind,
           CompactAsOfNodeKind compactKind>
 __device__ __forceinline__ float &GetRowMajorElement(
     float *matrix_data, IdxPtr gather_scatter_list,
-    ETypeMapperData<Idx, compactKind> etype_mapper_data, Idx idx_relation,
+    const ETypeMapperData<Idx, compactKind> etype_mapper_data, Idx idx_relation,
     Idx idx_row, Idx idx_head, Idx idx_feat, int num_heads,
     Idx feat_dim_per_head) {
   if constexpr (kind == MySGEMMGatherKind::TwoOrderBinarySearch ||

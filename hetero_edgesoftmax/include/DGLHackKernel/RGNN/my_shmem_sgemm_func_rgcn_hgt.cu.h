@@ -883,3 +883,4 @@ __global__ void HET_HGTFusedAttnScoreDeltaWeightBckProp(
                               fw_input_dim_per_head, fw_output_dim_per_head,
                               num_heads);
 }
+// TODO: pass in separate_coo as a struct in all functions in this file
