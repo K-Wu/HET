@@ -32,8 +32,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _gatSumProdZipDivKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const Idx *column_indices, const ETypeData<Idx, ETypeRelPtrFlag> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -51,9 +51,10 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
           if constexpr (RelationalFlag) {
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
-              etype = binary_search(num_relations, etypes, eidx);
+              etype = binary_search(etype_data.num_relations, etype_data.etypes,
+                                    eidx);
             } else {
-              etype = etypes[eidx];
+              etype = etype_data.etypes[eidx];
             }
             if constexpr (IsCompact(kind)) {
               feat_src_entry_id = find_relational_compact_as_of_node_index(
@@ -105,11 +106,11 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag>
 __global__ void HET_gatSumProdZipDivKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data) {
+    const Idx *column_indices, const ETypeData<Idx, false> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   _gatSumProdZipDivKernel<Idx, DType, kind, RelationalFlag, false, false>(
-      gdata, row_offsets, column_indices, etypes, num_rows, etype_mapper_data,
-      -1);
+      gdata, row_offsets, column_indices, etype_data, num_rows,
+      etype_mapper_data);
 }
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
@@ -119,8 +120,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const Idx *column_indices, ETypeData<Idx, ETypeRelPtrFlag> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -152,9 +153,10 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
         Idx etype = -1;
         if constexpr (RelationalFlag) {
           if constexpr (ETypeRelPtrFlag) {
-            etype = binary_search(num_relations, etypes, eidx);
+            etype = binary_search(etype_data.num_relations, etype_data.etypes,
+                                  eidx);
           } else {
-            etype = etypes[eidx];
+            etype = etype_data.etypes[eidx];
           }
           if constexpr (IsCompact(kind)) {
             dst_vid_relational = find_relational_compact_as_of_node_index(
@@ -210,9 +212,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag>
 __global__ void HET_gatExpLeakyReluSumKernel(
     GatFusedData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data) {
+    const Idx *column_indices, const ETypeData<Idx, false> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   _gatExpLeakyReluSumKernel<Idx, DType, kind, RelationalFlag, false, false>(
-      gdata, row_offsets, column_indices, etypes, num_rows, etype_mapper_data,
-      -1);
+      gdata, row_offsets, column_indices, etype_data, num_rows,
+      etype_mapper_data);
 }

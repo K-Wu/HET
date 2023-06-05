@@ -20,9 +20,9 @@ struct RGCNData {
 template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _rgcnNodeMeanAggregation_edge_parallel(
-    RGCNData<Idx, DType> gdata, const Idx* etypes, const Idx* row_indices,
-    const Idx* col_indices, int64_t num_edges,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    RGCNData<Idx, DType> gdata, const ETypeData<Idx, true> etype_data,
+    const Idx* row_indices, const Idx* col_indices, int64_t num_edges,
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -40,13 +40,15 @@ __device__ __forceinline__ void _rgcnNodeMeanAggregation_edge_parallel(
         Idx etype = -1;
         if constexpr (ETypeRelPtrFlag) {
           if constexpr (EtypeRelPtrIndexSearch) {
-            etype = linear_search(num_relations, etypes, eidx, resume_from);
+            etype = linear_search(etype_data.num_relations, etype_data.etypes,
+                                  eidx, resume_from);
             resume_from = etype;
           } else {
-            etype = binary_search(num_relations, etypes, eidx);
+            etype = binary_search(etype_data.num_relations, etype_data.etypes,
+                                  eidx);
           }
         } else {
-          etype = etypes[eidx];
+          etype = etype_data.etypes[eidx];
         }
         if constexpr (IsCompact(kind)) {
           feat_src_entry_id = src_vid;
@@ -80,10 +82,10 @@ __device__ __forceinline__ void _rgcnNodeMeanAggregation_edge_parallel(
 
 template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_rgcnNodeMeanAggregation_edge_parallel(
-    RGCNData<Idx, DType> gdata, const Idx* rel_ptrs, const Idx* row_indices,
-    const Idx* col_indices, int64_t num_edges,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    RGCNData<Idx, DType> gdata, const ETypeData<Idx, true> etype_data,
+    const Idx* row_indices, const Idx* col_indices, int64_t num_edges,
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   _rgcnNodeMeanAggregation_edge_parallel<Idx, DType, kind, true, false>(
-      gdata, rel_ptrs, row_indices, col_indices, num_edges, etype_mapper_data,
-      num_relations);
+      gdata, etype_data, row_indices, col_indices, num_edges,
+      etype_mapper_data);
 }

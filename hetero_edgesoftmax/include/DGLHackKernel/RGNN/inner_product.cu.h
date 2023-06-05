@@ -36,8 +36,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag>
 __global__ void HET_inner_product_fw_kernel(
     InnerProductData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const Idx *column_indices, const ETypeData<Idx, ETypeRelPtrFlag> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -56,9 +56,10 @@ __global__ void HET_inner_product_fw_kernel(
             if constexpr (IsCompact(kind)) {
               Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
-                etype = binary_search(num_relations, etypes, eidx);
+                etype = binary_search(etype_data.num_relations,
+                                      etype_data.etypes, eidx);
               } else {
-                etype = etypes[eidx];
+                etype = etype_data.etypes[eidx];
               }
 
               feat_src_entry_id = find_relational_compact_as_of_node_index(
@@ -111,8 +112,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __global__ void HET_inner_product_bck_kernel(
     BackwardInnerProductData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const Idx *column_indices, const ETypeData<Idx, ETypeRelPtrFlag> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -146,9 +147,10 @@ __global__ void HET_inner_product_bck_kernel(
               // index)
               Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
-                etype = binary_search(num_relations, etypes, e);
+                etype = binary_search(etype_data.num_relations,
+                                      etype_data.etypes, e);
               } else {
-                etype = etypes[e];
+                etype = etype_data.etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
                   etype, src_vid, edata_idx, etype_mapper_data);

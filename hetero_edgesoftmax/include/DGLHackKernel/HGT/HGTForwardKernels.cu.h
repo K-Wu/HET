@@ -48,11 +48,11 @@ template <typename Idx, typename DType, CompactAsOfNodeKind EdgeMessagesKind,
           typename EdgeMessagesPointerType,
           bool BinarySearchToGetEtypeNodeOffsetFlag, bool CSRInsteadOfCOOFlag>
 __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
-    Idx *col_idxes, Idx *etypes, Idx *eids,
+    Idx *col_idxes, const ETypeData<Idx, false> etype_data, Idx *eids,
     EdgeMessagesPointerType EdgeMessages, DType *EdgeAttnScores, Idx num_nodes,
-    Idx num_edges, Idx num_etypes, Idx num_heads, Idx inout_feat_dim,
-    DType *NodeAggregates, Idx *MapAmongEtypeNodeAndOffsetArray,
-    Idx *etype_unique_node_offsets, Idx *row_indices_or_row_ptrs) {
+    Idx num_edges, Idx num_heads, Idx inout_feat_dim, DType *NodeAggregates,
+    Idx *MapAmongEtypeNodeAndOffsetArray, Idx *etype_unique_node_offsets,
+    Idx *row_indices_or_row_ptrs) {
   // each warp deals with one edge
   Idx edge_idx =
       (blockIdx.x * blockDim.x + threadIdx.x) / warpSize;  // warpSize = 32
@@ -60,7 +60,8 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
          "inout_feat_dim must be multiple of warpSize");  // 32
   for (; edge_idx < num_edges; edge_idx += gridDim.x * blockDim.x / warpSize) {
     Idx col_idx = col_idxes[edge_idx];
-    Idx etype = etypes[edge_idx];
+    // TODO: this looks suspicious
+    Idx etype = etype_data.etypes[edge_idx];
     Idx eid = eids[edge_idx];
     DType *EdgeMessage;
     if constexpr (IsCompact(EdgeMessagesKind)) {
@@ -112,74 +113,75 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
 // this kernel can be used for either sW in edge attention computation (vanilla
 // + compactAsOfNode) or sW in edge message generation (vanilla). s STANDS FOR
 // SOURCE NODE.
-template <typename Idx, typename DType, int TILE_SZ_A, int TILE_SZ_B,
-          int OUT_DIM, int NUM_HEADS, bool WORK_ASSIGNMENT_INDEX_FLAG,
-          bool InputNodeFeaturesCompactOfNodeFlag,
-          bool ETypeUniqueNodeIndexBinarySearchFlag>
-__global__ void HET_EdgeMessageGeneration(
-    Idx *etype_edge_offsets, Idx *etype_block_offsets, Idx *row_idxes,
-    Idx *col_idxes, Idx *etypes, Idx *eids, DType *weight, Idx num_nodes,
-    Idx num_edges, Idx num_etypes, DType *NodeFeatures, DType *OutEdgeMessage,
-    Idx *etype_unique_node_offsets, Idx *etype_unique_node_index_map) {
-  constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
-  constexpr int COARSE_SGEMM_EDGES_PER_BLOCK = (TILE_SZ_B);
+// template <typename Idx, typename DType, int TILE_SZ_A, int TILE_SZ_B,
+//           int OUT_DIM, int NUM_HEADS, bool WORK_ASSIGNMENT_INDEX_FLAG,
+//           bool InputNodeFeaturesCompactOfNodeFlag,
+//           bool ETypeUniqueNodeIndexBinarySearchFlag>
+// __global__ void HET_EdgeMessageGeneration(
+//     Idx *etype_edge_offsets, const ETypeData<Idx, true> etype_data, Idx
+//     *row_idxes, Idx *col_idxes,  Idx *eids, DType *weight, Idx num_nodes, Idx
+//     num_edges, DType *NodeFeatures, DType *OutEdgeMessage, Idx
+//     *etype_unique_node_offsets, Idx *etype_unique_node_index_map) {
+//   constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
+//   constexpr int COARSE_SGEMM_EDGES_PER_BLOCK = (TILE_SZ_B);
 
-  int stride;
-  int relation_idx;
-  if constexpr (WORK_ASSIGNMENT_INDEX_FLAG) {
-    assert(0 &&
-           "WORK_ASSIGNMENT_INDEX_FLAG is not supported in "
-           "HET_EdgeMessageGeneration");
-  } else {
-    relation_idx =
-        binary_search<Idx, Idx *>(num_etypes, etype_block_offsets, blockIdx.x);
-    stride =
-        COARSE_SGEMM_EDGES_PER_BLOCK * (etype_block_offsets[relation_idx + 1] -
-                                        etype_block_offsets[relation_idx]);
-  }
-  for (int edge_entry_idx = etype_edge_offsets[relation_idx];
-       edge_entry_idx < etype_edge_offsets[relation_idx + 1];
-       edge_entry_idx += stride) {
-    if constexpr (InputNodeFeaturesCompactOfNodeFlag) {
-      mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, true, true,
-                      InputNodeFeaturesCompactOfNodeFlag,
-                      ETypeUniqueNodeIndexBinarySearchFlag>::
-          exec_function(
-              OUT_DIM,
-              etype_edge_offsets[relation_idx + 1] -
-                  etype_edge_offsets[relation_idx],
-              NODE_INPUT_DIM_PER_HEAD,
-              &weight[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD *
-                      NODE_INPUT_DIM_PER_HEAD],
-              // assuming in_dim == out_dim
-              &NodeFeatures[etype_unique_node_offsets[relation_idx] * OUT_DIM],
-              OutEdgeMessage,
-              &row_idxes[etype_edge_offsets[relation_idx]] /* source node
-                           feature is what we want as one of the operand*/
-              ,
-              &etype_unique_node_index_map
-                  [etype_unique_node_offsets[relation_idx]],
-              etype_unique_node_offsets[relation_idx + 1] -
-                  etype_unique_node_offsets[relation_idx],
-              &eids[etype_edge_offsets[relation_idx]],
-              edge_entry_idx - etype_edge_offsets[relation_idx]);
-    } else {
-      mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, true, true,
-                      false, false>::
-          exec_function(
-              OUT_DIM, etype_edge_offsets[relation_idx + 1],
-              NODE_INPUT_DIM_PER_HEAD,
-              &weight[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD *
-                      NODE_INPUT_DIM_PER_HEAD],
-              // assuming in_dim == out_dim
-              NodeFeatures, OutEdgeMessage,
-              row_idxes /* source node feature is what we want as one of the
-                           operand*/
-              ,
-              nullptr, -1, eids, edge_entry_idx);
-    }
-  }
-}
+//   int stride;
+//   int relation_idx;
+//   if constexpr (WORK_ASSIGNMENT_INDEX_FLAG) {
+//     assert(0 &&
+//            "WORK_ASSIGNMENT_INDEX_FLAG is not supported in "
+//            "HET_EdgeMessageGeneration");
+//   } else {
+//     relation_idx =
+//         binary_search<Idx, Idx *>(etype_data.num_relations,
+//         etype_data.etypes, blockIdx.x);
+//     stride =
+//         COARSE_SGEMM_EDGES_PER_BLOCK * (etype_data.etypes[relation_idx + 1] -
+//                                         etype_data.etypes[relation_idx]);
+//   }
+//   for (int edge_entry_idx = etype_edge_offsets[relation_idx];
+//        edge_entry_idx < etype_edge_offsets[relation_idx + 1];
+//        edge_entry_idx += stride) {
+//     if constexpr (InputNodeFeaturesCompactOfNodeFlag) {
+//       mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, true, true,
+//                       InputNodeFeaturesCompactOfNodeFlag,
+//                       ETypeUniqueNodeIndexBinarySearchFlag>::
+//           exec_function(
+//               OUT_DIM,
+//               etype_edge_offsets[relation_idx + 1] -
+//                   etype_edge_offsets[relation_idx],
+//               NODE_INPUT_DIM_PER_HEAD,
+//               &weight[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD *
+//                       NODE_INPUT_DIM_PER_HEAD],
+//               // assuming in_dim == out_dim
+//               &NodeFeatures[etype_unique_node_offsets[relation_idx] *
+//               OUT_DIM], OutEdgeMessage,
+//               &row_idxes[etype_edge_offsets[relation_idx]] /* source node
+//                            feature is what we want as one of the operand*/
+//               ,
+//               &etype_unique_node_index_map
+//                   [etype_unique_node_offsets[relation_idx]],
+//               etype_unique_node_offsets[relation_idx + 1] -
+//                   etype_unique_node_offsets[relation_idx],
+//               &eids[etype_edge_offsets[relation_idx]],
+//               edge_entry_idx - etype_edge_offsets[relation_idx]);
+//     } else {
+//       mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, true, true,
+//                       false, false>::
+//           exec_function(
+//               OUT_DIM, etype_edge_offsets[relation_idx + 1],
+//               NODE_INPUT_DIM_PER_HEAD,
+//               &weight[relation_idx * NUM_HEADS * NODE_INPUT_DIM_PER_HEAD *
+//                       NODE_INPUT_DIM_PER_HEAD],
+//               // assuming in_dim == out_dim
+//               NodeFeatures, OutEdgeMessage,
+//               row_idxes /* source node feature is what we want as one of the
+//                            operand*/
+//               ,
+//               nullptr, -1, eids, edge_entry_idx);
+//     }
+//   }
+// }
 
 // This is to calculate the product of (sW) and t where (sW) is stored per edge
 // and t is stored per node.
@@ -243,9 +245,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           int UseMuAppliedAttnScoreSwitch>
 __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
     HgtDstOutData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
-    const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data,
-    int64_t num_relations) {
+    const Idx *row_offsets, const Idx *column_indices,
+    const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows,
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.message_out_dim / num_heads;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -263,9 +265,10 @@ __global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
           if constexpr (RelationalFlag) {
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
-              etype = binary_search(num_relations, etypes, eidx);
+              etype = binary_search(etype_data.num_relations, etype_data.etypes,
+                                    eidx);
             } else {
-              etype = etypes[eidx];
+              etype = etype_data.etypes[eidx];
             }
             if constexpr (IsCompact(kind)) {
               feat_src_entry_id = find_relational_compact_as_of_node_index(
@@ -421,9 +424,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           int OutputMuAppliedAttnScoreSwitch>
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
-    const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data,
-    int64_t num_relations) {
+    const Idx *row_offsets, const Idx *column_indices,
+    const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows,
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
   if constexpr (OutputMuAppliedAttnScoreSwitch != 0 &&
@@ -455,9 +458,10 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
         DType mu = 1.0;
         if constexpr (RelationalFlag) {
           if constexpr (ETypeRelPtrFlag) {
-            etype = binary_search(num_relations, etypes, eidx);
+            etype = binary_search(etype_data.num_relations, etype_data.etypes,
+                                  eidx);
           } else {
-            etype = etypes[eidx];
+            etype = etype_data.etypes[eidx];
           }
         }
         if constexpr (IsCompact(kind)) {
@@ -558,9 +562,10 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
               if constexpr (RelationalFlag) {
                 Idx etype;
                 if constexpr (ETypeRelPtrFlag) {
-                  etype = binary_search(num_relations, etypes, eidx);
+                  etype = binary_search(etype_data.num_relations,
+                                        etype_data.etypes, eidx);
                 } else {
-                  etype = etypes[eidx];
+                  etype = etype_data.etypes[eidx];
                 }
                 mu = gdata.mu[etype * num_heads + feat_idx];
               } else {
@@ -585,9 +590,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           int OutputMuAppliedAttnScoreSwitch>
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
-    const Idx *row_indices, const Idx *column_indices, const Idx *etypes,
-    int64_t num_edges, const ETypeMapperData<Idx, kind> etype_mapper_data,
-    int64_t num_relations) {
+    const Idx *row_indices, const Idx *column_indices,
+    const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_edges,
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx tx = blockIdx.x * blockDim.x + threadIdx.x;
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -622,14 +627,16 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
       if constexpr (RelationalFlag) {
         if constexpr (ETypeRelPtrFlag) {
           if constexpr (EtypeRelPtrIndexSearch) {
-            etype = linear_search(num_relations, etypes, eidx, resume_from);
+            etype = linear_search(etype_data.num_relations, etype_data.etypes,
+                                  eidx, resume_from);
             resume_from = etype;
           } else {
-            etype = binary_search(num_relations, etypes, eidx);
+            etype = binary_search(etype_data.num_relations, etype_data.etypes,
+                                  eidx);
           }
 
         } else {
-          etype = etypes[eidx];
+          etype = etype_data.etypes[eidx];
         }
       }
       if constexpr (IsCompact(kind)) {
@@ -694,9 +701,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           int OutputMuAppliedAttnScoreSwitch>
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
-    const Idx *row_indices, const Idx *column_indices, const Idx *etypes,
-    int64_t num_edges, const ETypeMapperData<Idx, kind> etype_mapper_data,
-    int64_t num_relations) {
+    const Idx *row_indices, const Idx *column_indices,
+    const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_edges,
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -726,13 +733,15 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
             Idx etype;
             if constexpr (ETypeRelPtrFlag) {
               if constexpr (EtypeRelPtrIndexSearch) {
-                etype = linear_search(num_relations, etypes, eidx, resume_from);
+                etype = linear_search(etype_data.num_relations,
+                                      etype_data.etypes, eidx, resume_from);
                 resume_from = etype;
               } else {
-                etype = binary_search(num_relations, etypes, eidx);
+                etype = binary_search(etype_data.num_relations,
+                                      etype_data.etypes, eidx);
               }
             } else {
-              etype = etypes[eidx];
+              etype = etype_data.etypes[eidx];
             }
             mu = gdata.mu[etype * num_heads + feat_idx];
           } else {

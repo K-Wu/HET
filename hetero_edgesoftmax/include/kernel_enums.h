@@ -85,7 +85,7 @@ struct ETypeData {
 template <typename Idx>
 struct ETypeData<Idx, true> {
   Idx *__restrict__ etypes{nullptr};
-  int64_t num_relations;
+  int64_t num_relations{-1};
 };
 
 template <typename Idx>

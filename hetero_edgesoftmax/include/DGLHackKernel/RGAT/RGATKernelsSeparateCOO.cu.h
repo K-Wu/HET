@@ -10,11 +10,10 @@
 template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
-    GatFusedData<Idx, DType> gdata, const Idx *etypes, const Idx *row_indices,
-    const Idx *col_indices, int64_t num_edges,
+    GatFusedData<Idx, DType> gdata, const ETypeData<Idx, true> etype_data,
+    const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
     const ETypeMapperData<Idx, kind> etype_mapper_data,
-    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
-    int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -38,14 +37,16 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
           Idx etype = -1;
           if constexpr (ETypeRelPtrFlag) {
             if constexpr (EtypeRelPtrIndexSearch) {
-              etype = linear_search(num_relations, etypes, eidx, resume_from);
+              etype = linear_search(etype_data.num_relations, etype_data.etypes,
+                                    eidx, resume_from);
               resume_from = etype;
             } else {
-              etype = binary_search(num_relations, etypes, eidx);
+              etype = binary_search(etype_data.num_relations, etype_data.etypes,
+                                    eidx);
             }
 
           } else {
-            etype = etypes[eidx];
+            etype = etype_data.etypes[eidx];
           }
           if constexpr (CompactAsOfNodeFlag) {
             feat_src_entry_id = find_relational_compact_as_of_node_index(
@@ -93,14 +94,13 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
 
 template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_gatSumProdZipDivKernel_relational_separate_coo(
-    GatFusedData<Idx, DType> gdata, const Idx *rel_ptrs, const Idx *row_indices,
-    const Idx *col_indices, int64_t num_edges,
+    GatFusedData<Idx, DType> gdata, const ETypeData<Idx, true> etype_data,
+    const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
     const ETypeMapperData<Idx, kind> etype_mapper_data,
-    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
-    int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col) {
   _gatSumProdZipDivKernel_edge_parallel<Idx, DType, kind, true, false>(
-      gdata, rel_ptrs, row_indices, col_indices, num_edges, etype_mapper_data,
-      etype_mapper_data_col, num_relations);
+      gdata, etype_data, row_indices, col_indices, num_edges, etype_mapper_data,
+      etype_mapper_data_col);
 }
 
 // edge-centric schedule cf. HET_gatExpLeakyReluSumKernel in
@@ -108,11 +108,10 @@ __global__ void HET_gatSumProdZipDivKernel_relational_separate_coo(
 template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool FullCartesianFlag>
 __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
-    GatFusedData<Idx, DType> gdata, const Idx *etypes, const Idx *row_indices,
-    const Idx *col_indices, int64_t num_edges,
+    GatFusedData<Idx, DType> gdata, const ETypeData<Idx, true> etype_data,
+    const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
     const ETypeMapperData<Idx, kind> etype_mapper_data,
-    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
-    int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -144,13 +143,15 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
           Idx etype = -1;
           if constexpr (ETypeRelPtrFlag) {
             if constexpr (EtypeRelPtrIndexSearch) {
-              etype = linear_search(num_relations, etypes, eidx, resume_from);
+              etype = linear_search(etype_data.num_relations, etype_data.etypes,
+                                    eidx, resume_from);
               resume_from = etype;
             } else {
-              etype = binary_search(num_relations, etypes, eidx);
+              etype = binary_search(etype_data.num_relations, etype_data.etypes,
+                                    eidx);
             }
           } else {
-            etype = etypes[eidx];
+            etype = etype_data.etypes[eidx];
           }
           Idx src_vid_relational = find_relational_compact_as_of_node_index(
               etype, src_id, edata_idx, etype_mapper_data);
@@ -197,12 +198,11 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel_edge_parallel(
 
 template <typename Idx, typename DType, CompactAsOfNodeKind kind>
 __global__ void HET_gatExpLeakyReluSumKernel_relational_separate_coo(
-    GatFusedData<Idx, DType> gdata, const Idx *rel_ptrs, const Idx *row_indices,
-    const Idx *col_indices, int64_t num_edges,
+    GatFusedData<Idx, DType> gdata, const ETypeData<Idx, true> etype_data,
+    const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
     const ETypeMapperData<Idx, kind> etype_mapper_data,
-    const ETypeMapperData<Idx, kind> etype_mapper_data_col,
-    int64_t num_relations) {
+    const ETypeMapperData<Idx, kind> etype_mapper_data_col) {
   _gatExpLeakyReluSumKernel_edge_parallel<Idx, DType, kind, true, false>(
-      gdata, rel_ptrs, row_indices, col_indices, num_edges, etype_mapper_data,
-      etype_mapper_data_col, num_relations);
+      gdata, etype_data, row_indices, col_indices, num_edges, etype_mapper_data,
+      etype_mapper_data_col);
 }

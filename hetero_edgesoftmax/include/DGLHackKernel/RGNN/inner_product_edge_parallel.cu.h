@@ -12,8 +12,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool FeatSizeNoLessThanWarpSize>
 __global__ void HET_inner_product_fw_kernel_edge_parallel(
     InnerProductData<Idx, DType> gdata, const Idx *row_indices,
-    const Idx *column_indices, const Idx *etypes, int64_t num_edges,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const Idx *column_indices, const ETypeData<Idx, ETypeRelPtrFlag> etype_data,
+    int64_t num_edges, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -36,13 +36,15 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               if constexpr (EtypeRelPtrIndexSearch) {
-                etype = linear_search(num_relations, etypes, eidx, resume_from);
+                etype = linear_search(etype_data.num_relations,
+                                      etype_data.etypes, eidx, resume_from);
                 resume_from = etype;
               } else {
-                etype = binary_search(num_relations, etypes, eidx);
+                etype = binary_search(etype_data.num_relations,
+                                      etype_data.etypes, eidx);
               }
             } else {
-              etype = etypes[eidx];
+              etype = etype_data.etypes[eidx];
             }
 
             feat_src_entry_id = find_relational_compact_as_of_node_index(
@@ -110,8 +112,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __global__ void HET_inner_product_bck_kernel_edge_parallel(
     BackwardInnerProductData<Idx, DType> gdata, const Idx *row_indices,
-    const Idx *column_indices, const Idx *etypes, int64_t num_edges,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const Idx *column_indices, const ETypeData<Idx, ETypeRelPtrFlag> etype_data,
+    int64_t num_edges, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -147,13 +149,15 @@ __global__ void HET_inner_product_bck_kernel_edge_parallel(
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
               if constexpr (EtypeRelPtrIndexSearch) {
-                etype = linear_search(num_relations, etypes, e, resume_from);
+                etype = linear_search(etype_data.num_relations,
+                                      etype_data.etypes, e, resume_from);
                 resume_from = etype;
               } else {
-                etype = binary_search(num_relations, etypes, e);
+                etype = binary_search(etype_data.num_relations,
+                                      etype_data.etypes, e);
               }
             } else {
-              etype = etypes[e];
+              etype = etype_data.etypes[e];
             }
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
                 etype, src_vid, edata_idx, etype_mapper_data);

@@ -77,8 +77,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __global__ void HET__hgtQVectType2BackwardKernel(
     BackwardToDeltaQData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const Idx *column_indices, const ETypeData<Idx, ETypeRelPtrFlag> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.k_vect_dim_per_head;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
@@ -105,9 +105,10 @@ __global__ void HET__hgtQVectType2BackwardKernel(
           } else {  // CompactAsOfNodeFlag
             if constexpr (RelationalFlag) {
               if constexpr (ETypeRelPtrFlag) {
-                etype = binary_search(num_relations, etypes, e);
+                etype = binary_search(etype_data.num_relations,
+                                      etype_data.etypes, e);
               } else {  // !ETypeRelPtrFlag
-                etype = etypes[e];
+                etype = etype_data.etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
                   etype, src_vid, edata_idx, etype_mapper_data);
@@ -170,8 +171,8 @@ template <typename Idx, typename DType,  // CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
     BackwardNormToUnNormalizedAttnScoreData<Idx, DType> gdata,
-    const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, int64_t num_relations) {
+    const Idx *row_offsets, const Idx *column_indices,
+    const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   for (Idx src_vid = blockIdx.y * blockDim.y + threadIdx.y; src_vid < num_rows;
        src_vid += gridDim.y * blockDim.y) {
@@ -194,9 +195,10 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
 
           if constexpr (RelationalFlag) {
             if constexpr (ETypeRelPtrFlag) {
-              etype = binary_search(num_relations, etypes, e);
+              etype =
+                  binary_search(etype_data.num_relations, etype_data.etypes, e);
             } else {
-              etype = etypes[e];
+              etype = etype_data.etypes[e];
             }
           }
 
@@ -252,8 +254,8 @@ template <typename Idx, typename DType,  // CompactAsOfNodeKind kind,
 __global__ void
 HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO(
     BackwardNormToUnNormalizedAttnScoreData<Idx, DType> gdata,
-    const Idx *row_indices, const Idx *column_indices, const Idx *etypes,
-    int64_t num_edges, int64_t num_relations,
+    const Idx *row_indices, const Idx *column_indices,
+    const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_edges,
     DType *sum_incoming_edges_product_softmax_score) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   constexpr bool EtypeRelPtrIndexSearch = true;
@@ -273,13 +275,14 @@ HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO(
     if constexpr (RelationalFlag) {
       if constexpr (ETypeRelPtrFlag) {
         if constexpr (EtypeRelPtrIndexSearch) {
-          etype = linear_search(num_relations, etypes, e, resume_from);
+          etype = linear_search(etype_data.num_relations, etype_data.etypes, e,
+                                resume_from);
           resume_from = etype;
         } else {
-          etype = binary_search(num_relations, etypes, e);
+          etype = binary_search(etype_data.num_relations, etype_data.etypes, e);
         }
       } else {
-        etype = etypes[e];
+        etype = etype_data.etypes[e];
       }
     }
     for (Idx head_idx = threadIdx.x; head_idx < num_heads;
@@ -336,9 +339,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void
 HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
     BackwardHGTMessageData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
-    const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data,
-    int64_t num_relations) {
+    const Idx *row_offsets, const Idx *column_indices,
+    const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows,
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -370,9 +373,10 @@ HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
           } else {  // CompactAsOfNodeFlag
             if constexpr (RelationalFlag) {
               if constexpr (ETypeRelPtrFlag) {
-                etype = binary_search(num_relations, etypes, e);
+                etype = binary_search(etype_data.num_relations,
+                                      etype_data.etypes, e);
               } else {  // !ETypeRelPtrFlag
-                etype = etypes[e];
+                etype = etype_data.etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
                   etype, src_vid, edata_idx, etype_mapper_data);
@@ -491,9 +495,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
 __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
     BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreSwitch>
         gdata,
-    const Idx *row_offsets, const Idx *column_indices, const Idx *etypes,
-    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data,
-    int64_t num_relations) {
+    const Idx *row_offsets, const Idx *column_indices,
+    const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows,
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -542,9 +546,10 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
               // related to (relation, unique node index) Idx etype = etypes[e];
 
               if constexpr (ETypeRelPtrFlag) {
-                etype = binary_search(num_relations, etypes, e);
+                etype = binary_search(etype_data.num_relations,
+                                      etype_data.etypes, e);
               } else {
-                etype = etypes[e];
+                etype = etype_data.etypes[e];
               }
               edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
@@ -623,8 +628,8 @@ __global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
     BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreSwitch>
         gdata,
     DType *grad_message_src, const Idx *row_offsets, const Idx *column_indices,
-    const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows,
+    const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx num_heads = gdata.num_heads;  // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -675,9 +680,10 @@ __global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
               // related to (relation, unique node index) Idx etype = etypes[e];
 
               if constexpr (ETypeRelPtrFlag) {
-                etype = binary_search(num_relations, etypes, e);
+                etype = binary_search(etype_data.num_relations,
+                                      etype_data.etypes, e);
               } else {
-                etype = etypes[e];
+                etype = etype_data.etypes[e];
               }
               dst_vid_relational = find_relational_compact_as_of_node_index(
                   etype, dst_vid, edata_idx, etype_mapper_data);

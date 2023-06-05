@@ -31,8 +31,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const Idx *column_indices, const ETypeData<Idx, ETypeRelPtrFlag> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -75,9 +75,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
               // index)
               Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
-                etype = binary_search(num_relations, etypes, e);
+                etype = binary_search(etype_data.num_relations,
+                                      etype_data.etypes, e);
               } else {
-                etype = etypes[e];
+                etype = etype_data.etypes[e];
               }
               dst_vid_relational = find_relational_compact_as_of_node_index(
                   etype, dst_vid, edata_idx, etype_mapper_data);
@@ -132,12 +133,12 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag>
 __global__ void HET_fusedGatBackwardGradElErFeatSrcFused(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data) {
+    const Idx *column_indices, const ETypeData<Idx, false> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   _fusedGatBackwardGradElErFeatSrcFused<Idx, DType, kind, RelationalFlag,
                                         false>(gdata, row_offsets,
-                                               column_indices, etypes, num_rows,
-                                               etype_mapper_data, -1);
+                                               column_indices, etype_data,
+                                               num_rows, etype_mapper_data);
 }
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
@@ -155,8 +156,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const Idx *column_indices, const ETypeData<Idx, ETypeRelPtrFlag> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -187,9 +188,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc(
             if constexpr (RelationalFlag) {
               Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
-                etype = binary_search(num_relations, etypes, e);
+                etype = binary_search(etype_data.num_relations,
+                                      etype_data.etypes, e);
               } else {  // !ETypeRelPtrFlag
-                etype = etypes[e];
+                etype = etype_data.etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
                   etype, src_vid, edata_idx, etype_mapper_data);
@@ -226,11 +228,11 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag>
 __global__ void HET_fusedGatBackwardGradFeatSrc(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data) {
+    const Idx *column_indices, const ETypeData<Idx, false> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   _fusedGatBackwardGradFeatSrc<Idx, DType, kind, RelationalFlag, false>(
-      gdata, row_offsets, column_indices, etypes, num_rows, etype_mapper_data,
-      -1);
+      gdata, row_offsets, column_indices, etype_data, num_rows,
+      etype_mapper_data);
 }
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
@@ -260,8 +262,8 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __device__ __forceinline__ void _fusedGatBackwardGradElEr(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data, int64_t num_relations) {
+    const Idx *column_indices, const ETypeData<Idx, ETypeRelPtrFlag> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   Idx num_heads = gdata.num_heads;
   Idx hidden_xlen = gdata.feat_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
@@ -304,9 +306,10 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr(
               // index)
               Idx etype = -1;
               if constexpr (ETypeRelPtrFlag) {
-                etype = binary_search(num_relations, etypes, e);
+                etype = binary_search(etype_data.num_relations,
+                                      etype_data.etypes, e);
               } else {
-                etype = etypes[e];
+                etype = etype_data.etypes[e];
               }
               dst_vid_relational = find_relational_compact_as_of_node_index(
                   etype, dst_vid, edata_idx, etype_mapper_data);
@@ -345,9 +348,9 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag>
 __global__ void HET_fusedGatBackwardGradElEr(
     BackwardGatFusedData<Idx, DType> gdata, const Idx *row_offsets,
-    const Idx *column_indices, const Idx *etypes, int64_t num_rows,
-    const ETypeMapperData<Idx, kind> etype_mapper_data) {
+    const Idx *column_indices, ETypeData<Idx, false> etype_data,
+    int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
   _fusedGatBackwardGradElEr<Idx, DType, kind, RelationalFlag, false>(
-      gdata, row_offsets, column_indices, etypes, num_rows, etype_mapper_data,
-      -1);
+      gdata, row_offsets, column_indices, etype_data, num_rows,
+      etype_mapper_data);
 }

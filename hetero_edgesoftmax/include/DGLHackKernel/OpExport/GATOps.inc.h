@@ -44,7 +44,7 @@ void _FusedKernelImpl(at::Tensor &incsr_row_ptrs, at::Tensor &incsr_col_indices,
   // it is okay to pass in nullptrs as mapper data because !RelationalFlag
   HET_gatExpLeakyReluSumKernel<Idx, DType, CompactAsOfNodeKind::Enabled, false>
       <<<nblks, nthrs, 0, stream>>>(gdata, incsr_row_ptrs.data_ptr<Idx>(),
-                                    incsr_col_indices.data_ptr<Idx>(), nullptr,
+                                    incsr_col_indices.data_ptr<Idx>(), {},
                                     incsr_num_rows, {});
 
   // NB: updated to Type 2 Schedule:
@@ -57,8 +57,8 @@ void _FusedKernelImpl(at::Tensor &incsr_row_ptrs, at::Tensor &incsr_col_indices,
   // it is okay to pass in nullptrs as mapper data because !RelationalFlag
   HET_gatSumProdZipDivKernel<Idx, DType, CompactAsOfNodeKind::Enabled, false>
       <<<nblks2, nthrs2, 0, stream>>>(gdata, incsr_row_ptrs.data_ptr<Idx>(),
-                                      incsr_col_indices.data_ptr<Idx>(),
-                                      nullptr, incsr_num_rows, {});
+                                      incsr_col_indices.data_ptr<Idx>(), {},
+                                      incsr_num_rows, {});
 }
 constexpr auto FusedKernelImpl = _FusedKernelImpl<int64_t, float>;
 }  // namespace IntegratedCSR
@@ -104,20 +104,18 @@ void _FusedKernelImpl(at::Tensor &outcsr_row_ptrs,
     HET_fusedGatBackwardGradFeatSrc<Idx, DType, CompactAsOfNodeKind::Enabled,
                                     false><<<nblks, nthrs, 0, stream>>>(
         gdata, outcsr_row_ptrs.data_ptr<Idx>(),
-        outcsr_col_indices.data_ptr<Idx>(), nullptr, outcsr_num_rows, nullptr,
-        nullptr);
+        outcsr_col_indices.data_ptr<Idx>(), {}, outcsr_num_rows, {});
     HET_fusedGatBackwardGradElEr<Idx, DType, CompactAsOfNodeKind::Enabled,
                                  false><<<nblks, nthrs, 0, stream>>>(
         gdata, outcsr_row_ptrs.data_ptr<Idx>(),
-        outcsr_col_indices.data_ptr<Idx>(), nullptr, outcsr_num_rows, nullptr,
-        nullptr);
+        outcsr_col_indices.data_ptr<Idx>(), {}, outcsr_num_rows, {});
   } else {
     // it is okay to pass in nullptrs as mapper data because !RelationalFlag
     HET_fusedGatBackwardGradElErFeatSrcFused<
         Idx, DType, CompactAsOfNodeKind::Enabled, false>
         <<<nblks, nthrs, 0, stream>>>(gdata, outcsr_row_ptrs.data_ptr<Idx>(),
-                                      outcsr_col_indices.data_ptr<Idx>(),
-                                      nullptr, outcsr_num_rows, {});
+                                      outcsr_col_indices.data_ptr<Idx>(), {},
+                                      outcsr_num_rows, {});
   }
 }
 

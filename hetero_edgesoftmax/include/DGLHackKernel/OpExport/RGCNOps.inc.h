@@ -51,13 +51,16 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode(
           unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
       .unique_srcs_and_dests_node_indices =
           unique_srcs_and_dests_node_indices.data_ptr<Idx>()};
+  ETypeData<Idx, true> etype_data{
+      .etypes = separate_coo_rel_ptrs.data_ptr<Idx>(),
+      .num_relations = num_relations,
+  };
   HET_rgcnNodeMeanAggregation_edge_parallel<Idx, DType,
                                             CompactAsOfNodeKind::Enabled>
-      <<<nblks2, nthrs2, 0, stream>>>(
-          gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
-          separate_coo_row_indices.data_ptr<Idx>(),
-          separate_coo_col_indices.data_ptr<Idx>(), num_edges,
-          etype_mapper_data, num_relations);
+      <<<nblks2, nthrs2, 0, stream>>>(gdata, etype_data,
+                                      separate_coo_row_indices.data_ptr<Idx>(),
+                                      separate_coo_col_indices.data_ptr<Idx>(),
+                                      num_edges, etype_mapper_data);
 }
 
 void Layer1(at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
@@ -319,12 +322,16 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode(
           unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
       .unique_srcs_and_dests_node_indices =
           unique_srcs_and_dests_node_indices.data_ptr<Idx>()};
+
+  ETypeData<Idx, true> etype_data{
+      .etypes = separate_coo_rel_ptrs.data_ptr<Idx>(),
+      .num_relations = num_relations,
+  };
+
   HET_rgcnBackwardNodeMeanAggregation_edge_parallel<
       Idx, DType, CompactAsOfNodeKind::Enabled><<<nblks, nthrs, 0, stream>>>(
-      gdata, separate_coo_rel_ptrs.data_ptr<Idx>(),
-      separate_coo_row_indices.data_ptr<Idx>(),
-      separate_coo_col_indices.data_ptr<Idx>(), num_edges, etype_mapper_data,
-      num_relations);
+      gdata, etype_data, separate_coo_row_indices.data_ptr<Idx>(),
+      separate_coo_col_indices.data_ptr<Idx>(), num_edges, etype_mapper_data);
 }
 
 void Layer1(at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,

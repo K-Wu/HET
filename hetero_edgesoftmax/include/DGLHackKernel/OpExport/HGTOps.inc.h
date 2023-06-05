@@ -75,29 +75,31 @@ void _full_graph_edge_softmax_ops(
 
   if constexpr (EdgeParallelFlag) {
     // use separate coo instead of in csr
+    ETypeData<Idx, true> etype_data{
+        .etypes = incsr_or_sep_coo_reltypes_or_relptrs.data_ptr<Idx>(),
+        .num_relations = num_relations};
     HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel<
         Idx, DType, CompactAsOfNodeKind::Disabled, true, true, false,
         OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
         gdata, incsr_or_sep_coo_row_ptrs_or_indices.data_ptr<Idx>(),
-        incsr_or_sep_coo_col_indices.data_ptr<Idx>(),
-        incsr_or_sep_coo_reltypes_or_relptrs.data_ptr<Idx>(),
-        incsr_or_sep_coo_num_rows_or_edges, {}, num_relations);
+        incsr_or_sep_coo_col_indices.data_ptr<Idx>(), etype_data,
+        incsr_or_sep_coo_num_rows_or_edges, {});
     HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2<
         Idx, DType, CompactAsOfNodeKind::Disabled, true, true, false,
         OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
         gdata, incsr_or_sep_coo_row_ptrs_or_indices.data_ptr<Idx>(),
-        incsr_or_sep_coo_col_indices.data_ptr<Idx>(),
-        incsr_or_sep_coo_reltypes_or_relptrs.data_ptr<Idx>(),
-        incsr_or_sep_coo_num_rows_or_edges, {}, num_relations);
+        incsr_or_sep_coo_col_indices.data_ptr<Idx>(), etype_data,
+        incsr_or_sep_coo_num_rows_or_edges, {});
   } else {
     // use in csr
+    ETypeData<Idx, false> etype_data{
+        .etypes = incsr_or_sep_coo_reltypes_or_relptrs.data_ptr<Idx>()};
     HET__hgtEdgeSoftmaxAccumStageOnlyKernel<
         Idx, DType, CompactAsOfNodeKind::Disabled, true, false, false,
         OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
         gdata, incsr_or_sep_coo_row_ptrs_or_indices.data_ptr<Idx>(),
-        incsr_or_sep_coo_col_indices.data_ptr<Idx>(),
-        incsr_or_sep_coo_reltypes_or_relptrs.data_ptr<Idx>(),
-        incsr_or_sep_coo_num_rows_or_edges, {}, num_relations);
+        incsr_or_sep_coo_col_indices.data_ptr<Idx>(), etype_data,
+        incsr_or_sep_coo_num_rows_or_edges, {});
   }
 }
 
@@ -145,7 +147,6 @@ void _full_graph_message_mean_aggregation(
            "mean_aggregation");
   }
 
-  Idx num_relations = mu.numel() / gdata.num_heads;
   assert(gdata.num_heads ==
              edge_messages.size(edge_messages.ndimension() - 2) &&
          "assuming edge_messages[-2] to be num_heads but failed");
@@ -163,11 +164,15 @@ void _full_graph_message_mean_aggregation(
   // x-axis
   auto [nblks, nthrs] = get_type2_schedule(
       gdata.num_heads, gdata.message_out_dim, incsr_num_rows);
+
+  ETypeData<Idx, false> etype_data{
+      .etypes = incsr_reltypes.data_ptr<Idx>(),
+  };
   HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum<
       Idx, DType, CompactAsOfNodeKind::Disabled, true, false, false,
       UseMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
       gdata, incsr_row_ptrs.data_ptr<Idx>(), incsr_col_indices.data_ptr<Idx>(),
-      incsr_reltypes.data_ptr<Idx>(), incsr_num_rows, {}, num_relations);
+      etype_data, incsr_num_rows, {});
 }
 
 void full_graph_message_mean_aggregation(
@@ -303,13 +308,16 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
   auto [nblks, nthrs] =
       get_type1_schedule(gdata.num_heads, incsr_row_ptr.numel() - 1);
 
+  ETypeData<Idx, true> etype_data{
+      .etypes = incsr_reltypes.data_ptr<Idx>(),
+      .num_relations = num_relations,
+  };
   // TODO: expose a separate coo version
   HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel<Idx, DType, true,
                                                             true>
       <<<nblks, nthrs, 0, stream>>>(gdata, incsr_row_ptr.data_ptr<Idx>(),
                                     incsr_col_indices.data_ptr<Idx>(),
-                                    incsr_reltypes.data_ptr<Idx>(),
-                                    incsr_row_ptr.numel() - 1, num_relations);
+                                    etype_data, incsr_row_ptr.numel() - 1);
 }
 
 template <typename Idx, typename DType,
@@ -382,14 +390,17 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
   auto [nblks, nthrs] = get_type2_schedule(
       gdata_attn.num_heads, gdata_attn.message_src_xlen, outcsr_num_rows);
 
+  ETypeData<Idx, true> etype_data{
+      .etypes = outcsr_reltypes.data_ptr<Idx>(),
+      .num_relations = num_relations,
+  };
   HET__hgtAttnAndMessageSrcFusedBckKernel<Idx, DType, false, true, false,
                                           AttnScoreUseMuAppliedAttnScoreSwitch>
-      <<<nblks, nthrs, 0, stream>>>(
-          gdata_attn, grad_message.data_ptr<DType>(),
-          outcsr_row_ptrs.data_ptr<Idx>(), outcsr_col_indices.data_ptr<Idx>(),
-          outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows,
-          /*no need when !CompactAsOfNodeFlag*/ nullptr,
-          /*no need when !CompactAsOfNodeFlag*/ nullptr, num_relations);
+      <<<nblks, nthrs, 0, stream>>>(gdata_attn, grad_message.data_ptr<DType>(),
+                                    outcsr_row_ptrs.data_ptr<Idx>(),
+                                    outcsr_col_indices.data_ptr<Idx>(),
+                                    etype_data, outcsr_num_rows,
+                                    /*no need when !CompactAsOfNodeFlag*/ {});
 }
 
 template <typename Idx, typename DType, int UseMuAppliedAttnScoreSwitch>
@@ -418,7 +429,6 @@ void _full_graph_message_mean_aggregation(
       .eids = outcsr_eids.data_ptr<Idx>(),
       .grad_message_src = grad_message.data_ptr<DType>(),
       .grad_out = gradout.data_ptr<DType>()};
-  Idx num_relations = mu.numel() / gdata.num_heads;
 
   assert(gdata.num_heads == grad_message.size(grad_message.ndimension() - 2) &&
          "assuming num_heads is the same for grad_message but turned out not");
@@ -449,12 +459,15 @@ void _full_graph_message_mean_aggregation(
   auto [nblks, nthrs] = get_type2_schedule(
       gdata.num_heads, gdata.message_src_xlen, outcsr_num_rows);
 
+  ETypeData<Idx, false> etype_data{
+      .etypes = outcsr_reltypes.data_ptr<Idx>(),
+  };
+
   HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel<
       Idx, DType, CompactAsOfNodeKind::Disabled, true, false,
       UseMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
       gdata, outcsr_row_ptrs.data_ptr<Idx>(),
-      outcsr_col_indices.data_ptr<Idx>(), outcsr_reltypes.data_ptr<Idx>(),
-      outcsr_num_rows, {}, num_relations);
+      outcsr_col_indices.data_ptr<Idx>(), etype_data, outcsr_num_rows, {});
 }
 
 void full_graph_message_mean_aggregation(
@@ -492,7 +505,6 @@ void _full_graph_edge_softmax_ops(
       .grad_mu = grad_mu.data_ptr<DType>(),
       .mu = mu.data_ptr<DType>()};
 
-  Idx num_relations = mu.numel() / gdata.num_heads;
   assert(gdata.num_heads == message.size(message.ndimension() - 2) &&
          "expecting message.size[-2] to be num_heads but turned out not");
 
@@ -523,11 +535,15 @@ void _full_graph_edge_softmax_ops(
   // NB: message_src_xlen is the total dimension
   // whereas each head gets message_src_xlen //
   // num_heads number of elements
+  ETypeData<Idx, false> etype_data{
+      .etypes = outcsr_reltypes.data_ptr<Idx>(),
+  };
+
   HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel<
       Idx, DType, CompactAsOfNodeKind::Disabled, true, false,
       OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
       gdata, outcsr_row_ptr.data_ptr<Idx>(), outcsr_col_indices.data_ptr<Idx>(),
-      outcsr_reltypes.data_ptr<Idx>(), outcsr_num_rows, {}, num_relations);
+      etype_data, outcsr_num_rows, {});
 }
 
 void full_graph_edge_softmax_ops(
@@ -610,15 +626,20 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
   // edge -> blockIdx.y * blockDim.y + threadIdx.y;
   auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, num_edges);
 
+  ETypeData<Idx, true> etype_data{
+      .etypes = separate_reltypes.data_ptr<Idx>(),
+      .num_relations = num_relations,
+  };
+
   HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO<
       Idx, DType, true, true, 0><<<nblks, nthrs, 0, stream>>>(
       gdata, row_indices.data_ptr<Idx>(), col_indices.data_ptr<Idx>(),
-      separate_reltypes.data_ptr<Idx>(), num_edges, num_relations,
+      etype_data, num_edges,
       sum_incoming_edges_product_softmax_score.data_ptr<DType>());
   HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO<
       Idx, DType, true, true, 1><<<nblks, nthrs, 0, stream>>>(
       gdata, row_indices.data_ptr<Idx>(), col_indices.data_ptr<Idx>(),
-      separate_reltypes.data_ptr<Idx>(), num_edges, num_relations,
+      etype_data, num_edges,
       sum_incoming_edges_product_softmax_score.data_ptr<DType>());
 }
 }  // namespace SeparateCOO
