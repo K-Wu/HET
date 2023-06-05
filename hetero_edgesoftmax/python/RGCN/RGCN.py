@@ -426,7 +426,7 @@ def main(args):
         args.dataset,
         args.sort_by_src,
         args.sort_by_etype,
-        args.reindex_eid,
+        args.no_reindex_eid,
         args.sparse_format,
     )
     model = get_model(args, g)

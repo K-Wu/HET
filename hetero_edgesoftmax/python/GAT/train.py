@@ -84,7 +84,7 @@ def GAT_train(args, single_layer_flag: bool):
         args.dataset,
         args.sort_by_src,
         args.sort_by_etype,
-        args.reindex_eid,
+        args.no_reindex_eid,
         args.sparse_format,
     )
     num_nodes = mydgl_graph.get_num_nodes()
@@ -293,7 +293,7 @@ def GAT_get_parser(single_layer_flag: bool):
     parser.add_argument("--sort_by_src", action="store_true", help="sort by src")
     parser.add_argument("--sort_by_etype", action="store_true", help="sort by etype")
     parser.add_argument(
-        "--reindex_eid",
+        "--no_reindex_eid",
         action="store_true",
         help="use new eid after sorting rather than load referential eids",
     )

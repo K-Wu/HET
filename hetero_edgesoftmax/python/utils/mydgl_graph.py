@@ -41,8 +41,8 @@ def recursive_apply_to_each_tensor_in_dict(func, dict_var, filter_key_set):
 
 class MyDGLGraph:
     def __init__(self):
-
         self.graph_data = dict()
+        self.sequential_eids_format = ""
 
     @torch.no_grad()
     def _get_num_nodes(self):
@@ -606,6 +606,66 @@ class MyDGLGraph:
         ] = separate_coo_eids
 
     @torch.no_grad()
+    def canonicalize_eids(self, target_sequential_eids_format="separate_coo"):
+        @torch.no_grad()
+        def _get_old_to_sequential_mapping(eid_tensor):
+            return dict(zip(eid_tensor.tolist(), range(eid_tensor.shape[0])))
+
+        @torch.no_grad()
+        def _canonicalize_eids(old_to_new_eid_mapping, dict_prefix):
+            dict_prefix["eids"] = torch.tensor(
+                list(map(old_to_new_eid_mapping.get, dict_prefix["eids"].tolist()))
+            )
+
+        if target_sequential_eids_format == self.sequential_eids_format:
+            print("WARNING: already in target sequential eids format")
+            return
+
+        # step 1 get the mapping
+        old_to_new_eid_mapping = dict()
+        if target_sequential_eids_format == "separate_coo":
+            old_to_new_eid_mapping = _get_old_to_sequential_mapping(
+                self.graph_data["separate"]["coo"]["original"]["eids"]
+            )
+        elif target_sequential_eids_format == "separate_csr":
+            old_to_new_eid_mapping = _get_old_to_sequential_mapping(
+                self.graph_data["separate"]["csr"]["original"]["eids"]
+            )
+        elif target_sequential_eids_format == "integrated_coo":
+            old_to_new_eid_mapping = _get_old_to_sequential_mapping(
+                self.graph_data["original"]["eids"].tolist()
+            )
+        elif target_sequential_eids_format == "integrated_csr":
+            old_to_new_eid_mapping = _get_old_to_sequential_mapping(
+                self.graph_data["original"]["eids"].tolist()
+            )
+        else:
+            raise ValueError("unknown sequential eids format")
+
+        # step 2 apply the mapping
+        if "separate" in self.graph_data and "coo" in self.graph_data["separate"]:
+            if "original" in self.graph_data["separate"]["coo"]:
+                _canonicalize_eids(
+                    old_to_new_eid_mapping,
+                    self.graph_data["separate"]["coo"]["original"],
+                )
+            if "transposed" in self.graph_data["separate"]["coo"]:
+                raise NotImplementedError
+        if "separate" in self.graph_data and "csr" in self.graph_data["separate"]:
+            if "original" in self.graph_data["separate"]["csr"]:
+                _canonicalize_eids(
+                    old_to_new_eid_mapping,
+                    self.graph_data["separate"]["csr"]["original"],
+                )
+            if "transposed" in self.graph_data["separate"]["csr"]:
+                raise NotImplementedError
+        if "original" in self.graph_data:
+            _canonicalize_eids(old_to_new_eid_mapping, self.graph_data["original"])
+        if "transposed" in self.graph_data:
+            _canonicalize_eids(old_to_new_eid_mapping, self.graph_data["transposed"])
+        self.sequential_eids_format = target_sequential_eids_format
+
+    @torch.no_grad()
     def generate_separate_unique_node_indices_single_sided_for_each_etype(
         self, produce_inverse_idx=True
     ):
@@ -616,6 +676,10 @@ class MyDGLGraph:
             raise ValueError(
                 "separate coo graph data not found, please generate it first"
             )
+        if produce_inverse_idx:
+            # canonicalizing all formats' eid by setting separate coo's as sequential by a[b.long()].long()
+            # In this way, we don't need extra step to canonicalize the inverse idx
+            self.canonicalize_eids(target_sequential_eids_format="separate_coo")
 
         (
             result_node_indices_row,
@@ -668,6 +732,10 @@ class MyDGLGraph:
             raise ValueError(
                 "separate coo graph data not found, please generate it first"
             )
+        if produce_inverse_idx:
+            # canonicalizing all formats' eid by setting separate coo's as sequential by a[b.long()].long()
+            # In this way, we don't need extra step to canonicalize the inverse idx
+            self.canonicalize_eids(target_sequential_eids_format="separate_coo")
 
         (
             result_node_idx,
@@ -692,6 +760,7 @@ class MyDGLGraph:
             self.graph_data["separate"]["unique_node_indices"][
                 "inverse_indices"
             ] = result_node_indices_inverse_idx
+            # TODO: this is only mapping to the separate coo idx, consider canonicalizing separate coo's eid as sequential eid by a[b.long()].long(), in order to keep the current kernel code unchanged
 
     def import_metadata_from_dgl_heterograph(self, dglgraph):
         assert (

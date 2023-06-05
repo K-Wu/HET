@@ -106,7 +106,7 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
             args.dataset,
             args.sort_by_src,
             args.sort_by_etype,
-            args.reindex_eid,
+            args.no_reindex_eid,
             args.sparse_format,
         )
     if args.use_real_labels_and_features:
@@ -139,6 +139,7 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=False)
         g.generate_separate_unique_node_indices_for_each_etype()
         g.generate_separate_unique_node_indices_single_sided_for_each_etype()
+        g.canonicalize_eids()
         if not args.full_graph_training:
             # need to prepare dgl graph for sampler
             g_dglgraph = g.get_dgl_graph()

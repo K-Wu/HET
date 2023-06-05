@@ -9,7 +9,7 @@ import numpy as np
 
 
 def RGNN_get_mydgl_graph(
-    dataset, sort_by_src_flag, sort_by_etype_flag, reindex_eid_flag, sparse_format
+    dataset, sort_by_src_flag, sort_by_etype_flag, no_reindex_eid_flag, sparse_format
 ):
     # TODO: add args for dataset, and refactor these following lines into dedicated load data function
     # load graph data
@@ -17,6 +17,11 @@ def RGNN_get_mydgl_graph(
     # transposed_data_rowptr, transposed_data_colidx, transposed_data_reltypes, transposed_data_eids,
 
     dataset_sort_flag = sort_by_src_flag or sort_by_etype_flag
+
+    if no_reindex_eid_flag:
+        raise NotImplementedError(
+            "reindex eid is currently 1) a must for logic like inverse idx and eid indirection omittance, and 2) enabled anyway in graphiler loader"
+        )
 
     if dataset == "fb15k":
         print("WARNING - loading fb15k. Currently we only support a few dataset.")
@@ -132,7 +137,11 @@ def RGNN_get_mydgl_graph(
             "ERROR! now only support fb15k, wikikg2 and those in graphiler datasets. Loading it now"
         )
         exit(1)
-    if reindex_eid_flag:
+    if no_reindex_eid_flag:
+        raise NotImplementedError(
+            "reindex eid is currently a must for logic like inverse idx and eid indirection omittance"
+        )
+    else:
         edge_new_eids = np.arange(edge_referential_eids.shape[0])
         edge_referential_to_new_eids_mapping = dict(
             zip(edge_referential_eids, edge_new_eids)
@@ -160,6 +169,7 @@ def RGNN_get_mydgl_graph(
             transposed_edge_etypes,
             transposed_edge_referential_eids,
         )
+        g.sequential_eids_format = "original_coo"
     elif sparse_format == "csr":
         # coo to csr conversion
         (
@@ -197,6 +207,8 @@ def RGNN_get_mydgl_graph(
             transposed_data_reltypes,
             transposed_data_eids,
         )
+
+        g.sequential_eids_format = "original_coo"
     else:
         raise NotImplementedError("sparse format not supported")
     g["original"]["node_type_offsets"] = th.LongTensor(ntype_offsets)
@@ -462,6 +474,7 @@ def create_mydgl_graph_coo_from_hetero_dgl_graph(g):
     mydgl_graph = create_mydgl_graph_coo_torch(
         total_edge_srcs, total_edge_dsts, total_edge_etypes, total_edge_referential_eids
     )
+    mydgl_graph.sequential_eids_format = "original_coo"
     mydgl_graph.import_metadata_from_dgl_heterograph(g)
     return mydgl_graph
 
@@ -480,6 +493,7 @@ def create_mydgl_graph_coo_from_homo_dgl_graph(g, dataset_originally_homo_flag):
         etypes,
         th.arange(g.number_of_edges(), dtype=th.int64),
     )
+    mydgl_graph.sequential_eids_format = "original_coo"
     return mydgl_graph
 
 

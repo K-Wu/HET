@@ -45,7 +45,7 @@ def RGCNSingleLayer_main(args):
         args.dataset,
         args.sort_by_src,
         args.sort_by_etype,
-        args.reindex_eid,
+        args.no_reindex_eid,
         mydgl_graph_format
         # args.sparse_format,
     )
@@ -68,6 +68,7 @@ def RGCNSingleLayer_main(args):
                     "node_indices_col"
                 ].shape,
             )
+    g.canonicalize_eids()
     RGCN_main_procedure(args, g, model, feats)
 
 

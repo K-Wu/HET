@@ -410,9 +410,9 @@ def add_generic_RGNN_args(parser, default_logfilename, filtered_args={}):
         parser.add_argument(
             "--sort_by_etype", action="store_true", help="sort by etype"
         )
-    if not "reindex_eid" in filtered_args:
+    if not "no_reindex_eid" in filtered_args:
         parser.add_argument(
-            "--reindex_eid",
+            "--no_reindex_eid",
             action="store_true",
             help="use new eid after sorting rather than load referential eids",
         )
