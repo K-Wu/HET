@@ -650,7 +650,10 @@ class MyDGLGraph:
                     self.graph_data["separate"]["coo"]["original"],
                 )
             if "transposed" in self.graph_data["separate"]["coo"]:
-                raise NotImplementedError
+                _canonicalize_eids(
+                    old_to_new_eid_mapping,
+                    self.graph_data["separate"]["coo"]["transposed"],
+                )
         if "separate" in self.graph_data and "csr" in self.graph_data["separate"]:
             if "original" in self.graph_data["separate"]["csr"]:
                 _canonicalize_eids(
@@ -658,7 +661,10 @@ class MyDGLGraph:
                     self.graph_data["separate"]["csr"]["original"],
                 )
             if "transposed" in self.graph_data["separate"]["csr"]:
-                raise NotImplementedError
+                _canonicalize_eids(
+                    old_to_new_eid_mapping,
+                    self.graph_data["separate"]["csr"]["transposed"],
+                )
         if "original" in self.graph_data:
             _canonicalize_eids(old_to_new_eid_mapping, self.graph_data["original"])
         if "transposed" in self.graph_data:

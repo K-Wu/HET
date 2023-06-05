@@ -142,21 +142,22 @@ def RGNN_get_mydgl_graph(
             "reindex eid is currently a must for logic like inverse idx and eid indirection omittance"
         )
     else:
-        edge_new_eids = np.arange(edge_referential_eids.shape[0])
+        edge_new_eids = (
+            np.arange(edge_referential_eids.shape[0]).astype(np.int64).tolist()
+        )
         edge_referential_to_new_eids_mapping = dict(
-            zip(edge_referential_eids, edge_new_eids)
+            zip(edge_referential_eids.tolist(), edge_new_eids)
         )
         transposed_edge_new_eids = np.array(
             list(
                 map(
                     edge_referential_to_new_eids_mapping.__getitem__,
-                    transposed_edge_referential_eids,
+                    transposed_edge_referential_eids.tolist(),
                 )
             )
         ).astype(np.int64)
-        print("transposed_edge_new_eids shape", transposed_edge_new_eids.shape)
-        edge_referential_eids = edge_new_eids
-        transposed_edge_referential_eids = transposed_edge_new_eids
+        edge_referential_eids = th.tensor(edge_new_eids)
+        transposed_edge_referential_eids = th.tensor(transposed_edge_new_eids)
 
     if sparse_format == "coo":
         g = create_mydgl_graph_coo_with_transpose(
