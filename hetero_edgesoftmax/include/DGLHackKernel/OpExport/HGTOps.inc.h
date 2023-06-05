@@ -46,7 +46,6 @@ void _full_graph_edge_softmax_ops(
       .unnormalized_attn_score = unnormalized_attn_score.data_ptr<DType>(),
       .edgesoftmax_sum_per_node = edgesoftmax_sum_per_node.data_ptr<DType>()};
 
-  Idx num_relations = mu.numel() / gdata.num_heads;
   if constexpr (OutputMuAppliedAttnScoreSwitch == 1) {
     gdata.mu_softmax_applied_unnormalized_attn_score =
         mu_softmax_applied_unnormalized_attn_score.data_ptr<DType>();
@@ -75,6 +74,7 @@ void _full_graph_edge_softmax_ops(
 
   if constexpr (EdgeParallelFlag) {
     // use separate coo instead of in csr
+    Idx num_relations = mu.numel() / gdata.num_heads;
     ETypeData<Idx, true> etype_data{
         .etypes = incsr_or_sep_coo_reltypes_or_relptrs.data_ptr<Idx>(),
         .num_relations = num_relations};

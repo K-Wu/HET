@@ -16,16 +16,91 @@ namespace TorchExport {
 namespace RGNN {
 namespace FwProp {
 
+template <int WORK_BLOCK_SIZE>
+void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
+                                          at::Tensor &weights,
+                                          at::Tensor &inputs, at::Tensor &ret) {
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
+
+  assert(weights.size(1) == 1 && "assertion n_head == 1 failed");
+  const int64_t num_input_dim = weights.size(2);
+  const int64_t num_output_dim = weights.size(3);  // weight shape (num_ntypes,
+                                                   // in_feat, out_feat)
+  int64_t num_ntypes = ntype_offset_ptrs.numel() - 1;
+  int64_t num_nodes = inputs.size(0);
+
+  constexpr bool REG_TILING_FLAG = true;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
+  constexpr int THREADING_BLOCK_SIZE_X =
+      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
+  constexpr int THREADING_BLOCK_SIZE_Y =
+      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
+
+  int grid_dim_y = std::min(
+      ceil_div<>(num_nodes, (int64_t)WORK_BLOCK_SIZE_Y),
+      (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
+                        // case the total number of blocks is slightly larger
+                        // due to relationship with very few workloads
+  std::vector<int> num_blocks_assignment_for_same_ntype_vect,
+      num_blocks_assignment_for_all_prev_ntype_vect;
+
+  at::Tensor ntype_offset_ptrs_cpu_contiguous =
+      ntype_offset_ptrs.cpu().contiguous();
+  std::tie(num_blocks_assignment_for_same_ntype_vect,
+           num_blocks_assignment_for_all_prev_ntype_vect) =
+      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
+          grid_dim_y, num_ntypes, WORK_BLOCK_SIZE_Y,
+          ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>(),
+          ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>() + num_ntypes +
+              1);
+
+  grid_dim_y = num_blocks_assignment_for_all_prev_ntype_vect.back();
+
+  thrust::device_vector<int> dev_num_blocks_assignment_for_same_ntype_vect(
+      num_blocks_assignment_for_same_ntype_vect.begin(),
+      num_blocks_assignment_for_same_ntype_vect.end());
+  thrust::device_vector<int> dev_num_blocks_assignment_for_all_prev_ntype_vect(
+      num_blocks_assignment_for_all_prev_ntype_vect.begin(),
+      num_blocks_assignment_for_all_prev_ntype_vect.end());
+  // NB: my shmem sgemm matmul scheme
+  // in NoScatterScatter scenario, there is no such thing as multi-headed
+  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE_X),
+                   grid_dim_y, 1);
+  const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
+  HET_RGNNMatmulNoScatterGatherListFwOrBckProp<
+      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
+      <<<nblks, nthrs, 0, stream>>>(
+          inputs.data_ptr<float>(), weights.data_ptr<float>(),
+          ret.data_ptr<float>(), ntype_offset_ptrs.data_ptr<int64_t>(),
+
+          thrust::raw_pointer_cast(
+              dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
+          num_ntypes, num_input_dim, num_output_dim);
+}
+
+// TODO: check if the two folloing could be merged into one
+void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
+                                         at::Tensor &weights,
+                                         at::Tensor &inputs, at::Tensor &ret) {
+  _RelationalMatmulNoScatterGatherList<32>(ntype_offset_ptrs, weights, inputs,
+                                           ret);
+}
+namespace SeparateCOO {
 // NB: KWU: use reg tiling here: test fuse attn score vs non-fused
 // TODO: remove HET_RGNNFeatPerEdgeFwPropACGatherScatterListIdentical by using
 // the HET_RGNNFeatPerEdgeFwProp with one of the argument set as nullptr
 template <CompactAsOfNodeKind kind, bool ACGatherScatterListIdenticalFlag,
           bool InputNumHeadOneFlag>
-void _RelationalMatMul_separatecoo(
-    at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
-    at::Tensor &separate_coo_eids, at::Tensor &unique_srcs_and_dests_rel_ptrs,
-    at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &weights,
-    at::Tensor &node_feat, at::Tensor &ret) {
+void _RelationalMatMul(at::Tensor &separate_coo_relptrs,
+                       at::Tensor &separate_coo_node_indices,
+                       at::Tensor &separate_coo_eids,
+                       at::Tensor &unique_srcs_and_dests_rel_ptrs,
+                       at::Tensor &unique_srcs_and_dests_node_indices,
+                       at::Tensor &weights, at::Tensor &node_feat,
+                       at::Tensor &ret) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   const int64_t num_relations =
       separate_coo_relptrs.numel() == 0
@@ -171,79 +246,6 @@ void _RelationalMatMul_separatecoo(
   }
 }
 
-template <int WORK_BLOCK_SIZE>
-void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
-                                          at::Tensor &weights,
-                                          at::Tensor &inputs, at::Tensor &ret) {
-  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-
-  assert(weights.size(1) == 1 && "assertion n_head == 1 failed");
-  const int64_t num_input_dim = weights.size(2);
-  const int64_t num_output_dim = weights.size(3);  // weight shape (num_ntypes,
-                                                   // in_feat, out_feat)
-  int64_t num_ntypes = ntype_offset_ptrs.numel() - 1;
-  int64_t num_nodes = inputs.size(0);
-
-  constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
-  constexpr int THREADING_BLOCK_SIZE_X =
-      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
-  constexpr int THREADING_BLOCK_SIZE_Y =
-      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
-
-  int grid_dim_y = std::min(
-      ceil_div<>(num_nodes, (int64_t)WORK_BLOCK_SIZE_Y),
-      (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
-                        // case the total number of blocks is slightly larger
-                        // due to relationship with very few workloads
-  std::vector<int> num_blocks_assignment_for_same_ntype_vect,
-      num_blocks_assignment_for_all_prev_ntype_vect;
-
-  at::Tensor ntype_offset_ptrs_cpu_contiguous =
-      ntype_offset_ptrs.cpu().contiguous();
-  std::tie(num_blocks_assignment_for_same_ntype_vect,
-           num_blocks_assignment_for_all_prev_ntype_vect) =
-      get_schedule_by_relation_kernel_launch_metadata<false, false, int64_t *>(
-          grid_dim_y, num_ntypes, WORK_BLOCK_SIZE_Y,
-          ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>(),
-          ntype_offset_ptrs_cpu_contiguous.data_ptr<int64_t>() + num_ntypes +
-              1);
-
-  grid_dim_y = num_blocks_assignment_for_all_prev_ntype_vect.back();
-
-  thrust::device_vector<int> dev_num_blocks_assignment_for_same_ntype_vect(
-      num_blocks_assignment_for_same_ntype_vect.begin(),
-      num_blocks_assignment_for_same_ntype_vect.end());
-  thrust::device_vector<int> dev_num_blocks_assignment_for_all_prev_ntype_vect(
-      num_blocks_assignment_for_all_prev_ntype_vect.begin(),
-      num_blocks_assignment_for_all_prev_ntype_vect.end());
-  // NB: my shmem sgemm matmul scheme
-  // in NoScatterScatter scenario, there is no such thing as multi-headed
-  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE_X),
-                   grid_dim_y, 1);
-  const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
-  HET_RGNNMatmulNoScatterGatherListFwOrBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
-      <<<nblks, nthrs, 0, stream>>>(
-          inputs.data_ptr<float>(), weights.data_ptr<float>(),
-          ret.data_ptr<float>(), ntype_offset_ptrs.data_ptr<int64_t>(),
-
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
-          num_ntypes, num_input_dim, num_output_dim);
-}
-
-// TODO: check if the two folloing could be merged into one
-void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
-                                         at::Tensor &weights,
-                                         at::Tensor &inputs, at::Tensor &ret) {
-  _RelationalMatmulNoScatterGatherList<32>(ntype_offset_ptrs, weights, inputs,
-                                           ret);
-}
-namespace SeparateCOO {
 void RelationalMatMul(torch::Dict<std::string, at::Tensor> args_tensor_dict,
                       int64_t IntKind, at::Tensor &weights,
                       at::Tensor &node_feat, at::Tensor &ret,
@@ -261,27 +263,23 @@ void RelationalMatMul(torch::Dict<std::string, at::Tensor> args_tensor_dict,
     at::Tensor separate_coo_eids = args_tensor_dict.at("separate_coo_eids");
     if (separate_coo_node_indices.data_ptr() == separate_coo_eids.data_ptr()) {
       // TODO: use std::map or alike to implement dispatcher to reduce the
-      // duplicate code of calling _RelationalMatMul_separatecoo
+      // duplicate code of calling _RelationalMatMul
       if (InputNumHeadOneFlag) {
-        _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, true,
-                                      true>(
+        _RelationalMatMul<CompactAsOfNodeKind::Disabled, true, true>(
             separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
             dummy_tensor, weights, node_feat, ret);
       } else {
-        _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, true,
-                                      false>(
+        _RelationalMatMul<CompactAsOfNodeKind::Disabled, true, false>(
             separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
             dummy_tensor, weights, node_feat, ret);
       }
     } else {
       if (InputNumHeadOneFlag) {
-        _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, false,
-                                      true>(
+        _RelationalMatMul<CompactAsOfNodeKind::Disabled, false, true>(
             separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
             dummy_tensor, dummy_tensor, weights, node_feat, ret);
       } else {
-        _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Disabled, false,
-                                      false>(
+        _RelationalMatMul<CompactAsOfNodeKind::Disabled, false, false>(
             separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
             dummy_tensor, dummy_tensor, weights, node_feat, ret);
       }
@@ -292,12 +290,12 @@ void RelationalMatMul(torch::Dict<std::string, at::Tensor> args_tensor_dict,
     at::Tensor unique_srcs_and_dests_node_indices =
         args_tensor_dict.at("unique_srcs_and_dests_node_indices");
     if (InputNumHeadOneFlag) {
-      _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Enabled, false, true>(
+      _RelationalMatMul<CompactAsOfNodeKind::Enabled, false, true>(
           dummy_tensor, dummy_tensor, dummy_tensor,
           unique_srcs_and_dests_rel_ptrs, unique_srcs_and_dests_node_indices,
           weights, node_feat, ret);
     } else {
-      _RelationalMatMul_separatecoo<CompactAsOfNodeKind::Enabled, false, false>(
+      _RelationalMatMul<CompactAsOfNodeKind::Enabled, false, false>(
           dummy_tensor, dummy_tensor, dummy_tensor,
           unique_srcs_and_dests_rel_ptrs, unique_srcs_and_dests_node_indices,
           weights, node_feat, ret);
@@ -598,10 +596,22 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
               dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
           num_ntypes);
 }
+// TODO: check if the two folloing could be merged into one
+void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
+                                         at::Tensor &weights_transposed,
+                                         at::Tensor &node_feat_input,
+                                         at::Tensor &grad_node_feat_output,
+                                         at::Tensor &grad_node_feat_input,
+                                         at::Tensor &grad_weights) {
+  _RelationalMatmulNoScatterGatherList<32>(
+      ntype_offset_ptrs, weights_transposed, node_feat_input,
+      grad_node_feat_output, grad_weights, grad_node_feat_input);
+}
+namespace SeparateCOO {
 
 template <int WORK_BLOCK_SIZE, CompactAsOfNodeKind kind,
           bool ACGatherScatterListIdenticalFlag, bool InputNumHeadOneFlag>
-void _BackwardRelationalMatMul_separatecoo(
+void _BackwardRelationalMatMul(
     at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_node_indices,
     at::Tensor &separate_coo_eids, at::Tensor &unique_srcs_and_dests_rel_ptrs,
     at::Tensor &unique_srcs_and_dests_node_indices,
@@ -793,18 +803,6 @@ void _BackwardRelationalMatMul_separatecoo(
   }
 }
 
-// TODO: check if the two folloing could be merged into one
-void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
-                                         at::Tensor &weights_transposed,
-                                         at::Tensor &node_feat_input,
-                                         at::Tensor &grad_node_feat_output,
-                                         at::Tensor &grad_node_feat_input,
-                                         at::Tensor &grad_weights) {
-  _RelationalMatmulNoScatterGatherList<32>(
-      ntype_offset_ptrs, weights_transposed, node_feat_input,
-      grad_node_feat_output, grad_weights, grad_node_feat_input);
-}
-namespace SeparateCOO {
 void RelationalMatMul(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
                       int64_t IntKind, at::Tensor &weights_transposed,
                       at::Tensor &node_feat, at::Tensor &gradout,
@@ -818,13 +816,12 @@ void RelationalMatMul(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
     at::Tensor unique_srcs_and_dests_node_indices =
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
     if (InputNumHeadOneFlag) {
-      _BackwardRelationalMatMul_separatecoo<32, CompactAsOfNodeKind::Enabled,
-                                            false, true>(
+      _BackwardRelationalMatMul<32, CompactAsOfNodeKind::Enabled, false, true>(
           dummy_tensor, dummy_tensor, dummy_tensor,
           unique_srcs_and_dests_rel_ptrs, unique_srcs_and_dests_node_indices,
           weights_transposed, node_feat, gradout, grad_node_feat, grad_weights);
     } else {
-      _BackwardRelationalMatMul_separatecoo<
+      _BackwardRelationalMatMul<
 
           32, CompactAsOfNodeKind::Enabled, false, false>(
           dummy_tensor, dummy_tensor, dummy_tensor,
@@ -840,28 +837,28 @@ void RelationalMatMul(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
     at::Tensor separate_coo_eids = arg_tensor_dict.at("separate_coo_eids");
     if (separate_coo_eids.data_ptr() == separate_coo_node_indices.data_ptr()) {
       if (InputNumHeadOneFlag) {
-        _BackwardRelationalMatMul_separatecoo<32, CompactAsOfNodeKind::Disabled,
-                                              true, true>(
+        _BackwardRelationalMatMul<32, CompactAsOfNodeKind::Disabled, true,
+                                  true>(
             separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
             dummy_tensor, weights_transposed, node_feat, gradout,
             grad_node_feat, grad_weights);
       } else {
-        _BackwardRelationalMatMul_separatecoo<32, CompactAsOfNodeKind::Disabled,
-                                              true, false>(
+        _BackwardRelationalMatMul<32, CompactAsOfNodeKind::Disabled, true,
+                                  false>(
             separate_coo_relptrs, dummy_tensor, separate_coo_eids, dummy_tensor,
             dummy_tensor, weights_transposed, node_feat, gradout,
             grad_node_feat, grad_weights);
       }
     } else {
       if (InputNumHeadOneFlag) {
-        _BackwardRelationalMatMul_separatecoo<32, CompactAsOfNodeKind::Disabled,
-                                              false, true>(
+        _BackwardRelationalMatMul<32, CompactAsOfNodeKind::Disabled, false,
+                                  true>(
             separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
             dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
             grad_node_feat, grad_weights);
       } else {
-        _BackwardRelationalMatMul_separatecoo<32, CompactAsOfNodeKind::Disabled,
-                                              false, false>(
+        _BackwardRelationalMatMul<32, CompactAsOfNodeKind::Disabled, false,
+                                  false>(
             separate_coo_relptrs, separate_coo_node_indices, separate_coo_eids,
             dummy_tensor, dummy_tensor, weights_transposed, node_feat, gradout,
             grad_node_feat, grad_weights);
