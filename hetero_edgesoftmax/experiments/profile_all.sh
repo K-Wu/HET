@@ -4,7 +4,7 @@ declare -a CompactFlag=("--compact_as_of_node_flag" "" "--compact_as_of_node_fla
 declare -a MulFlag=("--multiply_among_weights_first_flag" "")
 declare -a Datasets=("aifb" "mutag" "bgs" "am" "mag" "wikikg2" "fb15k" "biokg")
 
-OUTPUT_DIR="misc/artifacts/ncu_breakdown_`date +%Y%m%d`"
+OUTPUT_DIR="misc/artifacts/ncu_breakdown_`date +%Y%m%d%H%M`"
 mkdir -p ${OUTPUT_DIR}
 
 for m in ${MODELS[@]}

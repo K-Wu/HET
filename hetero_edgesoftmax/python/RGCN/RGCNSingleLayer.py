@@ -60,11 +60,11 @@ def RGCNSingleLayer_main(args):
             g.generate_separate_unique_node_indices_single_sided_for_each_etype()
             print(
                 "size of unique nodes",
-                g["separate"]["unique_node_indices"]["node_indices"].shape,
-                g["separate"]["unique_node_indices_single_sided"][
+                g.get_separate_unique_node_indices()["node_indices"].shape,
+                g.get_separate_unique_node_indices_single_sided()[
                     "node_indices_row"
                 ].shape,
-                g["separate"]["unique_node_indices_single_sided"][
+                g.get_separate_unique_node_indices_single_sided()[
                     "node_indices_col"
                 ].shape,
             )

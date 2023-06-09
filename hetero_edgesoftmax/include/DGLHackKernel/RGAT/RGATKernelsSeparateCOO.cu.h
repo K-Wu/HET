@@ -5,6 +5,11 @@
 #include "DGLHackKernel/GAT/FusedGAT.cu.h"
 #include "kernel_enums.h"
 
+// TODO: put cuda kernels in HET::KernelImpl
+namespace HET {
+namespace KernelImpl {}  // namespace KernelImpl
+}  // namespace HET
+
 // edge-centric schedule cf. HET_gatSumProdZipDivKernel in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
 template <typename Idx, typename DType, CompactAsOfNodeKind kind,

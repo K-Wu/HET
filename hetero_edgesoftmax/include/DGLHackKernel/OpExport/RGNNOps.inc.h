@@ -5,8 +5,9 @@
 #include <torch/library.h>
 
 #include "DGLHackKernel/DGLHackUtils.h"
-#include "DGLHackKernel/RGNN/inner_product.cu.h"
-#include "DGLHackKernel/RGNN/inner_product_edge_parallel.cu.h"
+#include "DGLHackKernel/RGNN/GatherCompactToNonCompact.cu.h"
+#include "DGLHackKernel/RGNN/InnerProduct.cu.h"
+#include "DGLHackKernel/RGNN/InnerProductEdgeParallel.cu.h"
 #include "DGLHackKernel/RGNN/my_shmem_sgemm_func.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
 #include "ThreadingGridsBlocksSchedules.h"
@@ -121,7 +122,7 @@ void _RelationalMatMul(at::Tensor &separate_coo_relptrs,
   // assuming coarsening in both x and y direction if shmem is used instead of
   // reg tiling
   // TODO: KWU: enable reg tiling for compact as of node
-  constexpr bool REG_TILING_FLAG = (kind == CompactAsOfNodeKind::Disabled);
+  constexpr bool REG_TILING_FLAG = true;
 
   constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
   constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
@@ -316,7 +317,7 @@ void RelationalMatMul(torch::Dict<std::string, at::Tensor> args_tensor_dict,
 template </*int XPU, */ typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool IntegratedFormatRatherThanSeparateFlag,
           bool CSRRatherThanCOOFlag>
-void _inner_product_various_left_and_node_right(
+void _InnerProductVariousLeftAndNodeRight(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
     at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_indices,
@@ -379,8 +380,6 @@ void _inner_product_various_left_and_node_right(
         .etypes = incsr_row_ptr.numel() > 0 ? incsr_row_ptr.data_ptr<Idx>()
                                             : nullptr};
 
-    // FIXME: we need to pass in the number of relations
-    assert(0 && "we need to pass in the number of relations!!\n");
     HET_inner_product_fw_kernel<Idx, DType, kind, true, false, false>
         <<<nblks2, nthrs2, 0, stream>>>(
             gdata, etype_data, incsr_col_indices_data_ptr,
@@ -457,7 +456,169 @@ void _inner_product_various_left_and_node_right(
   }
 }
 
+template </*int XPU, */ typename Idx, typename DType, CompactAsOfNodeKind kind,
+          bool IntegratedFormatRatherThanSeparateFlag,
+          bool CSRRatherThanCOOFlag>
+void _GatherCompactToNonCompact(
+    at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
+    at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_indices,
+    at::Tensor &incsr_eids, at::Tensor &incsr_reltypes,
+    at::Tensor &unique_srcs_and_dests_rel_ptrs,
+    at::Tensor &unique_srcs_and_dests_node_indices,
+    at::Tensor &edata_idx_to_inverse_idx, at::Tensor &in_feat,
+    at::Tensor &out_feat) {
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
+
+  if constexpr (IntegratedFormatRatherThanSeparateFlag &&
+                CSRRatherThanCOOFlag) {
+    // Integrated CSR
+    // Configure kernel launch parameters.
+
+    // NB: updated to Type 2 Schedule (modified):
+    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // 1 (rather than num_head) -> threadIdx.y
+    // node -> blockIdx.y
+    // total_feat_idx (rather than feat_idx per head) -> blockIdx.x * blockDim.x
+    // + threadIdx.x
+
+    int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
+    auto [nblks2, nthrs2] =
+        get_type2_schedule(1, SeastarComputeXLength<>(in_feat), incsr_num_rows);
+
+    Idx *incsr_col_indices_data_ptr = incsr_col_indices.numel() > 0
+                                          ? incsr_col_indices.data_ptr<Idx>()
+                                          : nullptr;
+    Idx *incsr_reltypes_data_ptr =
+        incsr_reltypes.numel() > 0 ? incsr_reltypes.data_ptr<Idx>() : nullptr;
+
+    ETypeMapperData<Idx, kind> etype_mapper_data;
+
+    if constexpr (kind == CompactAsOfNodeKind::EnabledWithDirectIndexing) {
+      assert(edata_idx_to_inverse_idx.numel() > 0);
+      etype_mapper_data.edata_idx_to_inverse_idx =
+          edata_idx_to_inverse_idx.data_ptr<Idx>();
+    } else if constexpr (kind == CompactAsOfNodeKind::Enabled) {
+      assert(unique_srcs_and_dests_rel_ptrs.numel() > 0);
+      assert(unique_srcs_and_dests_node_indices.numel() > 0);
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+      etype_mapper_data.unique_srcs_and_dests_node_indices =
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    } else {
+      assert(kind == CompactAsOfNodeKind::Disabled);
+    }
+
+    ETypeData<Idx, false> etype_data{
+        .etypes = incsr_row_ptr.numel() > 0 ? incsr_row_ptr.data_ptr<Idx>()
+                                            : nullptr};
+    // not implemented!
+    assert(0 && "not implemented");
+  } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
+                       !CSRRatherThanCOOFlag) {
+    // separate coo
+    int64_t num_edges = separate_coo_row_indices.numel();
+    int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
+
+    // NB: Type 2 Schedule:
+    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // 1 (rather than idx_head) -> threadIdx.y
+    // edge -> blockIdx.y
+    // total_feat_idx (rather than feat_idx per head) -> blockIdx.x * blockDim.x
+    // + threadIdx.x threadIdx.x and threadIdx.y and only this pair is exchanged
+    // compared with original seastar schedule to allow reduction within the
+    // warp, i.e., along x-axis
+    auto [nblks_inner_product, nthrs_inner_product] =
+        get_type2_schedule(1, SeastarComputeXLength<>(in_feat), num_edges);
+    Idx *separate_coo_row_indices_data_ptr =
+        separate_coo_row_indices.numel() > 0
+            ? separate_coo_row_indices.data_ptr<Idx>()
+            : nullptr;
+    Idx *separate_coo_col_indices_data_ptr =
+        separate_coo_col_indices.numel() > 0
+            ? separate_coo_col_indices.data_ptr<Idx>()
+            : nullptr;
+    ETypeMapperData<Idx, kind> etype_mapper_data;
+    ETypeData<Idx, true> etype_data{
+        .etypes = separate_coo_rel_ptrs.numel() > 0
+                      ? separate_coo_rel_ptrs.data_ptr<Idx>()
+                      : nullptr,
+        .num_relations = num_relations,
+    };
+
+    if constexpr (IsCompact(kind)) {
+      if constexpr (IsBinarySearch(kind)) {
+        assert(unique_srcs_and_dests_rel_ptrs.numel() > 0);
+        assert(unique_srcs_and_dests_node_indices.numel() > 0);
+        etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+        etype_mapper_data.unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+      } else {
+        assert(edata_idx_to_inverse_idx.numel() > 0);
+        etype_mapper_data.edata_idx_to_inverse_idx =
+            edata_idx_to_inverse_idx.data_ptr<Idx>();
+      }
+    } else {
+      assert(kind == CompactAsOfNodeKind::Disabled);
+    }
+    HET_gather_compact_to_non_compact_edge_parallel<Idx, DType, kind, true,
+                                                    true, false>
+        <<<nblks_inner_product, nthrs_inner_product, 0, stream>>>(
+            SeastarComputeXLength<>(in_feat), out_feat.data_ptr<DType>(),
+            in_feat.data_ptr<DType>(), separate_coo_eids.data_ptr<Idx>(),
+            separate_coo_row_indices_data_ptr,
+            separate_coo_col_indices_data_ptr, etype_data, num_edges,
+            etype_mapper_data);
+  } else {
+    assert(0 && "Not implemented");
+  }
+}
+
 namespace SeparateCOO {
+void GatherCompactToNonCompact(
+    torch::Dict<std::string, at::Tensor> arg_tensor_dict, int64_t IntKind,
+    at::Tensor &separate_coo_rel_ptrs, at::Tensor &separate_coo_eids,
+    at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
+    at::Tensor &in_feat, at::Tensor &out_feat) {
+  at::Tensor dummy_tensor;
+  auto Kind = static_cast<CompactAsOfNodeKind>(IntKind);
+  if (Kind == CompactAsOfNodeKind::EnabledWithDirectIndexing) {
+    at::Tensor edata_idx_to_inverse_idx =
+        arg_tensor_dict.at("edata_idx_to_inverse_idx");
+    _GatherCompactToNonCompact<int64_t, float,
+                               CompactAsOfNodeKind::EnabledWithDirectIndexing,
+                               false, false>(
+        separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+        separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+        dummy_tensor, dummy_tensor, dummy_tensor, edata_idx_to_inverse_idx,
+        in_feat, out_feat);
+  } else if (Kind == CompactAsOfNodeKind::Enabled) {
+    // originally inner_product_node_compact_and_node_separatecoo
+    // left_side_data is left_node_compact_data
+    at::Tensor unique_srcs_and_dests_rel_ptrs =
+        arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
+    at::Tensor unique_srcs_and_dests_node_indices =
+        arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
+    _GatherCompactToNonCompact<int64_t, float, CompactAsOfNodeKind::Enabled,
+                               false, false>(
+        separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+        separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+        dummy_tensor, unique_srcs_and_dests_rel_ptrs,
+        unique_srcs_and_dests_node_indices, dummy_tensor, in_feat, out_feat);
+  } else if (Kind == CompactAsOfNodeKind::Disabled) {
+    // originally inner_product_edge_and_node_separatecoo
+    // left_side_data is left_edge_data
+    _GatherCompactToNonCompact<int64_t, float, CompactAsOfNodeKind::Disabled,
+                               false, false>(
+        separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
+        separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
+        dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, in_feat,
+        out_feat);
+  } else {
+    assert(0 && "Not implemented");
+  }
+}
 void InnerProductRightNode(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
                            int64_t IntKind, at::Tensor &separate_coo_rel_ptrs,
                            at::Tensor &separate_coo_eids,
@@ -474,7 +635,7 @@ void InnerProductRightNode(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
   if (Kind == CompactAsOfNodeKind::EnabledWithDirectIndexing) {
     at::Tensor edata_idx_to_inverse_idx =
         arg_tensor_dict.at("edata_idx_to_inverse_idx");
-    _inner_product_various_left_and_node_right<
+    _InnerProductVariousLeftAndNodeRight<
         int64_t, float, CompactAsOfNodeKind::EnabledWithDirectIndexing, false,
         false>(separate_coo_eids, separate_coo_rel_ptrs,
                separate_coo_row_indices, separate_coo_col_indices, dummy_tensor,
@@ -488,7 +649,7 @@ void InnerProductRightNode(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
         arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
-    _inner_product_various_left_and_node_right<
+    _InnerProductVariousLeftAndNodeRight<
         int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
@@ -498,7 +659,7 @@ void InnerProductRightNode(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
   } else if (Kind == CompactAsOfNodeKind::Disabled) {
     // originally inner_product_edge_and_node_separatecoo
     // left_side_data is left_edge_data
-    _inner_product_various_left_and_node_right<
+    _InnerProductVariousLeftAndNodeRight<
         int64_t, float, CompactAsOfNodeKind::Disabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
@@ -876,7 +1037,7 @@ void RelationalMatMul(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
 template </*int XPU, */ typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool IntegratedFormatRatherThanSeparateFlag,
           bool CSRRatherThanCOOFlag>
-void _inner_product_various_left_and_node_right(
+void _InnerProductVariousLeftAndNodeRight(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
     at::Tensor &outcsr_row_ptr, at::Tensor &outcsr_col_indices,
@@ -1000,7 +1161,7 @@ void InnerProductRightNode(
   if (Kind == CompactAsOfNodeKind::EnabledWithDirectIndexing) {
     at::Tensor edata_idx_to_inverse_idx =
         arg_tensor_dict.at("edata_idx_to_inverse_idx");
-    _inner_product_various_left_and_node_right<
+    _InnerProductVariousLeftAndNodeRight<
         int64_t, float, CompactAsOfNodeKind::EnabledWithDirectIndexing, false,
         false>(separate_coo_eids, separate_coo_rel_ptrs,
                separate_coo_row_indices, separate_coo_col_indices, dummy_tensor,
@@ -1016,7 +1177,7 @@ void InnerProductRightNode(
         arg_tensor_dict.at("unique_srcs_and_dests_rel_ptrs");
     at::Tensor unique_srcs_and_dests_node_indices =
         arg_tensor_dict.at("unique_srcs_and_dests_node_indices");
-    _inner_product_various_left_and_node_right<
+    _InnerProductVariousLeftAndNodeRight<
         int64_t, float, CompactAsOfNodeKind::Enabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
@@ -1028,7 +1189,7 @@ void InnerProductRightNode(
     // originally inner_product_edge_and_node_separatecoo
     // left_side_data is left_edge_data
     // grad_left_side_data is grad_left_edge_data
-    _inner_product_various_left_and_node_right<
+    _InnerProductVariousLeftAndNodeRight<
         int64_t, float, CompactAsOfNodeKind::Disabled, false, false>(
         separate_coo_eids, separate_coo_rel_ptrs, separate_coo_row_indices,
         separate_coo_col_indices, dummy_tensor, dummy_tensor, dummy_tensor,
@@ -1059,6 +1220,8 @@ TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
   // RGNN innerproduct
   m.def("rgnn_inner_product_right_node_separatecoo",
         RGNN::FwProp::SeparateCOO::InnerProductRightNode);
+  m.def("rgnn_gather_compact_to_non_compact",
+        RGNN::FwProp::SeparateCOO::GatherCompactToNonCompact);
   m.def("backward_inner_product_right_node_separatecoo",
         RGNN::BckProp::SeparateCOO::InnerProductRightNode);
 }

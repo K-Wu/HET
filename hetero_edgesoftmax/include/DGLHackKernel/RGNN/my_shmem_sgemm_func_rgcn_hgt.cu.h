@@ -552,7 +552,8 @@ class _simplified_basic_MatMulKernel<
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(256, 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
     HET_RGCNMatmulNoScatterGatherListFwProp(
         float *node_feat_input, float *weights,
         float *linear_projected_node_feat, float *edge_norm,
@@ -586,7 +587,8 @@ __global__ void __launch_bounds__(256, 3)
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(256, 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
     HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
         float *node_feat_input, float *delta_linear_projected_node_feat,
         float *delta_weights, float *edge_norm, IdxPtr separate_coo_row_idx,
@@ -620,7 +622,8 @@ __global__ void __launch_bounds__(256, 3)
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(256, 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
     HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
         float *delta_linear_projected_node_feat, float *weights_transposed,
         float *delta_node_feat_input, float *edge_norm, float *grad_edge_norm,
@@ -659,7 +662,8 @@ __global__ void __launch_bounds__(256, 3)
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(256, 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
     HET_HGTMessageGenerationAndAccumulationFwProp(
         float *node_feat_input, float *weights,
         float *linear_projected_node_feat, float *edge_norm,
@@ -769,7 +773,7 @@ template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
 __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 8 : 3)
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
     HET_HGTFusedAttnScoreFwProp(
         float *applied_klinear_node_features,
         float *applied_qlinear_node_features, float *attn_score_weight,

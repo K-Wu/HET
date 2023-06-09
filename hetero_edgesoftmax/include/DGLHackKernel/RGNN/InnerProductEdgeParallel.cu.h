@@ -2,7 +2,7 @@
 
 #include <cuda_runtime.h>
 
-#include "inner_product.cu.h"
+#include "InnerProduct.cu.h"
 #include "kernel_enums.h"
 
 // adapted from _gatSumProdZipDivKernel in
