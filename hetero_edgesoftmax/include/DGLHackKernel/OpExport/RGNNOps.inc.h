@@ -178,10 +178,6 @@ void _RelationalMatMul(at::Tensor &separate_coo_relptrs,
           num_blocks_assignment_for_all_prev_relation_vect.end());
 
   if constexpr (IsCompact(kind)) {
-    if constexpr (REG_TILING_FLAG) {
-      // not implemented yet
-      assert(0 && "not implemented yet");
-    }
     if constexpr (ACGatherScatterListIdenticalFlag) {
       CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
           IsCompact(kind) && ACGatherScatterListIdenticalFlag,
