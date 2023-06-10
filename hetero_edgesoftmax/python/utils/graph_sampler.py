@@ -4,6 +4,10 @@
 
 import dgl
 import torch
+
+# hack old pytorch where concatenation is provided as torch.hstack
+if "concat" not in torch.__dict__:
+    torch.concat = torch.hstack
 from ..utils_lite import coo2csr
 
 

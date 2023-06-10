@@ -22,6 +22,8 @@ import torch as th
 from .. import utils
 from ..RGNNUtils import *
 
+from typing import Tuple
+
 
 def RGAT_parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="RGAT")
@@ -60,7 +62,7 @@ def RGAT_get_model(g, num_classes, args):
 
 def RGAT_get_our_model(
     g: utils.MyDGLGraph, num_classes, args: argparse.Namespace
-) -> tuple[HET_RelGraphEmbed, HET_RelationalGATEncoder]:
+) -> Tuple[HET_RelGraphEmbed, HET_RelationalGATEncoder]:
     embed_layer = HET_RelGraphEmbed(g, args.n_infeat, exclude=[])  # exclude=["paper"])
 
     model = HET_RelationalGATEncoder(

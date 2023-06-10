@@ -1,6 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3torch.concat
 import torch
 
+# hack old pytorch where concatenation is provided as torch.hstack
+if "concat" not in torch.__dict__:
+    torch.concat = torch.hstack
 
 # NB: return inverse_indices here so that we can direct index rather than binary search
 @torch.no_grad()
