@@ -1,6 +1,7 @@
 #pragma once
 #include <cuda_runtime.h>
 // #include "cuda.h"
+#include "macros.h"
 #include "my_shmem_sgemm_func_rgcn_hgt_functor.cu.h"
 #include "utils.cu.h"
 
@@ -552,15 +553,12 @@ class _simplified_basic_MatMulKernel<
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
-    HET_RGCNMatmulNoScatterGatherListFwProp(
-        float *node_feat_input, float *weights,
-        float *linear_projected_node_feat, float *edge_norm,
-        IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
-        IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
-        int *accum_num_blocks_per_relation, Idx num_relations, Idx input_dim,
-        Idx output_dim) {
+__global__ void MY_SGEMM_LAUNCH_BOUNDS HET_RGCNMatmulNoScatterGatherListFwProp(
+    float *node_feat_input, float *weights, float *linear_projected_node_feat,
+    float *edge_norm, IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
+    IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
+    int *accum_num_blocks_per_relation, Idx num_relations, Idx input_dim,
+    Idx output_dim) {
   // TODO: KWU: supercede blockIdx/threadIdx with pretended blockIdx and
   // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.y;
@@ -587,14 +585,13 @@ __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
-    HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
-        float *node_feat_input, float *delta_linear_projected_node_feat,
-        float *delta_weights, float *edge_norm, IdxPtr separate_coo_row_idx,
-        IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
-        IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
-        Idx num_relations, Idx delta_output_dim, Idx delta_input_dim) {
+__global__ void MY_SGEMM_LAUNCH_BOUNDS
+HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
+    float *node_feat_input, float *delta_linear_projected_node_feat,
+    float *delta_weights, float *edge_norm, IdxPtr separate_coo_row_idx,
+    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
+    IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
+    Idx num_relations, Idx delta_output_dim, Idx delta_input_dim) {
   // TODO: KWU: supercede blockIdx/threadIdx with pretended blockIdx and
   // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.z;
@@ -622,15 +619,14 @@ __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
-    HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
-        float *delta_linear_projected_node_feat, float *weights_transposed,
-        float *delta_node_feat_input, float *edge_norm, float *grad_edge_norm,
-        float *input_node_feat_for_grad_norm, IdxPtr separate_coo_row_idx,
-        IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
-        IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
-        Idx num_relations, Idx delta_output_dim, Idx delta_input_dim) {
+__global__ void MY_SGEMM_LAUNCH_BOUNDS
+HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
+    float *delta_linear_projected_node_feat, float *weights_transposed,
+    float *delta_node_feat_input, float *edge_norm, float *grad_edge_norm,
+    float *input_node_feat_for_grad_norm, IdxPtr separate_coo_row_idx,
+    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
+    IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
+    Idx num_relations, Idx delta_output_dim, Idx delta_input_dim) {
   // TODO: KWU: supercede blockIdx/threadIdx with pretended blockIdx and
   // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.y;
@@ -662,15 +658,14 @@ __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
-    HET_HGTMessageGenerationAndAccumulationFwProp(
-        float *node_feat_input, float *weights,
-        float *linear_projected_node_feat, float *edge_norm,
-        /*float* relation_pri, */ IdxPtr separate_coo_row_idx,
-        IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
-        IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
-        Idx num_relations, Idx input_dim, Idx output_dim, int num_heads) {
+__global__ void MY_SGEMM_LAUNCH_BOUNDS
+HET_HGTMessageGenerationAndAccumulationFwProp(
+    float *node_feat_input, float *weights, float *linear_projected_node_feat,
+    float *edge_norm,
+    /*float* relation_pri, */ IdxPtr separate_coo_row_idx,
+    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
+    IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
+    Idx num_relations, Idx input_dim, Idx output_dim, int num_heads) {
   // TODO: KWU: supercede blockIdx/threadIdx with pretended blockIdx and
   // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.y;
@@ -772,16 +767,14 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
-    HET_HGTFusedAttnScoreFwProp(
-        float *applied_klinear_node_features,
-        float *applied_qlinear_node_features, float *attn_score_weight,
-        float *attn_score_inner_product, float *unnormalized_attn_score,
-        IdxPtr separate_coo_row_idx, IdxPtr separate_coo_col_idx,
-        IdxPtr separate_coo_eids, IdxPtr separate_coo_rel_ptrs,
-        int *accum_num_blocks_per_relation, Idx num_relations,
-        Idx fw_input_dim_per_head, Idx fw_output_dim_per_head, int num_heads) {
+__global__ void MY_SGEMM_LAUNCH_BOUNDS HET_HGTFusedAttnScoreFwProp(
+    float *applied_klinear_node_features, float *applied_qlinear_node_features,
+    float *attn_score_weight, float *attn_score_inner_product,
+    float *unnormalized_attn_score, IdxPtr separate_coo_row_idx,
+    IdxPtr separate_coo_col_idx, IdxPtr separate_coo_eids,
+    IdxPtr separate_coo_rel_ptrs, int *accum_num_blocks_per_relation,
+    Idx num_relations, Idx fw_input_dim_per_head, Idx fw_output_dim_per_head,
+    int num_heads) {
   // TODO: KWU: supercede blockIdx/threadIdx with pretended blockIdx and
   // threadIdx if in a mega-kernel
   Idx idx_block_assignment = blockIdx.y;

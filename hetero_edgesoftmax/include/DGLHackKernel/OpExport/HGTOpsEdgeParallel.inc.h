@@ -7,6 +7,7 @@
 #include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
 #include "ThreadingGridsBlocksSchedules.h"
+#include "macros.h"
 
 namespace HET {
 namespace TorchExport {
@@ -37,13 +38,8 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
 
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
-  constexpr int THREADING_BLOCK_SIZE_X =
-      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
-  constexpr int THREADING_BLOCK_SIZE_Y =
-      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
+
+  MY_SGEMM_GRID_CONFIG()
 
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = weights.size(1);
@@ -115,10 +111,7 @@ void full_graph_hetero_attention_ops(
   const int64_t num_output_dim = attn_score_weight.size(3);
   int64_t num_edges = separate_coo_eids.numel();
 
-  // NB: configuration irrelavant to whether use reg tiled or not
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
+  MY_SGEMM_GRID_CONFIG()
 
   int grid_dim_y = std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
                             (int64_t)4096);
@@ -140,12 +133,6 @@ void full_graph_hetero_attention_ops(
           num_blocks_assignment_for_all_prev_relation_vect.begin(),
           num_blocks_assignment_for_all_prev_relation_vect.end());
 
-  // NB: KWU: choose reg tiled configurations by introducing ternary operators
-  // NB: shmem-tiled specific configuration
-  constexpr int THREADING_BLOCK_SIZE_X =
-      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
-  constexpr int THREADING_BLOCK_SIZE_Y =
-      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
   // NB: my shmem sgemm matmul scheme
   const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE_X),
                    grid_dim_y, num_heads);
@@ -193,13 +180,8 @@ void full_graph_hetero_attention_ops(
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
 
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
-  constexpr int THREADING_BLOCK_SIZE_X =
-      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
-  constexpr int THREADING_BLOCK_SIZE_Y =
-      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
+
+  MY_SGEMM_GRID_CONFIG()
 
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = attn_score_weight_transposed.size(1);
@@ -320,13 +302,8 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
     at::Tensor &grad_edge_norm, at::Tensor &grad_node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
-  constexpr int THREADING_BLOCK_SIZE_X =
-      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
-  constexpr int THREADING_BLOCK_SIZE_Y =
-      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
+
+  MY_SGEMM_GRID_CONFIG()
 
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_heads = weights_transposed.size(1);
