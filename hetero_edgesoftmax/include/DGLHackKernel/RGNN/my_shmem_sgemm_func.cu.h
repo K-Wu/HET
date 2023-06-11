@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 // #include "cuda.h"
 #include "kernel_enums.h"
+#include "macros.h"
 #include "my_shmem_sgemm_func_functor.cu.h"
 #include "utils.cu.h"
 
@@ -433,15 +434,11 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 18 : 3)
-    HET_RGNNFeatPerEdgeFwProp(float *node_feat_input, float *weight,
-                              float *node_feat_per_edge,
-                              IdxPtr A_col_row_idx_gather_list,
-                              IdxPtr A_rel_ptr, IdxPtr C_eid_scatter_list,
-                              Idx input_dim, Idx output_per_head_dim,
-                              int num_heads, int *accum_num_blocks_per_relation,
-                              Idx num_relations) {
+__global__ void MY_SGEMM_LAUNCH_BOUNDS HET_RGNNFeatPerEdgeFwProp(
+    float *node_feat_input, float *weight, float *node_feat_per_edge,
+    IdxPtr A_col_row_idx_gather_list, IdxPtr A_rel_ptr,
+    IdxPtr C_eid_scatter_list, Idx input_dim, Idx output_per_head_dim,
+    int num_heads, int *accum_num_blocks_per_relation, Idx num_relations) {
   // (input, weight, output) are 1, NH, NH or NH, NH, NH depending on whether
   // A_num_head_one_flag is true. NH is num_heads
   Idx idx_block_assignment = blockIdx.y;
@@ -469,10 +466,13 @@ __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
           typename Idx, typename IdxPtr>
-__global__ void HET_RGNNMatmulNoScatterGatherListFwOrBckProp(
-    float *node_feat_input, float *weights, float *linear_projected_node_feat,
-    IdxPtr ntype_ptrs, int *accum_num_blocks_per_ntype, Idx num_ntypes,
-    Idx input_dim, Idx output_dim) {
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 20 : 3)
+    HET_RGNNMatmulNoScatterGatherListFwOrBckProp(
+        float *node_feat_input, float *weights,
+        float *linear_projected_node_feat, IdxPtr ntype_ptrs,
+        int *accum_num_blocks_per_ntype, Idx num_ntypes, Idx input_dim,
+        Idx output_dim) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_ntype = binary_search<int, int *>(
       num_ntypes, accum_num_blocks_per_ntype, idx_block_assignment);
@@ -563,14 +563,11 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 18 : 3)
-    HET_RGNNFeatCompactFwProp(
-        float *node_feat_input, float *weight, float *node_feat_per_edge,
-        const ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled>
-            etype_mapper_data,
-        Idx input_dim, Idx output_per_head_dim, int num_heads,
-        int *accum_num_blocks_per_relation, Idx num_relations) {
+__global__ void MY_SGEMM_LAUNCH_BOUNDS HET_RGNNFeatCompactFwProp(
+    float *node_feat_input, float *weight, float *node_feat_per_edge,
+    const ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
+    Idx input_dim, Idx output_per_head_dim, int num_heads,
+    int *accum_num_blocks_per_relation, Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);
@@ -605,14 +602,12 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 18 : 3)
-    HET_RGNNDeltaNodeFeatInputBckProp(
-        float *delta_feat_per_edge, float *weight_transposed,
-        float *delta_node_input, IdxPtr A_eid_gather_list, IdxPtr A_rel_ptr,
-        IdxPtr C_col_row_idx_scatter_list, Idx delta_output_per_head_dim,
-        Idx delta_input_dim, int num_heads, int *accum_num_blocks_per_relation,
-        Idx num_relations) {
+__global__ void MY_SGEMM_LAUNCH_BOUNDS HET_RGNNDeltaNodeFeatInputBckProp(
+    float *delta_feat_per_edge, float *weight_transposed,
+    float *delta_node_input, IdxPtr A_eid_gather_list, IdxPtr A_rel_ptr,
+    IdxPtr C_col_row_idx_scatter_list, Idx delta_output_per_head_dim,
+    Idx delta_input_dim, int num_heads, int *accum_num_blocks_per_relation,
+    Idx num_relations) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_relation = binary_search<int, int *>(
       num_relations, accum_num_blocks_per_relation, idx_block_assignment);

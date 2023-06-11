@@ -11,6 +11,7 @@
 #include "DGLHackKernel/RGNN/my_shmem_sgemm_func.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
 #include "ThreadingGridsBlocksSchedules.h"
+#include "macros.h"
 
 namespace HET {
 namespace TorchExport {
@@ -31,13 +32,8 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
   int64_t num_nodes = inputs.size(0);
 
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
-  constexpr int THREADING_BLOCK_SIZE_X =
-      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
-  constexpr int THREADING_BLOCK_SIZE_Y =
-      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
+
+  MY_SGEMM_GRID_CONFIG()
 
   int grid_dim_y = std::min(
       ceil_div<>(num_nodes, (int64_t)WORK_BLOCK_SIZE_Y),
@@ -124,13 +120,7 @@ void _RelationalMatMul(at::Tensor &separate_coo_relptrs,
   // TODO: KWU: enable reg tiling for compact as of node
   constexpr bool REG_TILING_FLAG = true;
 
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
-  constexpr int THREADING_BLOCK_SIZE_X =
-      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
-  constexpr int THREADING_BLOCK_SIZE_Y =
-      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
+  MY_SGEMM_GRID_CONFIG()
 
   if constexpr (IsCompact(kind)) {
     num_edges = unique_srcs_and_dests_node_indices.numel();
@@ -687,13 +677,8 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
   int64_t num_nodes = node_feat_input.size(0);
 
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
-  constexpr int THREADING_BLOCK_SIZE_X =
-      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
-  constexpr int THREADING_BLOCK_SIZE_Y =
-      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
+
+  MY_SGEMM_GRID_CONFIG()
 
   int grid_dim_y = std::min(
       ceil_div<>(num_nodes, (int64_t)WORK_BLOCK_SIZE_Y),
@@ -785,13 +770,8 @@ void _BackwardRelationalMatMul(
       weights_transposed.size(2);  // weight shape (num_relations, n_heads,
                                    // in_feat, out_feat // n_heads)
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
-  constexpr int THREADING_BLOCK_SIZE_X =
-      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
-  constexpr int THREADING_BLOCK_SIZE_Y =
-      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
+
+  MY_SGEMM_GRID_CONFIG()
 
   int64_t num_edges;
   assert(weights_transposed.is_contiguous());

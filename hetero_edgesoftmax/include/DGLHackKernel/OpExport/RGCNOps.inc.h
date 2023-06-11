@@ -10,6 +10,7 @@
 #include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
 #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
 #include "ThreadingGridsBlocksSchedules.h"
+#include "macros.h"
 
 // TODO: create dummy tensor instead whenever unused field in torch export
 // functions
@@ -70,13 +71,9 @@ void Layer1(at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
             at::Tensor &node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
-  constexpr int THREADING_BLOCK_SIZE_X =
-      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
-  constexpr int THREADING_BLOCK_SIZE_Y =
-      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
+
+  MY_SGEMM_GRID_CONFIG()
+
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_input_dim = weights.size(1);
   const int64_t num_output_dim = weights.size(2);
@@ -342,13 +339,9 @@ void Layer1(at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
             at::Tensor &delta_node_feat_output, at::Tensor &delta_weights) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
-  constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
-  constexpr int THREADING_BLOCK_SIZE_X =
-      REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
-  constexpr int THREADING_BLOCK_SIZE_Y =
-      REG_TILING_FLAG ? 1 : WORK_BLOCK_SIZE_Y / 2;
+
+  MY_SGEMM_GRID_CONFIG()
+
   const int64_t num_relations = (separate_coo_relptrs.numel() - 1);
   const int64_t num_fw_input_dim = weights_transposed.size(2);
   const int64_t num_fw_output_dim = weights_transposed.size(1);
@@ -394,14 +387,7 @@ void Layer1(at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
           num_relations, num_fw_output_dim, num_fw_input_dim);
 
   constexpr bool REG_TILING_FLAG_OUTPROD = true;
-  constexpr int WORK_BLOCK_SIZE_OUTPROD_X = REG_TILING_FLAG_OUTPROD ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_OUTPROD_Y = REG_TILING_FLAG_OUTPROD ? 16 : 32;
-  constexpr int WORK_BLOCK_SIZE_OUTPROD_K = REG_TILING_FLAG_OUTPROD ? 8 : 32;
-  constexpr int THREADING_BLOCK_SIZE_OUTPROD_X =
-      REG_TILING_FLAG_OUTPROD ? WORK_BLOCK_SIZE_OUTPROD_X
-                              : WORK_BLOCK_SIZE_OUTPROD_X / 2;
-  constexpr int THREADING_BLOCK_SIZE_OUTPROD_Y =
-      REG_TILING_FLAG_OUTPROD ? 1 : WORK_BLOCK_SIZE_OUTPROD_Y / 2;
+  MY_SGEMM_GRID_CONFIG(_OUTPROD)
 
   int grid_dim_y_outprod =
       std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_OUTPROD_Y),
