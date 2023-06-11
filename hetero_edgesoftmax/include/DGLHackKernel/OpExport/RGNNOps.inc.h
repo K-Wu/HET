@@ -31,8 +31,8 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
   int64_t num_nodes = inputs.size(0);
 
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
   constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
@@ -124,8 +124,8 @@ void _RelationalMatMul(at::Tensor &separate_coo_relptrs,
   // TODO: KWU: enable reg tiling for compact as of node
   constexpr bool REG_TILING_FLAG = true;
 
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
   constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
@@ -687,8 +687,8 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
   int64_t num_nodes = node_feat_input.size(0);
 
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
   constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
@@ -785,8 +785,8 @@ void _BackwardRelationalMatMul(
       weights_transposed.size(2);  // weight shape (num_relations, n_heads,
                                    // in_feat, out_feat // n_heads)
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
   constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;

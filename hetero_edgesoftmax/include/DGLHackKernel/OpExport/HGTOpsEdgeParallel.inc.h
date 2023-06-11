@@ -37,8 +37,8 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
 
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
   constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
@@ -116,8 +116,8 @@ void full_graph_hetero_attention_ops(
   int64_t num_edges = separate_coo_eids.numel();
 
   // NB: configuration irrelavant to whether use reg tiled or not
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
   constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
 
   int grid_dim_y = std::min(ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
@@ -193,8 +193,8 @@ void full_graph_hetero_attention_ops(
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
 
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
   constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
@@ -320,8 +320,8 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
     at::Tensor &grad_edge_norm, at::Tensor &grad_node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
   constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;

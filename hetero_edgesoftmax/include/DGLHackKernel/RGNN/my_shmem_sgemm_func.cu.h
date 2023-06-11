@@ -183,13 +183,13 @@ class _basic_MatMulKernel<false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
             int thIdxRow_A_outer_product =
                 (threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x) %
                     SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT +
-                loadLoopIdx *
-                    (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR_LOAD_A);
-            static_assert(
-                SHMEM_BLOCK_SIZE_Y % COARSEN_DIVISOR_FACTOR_LOAD_A == 0, "");
+                (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) /
+                    COARSEN_DIVISOR_FACTOR_LOAD_A;
             int thIdxFeat_A_outer_product =
                 (threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x) /
-                SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT;
+                    SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT +
+                (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) %
+                    COARSEN_DIVISOR_FACTOR_LOAD_A;
 
             // Get sub-matrix Asub of A
             As[thIdxRow_A_outer_product][thIdxFeat_A_outer_product] =
@@ -242,12 +242,12 @@ class _basic_MatMulKernel<false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
         } else {
           for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR_LOAD_A;
                loadLoopIdx++) {
-            int thIdxRow = thIdxRow_initial +
-                           loadLoopIdx * (SHMEM_BLOCK_SIZE_Y /
-                                          COARSEN_DIVISOR_FACTOR_LOAD_A);
-            static_assert(
-                SHMEM_BLOCK_SIZE_Y % COARSEN_DIVISOR_FACTOR_LOAD_A == 0, "");
-            int thIdxFeat = thIdxFeat_initial;
+            int thIdxRow =
+                thIdxRow_initial + (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) /
+                                       COARSEN_DIVISOR_FACTOR_LOAD_A;
+            int thIdxFeat =
+                thIdxFeat_initial + (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) %
+                                        COARSEN_DIVISOR_FACTOR_LOAD_A;
             // Get sub-matrix Asub of A
             As[thIdxRow][thIdxFeat] =
                 (thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y < numARows &&
@@ -433,8 +433,8 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 18 : 3)
     HET_RGNNFeatPerEdgeFwProp(float *node_feat_input, float *weight,
                               float *node_feat_per_edge,
                               IdxPtr A_col_row_idx_gather_list,
@@ -563,8 +563,8 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 18 : 3)
     HET_RGNNFeatCompactFwProp(
         float *node_feat_input, float *weight, float *node_feat_per_edge,
         const ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled>
@@ -605,8 +605,8 @@ template <
     int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K,
     typename Idx, typename IdxPtr,
     bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 18 : 3)
     HET_RGNNDeltaNodeFeatInputBckProp(
         float *delta_feat_per_edge, float *weight_transposed,
         float *delta_node_input, IdxPtr A_eid_gather_list, IdxPtr A_rel_ptr,

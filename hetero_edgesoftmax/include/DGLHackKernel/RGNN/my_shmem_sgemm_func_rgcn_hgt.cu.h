@@ -281,13 +281,13 @@ class _simplified_basic_MatMulKernel<
             int thIdxRow_A_outer_product =
                 (threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x) %
                     SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT +
-                loadLoopIdx *
-                    (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR_LOAD_A);
-            static_assert(
-                SHMEM_BLOCK_SIZE_Y % COARSEN_DIVISOR_FACTOR_LOAD_A == 0, "");
+                (loadLoopIdx * SHMEM_BLOCK_SIZE_Y /
+                 COARSEN_DIVISOR_FACTOR_LOAD_A);
             int thIdxFeat_A_outer_product =
                 (threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x) /
-                SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT;
+                    SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT +
+                (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) %
+                    COARSEN_DIVISOR_FACTOR_LOAD_A;
 
             float enorm =
                 (NoEdgeNormFlag
@@ -320,12 +320,12 @@ class _simplified_basic_MatMulKernel<
                loadLoopIdx++) {
             // NB: KWU: for outerproduct, the m loop variable is on the K
             // dimension
-            int thIdxRow = thIdxRow_initial +
-                           loadLoopIdx * (SHMEM_BLOCK_SIZE_K /
-                                          COARSEN_DIVISOR_FACTOR_LOAD_B);
-            static_assert(
-                SHMEM_BLOCK_SIZE_K % COARSEN_DIVISOR_FACTOR_LOAD_B == 0, "");
-            int thIdxFeat = thIdxFeat_initial;
+            int thIdxRow =
+                thIdxRow_initial + (loadLoopIdx * SHMEM_BLOCK_SIZE_K /
+                                    COARSEN_DIVISOR_FACTOR_LOAD_B);
+            int thIdxFeat =
+                thIdxFeat_initial + (loadLoopIdx * SHMEM_BLOCK_SIZE_K) %
+                                        COARSEN_DIVISOR_FACTOR_LOAD_B;
             float value_to_load =
                 ((m)*SHMEM_BLOCK_SIZE_K + thIdxRow <  //+ blockRowJobEntryBeg <
                      numARows &&  // TODO: idx_head < num_heads
@@ -345,12 +345,12 @@ class _simplified_basic_MatMulKernel<
         } else {
           for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR_LOAD_A;
                loadLoopIdx++) {
-            int thIdxRow = thIdxRow_initial +
-                           loadLoopIdx * (SHMEM_BLOCK_SIZE_Y /
-                                          COARSEN_DIVISOR_FACTOR_LOAD_A);
-            static_assert(
-                SHMEM_BLOCK_SIZE_Y % COARSEN_DIVISOR_FACTOR_LOAD_A == 0, "");
-            int thIdxFeat = thIdxFeat_initial;
+            int thIdxRow =
+                thIdxRow_initial + (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) /
+                                       COARSEN_DIVISOR_FACTOR_LOAD_A;
+            int thIdxFeat =
+                thIdxFeat_initial + (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) %
+                                        COARSEN_DIVISOR_FACTOR_LOAD_A;
             // Get sub-matrix Asub of A
             float enorm =
                 (NoEdgeNormFlag
@@ -552,8 +552,8 @@ class _simplified_basic_MatMulKernel<
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 18 : 3)
     HET_RGCNMatmulNoScatterGatherListFwProp(
         float *node_feat_input, float *weights,
         float *linear_projected_node_feat, float *edge_norm,
@@ -587,8 +587,8 @@ __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 18 : 3)
     HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp(
         float *node_feat_input, float *delta_linear_projected_node_feat,
         float *delta_weights, float *edge_norm, IdxPtr separate_coo_row_idx,
@@ -622,8 +622,8 @@ __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 18 : 3)
     HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
         float *delta_linear_projected_node_feat, float *weights_transposed,
         float *delta_node_feat_input, float *edge_norm, float *grad_edge_norm,
@@ -662,8 +662,8 @@ __global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 18 : 3)
     HET_HGTMessageGenerationAndAccumulationFwProp(
         float *node_feat_input, float *weights,
         float *linear_projected_node_feat, float *edge_norm,
@@ -772,8 +772,8 @@ HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp(
 template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
           int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 64 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 12 : 3)
+__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
+                                  THREADING_BLOCK_SIZE_Y == 1 ? 18 : 3)
     HET_HGTFusedAttnScoreFwProp(
         float *applied_klinear_node_features,
         float *applied_qlinear_node_features, float *attn_score_weight,

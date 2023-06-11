@@ -70,8 +70,8 @@ void Layer1(at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
             at::Tensor &node_feat_output) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
   constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
@@ -342,8 +342,8 @@ void Layer1(at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
             at::Tensor &delta_node_feat_output, at::Tensor &delta_weights) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   constexpr bool REG_TILING_FLAG = true;
-  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 64 : 32;
-  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 16 : 32;
+  constexpr int WORK_BLOCK_SIZE_X = REG_TILING_FLAG ? 32 : 32;
+  constexpr int WORK_BLOCK_SIZE_Y = REG_TILING_FLAG ? 8 : 32;
   constexpr int WORK_BLOCK_SIZE_K = REG_TILING_FLAG ? 8 : 32;
   constexpr int THREADING_BLOCK_SIZE_X =
       REG_TILING_FLAG ? WORK_BLOCK_SIZE_X : WORK_BLOCK_SIZE_X / 2;
