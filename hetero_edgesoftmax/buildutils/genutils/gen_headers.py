@@ -15,6 +15,7 @@ def print_debug_info_func():
 
     void build_debug_info() {
     std::cout << "GIT_COMMIT_HASH: " << GIT_COMMIT_HASH << std::endl;
+    std::cout << "built for CUDA ARCHS " << CUDA_ARCHS << std::endl;
     #ifdef ENABLE_DEBUG_MACRO
     std::cout << "WARNING: library built in debug mode without -O3" << std::endl;
     #else

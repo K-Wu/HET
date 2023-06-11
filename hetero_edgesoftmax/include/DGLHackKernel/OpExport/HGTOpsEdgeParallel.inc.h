@@ -302,8 +302,8 @@ void full_graph_hetero_attention_ops(
       .num_relations = num_relations,
   };
 
-  HET__hgtQVectType2BackwardKernel<int64_t, float,
-                                   CompactAsOfNodeKind::Disabled, true, true>
+  HET_HGTQVectType2BackwardKernel<int64_t, float, CompactAsOfNodeKind::Disabled,
+                                  true, true>
       <<<nblks_type2, nthrs_type2, 0, stream>>>(
           gdata, incsr_row_ptr.data_ptr<int64_t>(),
           incsr_col_indices.data_ptr<int64_t>(), etype_data,

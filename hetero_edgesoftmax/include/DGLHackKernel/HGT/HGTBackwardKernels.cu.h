@@ -72,10 +72,10 @@ struct BackwardToDeltaQData {
 
 // delta_q = delta_attn_score*inner_product
 // based on
-// HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel
+// HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel
 template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag>
-__global__ void HET__hgtQVectType2BackwardKernel(
+__global__ void HET_HGTQVectType2BackwardKernel(
     BackwardToDeltaQData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const ETypeData<Idx, ETypeRelPtrFlag> etype_data,
     int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
@@ -156,7 +156,7 @@ __global__ void HET__hgtQVectType2BackwardKernel(
 }
 
 // TODO: do an edge parallel version
-// based on HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel, as
+// based on HET_HGTEdgeSoftmaxAccumStageOnlyBackwardKernel, as
 // normalized_attn_score is present, this is similar to the case where
 // FwdOutputMuAppliedAttnScoreSwitch == 2 denote aj as attn_score of edge j,
 // mu_j as the corresponding mu of edge j, Sj as the normalized attn score. In
@@ -337,7 +337,7 @@ template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag,
           int UseMuAppliedAttnScoreSwitch>
 __global__ void
-HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
+HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
     BackwardHGTMessageData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_offsets, const Idx *column_indices,
     const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows,
@@ -492,7 +492,7 @@ struct BackwardHGTAttnScoreData<Idx, DType, 0> {
 template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag,
           int FwdOutputMuAppliedAttnScoreSwitch>
-__global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
+__global__ void HET_HGTEdgeSoftmaxAccumStageOnlyBackwardKernel(
     BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreSwitch>
         gdata,
     const Idx *row_offsets, const Idx *column_indices,
@@ -617,14 +617,14 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel(
 }
 
 // fusing kernel
-// HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel and
-// HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel Corresponding python autograd
+// HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel and
+// HET_HGTEdgeSoftmaxAccumStageOnlyBackwardKernel Corresponding python autograd
 // function HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR in
 // [[hetero_edgesoftmax/python/backend/hgt_layers_and_funcs.py]]
 template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag,
           int FwdOutputMuAppliedAttnScoreSwitch>
-__global__ void HET__hgtAttnAndMessageSrcFusedBckKernel(
+__global__ void HET_HGTAttnAndMessageSrcFusedBckKernel(
     BackwardHGTAttnScoreData<Idx, DType, FwdOutputMuAppliedAttnScoreSwitch>
         gdata,
     DType *grad_message_src, const Idx *row_offsets, const Idx *column_indices,

@@ -8,38 +8,39 @@
 // extract this kernel with mysgemm_ into template specialization
 // template <int NODE_INPUT_DIM_PER_HEAD/*derived from OUT_DIM and NUM_HEADS*/,
 // NUM_HEADS, OUT_DIM, COARSE_SGEMM_NODES_PER_BLOCK>
-template <int TILE_SZ_A, int TILE_SZ_B, int OUT_DIM, int NUM_HEADS>
-__global__ void HET__global_EdgeMessageConcatenatedCOOKernel(
-    float **intermediate_node_vect, int nnz, int *matCols, int *matRelation,
-    float *node_input_data, float *relation_message_matrices,
-    int **dest_node_to_unique_index_per_relation,
-    int *sizes_unique_index_to_dest_node_per_relation, int num_relations,
-    int *num_blocks_xdim_for_same_relation_per_block_vect,
-    int *beg_node_entry_idxes_vect, int *blockid_relation_id_vect) {
-  constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
-  constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
-  int beg_node_entry_idx = beg_node_entry_idxes_vect[blockIdx.x];
-  int stride = num_blocks_xdim_for_same_relation_per_block_vect[blockIdx.x] *
-               COARSE_SGEMM_NODES_PER_BLOCK;
-  int relation_idx = blockid_relation_id_vect[blockIdx.x];
+// template <int TILE_SZ_A, int TILE_SZ_B, int OUT_DIM, int NUM_HEADS>
+// __global__ void HET_HGTEdgeMessageConcatenatedCOOKernel(
+//     float **intermediate_node_vect, int nnz, int *matCols, int *matRelation,
+//     float *node_input_data, float *relation_message_matrices,
+//     int **dest_node_to_unique_index_per_relation,
+//     int *sizes_unique_index_to_dest_node_per_relation, int num_relations,
+//     int *num_blocks_xdim_for_same_relation_per_block_vect,
+//     int *beg_node_entry_idxes_vect, int *blockid_relation_id_vect) {
+//   constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
+//   constexpr int COARSE_SGEMM_NODES_PER_BLOCK = (TILE_SZ_B);
+//   int beg_node_entry_idx = beg_node_entry_idxes_vect[blockIdx.x];
+//   int stride = num_blocks_xdim_for_same_relation_per_block_vect[blockIdx.x] *
+//                COARSE_SGEMM_NODES_PER_BLOCK;
+//   int relation_idx = blockid_relation_id_vect[blockIdx.x];
 
-  for (int node_entry_idx = beg_node_entry_idx;
-       node_entry_idx <
-       sizes_unique_index_to_dest_node_per_relation[relation_idx];
-       node_entry_idx += stride) {
-    mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, false, false,
-                    false, false>::
-        exec_function(
-            OUT_DIM, sizes_unique_index_to_dest_node_per_relation[relation_idx],
-            NODE_INPUT_DIM_PER_HEAD,
-            &relation_message_matrices[relation_idx * NUM_HEADS *
-                                       NODE_INPUT_DIM_PER_HEAD *
-                                       NODE_INPUT_DIM_PER_HEAD],
-            node_input_data, intermediate_node_vect[relation_idx],
-            /*B gather list*/ nullptr, nullptr, -1,
-            /*C scatter list*/ nullptr, node_entry_idx);
-  }
-}
+//   for (int node_entry_idx = beg_node_entry_idx;
+//        node_entry_idx <
+//        sizes_unique_index_to_dest_node_per_relation[relation_idx];
+//        node_entry_idx += stride) {
+//     mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, NUM_HEADS, false, false,
+//                     false, false>::
+//         exec_function(
+//             OUT_DIM,
+//             sizes_unique_index_to_dest_node_per_relation[relation_idx],
+//             NODE_INPUT_DIM_PER_HEAD,
+//             &relation_message_matrices[relation_idx * NUM_HEADS *
+//                                        NODE_INPUT_DIM_PER_HEAD *
+//                                        NODE_INPUT_DIM_PER_HEAD],
+//             node_input_data, intermediate_node_vect[relation_idx],
+//             /*B gather list*/ nullptr, nullptr, -1,
+//             /*C scatter list*/ nullptr, node_entry_idx);
+//   }
+// }
 
 // only requires column indices and therefore both COO and CSR could leverage
 // this kernel.
@@ -243,7 +244,7 @@ struct HgtDstOutData<Idx, DType, 2> {
 template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int UseMuAppliedAttnScoreSwitch>
-__global__ void HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
+__global__ void HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
     HgtDstOutData<Idx, DType, UseMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_offsets, const Idx *column_indices,
     const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows,
@@ -422,7 +423,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 3> {
 template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int OutputMuAppliedAttnScoreSwitch>
-__global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
+__global__ void HET_HGTEdgeSoftmaxAccumStageOnlyKernel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_offsets, const Idx *column_indices,
     const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows,
@@ -588,7 +589,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel(
 template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int OutputMuAppliedAttnScoreSwitch>
-__global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
+__global__ void HET_HGTEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_indices, const Idx *column_indices,
     const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_edges,
@@ -699,7 +700,7 @@ __global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
 template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, bool FullCartesianFlag,
           int OutputMuAppliedAttnScoreSwitch>
-__global__ void HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
+__global__ void HET_HGTEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2(
     HgtEdgeSoftmaxAccumData<Idx, DType, OutputMuAppliedAttnScoreSwitch> gdata,
     const Idx *row_indices, const Idx *column_indices,
     const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_edges,

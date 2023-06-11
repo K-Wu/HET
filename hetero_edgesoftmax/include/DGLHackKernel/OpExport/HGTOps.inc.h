@@ -30,7 +30,7 @@ void _full_graph_edge_softmax_ops(
     at::Tensor &edgesoftmax_sum_per_node,
     at::Tensor &mu_softmax_applied_unnormalized_attn_score,
     at::Tensor &normalized_attn_score) {
-  // using HET__hgtEdgeSoftmaxAccumStageOnlyKernel based on
+  // using HET_HGTEdgeSoftmaxAccumStageOnlyKernel based on
   // _gatExpLeakyReluSumKernel in
   // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]].
   // There is an existing implementation with tricky API in
@@ -78,13 +78,13 @@ void _full_graph_edge_softmax_ops(
     ETypeData<Idx, true> etype_data{
         .etypes = incsr_or_sep_coo_reltypes_or_relptrs.data_ptr<Idx>(),
         .num_relations = num_relations};
-    HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel<
+    HET_HGTEdgeSoftmaxAccumStageOnlyKernel_edgeparallel<
         Idx, DType, CompactAsOfNodeKind::Disabled, true, true, false,
         OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
         gdata, incsr_or_sep_coo_row_ptrs_or_indices.data_ptr<Idx>(),
         incsr_or_sep_coo_col_indices.data_ptr<Idx>(), etype_data,
         incsr_or_sep_coo_num_rows_or_edges, {});
-    HET__hgtEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2<
+    HET_HGTEdgeSoftmaxAccumStageOnlyKernel_edgeparallel_stage_2<
         Idx, DType, CompactAsOfNodeKind::Disabled, true, true, false,
         OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
         gdata, incsr_or_sep_coo_row_ptrs_or_indices.data_ptr<Idx>(),
@@ -94,7 +94,7 @@ void _full_graph_edge_softmax_ops(
     // use in csr
     ETypeData<Idx, false> etype_data{
         .etypes = incsr_or_sep_coo_reltypes_or_relptrs.data_ptr<Idx>()};
-    HET__hgtEdgeSoftmaxAccumStageOnlyKernel<
+    HET_HGTEdgeSoftmaxAccumStageOnlyKernel<
         Idx, DType, CompactAsOfNodeKind::Disabled, true, false, false,
         OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
         gdata, incsr_or_sep_coo_row_ptrs_or_indices.data_ptr<Idx>(),
@@ -110,7 +110,7 @@ void _full_graph_message_mean_aggregation(
     at::Tensor &incsr_reltypes, at::Tensor &incsr_eids,
     at::Tensor &edge_messages, at::Tensor &edge_attn_score,
     at::Tensor &edgesoftmax_sum_per_node, at::Tensor &mu, at::Tensor &ret) {
-  // using HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum based on
+  // using HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum based on
   // _gatSumProdZipDivKernel whose driver code is
   // HET::TorchExport::RGCN::FwProp::IntegratedCSR::_FusedKernelImpl in
   // [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/GATOps.inc.h]] NB:
@@ -168,7 +168,7 @@ void _full_graph_message_mean_aggregation(
   ETypeData<Idx, false> etype_data{
       .etypes = incsr_reltypes.data_ptr<Idx>(),
   };
-  HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum<
+  HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum<
       Idx, DType, CompactAsOfNodeKind::Disabled, true, false, false,
       UseMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
       gdata, incsr_row_ptrs.data_ptr<Idx>(), incsr_col_indices.data_ptr<Idx>(),
@@ -207,7 +207,7 @@ void full_graph_edge_softmax_only_accumu_stage_ops(
     at::Tensor &unnormalized_attn_score, at::Tensor &mu,
     at::Tensor &edgesoftmax_sum_per_node,
     at::Tensor &mu_softmax_applied_unnormalized_attn_score) {
-  // using HET__hgtEdgeSoftmaxAccumStageOnlyKernel based on
+  // using HET_HGTEdgeSoftmaxAccumStageOnlyKernel based on
   // _gatExpLeakyReluSumKernel whose driver code is
   // HET::TorchExport::RGCN::FwProp::IntegratedCSR::_FusedKernelImpl in
   // [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/GATOps.inc.h]]
@@ -273,7 +273,7 @@ void HGTBackPropGradientSMAFusionExperimental(
 }
 
 // adapted from the BckProp::_full_graph_edge_softmax_ops, the wrapper function
-// of HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel
+// of HET_HGTEdgeSoftmaxAccumStageOnlyBackwardKernel
 template <typename Idx, typename DType>
 void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
     at::Tensor &incsr_row_ptr, at::Tensor &incsr_col_indices,
@@ -394,8 +394,8 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
       .etypes = outcsr_reltypes.data_ptr<Idx>(),
       .num_relations = num_relations,
   };
-  HET__hgtAttnAndMessageSrcFusedBckKernel<Idx, DType, false, true, false,
-                                          AttnScoreUseMuAppliedAttnScoreSwitch>
+  HET_HGTAttnAndMessageSrcFusedBckKernel<Idx, DType, false, true, false,
+                                         AttnScoreUseMuAppliedAttnScoreSwitch>
       <<<nblks, nthrs, 0, stream>>>(gdata_attn, grad_message.data_ptr<DType>(),
                                     outcsr_row_ptrs.data_ptr<Idx>(),
                                     outcsr_col_indices.data_ptr<Idx>(),
@@ -412,7 +412,7 @@ void _full_graph_message_mean_aggregation(
     at::Tensor &normalized_attn_score, at::Tensor &gradout,
     at::Tensor &grad_message) {
   // using
-  // HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel that
+  // HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel that
   // based on _fusedGatBackwardGradFeatSrc whose driver code is
   // HET::TorchExport::RGCN::BckProp::IntegratedCSR::_FusedKernelImpl in
   // [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/GATOps.inc.h]]
@@ -463,7 +463,7 @@ void _full_graph_message_mean_aggregation(
       .etypes = outcsr_reltypes.data_ptr<Idx>(),
   };
 
-  HET__hgtMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel<
+  HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel<
       Idx, DType, CompactAsOfNodeKind::Disabled, true, false,
       UseMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
       gdata, outcsr_row_ptrs.data_ptr<Idx>(),
@@ -539,7 +539,7 @@ void _full_graph_edge_softmax_ops(
       .etypes = outcsr_reltypes.data_ptr<Idx>(),
   };
 
-  HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel<
+  HET_HGTEdgeSoftmaxAccumStageOnlyBackwardKernel<
       Idx, DType, CompactAsOfNodeKind::Disabled, true, false,
       OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(
       gdata, outcsr_row_ptr.data_ptr<Idx>(), outcsr_col_indices.data_ptr<Idx>(),
@@ -572,7 +572,7 @@ void full_graph_edge_softmax_ops(
 //     mu_softmax_applied_unnormalized_attn_score, at::Tensor& out, at::Tensor&
 //     gradout, at::Tensor& mu, at::Tensor& grad_attn_score, at::Tensor&
 //     grad_mu) {
-//   // using HET__hgtEdgeSoftmaxAccumStageOnlyBackwardKernel based on
+//   // using HET_HGTEdgeSoftmaxAccumStageOnlyBackwardKernel based on
 //   // _fusedGatBackwardGradElEr whose driver code is
 //   // HET::TorchExport::RGCN::BckProp::IntegratedCSR::_FusedKernelImpl in
 //   // [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/GATOps.inc.h]]

@@ -38,9 +38,13 @@ else()
   message("CUDA_ARCH_LIST = ${CUDA_ARCH_LIST}")
   set(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
   set_property(GLOBAL PROPERTY CUDA_ARCHITECTURES "${CUDA_ARCH_LIST}")
+  # TODO: this scheme works on machine with single type of GPU. generalize it
   # set CUDA_ARCHS as a two-digit number for sputnik
   set(CUDA_ARCHS ${CUDA_ARCH_LIST})
 endif()
+
+# pass in CUDA_ARCHS as a C++ macro
+add_definitions(-DCUDA_ARCHS=${CUDA_ARCHS})
 
 #
 # Handle Dependencies.

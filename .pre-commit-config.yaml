@@ -4,7 +4,7 @@ repos:
   hooks:
   - id: clang-format
 - repo: https://github.com/psf/black
-  rev: 22.10.0
+  rev: 23.3.0
   hooks:
     - id: black
       # It is recommended to specify the latest version of Python
