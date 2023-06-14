@@ -4,6 +4,14 @@ import gspread
 from gspread import Worksheet, WorksheetNotFound
 from gspread.utils import finditem
 
+# TODO: find and extract the following pattern from the result folder
+#
+# "Mean forward time: {:4f} ms"
+# "Mean backward time: {:4f} ms"
+# "Mean training time: {:4f} ms"
+# OUTPUT_DIR="misc/artifacts/benchmark_all_`date +%Y%m%d%H%M`"
+#
+
 
 def upload_benchmark_results(cell_range, entries, target_sheet_url, target_gid):
     gc = gspread.service_account()

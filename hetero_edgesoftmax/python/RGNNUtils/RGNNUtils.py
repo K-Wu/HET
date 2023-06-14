@@ -34,7 +34,6 @@ class RelGraphEmbed(nn.Module):
 
     @utils_lite.warn_default_arguments
     def __init__(self, g, embed_size, exclude=list()):
-
         super(RelGraphEmbed, self).__init__()
         self.g = g
         self.embed_size = embed_size
@@ -72,7 +71,6 @@ class HET_RelGraphEmbed(nn.Module):
 
     @utils_lite.warn_default_arguments
     def __init__(self, g: utils.MyDGLGraph, embed_size, exclude=list()):
-
         super(HET_RelGraphEmbed, self).__init__()
         self.embed_size = embed_size
 
@@ -138,7 +136,6 @@ def HET_RGNN_train_full_graph(
     print("start training...")
 
     for epoch in range(args.n_epochs):
-
         print(f"Epoch {epoch:02d}")
         import contextlib
 
@@ -201,17 +198,17 @@ def HET_RGNN_train_full_graph(
         )
     else:
         print(
-            "Mean forward time: {:4f}".format(
+            "Mean forward time: {:4f} ms".format(
                 np.mean(forward_time[len(forward_time) // 4 :])
             )
         )
         print(
-            "Mean backward time: {:4f}".format(
+            "Mean backward time: {:4f} ms".format(
                 np.mean(backward_time[len(backward_time) // 4 :])
             )
         )
         print(
-            "Mean training time: {:4f}".format(
+            "Mean training time: {:4f} ms".format(
                 np.mean(training_time[len(training_time) // 4 :])
             )
         )
@@ -262,7 +259,6 @@ def RGNN_train_full_graph(
     # training loop
     print("start training...")
     for epoch in range(args.n_epochs):
-
         print(f"Epoch {epoch:02d}")
         model.train()
 
@@ -327,7 +323,6 @@ def RGNN_train_with_sampler(
     print("start training...")
 
     for epoch in range(args.n_epochs):
-
         print(f"Epoch {epoch:02d}")
         model.train()
 
