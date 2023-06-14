@@ -63,8 +63,16 @@ class _basic_MatMulKernel<
     // always input and B the gradient output feature. It is safe to pass
     // num_A_cols as in_dim.
 
-    // constexpr bool RIGHT_REG_TILED_FLAG = THREADING_BLOCK_SIZE_Y == 1;
-
+    // In register tiled mode, by default each threading block handles an output
+    // tile of size (Tm, Tn), produced by A tile in shmem of size (Tm, Tk), and
+    // B tile in register of size (Tk, Tn). The threading block size is Tn where
+    // data reuse is min(Tm, Tn) and each thread needs to store Tk elements,
+    // i.e., ([0:Tk), idx_thread), in registers. Each thread is in charge of
+    // ([0:Tn), idx_thread) in the output tile. If the thread number increases,
+    // each thread could store a fraction of elements in the registers, and
+    // corresponding do a fraction of the multiplication-accumulation. Still,
+    // each thread's update will span the whole column it belongs to in the
+    // output tile.
     constexpr int COARSEN_DIVISOR_FACTOR =
         (SHMEM_BLOCK_SIZE_X * SHMEM_BLOCK_SIZE_Y) /
         (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y);
@@ -116,6 +124,21 @@ class _basic_MatMulKernel<
       blockRowLoopInc = strideNumBlocksAlongRow;
     }
 
+    constexpr bool COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT =
+        !RIGHT_REG_TILED_FLAG;
+    // if the flag is true, each thread is in charge of a fraction of the output
+    // element. Otherwise, each thread is in charge of a fraction of the
+    // multiply-accumulation but still work on all the output elements
+
+    constexpr int NUM_MUL_ACC =
+        COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT
+            ? SHMEM_BLOCK_SIZE_K
+            : (SHMEM_BLOCK_SIZE_K * COARSEN_DIVISOR_FACTOR /
+               SHMEM_BLOCK_SIZE_Y);
+    constexpr int NUM_OUTPUT_PER_THREAD = COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT
+                                              ? COARSEN_DIVISOR_FACTOR
+                                              : SHMEM_BLOCK_SIZE_Y;
+
     for (int blockRow = blockRowLoopBeg; blockRow < blockRowLoopEnd;
          blockRow += blockRowLoopInc) {
       // NB: blockTask == blockIdx.x / ceil_div( num_B_cols, BLOCK_SIZE)
@@ -124,8 +147,9 @@ class _basic_MatMulKernel<
       // float* Csub = &C[blockRow * BLOCK_SIZE * num_B_cols + blockFeat *
       // BLOCK_SIZE]; Each thread computes one element of Csub by accumulating
       // results into Cvalue
-      float Cvalue[COARSEN_DIVISOR_FACTOR] = {};
       // Thread row and column within Csub
+      float Cvalue[NUM_OUTPUT_PER_THREAD] = {};
+
       int thIdxRow_initial = threadIdx.y;
       int thIdxFeat_initial = threadIdx.x;
       if constexpr (COARSEN_DIVISOR_FACTOR > 1) {
@@ -166,7 +190,9 @@ class _basic_MatMulKernel<
         __shared__ float As[SHMEM_BLOCK_SIZE_Y][SHMEM_BLOCK_SIZE_K];
         __shared__ float Bs[RIGHT_REG_TILED_FLAG ? 1 : SHMEM_BLOCK_SIZE_K]
                            [RIGHT_REG_TILED_FLAG ? 1 : SHMEM_BLOCK_SIZE_X];
-        float Bs_reg[RIGHT_REG_TILED_FLAG ? SHMEM_BLOCK_SIZE_K : 1];
+        float Bs_reg[RIGHT_REG_TILED_FLAG
+                         ? SHMEM_BLOCK_SIZE_K / THREADING_BLOCK_SIZE_Y
+                         : 1];
 
         // Get sub-matrix Bsub of B
         // Load Asub and Bsub from device memory to
@@ -321,20 +347,27 @@ class _basic_MatMulKernel<
         // before starting the computation
         __syncthreads();
         // Multiply Asub and Bsub together
-        for (int e = 0; e < SHMEM_BLOCK_SIZE_K; ++e) {
-          for (int idx_coarsen_factor = 0;
-               idx_coarsen_factor < COARSEN_DIVISOR_FACTOR;
-               idx_coarsen_factor++) {
+
+        static_assert(!(RIGHT_REG_TILED_FLAG &&
+                        (SHMEM_BLOCK_SIZE_X != THREADING_BLOCK_SIZE_X)),
+                      "unsupported yet");
+
+        for (int idx_mul_acc = 0; idx_mul_acc < NUM_MUL_ACC; ++idx_mul_acc) {
+          for (int idx_output = 0; idx_output < NUM_OUTPUT_PER_THREAD;
+               idx_output++) {
             float right_operand;
             if constexpr (RIGHT_REG_TILED_FLAG) {
-              right_operand = Bs_reg[e];
+              right_operand = Bs_reg[idx_mul_acc];
             } else {
-              right_operand = Bs[e][thIdxFeat_initial];
+              right_operand = Bs[idx_mul_acc][thIdxFeat_initial];
             }
-            Cvalue[idx_coarsen_factor] +=
+            constexpr bool COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT =
+                !RIGHT_REG_TILED_FLAG;
+
+            Cvalue[idx_output] +=
                 As[thIdxRow_initial +
-                   idx_coarsen_factor *
-                       (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR)][e] *
+                   idx_output * (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR)]
+                  [idx_mul_acc] *
                 right_operand;
           }
         }
@@ -346,11 +379,15 @@ class _basic_MatMulKernel<
 
       // Write Csub to device memory
       // Each thread writes one element
-      for (int storeLoopIdx = 0; storeLoopIdx < COARSEN_DIVISOR_FACTOR;
+      for (int storeLoopIdx = 0; storeLoopIdx < NUM_OUTPUT_PER_THREAD;
            storeLoopIdx++) {
         int thIdxRow =
             thIdxRow_initial +
-            storeLoopIdx * (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR);
+            storeLoopIdx * (SHMEM_BLOCK_SIZE_Y / NUM_OUTPUT_PER_THREAD);
+        static_assert(
+            SHMEM_BLOCK_SIZE_Y % NUM_OUTPUT_PER_THREAD == 0,
+            "SHMEM_BLOCK_SIZE_Y must be divisible by NUM_OUTPUT_PER_THREAD");
+
         int thIdxFeat = thIdxFeat_initial;
         if constexpr (OuterProductFlag) {
           // C is weight instead of feature.
@@ -364,6 +401,9 @@ class _basic_MatMulKernel<
                 "OuterproductFlag==true case must use atomic update");
           }
           if (WriteCInRangeFlag) {
+            // TODO: after non-atomic update is implemented, make sure that
+            // static_assert(!(RIGHT_REG_TILED_FLAG && !AtomicUpdateFlag),
+            //          "unsupported");
             // NB: offset dependent on whether one-side num_head is 1
             atomicAdd(
                 &C[(C_num_head_one_flag ? 0 : idx_head) *
@@ -388,7 +428,9 @@ class _basic_MatMulKernel<
                     C_num_head_one_flag ? 0 : idx_head,
                     blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat,
                     C_num_head_one_flag ? 1 : num_heads, num_B_cols);
-            if constexpr (AtomicUpdateFlag) {
+            // TODO: optimize this so that no need to do atomic update when reg
+            // tiling is used
+            if constexpr (AtomicUpdateFlag || RIGHT_REG_TILED_FLAG) {
               atomicAdd(&ref_to_global_mem_elem, val_locally_accumulated);
             } else {  // !AtomicUpdateFlag
               ref_to_global_mem_elem = val_locally_accumulated;
