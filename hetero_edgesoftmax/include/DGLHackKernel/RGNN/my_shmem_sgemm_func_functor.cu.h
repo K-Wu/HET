@@ -73,9 +73,10 @@ __device__ __forceinline__ float &GetRowMajorElement(
   }
 }
 
-template <bool DOUBLE_BUFFER_FLAG, int THREADING_BLOCK_SIZE_X,
-          int THREADING_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_X,
-          int SHMEM_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
+template <bool RIGHT_REG_TILED_FLAG, bool DOUBLE_BUFFER_FLAG,
+          int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
           MySGEMMGatherKind AGatherKind, MySGEMMGatherKind BGatherKind,
           MySGEMMGatherKind CScatterKind, bool AtomicUpdateFlag, typename Idx,
           typename IdxPtr, MySGEMMNumHeadKind numHeadKind,
@@ -92,18 +93,18 @@ class _basic_MatMulKernel {
 };
 
 // the double buffer version
-template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
-          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
-          int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
+template <bool RIGHT_REG_TILED_FLAG, int THREADING_BLOCK_SIZE_X,
+          int THREADING_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_X,
+          int SHMEM_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_K, bool OuterProductFlag,
           MySGEMMGatherKind AGatherKind, MySGEMMGatherKind BGatherKind,
           MySGEMMGatherKind CScatterKind, bool AtomicUpdateFlag, typename Idx,
           typename IdxPtr, MySGEMMNumHeadKind numHeadKind,
           CompactAsOfNodeKind compactKind>
-class _basic_MatMulKernel<true, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
-                          SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y,
-                          SHMEM_BLOCK_SIZE_K, OuterProductFlag, AGatherKind,
-                          BGatherKind, CScatterKind, AtomicUpdateFlag, Idx,
-                          IdxPtr, numHeadKind, compactKind> {
+class _basic_MatMulKernel<
+    RIGHT_REG_TILED_FLAG, true, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+    SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K,
+    OuterProductFlag, AGatherKind, BGatherKind, CScatterKind, AtomicUpdateFlag,
+    Idx, IdxPtr, numHeadKind, compactKind> {
  public:
   __device__ __forceinline__ static void execute_function(
       float *A, float *B, float *C, IdxPtr A_gather_list, IdxPtr B_gather_list,

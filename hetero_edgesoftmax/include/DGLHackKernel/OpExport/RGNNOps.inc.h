@@ -67,15 +67,15 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
                    grid_dim_y, 1);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
   HET_RGNNMatmulNoScatterGatherListFwOrBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
-      <<<nblks, nthrs, 0, stream>>>(
-          inputs.data_ptr<float>(), weights.data_ptr<float>(),
-          ret.data_ptr<float>(), ntype_offset_ptrs.data_ptr<int64_t>(),
+      REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+      int64_t *><<<nblks, nthrs, 0, stream>>>(
+      inputs.data_ptr<float>(), weights.data_ptr<float>(),
+      ret.data_ptr<float>(), ntype_offset_ptrs.data_ptr<int64_t>(),
 
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
-          num_ntypes, num_input_dim, num_output_dim);
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
+      num_ntypes, num_input_dim, num_output_dim);
 }
 
 // TODO: check if the two folloing could be merged into one
@@ -185,16 +185,17 @@ void _RelationalMatMul(at::Tensor &separate_coo_relptrs,
             unique_srcs_and_dests_rel_ptrs.data_ptr<int64_t>(),
         .unique_srcs_and_dests_node_indices =
             unique_srcs_and_dests_node_indices.data_ptr<int64_t>()};
-    HET_RGNNFeatCompactFwProp<THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
-                              WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y,
-                              WORK_BLOCK_SIZE_K, int64_t, int64_t *,
-                              InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
-        node_feat.data_ptr<float>(), weights.data_ptr<float>(),
-        ret.data_ptr<float>(), etype_mapper_data, num_input_dim,
-        num_output_per_head_dim, num_heads,
-        thrust::raw_pointer_cast(
-            dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-        num_relations);
+    HET_RGNNFeatCompactFwProp<REG_TILING_FLAG, THREADING_BLOCK_SIZE_X,
+                              THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+                              WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+                              int64_t *, InputNumHeadOneFlag>
+        <<<nblks, nthrs, 0, stream>>>(
+            node_feat.data_ptr<float>(), weights.data_ptr<float>(),
+            ret.data_ptr<float>(), etype_mapper_data, num_input_dim,
+            num_output_per_head_dim, num_heads,
+            thrust::raw_pointer_cast(
+                dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+            num_relations);
   } else {
     // NB: my shmem sgemm matmul scheme
     const dim3 nblks(
@@ -203,9 +204,9 @@ void _RelationalMatMul(at::Tensor &separate_coo_relptrs,
     const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
     if constexpr (ACGatherScatterListIdenticalFlag) {
       HET_RGNNFeatPerEdgeFwPropACGatherScatterListIdentical<
-          THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-          WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *,
-          InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+          REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+          WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+          int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
           node_feat.data_ptr<float>(), weights.data_ptr<float>(),
           ret.data_ptr<float>(), separate_coo_relptrs.data_ptr<int64_t>(),
           separate_coo_eids.data_ptr<int64_t>(), num_input_dim,
@@ -215,10 +216,10 @@ void _RelationalMatMul(at::Tensor &separate_coo_relptrs,
           num_relations);
     } else {
       // NB: KWU: use by default the new reg tiled version here
-      HET_RGNNFeatPerEdgeFwProp<THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
-                                WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y,
-                                WORK_BLOCK_SIZE_K, int64_t, int64_t *,
-                                InputNumHeadOneFlag>
+      HET_RGNNFeatPerEdgeFwProp<REG_TILING_FLAG, THREADING_BLOCK_SIZE_X,
+                                THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+                                WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+                                int64_t *, InputNumHeadOneFlag>
           <<<nblks, nthrs, 0, stream>>>(
               node_feat.data_ptr<float>(), weights.data_ptr<float>(),
               ret.data_ptr<float>(),
@@ -712,31 +713,31 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
                    grid_dim_y, 1);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
   HET_RGNNMatmulNoScatterGatherListFwOrBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
-      <<<nblks, nthrs, 0, stream>>>(
-          grad_node_feat_output.data_ptr<float>(),
-          weights_transposed.data_ptr<float>(),
-          grad_node_feat_input.data_ptr<float>(),
-          ntype_offset_ptrs.data_ptr<int64_t>(),
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
-          num_ntypes, num_output_dim, num_input_dim);
+      REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+      int64_t *><<<nblks, nthrs, 0, stream>>>(
+      grad_node_feat_output.data_ptr<float>(),
+      weights_transposed.data_ptr<float>(),
+      grad_node_feat_input.data_ptr<float>(),
+      ntype_offset_ptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
+      num_ntypes, num_output_dim, num_input_dim);
   // NB: my shmem sgemm matmul scheme
   const dim3 nblks_outer_product(
       ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE_X),
       ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE_Y), grid_dim_y);
+  // TODO: use a separate reg tiling flag
   HET_RGNNDeltaWeightNoScatterGatherListBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
-      <<<nblks_outer_product, nthrs, 0, stream>>>(
-          node_feat_input.data_ptr<float>(),
-          grad_node_feat_output.data_ptr<float>(),
-          grad_weights.data_ptr<float>(), ntype_offset_ptrs.data_ptr<int64_t>(),
-          num_input_dim, num_output_dim,
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
-          num_ntypes);
+      REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+      int64_t *><<<nblks_outer_product, nthrs, 0, stream>>>(
+      node_feat_input.data_ptr<float>(),
+      grad_node_feat_output.data_ptr<float>(), grad_weights.data_ptr<float>(),
+      ntype_offset_ptrs.data_ptr<int64_t>(), num_input_dim, num_output_dim,
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
+      num_ntypes);
 }
 // TODO: check if the two folloing could be merged into one
 void RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
@@ -848,16 +849,16 @@ void _BackwardRelationalMatMul(
         .unique_srcs_and_dests_node_indices =
             unique_srcs_and_dests_node_indices.data_ptr<int64_t>()};
     HET_RGNNDeltaNodeFeatInputCompactBckProp<
-        THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-        WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *,
-        InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+        REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+        WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+        int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
         gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
         grad_node_feat.data_ptr<float>(), etype_mapper_data, num_edges,
         num_output_per_head_dim, num_input_dim, num_heads,
         thrust::raw_pointer_cast(
             dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
         num_relations);
-    HET_RGNNDeltaWeightCompactBckProp<THREADING_BLOCK_SIZE_X,
+    HET_RGNNDeltaWeightCompactBckProp<REG_TILING_FLAG, THREADING_BLOCK_SIZE_X,
                                       THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
                                       WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K,
                                       int64_t, int64_t *, InputNumHeadOneFlag>
@@ -881,9 +882,9 @@ void _BackwardRelationalMatMul(
     // NB: #head of node_feat is 1 when InputNumHeadOneFlag is true
     if constexpr (ACGatherScatterListIdenticalFlag) {
       HET_RGNNDeltaNodeFeatInputBckPropACGatherScatterListIdentical<
-          THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-          WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *,
-          InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+          REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+          WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+          int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
           gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
           grad_node_feat.data_ptr<float>(),
           separate_coo_eids.data_ptr<int64_t>(),
@@ -897,22 +898,23 @@ void _BackwardRelationalMatMul(
       // HGT, and the delta weight is calculated accordingly. The original grid
       // configuration scheme dependent on weight dimensions should  still work
       HET_RGNNDeltaWeightBckPropACGatherScatterListIdentical<
-          THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-          WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *,
-          InputNumHeadOneFlag><<<nblks_outer_product, nthrs, 0, stream>>>(
-          node_feat.data_ptr<float>(), gradout.data_ptr<float>(),
-          grad_weights.data_ptr<float>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(), num_input_dim,
-          num_output_per_head_dim, num_heads,
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations);
+          REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+          WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+          int64_t *, InputNumHeadOneFlag>
+          <<<nblks_outer_product, nthrs, 0, stream>>>(
+              node_feat.data_ptr<float>(), gradout.data_ptr<float>(),
+              grad_weights.data_ptr<float>(),
+              separate_coo_relptrs.data_ptr<int64_t>(),
+              separate_coo_eids.data_ptr<int64_t>(), num_input_dim,
+              num_output_per_head_dim, num_heads,
+              thrust::raw_pointer_cast(
+                  dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+              num_relations);
     } else {
       HET_RGNNDeltaNodeFeatInputBckProp<
-          THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-          WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *,
-          InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+          REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+          WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+          int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
           gradout.data_ptr<float>(), weights_transposed.data_ptr<float>(),
           grad_node_feat.data_ptr<float>(),
           separate_coo_eids.data_ptr<int64_t>(),
@@ -922,10 +924,10 @@ void _BackwardRelationalMatMul(
           thrust::raw_pointer_cast(
               dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
           num_relations);
-      HET_RGNNDeltaWeightBckProp<THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
-                                 WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y,
-                                 WORK_BLOCK_SIZE_K, int64_t, int64_t *,
-                                 InputNumHeadOneFlag>
+      HET_RGNNDeltaWeightBckProp<REG_TILING_FLAG, THREADING_BLOCK_SIZE_X,
+                                 THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+                                 WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+                                 int64_t *, InputNumHeadOneFlag>
           <<<nblks_outer_product, nthrs, 0, stream>>>(
               node_feat.data_ptr<float>(), gradout.data_ptr<float>(),
               grad_weights.data_ptr<float>(),

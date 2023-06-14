@@ -11,10 +11,11 @@ enum class MySGEMMInnerProductKind {
   EnabledAndSkipOutputC
 };
 
-template <bool DOUBLE_BUFFER_FLAG, int THREADING_BLOCK_SIZE_X,
-          int THREADING_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_X,
-          int SHMEM_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_K, typename Idx,
-          typename IdxPtr, bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
+template <bool RIGHT_REG_TILED_FLAG, bool DOUBLE_BUFFER_FLAG,
+          int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
+          int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr,
+          bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
           MySGEMMInnerProductKind DoInnerProductSwitch,
           bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag,
           bool AtomicUpdateFlag>
@@ -32,16 +33,16 @@ class _simplified_basic_MatMulKernel {
   }
 };
 
-template <int THREADING_BLOCK_SIZE_X, int THREADING_BLOCK_SIZE_Y,
-          int SHMEM_BLOCK_SIZE_X, int SHMEM_BLOCK_SIZE_Y,
-          int SHMEM_BLOCK_SIZE_K, typename Idx, typename IdxPtr,
-          bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
+template <bool RIGHT_REG_TILED_FLAG, int THREADING_BLOCK_SIZE_X,
+          int THREADING_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_X,
+          int SHMEM_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_K, typename Idx,
+          typename IdxPtr, bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
           MySGEMMInnerProductKind DoInnerProductSwitch,
           bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag,
           bool AtomicUpdateFlag>
 class _simplified_basic_MatMulKernel<
-    true, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X,
-    SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr,
+    RIGHT_REG_TILED_FLAG, true, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+    SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr,
     HGT_INSTEAD_OF_RGCN_FLAG, OuterProductFlag, DoInnerProductSwitch,
     InnerProductGatherListNodeInsteadOfEdge, NoEdgeNormFlag, AtomicUpdateFlag> {
  public:

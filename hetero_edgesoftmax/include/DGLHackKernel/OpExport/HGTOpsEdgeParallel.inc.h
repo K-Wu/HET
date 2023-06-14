@@ -72,19 +72,19 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
   // TODO: KWU: allow more dtype options in this file
   HET_HGTMessageGenerationAndAccumulationFwProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
-      <<<nblks, nthrs, 0, stream>>>(
-          node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
-          node_feat_output.data_ptr<float>(),
-          edge_norm.data_ptr<float>(),  // relation_pri.data_ptr<float>(),
-          separate_coo_row_indices.data_ptr<int64_t>(),
-          separate_coo_col_indices.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations, num_input_dim, num_output_dim, num_heads);
+      REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+      int64_t *><<<nblks, nthrs, 0, stream>>>(
+      node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
+      node_feat_output.data_ptr<float>(),
+      edge_norm.data_ptr<float>(),  // relation_pri.data_ptr<float>(),
+      separate_coo_row_indices.data_ptr<int64_t>(),
+      separate_coo_col_indices.data_ptr<int64_t>(),
+      separate_coo_eids.data_ptr<int64_t>(),
+      separate_coo_relptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+      num_relations, num_input_dim, num_output_dim, num_heads);
 }
 
 // TODO: KWU: use reg tiling here: test fuse attn score vs non-fused
@@ -139,22 +139,22 @@ void full_graph_hetero_attention_ops(
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
 
   // NB: KWU: using reg tiled version by default
-  HET_HGTFusedAttnScoreFwProp<THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
-                              WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y,
-                              WORK_BLOCK_SIZE_K, int64_t, int64_t *>
-      <<<nblks, nthrs, 0, stream>>>(
-          applied_klinear_node_features.data_ptr<float>(),
-          applied_qlinear_node_features.data_ptr<float>(),
-          attn_score_weight.data_ptr<float>(),
-          attn_score_inner_product.data_ptr<float>(),
-          unnormalized_attn_score.data_ptr<float>(),
-          separate_coo_row_indices.data_ptr<int64_t>(),
-          separate_coo_col_indices.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations, num_input_dim, num_output_dim, num_heads);
+  HET_HGTFusedAttnScoreFwProp<REG_TILING_FLAG, THREADING_BLOCK_SIZE_X,
+                              THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+                              WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+                              int64_t *><<<nblks, nthrs, 0, stream>>>(
+      applied_klinear_node_features.data_ptr<float>(),
+      applied_qlinear_node_features.data_ptr<float>(),
+      attn_score_weight.data_ptr<float>(),
+      attn_score_inner_product.data_ptr<float>(),
+      unnormalized_attn_score.data_ptr<float>(),
+      separate_coo_row_indices.data_ptr<int64_t>(),
+      separate_coo_col_indices.data_ptr<int64_t>(),
+      separate_coo_eids.data_ptr<int64_t>(),
+      separate_coo_relptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+      num_relations, num_input_dim, num_output_dim, num_heads);
 }
 }  // namespace EdgeParallel
 }  // namespace SeparateCOO
@@ -227,34 +227,34 @@ void full_graph_hetero_attention_ops(
   // delta_weight=delta_inner_product*k=delta_attn_score*q*k
 
   HET_HGTFusedAttnScoreDeltaKVectBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
-      <<<nblks, nthrs, 0, stream>>>(
-          applied_qlinear_node_features.data_ptr<float>(),
-          attn_score_weight_transposed.data_ptr<float>(),
-          grad_k.data_ptr<float>(), grad_unnorm_attn_score.data_ptr<float>(),
-          separate_coo_row_indices.data_ptr<int64_t>(),
-          separate_coo_col_indices.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations, num_fw_input_dim, num_fw_output_dim, num_heads);
+      REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+      int64_t *><<<nblks, nthrs, 0, stream>>>(
+      applied_qlinear_node_features.data_ptr<float>(),
+      attn_score_weight_transposed.data_ptr<float>(), grad_k.data_ptr<float>(),
+      grad_unnorm_attn_score.data_ptr<float>(),
+      separate_coo_row_indices.data_ptr<int64_t>(),
+      separate_coo_col_indices.data_ptr<int64_t>(),
+      separate_coo_eids.data_ptr<int64_t>(),
+      separate_coo_relptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+      num_relations, num_fw_input_dim, num_fw_output_dim, num_heads);
   HET_HGTFusedAttnScoreDeltaWeightBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
-      <<<nblks_outer_product, nthrs, 0, stream>>>(
-          applied_klinear_node_features.data_ptr<float>(),
-          applied_qlinear_node_features.data_ptr<float>(),
-          grad_attn_score_weight.data_ptr<float>(),
-          grad_unnorm_attn_score.data_ptr<float>(),
-          separate_coo_row_indices.data_ptr<int64_t>(),
-          separate_coo_col_indices.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations, num_fw_input_dim, num_fw_output_dim, num_heads);
+      REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+      int64_t *><<<nblks_outer_product, nthrs, 0, stream>>>(
+      applied_klinear_node_features.data_ptr<float>(),
+      applied_qlinear_node_features.data_ptr<float>(),
+      grad_attn_score_weight.data_ptr<float>(),
+      grad_unnorm_attn_score.data_ptr<float>(),
+      separate_coo_row_indices.data_ptr<int64_t>(),
+      separate_coo_col_indices.data_ptr<int64_t>(),
+      separate_coo_eids.data_ptr<int64_t>(),
+      separate_coo_relptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+      num_relations, num_fw_input_dim, num_fw_output_dim, num_heads);
 
   // delta_q = delta_attn_score*inner_product
   BackwardToDeltaQData<int64_t, float> gdata{
@@ -339,35 +339,33 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
       num_heads * grid_dim_y);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
   HET_HGTMessageGenerationAndAccumulationDeltaNodeFeatInputBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
-      <<<nblks, nthrs, 0, stream>>>(
-          grad_node_feat_output.data_ptr<float>(),
-          weights_transposed.data_ptr<float>(),
-          grad_node_feat_input.data_ptr<float>(),
-          node_feat_input.data_ptr<float>(), edge_norm.data_ptr<float>(),
-          grad_edge_norm.data_ptr<float>(),
-          separate_coo_row_indices.data_ptr<int64_t>(),
-          separate_coo_col_indices.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations, num_output_dim, num_input_dim, num_heads);
+      REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+      int64_t *><<<nblks, nthrs, 0, stream>>>(
+      grad_node_feat_output.data_ptr<float>(),
+      weights_transposed.data_ptr<float>(),
+      grad_node_feat_input.data_ptr<float>(), node_feat_input.data_ptr<float>(),
+      edge_norm.data_ptr<float>(), grad_edge_norm.data_ptr<float>(),
+      separate_coo_row_indices.data_ptr<int64_t>(),
+      separate_coo_col_indices.data_ptr<int64_t>(),
+      separate_coo_eids.data_ptr<int64_t>(),
+      separate_coo_relptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+      num_relations, num_output_dim, num_input_dim, num_heads);
   HET_HGTMessageGenerationAndAccumulationDeltaWeightBckProp<
-      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
-      WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t, int64_t *>
-      <<<nblks_outer_product, nthrs, 0, stream>>>(
-          node_feat_input.data_ptr<float>(),
-          grad_node_feat_output.data_ptr<float>(),
-          grad_weights.data_ptr<float>(), edge_norm.data_ptr<float>(),
-          separate_coo_row_indices.data_ptr<int64_t>(),
-          separate_coo_col_indices.data_ptr<int64_t>(),
-          separate_coo_eids.data_ptr<int64_t>(),
-          separate_coo_relptrs.data_ptr<int64_t>(),
-          thrust::raw_pointer_cast(
-              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
-          num_relations, num_input_dim, num_output_dim, num_heads);
+      REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+      int64_t *><<<nblks_outer_product, nthrs, 0, stream>>>(
+      node_feat_input.data_ptr<float>(),
+      grad_node_feat_output.data_ptr<float>(), grad_weights.data_ptr<float>(),
+      edge_norm.data_ptr<float>(), separate_coo_row_indices.data_ptr<int64_t>(),
+      separate_coo_col_indices.data_ptr<int64_t>(),
+      separate_coo_eids.data_ptr<int64_t>(),
+      separate_coo_relptrs.data_ptr<int64_t>(),
+      thrust::raw_pointer_cast(
+          dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+      num_relations, num_input_dim, num_output_dim, num_heads);
 }
 
 }  // namespace EdgeParallel
