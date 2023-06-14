@@ -13,7 +13,7 @@ from gspread.utils import finditem
 #
 
 
-def upload_benchmark_results(cell_range, entries, target_sheet_url, target_gid):
+def upload_benchmark_results(entries, target_sheet_url, target_gid, cell_range=None):
     gc = gspread.service_account()
     sh = gc.open_by_url(target_sheet_url)
     sheet_data = sh.fetch_sheet_metadata()
@@ -27,12 +27,18 @@ def upload_benchmark_results(cell_range, entries, target_sheet_url, target_gid):
     except (StopIteration, KeyError):
         raise WorksheetNotFound(target_gid)
 
+    if cell_range is None:
+        # start from A1
+        cell_range = "A1:"
+        num_rows = len(entries)
+        num_cols = max([len(row) for row in entries])
+        cell_range += gspread.utils.rowcol_to_a1(num_rows, num_cols)
+
     ws.update(cell_range, entries)
 
 
 if __name__ == "__main__":
     upload_benchmark_results(
-        "A1:C3",
         [
             ["test_header", "test_header_1", "test_header_2"],
             ["2020-01-01", "test", "1.0"],
