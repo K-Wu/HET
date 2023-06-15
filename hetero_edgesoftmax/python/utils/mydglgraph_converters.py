@@ -25,7 +25,12 @@ def RGNN_get_mydgl_graph(
 
     if dataset == "fb15k":
         print("WARNING - loading fb15k. Currently we only support a few dataset.")
-        (edge_srcs, edge_dsts, edge_etypes, edge_referential_eids,) = load_fb15k237(
+        (
+            edge_srcs,
+            edge_dsts,
+            edge_etypes,
+            edge_referential_eids,
+        ) = load_fb15k237(
             "data/MyHybData",
             dataset_sort_flag,
             sort_by_src_flag,
@@ -50,7 +55,12 @@ def RGNN_get_mydgl_graph(
             canonical_etype_indices_tuples.append((0, idx_etype, 0))
     elif dataset == "wikikg2":
         print("WARNING - loading wikikg2. Currently we only support a few dataset.")
-        (edge_srcs, edge_dsts, edge_etypes, edge_referential_eids,) = load_wikikg2(
+        (
+            edge_srcs,
+            edge_dsts,
+            edge_etypes,
+            edge_referential_eids,
+        ) = load_wikikg2(
             "data/MyWikiKG2",
             dataset_sort_flag,
             sort_by_src_flag,
@@ -156,8 +166,9 @@ def RGNN_get_mydgl_graph(
                 )
             )
         ).astype(np.int64)
-        edge_referential_eids = th.tensor(edge_new_eids)
-        transposed_edge_referential_eids = th.tensor(transposed_edge_new_eids)
+        if th.is_tensor(edge_srcs):
+            edge_referential_eids = th.tensor(edge_new_eids)
+            transposed_edge_referential_eids = th.tensor(transposed_edge_new_eids)
 
     if sparse_format == "coo":
         g = create_mydgl_graph_coo_with_transpose(

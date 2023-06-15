@@ -40,6 +40,7 @@ do
         # then
         #     continue
         # fi
+        c=${CompactFlag[$c_idx]}
         # two dots in the name because mul flag is not set
         echo "python -m python.RGCN.RGCNSingleLayerSeparateCOO -d $d --num_layers 1  --full_graph_training --num_classes 64 --n_infeat 64 $c"
         echo "python -m python.RGCN.RGCNSingleLayerSeparateCOO -d $d --num_layers 1  --full_graph_training --num_classes 64 --n_infeat 64 $c" >>"${OUTPUT_DIR}/RGCN.$d..${c//[[:blank:]]/}.result.log"
