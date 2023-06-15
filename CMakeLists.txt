@@ -19,8 +19,7 @@ option(GITHUB_ACTION_TEST
        OFF)
 
 if(DEFINED CUDA_ARCHS)
-  # exit with error
-  message(FATAL_ERROR "CUDA_ARCHS is deprecated.")
+  message(WARNING "CUDA_ARCHS is set as ${CUDA_ARCHS}.")
 endif()
 
 # from https://stackoverflow.com/a/69353718

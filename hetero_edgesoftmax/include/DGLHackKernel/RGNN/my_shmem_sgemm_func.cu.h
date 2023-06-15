@@ -80,17 +80,17 @@ class _basic_MatMulKernel<
     static_assert(SHMEM_BLOCK_SIZE_X % THREADING_BLOCK_SIZE_X == 0, "");
 
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_A =
-        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X / THREADING_BLOCK_SIZE_X /
+        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y / THREADING_BLOCK_SIZE_X /
         THREADING_BLOCK_SIZE_Y;
-    static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X) %
+    static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y) %
                           (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y) ==
                       0,
                   "");
 
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_B =
-        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y / THREADING_BLOCK_SIZE_X /
+        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X / THREADING_BLOCK_SIZE_X /
         THREADING_BLOCK_SIZE_Y;
-    static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y) %
+    static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X) %
                           (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y) ==
                       0,
                   "");
@@ -317,7 +317,7 @@ class _basic_MatMulKernel<
                           (blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat)]
                       : 0.0f;
               if constexpr (RIGHT_REG_TILED_FLAG) {
-                Bs_reg[thIdxRow] = value_to_load;
+                Bs_reg[loadLoopIdx] = value_to_load;
               } else {
                 Bs[thIdxRow][thIdxFeat] = value_to_load;
               }
@@ -335,7 +335,7 @@ class _basic_MatMulKernel<
                             B_num_head_one_flag ? 1 : num_heads, num_B_cols)
                       : 0.0f;
               if constexpr (RIGHT_REG_TILED_FLAG) {
-                Bs_reg[thIdxRow] = value_to_load;
+                Bs_reg[loadLoopIdx] = value_to_load;
               } else {
                 Bs[thIdxRow][thIdxFeat] = value_to_load;
               }
@@ -361,12 +361,10 @@ class _basic_MatMulKernel<
             } else {
               right_operand = Bs[idx_mul_acc][thIdxFeat_initial];
             }
-            constexpr bool COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT =
-                !RIGHT_REG_TILED_FLAG;
 
             Cvalue[idx_output] +=
                 As[thIdxRow_initial +
-                   idx_output * (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR)]
+                   idx_output * (SHMEM_BLOCK_SIZE_Y / NUM_OUTPUT_PER_THREAD)]
                   [idx_mul_acc] *
                 right_operand;
           }
