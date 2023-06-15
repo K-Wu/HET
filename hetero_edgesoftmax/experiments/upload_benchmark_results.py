@@ -4,6 +4,8 @@ import gspread
 from gspread import Worksheet, WorksheetNotFound
 from gspread.utils import finditem
 
+import os
+
 # TODO: find and extract the following pattern from the result folder
 #
 # "Mean forward time: {:4f} ms"
@@ -13,7 +15,30 @@ from gspread.utils import finditem
 #
 
 
-def upload_benchmark_results(entries, target_sheet_url, target_gid, cell_range=None):
+def extract_info_from(filename):
+    # model_name.dataset_name.mul_flag.compact_flag.result.log
+    return filename.split(".")[:-2]
+
+
+def extract_results_from_folder(path):
+    all_names_and_info = []
+    for filename in os.listdir(path):
+        if filename.endswith(".result.log"):
+            name_info = extract_info_from(filename)
+            with open(os.path.join(path, filename), "r") as f:
+                lines = f.readlines()
+                for line in lines:
+                    if line.startswith("Mean forward time"):
+                        name_info.append(line.split(":")[1].strip().split()[0])
+                    elif line.startswith("Mean backward time"):
+                        name_info.append(line.split(":")[1].strip().split()[0])
+                    elif line.startswith("Mean training time"):
+                        name_info.append(line.split(":")[1].strip().split()[0])
+            all_names_and_info.append(name_info)
+    return all_names_and_info
+
+
+def update_gspread(entries, target_sheet_url, target_gid, cell_range=None):
     gc = gspread.service_account()
     sh = gc.open_by_url(target_sheet_url)
     sheet_data = sh.fetch_sheet_metadata()
@@ -38,12 +63,11 @@ def upload_benchmark_results(entries, target_sheet_url, target_gid, cell_range=N
 
 
 if __name__ == "__main__":
-    upload_benchmark_results(
-        [
-            ["test_header", "test_header_1", "test_header_2"],
-            ["2020-01-01", "test", "1.0"],
-            ["2020-01-02", "test2", "2.0"],
-        ],
+    names_and_info = extract_results_from_folder(
+        "misc/artifacts/benchmark_all_202306142317"
+    )
+    update_gspread(
+        names_and_info,
         "https://docs.google.com/spreadsheets/d/1qMklewOvYRVRHTYlMErvyd67afJvaVNwd79sMrKw__4/",
         "0",
     )
