@@ -78,17 +78,17 @@ class _simplified_basic_MatMulKernel<
     static_assert(SHMEM_BLOCK_SIZE_X % THREADING_BLOCK_SIZE_X == 0, "");
 
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_A =
-        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X / THREADING_BLOCK_SIZE_X /
+        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y / THREADING_BLOCK_SIZE_X /
         THREADING_BLOCK_SIZE_Y;
-    static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X) %
+    static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y) %
                           (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y) ==
                       0,
                   "");
 
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_B =
-        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y / THREADING_BLOCK_SIZE_X /
+        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X / THREADING_BLOCK_SIZE_X /
         THREADING_BLOCK_SIZE_Y;
-    static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_Y) %
+    static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X) %
                           (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y) ==
                       0,
                   "");
@@ -135,6 +135,21 @@ class _simplified_basic_MatMulKernel<
       blockRowLoopInc = strideNumBlocksAlongRow;
     }
 
+    constexpr bool COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT =
+        !RIGHT_REG_TILED_FLAG;
+    // if the flag is true, each thread is in charge of a fraction of the output
+    // element. Otherwise, each thread is in charge of a fraction of the
+    // multiply-accumulation but still work on all the output elements
+
+    constexpr int NUM_MUL_ACC =
+        COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT
+            ? SHMEM_BLOCK_SIZE_K
+            : (SHMEM_BLOCK_SIZE_K * COARSEN_DIVISOR_FACTOR /
+               SHMEM_BLOCK_SIZE_Y);
+    constexpr int NUM_OUTPUT_PER_THREAD = COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT
+                                              ? COARSEN_DIVISOR_FACTOR
+                                              : SHMEM_BLOCK_SIZE_Y;
+
     for (int blockRow = blockRowLoopBeg; blockRow < blockRowLoopEnd;
          blockRow += blockRowLoopInc) {
       // NB: blockTask == blockIdx.x / ceil_div( num_B_cols, BLOCK_SIZE)
@@ -142,14 +157,13 @@ class _simplified_basic_MatMulKernel<
       // Each thread block computes one sub-matrix Csub of C
       // Each thread computes one element of Csub by accumulating
       // results into Cvalue
-      float Cvalue[COARSEN_DIVISOR_FACTOR] = {};
+      float Cvalue[NUM_OUTPUT_PER_THREAD] = {};
       /*partially loaded in the main loop*/
-      int inner_prod_source_reg_ele_num =
-          max2(COARSEN_DIVISOR_FACTOR -
-                   ceil_div<Idx>(num_A_cols, SHMEM_BLOCK_SIZE_K),
-               0L);
+      int inner_prod_source_reg_ele_num = max2(
+          NUM_OUTPUT_PER_THREAD - ceil_div<Idx>(num_A_cols, SHMEM_BLOCK_SIZE_K),
+          0L);
       int inner_prod_source_shmem_ele_num =
-          min2(COARSEN_DIVISOR_FACTOR,
+          min2(NUM_OUTPUT_PER_THREAD,
                (int)ceil_div<Idx>(num_A_cols, SHMEM_BLOCK_SIZE_K));
       // TODO: KWU: use shared memory to store innerproductterm
       // TODO: KWU: add support to dynamic shape
@@ -157,13 +171,15 @@ class _simplified_basic_MatMulKernel<
       float InnerProductTerm
           [DoInnerProductSwitch != MySGEMMInnerProductKind::Disabled
                ? (INNER_PROD_LOAD_SOURCE_INTO_SHMEM
-                      ? COARSEN_DIVISOR_FACTOR /*max2(inner_prod_source_reg_ele_num,1)*/
-                      : COARSEN_DIVISOR_FACTOR)
+                      ? NUM_OUTPUT_PER_THREAD  // actually
+                                               // max2(inner_prod_source_reg_ele_num,1)
+                      : NUM_OUTPUT_PER_THREAD)
                : 1] = {};  // zero initialization
       __shared__ float InnerProductTerm_shmem
           [(DoInnerProductSwitch != MySGEMMInnerProductKind::Disabled &&
             INNER_PROD_LOAD_SOURCE_INTO_SHMEM)
-               ? COARSEN_DIVISOR_FACTOR /*max2(inner_prod_source_shmem_ele_num,1)*/
+               ? NUM_OUTPUT_PER_THREAD  // actually
+                                        // max2(inner_prod_source_shmem_ele_num,1)
                : 1]
           [(DoInnerProductSwitch != MySGEMMInnerProductKind::Disabled &&
             INNER_PROD_LOAD_SOURCE_INTO_SHMEM)
@@ -174,7 +190,7 @@ class _simplified_basic_MatMulKernel<
       // Thread row and column within Csub
       int thIdxRow_initial = threadIdx.y;
       int thIdxFeat_initial = threadIdx.x;
-      if constexpr (COARSEN_DIVISOR_FACTOR > 1) {
+      if constexpr (NUM_OUTPUT_PER_THREAD > 1) {
         // redo the thread indexing
         int thIdx = threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x;
         thIdxRow_initial = thIdx / SHMEM_BLOCK_SIZE_X;
@@ -191,14 +207,14 @@ class _simplified_basic_MatMulKernel<
             INNER_PROD_LOAD_SOURCE_INTO_SHMEM
                 ? inner_prod_source_reg_ele_num /*partially loaded in the main
                                                    loop*/
-                : COARSEN_DIVISOR_FACTOR;
+                : NUM_OUTPUT_PER_THREAD;
         for (int idx_coarsen_factor = 0;
              idx_coarsen_factor < inner_load_reg_loop_count;
              idx_coarsen_factor++) {
-          static_assert(SHMEM_BLOCK_SIZE_Y >= COARSEN_DIVISOR_FACTOR, "");
-          int thIdxRow = thIdxRow_initial +
-                         idx_coarsen_factor *
-                             (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR);
+          static_assert(SHMEM_BLOCK_SIZE_Y >= NUM_OUTPUT_PER_THREAD, "");
+          int thIdxRow =
+              thIdxRow_initial +
+              idx_coarsen_factor * (SHMEM_BLOCK_SIZE_Y / NUM_OUTPUT_PER_THREAD);
           int thIdxFeat = thIdxFeat_initial;
           bool WriteCInRangeFlag =
               thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y < numARows &&
@@ -237,17 +253,19 @@ class _simplified_basic_MatMulKernel<
         __shared__ float As[SHMEM_BLOCK_SIZE_Y][SHMEM_BLOCK_SIZE_K];
         __shared__ float Bs[RIGHT_REG_TILED_FLAG ? 1 : SHMEM_BLOCK_SIZE_K]
                            [RIGHT_REG_TILED_FLAG ? 1 : SHMEM_BLOCK_SIZE_X];
-        float Bs_reg[RIGHT_REG_TILED_FLAG ? SHMEM_BLOCK_SIZE_K : 1];
+        float Bs_reg[RIGHT_REG_TILED_FLAG
+                         ? SHMEM_BLOCK_SIZE_K / THREADING_BLOCK_SIZE_Y
+                         : 1];
 
         if constexpr (DoInnerProductSwitch !=
                           MySGEMMInnerProductKind::Disabled &&
                       INNER_PROD_LOAD_SOURCE_INTO_SHMEM) {
           if (m < inner_prod_source_shmem_ele_num) {  // the loop variable here
                                                       // is actually m
-            static_assert(SHMEM_BLOCK_SIZE_Y >= COARSEN_DIVISOR_FACTOR, "");
+            static_assert(SHMEM_BLOCK_SIZE_Y >= NUM_OUTPUT_PER_THREAD, "");
             int thIdxRow = thIdxRow_initial +
                            (inner_prod_source_reg_ele_num + m) *
-                               (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR);
+                               (SHMEM_BLOCK_SIZE_Y / NUM_OUTPUT_PER_THREAD);
             int thIdxFeat = thIdxFeat_initial;
             bool WriteCInRangeFlag =
                 thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y < numARows &&
@@ -338,7 +356,7 @@ class _simplified_basic_MatMulKernel<
                         (blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat)]
                     : 0.0f;
             if constexpr (RIGHT_REG_TILED_FLAG) {
-              Bs_reg[thIdxRow] = value_to_load;
+              Bs_reg[loadLoopIdx] = value_to_load;
             } else {
               Bs[thIdxRow][thIdxFeat] = value_to_load;
             }
@@ -407,7 +425,7 @@ class _simplified_basic_MatMulKernel<
                         (blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat)]
                     : 0.0f;
             if constexpr (RIGHT_REG_TILED_FLAG) {
-              Bs_reg[thIdxRow] = value_to_load;
+              Bs_reg[loadLoopIdx] = value_to_load;
             } else {
               Bs[thIdxRow][thIdxFeat] = value_to_load;
             }
@@ -419,21 +437,25 @@ class _simplified_basic_MatMulKernel<
 
         // TODO: KWU: switch to cg::sync
         __syncthreads();
+
+        static_assert(!(RIGHT_REG_TILED_FLAG &&
+                        (SHMEM_BLOCK_SIZE_X != THREADING_BLOCK_SIZE_X)),
+                      "unsupported yet");
+
         // Multiply Asub and Bsub together
-        for (int e = 0; e < SHMEM_BLOCK_SIZE_K; ++e) {
-          for (int idx_coarsen_factor = 0;
-               idx_coarsen_factor < COARSEN_DIVISOR_FACTOR;
-               idx_coarsen_factor++) {
+        for (int idx_mul_acc = 0; idx_mul_acc < NUM_MUL_ACC; ++idx_mul_acc) {
+          for (int idx_output = 0; idx_output < NUM_OUTPUT_PER_THREAD;
+               idx_output++) {
             float right_operand;
             if constexpr (RIGHT_REG_TILED_FLAG) {
-              right_operand = Bs_reg[e];
+              right_operand = Bs_reg[idx_mul_acc];
             } else {
-              right_operand = Bs[e][thIdxFeat_initial];
+              right_operand = Bs[idx_mul_acc][thIdxFeat_initial];
             }
-            Cvalue[idx_coarsen_factor] +=
+            Cvalue[idx_output] +=
                 As[thIdxRow_initial +
-                   idx_coarsen_factor *
-                       (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR)][e] *
+                   idx_output * (SHMEM_BLOCK_SIZE_Y / NUM_OUTPUT_PER_THREAD)]
+                  [idx_mul_acc] *
                 right_operand;
           }
         }
@@ -455,11 +477,11 @@ class _simplified_basic_MatMulKernel<
 
       // Write Csub to device memory
       // Each thread writes one element
-      for (int storeLoopIdx = 0; storeLoopIdx < COARSEN_DIVISOR_FACTOR;
+      for (int storeLoopIdx = 0; storeLoopIdx < NUM_OUTPUT_PER_THREAD;
            storeLoopIdx++) {
         int thIdxRow =
             thIdxRow_initial +
-            storeLoopIdx * (SHMEM_BLOCK_SIZE_Y / COARSEN_DIVISOR_FACTOR);
+            storeLoopIdx * (SHMEM_BLOCK_SIZE_Y / NUM_OUTPUT_PER_THREAD);
         int thIdxFeat = thIdxFeat_initial;
         if constexpr (OuterProductFlag) {
           // C is weight instead of feature.
@@ -502,7 +524,7 @@ class _simplified_basic_MatMulKernel<
                     thIdxFeat];
 
               auto value_locally_accumulated = Cvalue[storeLoopIdx];
-              if constexpr (AtomicUpdateFlag) {
+              if constexpr (AtomicUpdateFlag || RIGHT_REG_TILED_FLAG) {
                 atomicAdd(&ref_to_global_elem, value_locally_accumulated);
               } else {
                 ref_to_global_elem = value_locally_accumulated;

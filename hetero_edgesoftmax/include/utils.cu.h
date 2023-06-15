@@ -120,7 +120,8 @@ __device__ __forceinline__ Idx linear_search(Idx num_elements, const IdxPtr arr,
 }
 
 template <typename Idx>
-__device__ __host__ __forceinline__ Idx ceil_div(const Idx a, const Idx b) {
+__device__ __host__ __forceinline__ constexpr Idx ceil_div(const Idx a,
+                                                           const Idx b) {
   return (a + b - 1) / b;
 }
 
