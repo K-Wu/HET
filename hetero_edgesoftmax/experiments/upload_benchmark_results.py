@@ -20,6 +20,14 @@ def extract_info_from(filename):
     return filename.split(".")[:-2]
 
 
+def find_latest_subdirectory(root, prefix):
+    candidates = []
+    for subdir in os.listdir(root):
+        if subdir.startswith(prefix):
+            candidates.append(subdir)
+    return os.path.join(root, max(candidates))
+
+
 def extract_results_from_folder(path):
     all_names_and_info = []
     for filename in os.listdir(path):
@@ -63,9 +71,9 @@ def update_gspread(entries, target_sheet_url, target_gid, cell_range=None):
 
 
 if __name__ == "__main__":
-    names_and_info = extract_results_from_folder(
-        "misc/artifacts/benchmark_all_202306142317"
-    )
+    dir_to_upload = find_latest_subdirectory("misc/artifacts", "benchmark_all_")
+    print("Uploading results from", dir_to_upload)
+    names_and_info = extract_results_from_folder(dir_to_upload)
     update_gspread(
         names_and_info,
         "https://docs.google.com/spreadsheets/d/1qMklewOvYRVRHTYlMErvyd67afJvaVNwd79sMrKw__4/",
