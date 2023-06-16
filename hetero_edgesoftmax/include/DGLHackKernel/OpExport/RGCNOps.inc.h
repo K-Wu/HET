@@ -25,9 +25,8 @@ template <typename Idx, typename DType>
 void Layer1_NodeMeanAggregation_CompactAsOfNode(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
-    at::Tensor &unique_srcs_and_dests_rel_ptrs,
-    at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &feat_src,
-    at::Tensor &enorm, at::Tensor &ret) {
+    torch::Dict<std::string, at::Tensor> args_tensor_dict, at::Tensor &feat_src,
+    at::Tensor &enorm, at::Tensor &ret, bool DirectIndexFlag) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
   RGCNData<Idx, DType> gdata{.feat_src_xlen = SeastarComputeXLength<>(feat_src),
                              .eids = separate_coo_eids.data_ptr<Idx>(),
@@ -46,22 +45,40 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode(
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
   auto [nblks2, nthrs2] =
-      get_type2_schedule(num_edges, /*num_heads*/ 1, num_edges);
-  ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data{
-      .unique_srcs_and_dests_rel_ptrs =
-          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
-      .unique_srcs_and_dests_node_indices =
-          unique_srcs_and_dests_node_indices.data_ptr<Idx>()};
+      get_type2_schedule(/*num_heads*/ 1, num_edges, num_edges);
+
   ETypeData<Idx, true> etype_data{
       .etypes = separate_coo_rel_ptrs.data_ptr<Idx>(),
       .num_relations = num_relations,
   };
-  HET_rgcnNodeMeanAggregation_edge_parallel<Idx, DType,
-                                            CompactAsOfNodeKind::Enabled>
-      <<<nblks2, nthrs2, 0, stream>>>(gdata, etype_data,
-                                      separate_coo_row_indices.data_ptr<Idx>(),
-                                      separate_coo_col_indices.data_ptr<Idx>(),
-                                      num_edges, etype_mapper_data);
+  if (DirectIndexFlag) {
+    at::Tensor inverse_indices_row = args_tensor_dict.at("inverse_indices_row");
+    ETypeMapperData<Idx, CompactAsOfNodeKind::EnabledWithDirectIndexing>
+        etype_mapper_data{.edata_idx_to_inverse_idx =
+                              inverse_indices_row.data_ptr<Idx>()};
+    HET_RGCNNodeMeanAggregation_edge_parallel<
+        Idx, DType, CompactAsOfNodeKind::EnabledWithDirectIndexing>
+        <<<nblks2, nthrs2, 0, stream>>>(
+            gdata, etype_data, separate_coo_row_indices.data_ptr<Idx>(),
+            separate_coo_col_indices.data_ptr<Idx>(), num_edges,
+            etype_mapper_data);
+  } else {
+    at::Tensor unique_srcs_and_dests_rel_ptrs =
+        args_tensor_dict.at("rel_ptrs_row");
+    at::Tensor unique_srcs_and_dests_node_indices =
+        args_tensor_dict.at("node_indices_row");
+    ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data{
+        .unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
+        .unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>()};
+    HET_RGCNNodeMeanAggregation_edge_parallel<Idx, DType,
+                                              CompactAsOfNodeKind::Enabled>
+        <<<nblks2, nthrs2, 0, stream>>>(
+            gdata, etype_data, separate_coo_row_indices.data_ptr<Idx>(),
+            separate_coo_col_indices.data_ptr<Idx>(), num_edges,
+            etype_mapper_data);
+  }
 }
 
 void Layer1(at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
@@ -287,10 +304,9 @@ template <typename Idx, typename DType>
 void Layer1_NodeMeanAggregation_CompactAsOfNode(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
-    at::Tensor &unique_srcs_and_dests_rel_ptrs,
-    at::Tensor &unique_srcs_and_dests_node_indices, at::Tensor &feat_src,
+    torch::Dict<std::string, at::Tensor> args_tensor_dict, at::Tensor &feat_src,
     at::Tensor &enorm, at::Tensor &ret, at::Tensor &gradout,
-    at::Tensor &grad_feat_src) {
+    at::Tensor &grad_feat_src, bool DirectIndexFlag) {
   // adapted from launch configuration of
   // HET_fusedGatBackwardGradFeatSrc_relational_separate_coo in
   // [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/RGATOps.inc.h]]
@@ -314,21 +330,39 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode(
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
   auto [nblks, nthrs] = get_type2_schedule(1, gdata.feat_src_xlen, num_edges);
 
-  ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data{
-      .unique_srcs_and_dests_rel_ptrs =
-          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
-      .unique_srcs_and_dests_node_indices =
-          unique_srcs_and_dests_node_indices.data_ptr<Idx>()};
-
   ETypeData<Idx, true> etype_data{
       .etypes = separate_coo_rel_ptrs.data_ptr<Idx>(),
       .num_relations = num_relations,
   };
 
-  HET_rgcnBackwardNodeMeanAggregation_edge_parallel<
-      Idx, DType, CompactAsOfNodeKind::Enabled><<<nblks, nthrs, 0, stream>>>(
-      gdata, etype_data, separate_coo_row_indices.data_ptr<Idx>(),
-      separate_coo_col_indices.data_ptr<Idx>(), num_edges, etype_mapper_data);
+  if (!DirectIndexFlag) {
+    at::Tensor unique_srcs_and_dests_rel_ptrs =
+        args_tensor_dict.at("rel_ptrs_row");
+    at::Tensor unique_srcs_and_dests_node_indices =
+        args_tensor_dict.at("node_indices_row");
+    ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data{
+        .unique_srcs_and_dests_rel_ptrs =
+            unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>(),
+        .unique_srcs_and_dests_node_indices =
+            unique_srcs_and_dests_node_indices.data_ptr<Idx>()};
+
+    HET_RGCNBackwardNodeMeanAggregation_edge_parallel<
+        Idx, DType, CompactAsOfNodeKind::Enabled><<<nblks, nthrs, 0, stream>>>(
+        gdata, etype_data, separate_coo_row_indices.data_ptr<Idx>(),
+        separate_coo_col_indices.data_ptr<Idx>(), num_edges, etype_mapper_data);
+  } else {
+    at::Tensor inverse_indices_row = args_tensor_dict.at("inverse_indices_row");
+    ETypeMapperData<Idx, CompactAsOfNodeKind::EnabledWithDirectIndexing>
+        etype_mapper_data{.edata_idx_to_inverse_idx =
+                              inverse_indices_row.data_ptr<Idx>()};
+
+    HET_RGCNBackwardNodeMeanAggregation_edge_parallel<
+        Idx, DType, CompactAsOfNodeKind::EnabledWithDirectIndexing>
+        <<<nblks, nthrs, 0, stream>>>(gdata, etype_data,
+                                      separate_coo_row_indices.data_ptr<Idx>(),
+                                      separate_coo_col_indices.data_ptr<Idx>(),
+                                      num_edges, etype_mapper_data);
+  }
 }
 
 void Layer1(at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,

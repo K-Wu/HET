@@ -31,6 +31,7 @@ def get_single_layer_model(args, mydglgraph):
         num_blocks_on_node_forward=args.num_blocks_on_node_forward,
         num_blocks_on_node_backward=args.num_blocks_on_node_backward,
         compact_as_of_node_flag=args.compact_as_of_node_flag,
+        compact_direct_indexing_flag=args.compact_direct_indexing_flag,
     )
     return model
 

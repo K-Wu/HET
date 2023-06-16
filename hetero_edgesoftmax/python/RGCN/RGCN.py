@@ -56,6 +56,7 @@ class HET_EglRelGraphConv(nn.Module):
         num_blocks_on_node_forward=-1,
         num_blocks_on_node_backward=-1,
         compact_as_of_node_flag=False,
+        compact_direct_indexing_flag=False,
     ):
         super(HET_EglRelGraphConv, self).__init__()
         self.hybrid_assign_flag = hybrid_assign_flag
@@ -64,6 +65,7 @@ class HET_EglRelGraphConv(nn.Module):
         self.compact_as_of_node_flag = compact_as_of_node_flag
         if self.compact_as_of_node_flag:
             raise NotImplementedError("compact_as_of_node_flag not implemented yet")
+        self.compact_direct_indexing_flag = compact_direct_indexing_flag
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.num_rels = num_rels
@@ -185,6 +187,7 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
         activation=None,
         self_loop=False,
         compact_as_of_node_flag=False,
+        compact_direct_indexing_flag=False,
         dropout=0.0,
         layer_type=0,
     ):
@@ -196,6 +199,7 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
         self.num_rels = num_rels
         self.regularizer = regularizer
         self.compact_as_of_node_flag = compact_as_of_node_flag
+        self.compact_direct_indexing_flag = compact_direct_indexing_flag
         self.num_bases = num_bases
         if (
             self.num_bases is None
@@ -206,6 +210,7 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
         self.bias = bias
         self.activation = activation
         self.layer_type = layer_type
+        self.compact_direct_indexing_flag = compact_direct_indexing_flag
 
         if regularizer == "basis":
             # add basis weights
@@ -271,6 +276,7 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
         if self.layer_type == 0:
             raise NotImplementedError
         else:
+            # TODO: add support to compact_direct_indexing_flag
             if self.compact_as_of_node_flag:
                 separate_unique_node_indices_single_sided = (
                     g.get_separate_unique_node_indices_single_sided()
@@ -291,7 +297,7 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
                 )
                 feat_compact_src = feat_compact_src.squeeze(1)
                 node_repr = B.rgcn_node_mean_aggregation_compact_as_of_node_separate_coo_single_sided(
-                    g, feat_compact_src, norm
+                    g, feat_compact_src, norm, self.compact_direct_indexing_flag
                 )  # NB: use single side instead without need to modify kernel
             else:
                 node_repr = B.rgcn_layer1_separate_coo(
@@ -325,6 +331,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
         num_blocks_on_node_forward,
         num_blocks_on_node_backward,
         compact_as_of_node_flag,
+        compact_direct_indexing_flag,
     ):
         super(HET_EGLRGCNSingleLayerModel, self).__init__()
         if sparse_format == "separate_coo":
@@ -338,6 +345,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
                 activation=activation,
                 layer_type=1,
                 compact_as_of_node_flag=compact_as_of_node_flag,
+                compact_direct_indexing_flag=compact_direct_indexing_flag,
             )
         else:
             self.layer2 = HET_EglRelGraphConv(
@@ -351,6 +359,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
                 activation=activation,
                 layer_type=1,
                 compact_as_of_node_flag=compact_as_of_node_flag,
+                compact_direct_indexing_flag=compact_direct_indexing_flag,
             )
 
     def forward(self, g, feats, edge_norm):
@@ -371,6 +380,7 @@ class HET_EGLRGCNModel(nn.Module):
         num_bases,
         dropout,
         activation,
+        compact_direct_indexing_flag,
     ):
         super(HET_EGLRGCNModel, self).__init__()
         self.layer1 = HET_EglRelGraphConv(
@@ -382,6 +392,7 @@ class HET_EGLRGCNModel(nn.Module):
             num_bases=num_bases,
             dropout=dropout,
             activation=activation,
+            compact_direct_indexing_flag=compact_direct_indexing_flag,
             layer_type=0,
         )
         self.layer2 = HET_EglRelGraphConv(
@@ -393,6 +404,7 @@ class HET_EGLRGCNModel(nn.Module):
             num_bases=num_bases,
             dropout=dropout,
             activation=activation,
+            compact_direct_indexing_flag=compact_direct_indexing_flag,
             layer_type=1,
         )
 
@@ -416,6 +428,7 @@ def get_model(args, mydglgraph):
         args.sparse_format,
         num_bases=args.num_bases,
         activation=None,  # F.relu,
+        compact_direct_indexing_flag=args.compact_direct_indexing_flag,
         dropout=args.dropout,
     )
     return model

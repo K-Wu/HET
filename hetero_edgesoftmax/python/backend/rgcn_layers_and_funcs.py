@@ -130,7 +130,6 @@ class SeastarRgcnFirstLayerCSR(th.autograd.Function):
         norm,
         ret,
     ):
-
         ctx.save_for_backward(
             incsr_row_ptr,
             incsr_col_indices,
@@ -581,11 +580,14 @@ class RGCNNodeMeanAggregationCompactAsOfNodeSeparateCOO(th.autograd.Function):
             separate_coo_rel_ptrs,
             separate_coo_row_indices,
             separate_coo_col_indices,
-            separate_unique_node_indices_rel_ptrs,
-            separate_unique_node_indices_node_indices,
+            {
+                "rel_ptrs_row": separate_unique_node_indices_rel_ptrs,
+                "node_indices_row": separate_unique_node_indices_node_indices,
+            },
             feat_src,
             enorm,
             ret,
+            False,  # compact_direct_indexing_flag
         )
         return ret
 
@@ -609,17 +611,91 @@ class RGCNNodeMeanAggregationCompactAsOfNodeSeparateCOO(th.autograd.Function):
             separate_coo_rel_ptrs,
             separate_coo_row_indices,
             separate_coo_col_indices,
-            separate_unique_node_indices_rel_ptrs,
-            separate_unique_node_indices_node_indices,
+            {
+                "rel_ptrs_row": separate_unique_node_indices_rel_ptrs,
+                "node_indices_row": separate_unique_node_indices_node_indices,
+            },
             feat_src,
             enorm,
             ret,
             gradout,
             grad_feat_src,
+            False,  # compact_direct_indexing_flag
         )
         # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
         # fmt: off
         return None, None, None, None, None, None, grad_feat_src, None, None
+        # fmt: on
+
+
+class RGCNNodeMeanAggregationCompactAsOfNodeDirectIndexingSeparateCOO(
+    th.autograd.Function
+):
+    @staticmethod
+    def forward(
+        ctx,
+        separate_coo_eids,
+        separate_coo_rel_ptrs,
+        separate_coo_row_indices,
+        separate_coo_col_indices,
+        inverse_indices_row,
+        feat_src,
+        enorm,
+        ret,
+    ):
+        ctx.save_for_backward(
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            inverse_indices_row,
+            feat_src,
+            enorm,
+            ret,
+        )
+        K.rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            {"inverse_indices_row": inverse_indices_row},
+            feat_src,
+            enorm,
+            ret,
+            True,  # compact_direct_indexing_flag
+        )
+        return ret
+
+    @staticmethod
+    def backward(ctx, gradout):
+        (
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            inverse_indices_row,
+            feat_src,
+            enorm,
+            ret,
+        ) = ctx.saved_tensors
+        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
+
+        K.backward_rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(
+            separate_coo_eids,
+            separate_coo_rel_ptrs,
+            separate_coo_row_indices,
+            separate_coo_col_indices,
+            {"inverse_indices_row": inverse_indices_row},
+            feat_src,
+            enorm,
+            ret,
+            gradout,
+            grad_feat_src,
+            True,  # compact_direct_indexing_flag
+        )
+        # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
+        # fmt: off
+        return None, None, None, None, None, grad_feat_src, None, None
         # fmt: on
 
 
@@ -647,7 +723,7 @@ def rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(g, feat_compact, 
 
 
 def rgcn_node_mean_aggregation_compact_as_of_node_separate_coo_single_sided(
-    g, feat_compact_src, enorm
+    g, feat_compact_src, enorm, compact_direct_indexing_flag
 ):
     separate_coo_dict = g.get_separate_coo_original()
     separate_unique_node_indices_single_sided = (
@@ -660,14 +736,32 @@ def rgcn_node_mean_aggregation_compact_as_of_node_separate_coo_single_sided(
         device=feat_compact_src.device,
         memory_format=th.contiguous_format,
     )
-    return RGCNNodeMeanAggregationCompactAsOfNodeSeparateCOO.apply(
-        separate_coo_dict["eids"],
-        separate_coo_dict["rel_ptrs"],
-        separate_coo_dict["row_indices"],
-        separate_coo_dict["col_indices"],
-        separate_unique_node_indices_single_sided["rel_ptrs_row"],
-        separate_unique_node_indices_single_sided["node_indices_row"],
-        feat_compact_src,
-        enorm,
-        ret,
-    )
+    if compact_direct_indexing_flag:
+        separate_unique_node_indices_dict_single_sided_inverse_idx = (
+            g.get_separate_unique_node_indices_single_sided_inverse_idx()
+        )
+        return RGCNNodeMeanAggregationCompactAsOfNodeDirectIndexingSeparateCOO.apply(
+            separate_coo_dict["eids"],
+            separate_coo_dict["rel_ptrs"],
+            separate_coo_dict["row_indices"],
+            separate_coo_dict["col_indices"],
+            separate_unique_node_indices_dict_single_sided_inverse_idx[
+                "inverse_indices_row"
+            ],
+            feat_compact_src,
+            enorm,
+            ret,
+        )
+
+    else:
+        return RGCNNodeMeanAggregationCompactAsOfNodeSeparateCOO.apply(
+            separate_coo_dict["eids"],
+            separate_coo_dict["rel_ptrs"],
+            separate_coo_dict["row_indices"],
+            separate_coo_dict["col_indices"],
+            separate_unique_node_indices_single_sided["rel_ptrs_row"],
+            separate_unique_node_indices_single_sided["node_indices_row"],
+            feat_compact_src,
+            enorm,
+            ret,
+        )

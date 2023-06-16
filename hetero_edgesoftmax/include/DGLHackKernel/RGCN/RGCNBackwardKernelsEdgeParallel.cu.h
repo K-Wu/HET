@@ -19,7 +19,7 @@ struct BackwardRGCNData {
 // [[hetero_edgesoftmax/include/DGLHackKernel/RGAT/RGATBackwardKernelsSeparateCOO.cu.h]]
 template <typename Idx, typename DType, CompactAsOfNodeKind kind,
           bool RelationalFlag>
-__device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
+__device__ __forceinline__ void _RGCNBackwardNodeMeanAggregation_edge_parallel(
     BackwardRGCNData<Idx, DType> gdata, const ETypeData<Idx, true> etype_data,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
     const ETypeMapperData<Idx, kind> etype_mapper_data) {
@@ -81,11 +81,11 @@ __device__ __forceinline__ void _rgcnBackwardNodeMeanAggregation_edge_parallel(
 }
 
 template <typename Idx, typename DType, CompactAsOfNodeKind kind>
-__global__ void HET_rgcnBackwardNodeMeanAggregation_edge_parallel(
+__global__ void HET_RGCNBackwardNodeMeanAggregation_edge_parallel(
     BackwardRGCNData<Idx, DType> gdata, const ETypeData<Idx, true> etype_data,
     const Idx *row_indices, const Idx *col_indices, int64_t num_edges,
     const ETypeMapperData<Idx, kind> etype_mapper_data) {
-  _rgcnBackwardNodeMeanAggregation_edge_parallel<Idx, DType, kind, true>(
+  _RGCNBackwardNodeMeanAggregation_edge_parallel<Idx, DType, kind, true>(
       gdata, etype_data, row_indices, col_indices, num_edges,
       etype_mapper_data);
 }

@@ -421,6 +421,10 @@ def add_generic_RGNN_args(parser, default_logfilename, filtered_args={}):
             action="store_true",
             help="use real labels",
         )
+    if not "compact_direct_indexing_flag" in filtered_args:
+        parser.add_argument(
+            "--compact_direct_indexing_flag", action="store_true", default=False
+        )
     if not "lr" in filtered_args:
         parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
     if not "n_head" in filtered_args:

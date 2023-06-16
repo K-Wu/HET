@@ -30,9 +30,6 @@ def RGAT_parse_args() -> argparse.Namespace:
     add_generic_RGNN_args(parser, "RGAT.json", {})
     parser.add_argument("--multiply_among_weights_first_flag", action="store_true")
     parser.add_argument("--gat_edge_parallel_flag", action="store_true", default=True)
-    parser.add_argument(
-        "--compact_direct_indexing_flag", action="store_true", default=False
-    )
     args = parser.parse_args()
     return args
 
@@ -91,7 +88,6 @@ def RGAT_get_our_model(
 
 
 def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
-
     # argument sanity check
     # Static parameters
     # NB: default values are all moved to args

@@ -25,9 +25,6 @@ def HGT_parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--multiply_among_weights_first_flag", action="store_true", default=False
     )
-    parser.add_argument(
-        "--compact_direct_indexing_flag", action="store_true", default=False
-    )
     args = parser.parse_args()
     return args
 
@@ -99,7 +96,6 @@ def HGT_get_our_model(
 
 
 def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
-
     if dgl_model_flag:
         g, _, _2 = utils.graphiler_load_data(args.dataset, to_homo=False)
     else:
