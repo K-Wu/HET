@@ -6,15 +6,15 @@
 ///
 /// DAG
 ///
-(NODEWISE, "hs") = NodeLinear(input_key = (NODEWISE, "feature"), weight = (V, slice=NODETYPE));
-(NODEWISE, "hs_attn") = NodeLinear(input_key =  (NODEWISE, "feature"), weight = (K, slice=NODETYPE));
-(NODEWISE, "ht_attn") = NodeLinear(input_key =  (NODEWISE, "feature"), weight = (Q, slice=NODETYPE));
+(NODEWISE, "hs") = NodeLinear(input_key = (NODEWISE, "feature"), weight = (V, NODETYPE));
+(NODEWISE, "hs_attn") = NodeLinear(input_key =  (NODEWISE, "feature"), weight = (K, NODETYPE));
+(NODEWISE, "ht_attn") = NodeLinear(input_key =  (NODEWISE, "feature"), weight = (Q, NODETYPE));
 
 // TODO: Set node and/or edge as a keyword of the operator
-(EDGEWISE, "msg") = EdgeLinear(input_key = (SRCNODE, "hs"), weight = (W_msg, slice=EDGETYPE));
-(EDGEWISE, "raw_attn_tmp") = EdgeLinear(input_key = (SRCNODE, "hs_attn"), weight = (W_attn, slice=EDGETYPE));
+(EDGEWISE, "msg") = EdgeLinear(input_key = (SRCNODE, "hs"), weight = (W_msg, EDGETYPE));
+(EDGEWISE, "raw_attn_tmp") = EdgeLinear(input_key = (SRCNODE, "hs_attn"), weight = (W_attn, EDGETYPE));
 (EDGEWISE, "raw_attn_tmp2") = EdgeInnerProduct(left = (EDGEWISE, "raw_attn_tmp"), right = (DSTNODE, "ht_attn"));
-(EDGEWISE, "raw_attn") = Nonlinear(method = EXP, input = (EDGEWISE, "raw_attn_tmp2"))
+(EDGEWISE, "raw_attn") = NonlinearExp(input = (EDGEWISE, "raw_attn_tmp2"))
 
 // edge softmax
 (DSTNODE, "attn_sum") = NodeSumAccumulation(input_key = (EDGEWISE, "raw_attn"));
