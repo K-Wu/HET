@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-from .regex_match import *
-
-# import .regex_match
+from . import regex_patterns
+import re
 
 
 def strip_white_spaces(line):
@@ -23,12 +22,14 @@ def loads(lines):
         # skip empty or comment lines
         if len(line) == 0:
             continue
-        match = re.match(operator_pattern, line)
+        match = re.match(regex_patterns.operator_pattern, line)
         if match:
             result = match.group("result")
             func_name = match.group("funcname")
             keyword_fields = match.group("keyword_fields")
-            keyword_value_pairs = re.findall(keyword_value_pair_pattern, keyword_fields)
+            keyword_value_pairs = re.findall(
+                regex_patterns.keyword_value_pair_pattern, keyword_fields
+            )
             print(result, func_name, keyword_fields)
             # print every matched key_value pair
             for keyword_value_pair in keyword_value_pairs:
