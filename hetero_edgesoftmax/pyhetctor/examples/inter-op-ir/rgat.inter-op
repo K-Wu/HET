@@ -1,17 +1,19 @@
 for e in g.edges():
-    zi = e.src.feature * W[e.etype]
-    zj = e.dst.feature * W[e.etype]
-    e["attn"] = leakyrelu(inner_prod(attn_vec[e.etype], concat([zi, zj])))
-    e["attn"] = exp(e.attn)
-    e["msg"] = zi
+    e["zi"] = e.src.feature * W[e.etype]
+    e["zj"] = e.dst.feature * W[e.etype]
+    e["zizj"] = concat([e.zi, e.zj])
+    e["raw_attn_tmp"] = inner_product(attn_vec[e.etype], e.zizj)
+    e["raw_attn_tmp2"] = leakyrelu(e.raw_attn_tmp)
+    e["raw_attn"] = exp(e.raw_attn_tmp2)
+    e["msg"] = e["zi"]
 
 # edge softmax
 for n in g.dst_nodes():
     n["attn_sum"] = 0.0
     for e in n.incoming_edges():
-        n["attn_sum"] += e.attn
+        n["attn_sum"] += e.raw_attn
 for e in g.edges():
-    e["attn"] = e.attn / e.dst.attn_sum
+    e["attn"] = e.raw_attn / e.dst.attn_sum
 
 # node accumulation
 for n in g.dst_nodes():

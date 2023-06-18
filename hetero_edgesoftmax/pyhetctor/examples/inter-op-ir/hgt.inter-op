@@ -5,15 +5,15 @@ for n in g.nodes():
 
 for e in g.edges():
     e["msg"] = e.src.hs * W_msg[e.etype]
-    e["attn"] = e.src.hs_attn * W_attn[e.etype] * e.dst.ht_attn
+    e["raw_attn"] = e.src.hs_attn * W_attn[e.etype] * e.dst.ht_attn
 
 # edge softmax
 for n in g.dst_nodes():
     n["attn_sum"] = 0.0
     for e in n.incoming_edges():
-        n["attn_sum"] += e.attn
+        n["attn_sum"] += e.raw_attn
 for e in g.edges():
-    e["attn"] = e.attn / e.dst.attn_sum
+    e["attn"] = e.raw_attn / e.dst.attn_sum
 
 # node accumulation
 for n in g.dst_nodes():

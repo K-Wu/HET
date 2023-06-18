@@ -16,3 +16,4 @@ dataset/
 *.out
 *.npy
 *.json
+**/misc/artifacts/**.txt

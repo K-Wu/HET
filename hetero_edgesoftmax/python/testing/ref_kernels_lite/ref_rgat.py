@@ -2,7 +2,7 @@
 import torch
 
 
-def relational_fused_gat_kernel_separate_coo(
+def relational_fused_gat_separate_coo(
     separate_coo_eids,
     separate_coo_rel_ptrs,
     separate_coo_row_idx,
@@ -99,7 +99,7 @@ def towrap_relational_fused_gat_kernel_compact_as_of_node_separate_coo_dual_uniq
     er_uncompact = torch.index_select(
         er, 0, unique_node_idx_inverse_mapping_col
     )  # (separate_coo_eids.shape[0], er.shape[1])
-    return relational_fused_gat_kernel_separate_coo(
+    return relational_fused_gat_separate_coo(
         separate_coo_eids,
         separate_coo_rel_ptrs,
         separate_coo_row_idx,
@@ -204,7 +204,7 @@ def towrap_relational_fused_gat_kernel_compact_as_of_node_separate_coo(
     exp_uncompact = torch.index_select(
         exp, 0, unique_node_idx_inverse_mapping
     )  # (separate_coo_eids.shape[0], el.shape[1])
-    relational_fused_gat_kernel_separate_coo(
+    relational_fused_gat_separate_coo(
         separate_coo_eids,
         separate_coo_rel_ptrs,
         separate_coo_row_idx,
