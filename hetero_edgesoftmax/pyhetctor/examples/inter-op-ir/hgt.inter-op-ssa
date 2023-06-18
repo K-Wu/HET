@@ -1,0 +1,25 @@
+///
+/// SHAPE INFORMATION
+///
+// TODO: fullfil this
+
+///
+/// DAG
+///
+(NODEWISE, "hs") = NodeLinear(input_key = (NODEWISE, "feature"), weight = (V, slice=NODETYPE));
+(NODEWISE, "hs_attn") = NodeLinear(input_key =  (NODEWISE, "feature"), weight = (K, slice=NODETYPE));
+(NODEWISE, "ht_attn") = NodeLinear(input_key =  (NODEWISE, "feature"), weight = (Q, slice=NODETYPE));
+
+// TODO: Set node and/or edge as a keyword of the operator
+(EDGEWISE, "msg") = EdgeLinear(input_key = (SRCNODE, "hs"), weight = (W_msg, slice=EDGETYPE));
+(EDGEWISE, "attn_tmp") = EdgeLinear(input_key = (SRCNODE, "hs_attn"), weight = (W_attn, slice=EDGETYPE));
+(EDGEWISE, "attn_tmp2") = EdgeInnerProduct(left = (EDGEWISE, "attn_tmp"), right = (DSTNODE, "ht_attn"));
+(EDGEWISE, "attn") = Nonlinear(method = EXP, input = (EDGEWISE, "attn_tmp2"))
+
+// edge softmax
+(DSTNODE, "attn_sum") = NodeSumAccumulation(input_key = (EDGEWISE, "attn"));
+(EDGEWISE, "attn") = Divide(left = (EDGEWISE, "attn"), right = (DSTNODE, "attn_sum"));
+
+// node accumulation
+(EDGEWISE, "output_tmp") = EdgeScaleVectorMul(scalar=(EDGEWISE, "attn"), vector=(EDGEWISE, "msg"));
+(DSTNODE, "output") = NodeSumAccumulation(input=(EDGEWISE,"output_tmp"));

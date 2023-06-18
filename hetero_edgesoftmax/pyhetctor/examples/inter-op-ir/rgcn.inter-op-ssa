@@ -1,0 +1,15 @@
+///
+/// SHAPE INFORMATION
+///
+// TODO: fullfil this
+
+///
+/// DAG
+///
+(DSTNODE, "raw_output_self") = NodeLinear(input_key = (NODEWISE, "feature"), weight = W0);
+// node accumulation
+(EDGEWISE, "raw_output_tmp") = EdgeLinear(input_key = (SRCNODE, "feature), weight = (Wr, slice=EDGETYPE));
+(EDGEWISE, "raw_output_neighbors") = EdgeScaleVectorMul(scalar=(EDGEWISE, "norm_factor"), vector=(EDGEWISE, "raw_output_tmp"));
+(EDGEWISE, "raw_output") = (DSTNODE, "raw_output_self") + (DSTNODE, "raw_output_neighbors");
+(DSTNODE, "raw_output") = NodeSumAccumulation(input=(EDGEWISE,"raw_output"));
+(DSTNODE, "output") = Nonlinear(method = TANH, input = (NODEWISE, "raw_output"));

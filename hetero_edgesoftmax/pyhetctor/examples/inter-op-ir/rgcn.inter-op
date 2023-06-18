@@ -1,0 +1,5 @@
+for n in g.dst_nodes():
+    n["raw_output"] += n.feature * W0
+    for e in n.incoming_edges():
+        n["raw_output"] += e.norm_factor * e.src.feature * Wr[e.etype]
+    n["output"] = tanh(n.raw_output)

@@ -1,0 +1,23 @@
+///
+/// SHAPE INFORMATIOn 
+///
+// TODO: fullfil this
+
+///
+/// DAG
+///
+(EDGEWISE, "zi") = NodeLinear(input_key = (SRCNODE, "feature"), weight = (W,slice=EDGETYPE));
+(EDGEWISE, "zj") = NodeLinear(input_key = (DSTNODE, "feature"), weight = (W,slice=EDGETYPE));
+(NODEWISE, "msg") = (EDGEWISE, "zi");
+(EDGEWISE, "zizj") = Concatenate(left = (EDGEWISE, "zi"), right = (EDGEWISE, "zj"));
+(EDGEWISE, "attn_tmp") = EdgeInnerProduct(left = (attn_vec, slice=EDGETYPE), right = (EDGEWISE, "zizj"));
+(EDGEWISE, "attn_tmp2") = LeakyRelu(input = (EDGEWISE, "attn"));
+(EDGEWISE, "attn") = Nonlinear(method = EXP, input = (EDGEWISE, "attn_tmp2"));
+
+// edge softmax
+(DSTNODE, "attn_sum") = NodeSumAccumulation(input_key = (EDGEWISE, "attn"));
+(EDGEWISE, "attn") = divide(left = (EDGEWISE, "attn"), right = (DSTNODE, "attn_sum"));
+
+// node accumulation
+(EDGEWISE, "output_tmp") = EdgeScaleVectorMul(scalar=(EDGEWISE, "attn"), vector=(EDGEWISE, "msg"));
+(DSTNODE, "output") = NodeSumAccumulation(input=(EDGEWISE,"output_tmp"));

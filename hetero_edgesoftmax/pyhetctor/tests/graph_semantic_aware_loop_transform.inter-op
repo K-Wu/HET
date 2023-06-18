@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 for e in g.edges():
     e.dst["sum"] += e.data1
 for e in g.edges():

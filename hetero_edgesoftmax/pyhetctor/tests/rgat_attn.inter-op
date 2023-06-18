@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# this is a part of [[/hetero_edgesoftmax/pyhetctor/examples/inter-op-ir/rgat.inter-op]]
 for e in g.edges():
     zi = e.src.feature * W[e.etype]
     zj = e.dst.feature * W[e.etype]
