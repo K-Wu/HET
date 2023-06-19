@@ -6,6 +6,7 @@
 ///
 /// DAG
 ///
+DAG{
 (NODEWISE, "hs") = NodeLinear(input_key = (NODEWISE, "feature"), weight = (V, NODETYPE));
 (NODEWISE, "hs_attn") = NodeLinear(input_key =  (NODEWISE, "feature"), weight = (K, NODETYPE));
 (NODEWISE, "ht_attn") = NodeLinear(input_key =  (NODEWISE, "feature"), weight = (Q, NODETYPE));
@@ -23,3 +24,4 @@
 // node accumulation
 (EDGEWISE, "output_tmp") = EdgeScalarVectorMul(scalar=(EDGEWISE, "attn"), vector=(EDGEWISE, "msg"));
 (DSTNODE, "output") = NodeSumAccumulation(input=(EDGEWISE,"output_tmp"));
+}

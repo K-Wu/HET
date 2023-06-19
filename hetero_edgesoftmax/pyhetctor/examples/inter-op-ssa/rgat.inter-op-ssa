@@ -2,13 +2,17 @@
 /// SHAPE INFORMATION
 ///
 // TODO: fullfil this
+SHAPE{
+
+}
 
 ///
 /// DAG
 ///
+DAG{
 (EDGEWISE, "zi") = NodeLinear(input_key = (SRCNODE, "feature"), weight = (W,EDGETYPE));
 (EDGEWISE, "zj") = NodeLinear(input_key = (DSTNODE, "feature"), weight = (W,EDGETYPE));
-(NODEWISE, "msg") = (EDGEWISE, "zi");
+(NODEWISE, "msg") = Copy(input = (EDGEWISE, "zi"));
 (EDGEWISE, "zizj") = Concatenate(left = (EDGEWISE, "zi"), right = (EDGEWISE, "zj"));
 (EDGEWISE, "raw_attn_tmp") = EdgeInnerProduct(left = (attn_vec, EDGETYPE), right = (EDGEWISE, "zizj"));
 (EDGEWISE, "raw_attn_tmp2") = LeakyRelu(input = (EDGEWISE, "raw_attn_tmp"));
@@ -21,3 +25,4 @@
 // node accumulation
 (EDGEWISE, "output_tmp") = EdgeScalarVectorMul(scalar=(EDGEWISE, "attn"), vector=(EDGEWISE, "msg"));
 (DSTNODE, "output") = NodeSumAccumulation(input=(EDGEWISE,"output_tmp"));
+}
