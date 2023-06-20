@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 from collections import namedtuple
 
+# TODO: do we need "shape" and "dtype"?
+_WeightVar = namedtuple("WeightVar", ["name", "slice_type"])
+_DataVar = namedtuple("DataVar", ["type", "name"])
+
+
 _LinearOp = namedtuple("LinearOp", ["result", "left", "right"])
 
 
 # when inherited, this class provides implementation of from_dict for namedtuples
-class DictionaryLoadDumper:
+class DictLoader:
     @classmethod
     def from_dict(cls, d):
         # return cls(**d)
@@ -15,7 +20,17 @@ class DictionaryLoadDumper:
         return self._asdict()
 
 
-class LinearOp(_LinearOp):
+class LinearOp(_LinearOp, DictLoader):
+    def validate():
+        raise NotImplementedError
+
+
+class WeightVar(_WeightVar, DictLoader):
+    def validate():
+        raise NotImplementedError
+
+
+class DataVar(_DataVar, DictLoader):
     def validate():
         raise NotImplementedError
 

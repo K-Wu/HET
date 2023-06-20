@@ -5,7 +5,9 @@ for n in g.nodes():
 
 for e in g.edges():
     e["msg"] = e.src.hs * W_msg[e.etype]
-    e["raw_attn"] = exp(e.src.hs_attn * W_attn[e.etype] * e.dst.ht_attn)
+    e["raw_attn_tmp1"] = e.src.hs_attn * W_attn[e.etype]
+    e["raw_attn_tmp2"] = e.raw_attn_tmp1 * e.dst.ht_attn
+    e["raw_attn"] = exp(e.raw_attn_tmp2)
 
 # edge softmax
 for n in g.dst_nodes():

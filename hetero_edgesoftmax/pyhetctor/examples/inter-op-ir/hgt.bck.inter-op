@@ -12,4 +12,18 @@ for n in g.dst_nodes():
         e.raw_attn.delta += e.dst.attn_sum.delta
 
 for e in g.edges():
-    
+    e.raw_attn_tmp2.delta = inverse_exp(e["raw_attn"].delta)
+    e.raw_attn_tmp1.delta = e["raw_attn_tmp2"].delta * e.dst.ht_attn
+    e.dst.ht_attn.delta += e["raw_attn_tmp2"].delta * e.raw_attn_tmp1
+    e.src.hs_attn.delta += e["raw_attn_tmp1"].delta * transpose(W_attn[e.etype])
+    W_attn[e.etype].delta += outer_product(e.src.hs_attn, e["raw_attn_tmp1"].delta)
+    e.src.hs.delta = e.msg.delta * transpose(W_msg[e.etype])
+    W_msg[e.etype].delta += outer_product(e.src.hs, e.msg.delta)
+
+for n in g.nodes():
+    Q[n.ntype].delta += outer_product(n.feature, n["ht_attn"].delta)
+    n.feature.delta += inner_product(n["ht_attn"], transpose(Q[n.ntype]))
+    K[n.ntype].delta += outer_product(n.feature, n["hs_attn"].delta)
+    n.feature.delta += inner_product(n["hs_attn"], transpose(K[n.ntype]))
+    V[n.ntype].delta += outer_product(n.feature, n["hs"].delta)
+    n.feature.delta += inner_product(n["hs"], transpose(V[n.ntype]))

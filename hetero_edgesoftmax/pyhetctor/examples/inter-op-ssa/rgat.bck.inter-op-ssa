@@ -31,9 +31,9 @@ DAG{
 (W_transposed, EDGETYPE) = Transpose(input = (W, EDGETYPE));
 (SRCNODE, "feature_delta") = OuterProduct(left = (EDGEWISE, "zi_delta"), right = (W_transposed, EDGETYPE));
 (DSTNODE, "feature_delta") = OuterProduct(left = (EDGEWISE, "zh_delta"), right = (W_transposed, EDGETYPE));
-(EDGEWISE, "W_delta_term1_tmp1") = OuterProduct(left = (EDGEWISE, "zi_delta"), right = (SRCNODE, "feature"));
+(EDGEWISE, "W_delta_term1_tmp1") = OuterProduct(left = (SRCNODE, "feature"), right = (EDGEWISE, "zi_delta"));
 (W_delta_term1, EDGETYPE) = EdgeTypeSumAccumulation(input =(EDGEWISE, "W_delta_term1_tmp1"));
-(EDGEWISE, "W_delta_term1_tmp2") = OuterProduct(left = (EDGEWISE, "zj_delta"), right = (DSTNODE, "feature"));
+(EDGEWISE, "W_delta_term1_tmp2") = OuterProduct(left = (DSTNODE, "feature"), right = (EDGEWISE, "zj_delta"));
 (W_delta_term2, EDGETYPE) = EdgeTypeSumAccumulation(input =(EDGEWISE, "W_delta_term1_tmp2"));
 (W_delta, EDGETYPE) = Add(left = (W_delta_term1, EDGETYPE), right = (W_delta_term2, EDGETYPE));
 }

@@ -5,7 +5,7 @@ for e in g.edges():
     e["raw_attn_tmp1"] = inner_product(attn_vec[e.etype], e.zizj)
     e["raw_attn_tmp2"] = leakyrelu(e.raw_attn_tmp1)
     e["raw_attn"] = exp(e.raw_attn_tmp2)
-    e["msg"] = e["zi"]
+    e["msg"] = e.zi
 
 # edge softmax
 for n in g.dst_nodes():
