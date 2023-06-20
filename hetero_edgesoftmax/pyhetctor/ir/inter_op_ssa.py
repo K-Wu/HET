@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
+from collections import namedtuple
+
+_LinearOp = namedtuple("LinearOp", ["result", "left", "right"])
 
 
-class LinearOp:
-    def __init__(self):
-        pass
+# when inherited, this class provides implementation of from_dict for namedtuples
+class DictionaryLoadDumper:
+    @classmethod
+    def from_dict(cls, d):
+        # return cls(**d)
+        return cls._make(d)
 
-    def load_from(op_dict):
-        raise NotImplementedError
+    def to_dict(self):
+        return self._asdict()
 
-    def dump_to(op_dict):
-        raise NotImplementedError
 
+class LinearOp(_LinearOp):
     def validate():
         raise NotImplementedError
 

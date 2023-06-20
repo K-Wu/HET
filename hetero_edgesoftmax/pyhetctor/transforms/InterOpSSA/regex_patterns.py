@@ -28,7 +28,7 @@ keyword_value_pair_pattern = (
 # operator_pattern = r"(?P<funcname>[A-Z][A-z0-9_]*)\s*\(((?P<keywords>[a-z0-9_]*\s*=\s*.*)\s*,)*\s*(?P<lastkeyword>[a-z0-9_]*\s*=\s*.*\)),?\)\s*;"
 # NB: plain assignment e.g. (NODEWISE, "msg") <- (EDGEWISE, "zi") is denoted as
 # (NODEWISE, "msg")=Copy(input=(EDGEWISE, "zi"));
-operator_pattern = r"(?P<result>{weight_pattern}|{non_weight_pattern})=(?P<funcname>[A-Z][A-z0-9_]*)\((?P<keyword_fields>({keyword_value_pair},)*{keyword_value_pair},?)\);".format(
+operator_pattern = r"((?P<result2>{weight_pattern}|{non_weight_pattern}),)?(?P<result>{weight_pattern}|{non_weight_pattern})=(?P<funcname>[A-Z][A-z0-9_]*)\((?P<keyword_fields>({keyword_value_pair},)*{keyword_value_pair},?)\);".format(
     weight_pattern=strip_group_names(weight_pattern),
     non_weight_pattern=strip_group_names(non_weight_pattern),
     keyword_value_pair=strip_group_names(keyword_value_pair_pattern),

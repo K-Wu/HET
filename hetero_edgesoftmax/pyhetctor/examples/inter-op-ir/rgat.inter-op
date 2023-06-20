@@ -2,8 +2,8 @@ for e in g.edges():
     e["zi"] = e.src.feature * W[e.etype]
     e["zj"] = e.dst.feature * W[e.etype]
     e["zizj"] = concat([e.zi, e.zj])
-    e["raw_attn_tmp"] = inner_product(attn_vec[e.etype], e.zizj)
-    e["raw_attn_tmp2"] = leakyrelu(e.raw_attn_tmp)
+    e["raw_attn_tmp1"] = inner_product(attn_vec[e.etype], e.zizj)
+    e["raw_attn_tmp2"] = leakyrelu(e.raw_attn_tmp1)
     e["raw_attn"] = exp(e.raw_attn_tmp2)
     e["msg"] = e["zi"]
 

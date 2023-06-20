@@ -1,7 +1,7 @@
 for n in g.dst_nodes():
     for e in n.incoming_edges():
         e.attn.delta = inner_product(n["output"], e.msg)
-        e.msg.delta = EdgeScalarVectorMul(scalar = e.attn, vector = n["output"])
+        e.msg.delta = e.attn * n["output"]
 
 for e in g.edges():
     e.raw_attn.delta = e["attn"].delta / e.dst.attn_sum
@@ -13,11 +13,11 @@ for n in g.dst_nodes():
 
 for e in g.edges():
     e.raw_attn_tmp2.delta = inverse_exp(e["raw_attn"].delta)
-    e.raw_attn_tmp.delta = inverse_leakyrelu(e.["raw_attn_tmp2"].delta)
-    attn_vec[e.etype].delta += ScalarVectorMul(scalar = e.raw_attn_tmp.delta, vector = e.zizj)
-    e.zizj.delta = inner_product(attn_vec[e.etype], e.raw_attn_tmp.delta)
+    e.raw_attn_tmp1.delta = inverse_leakyrelu(e.["raw_attn_tmp2"].delta)
+    attn_vec[e.etype].delta += e.raw_attn_tmp1.delta * e.zizj
+    e.zizj.delta = inner_product(attn_vec[e.etype], e.raw_attn_tmp1.delta)
     [e.zi.delta, e.zj.delta] = split(e.zizj.delta)
-    e.src.feature.delta = e.["zi"].delta * transpose(W[e.etype])
-    e.dst.feature.delta = e.["zj"].delta * transpose(W[e.etype])
-    W[e.etype].delta += outer_product(e.["zi"].delta, e.src.feature)
-    W[e.etype].delta += outer_product(e.["zj"].delta, e.dst.feature)
+    e.src.feature.delta = e["zi"].delta * transpose(W[e.etype])
+    e.dst.feature.delta = e["zj"].delta * transpose(W[e.etype])
+    W[e.etype].delta += outer_product(e["zi"].delta, e.src.feature)
+    W[e.etype].delta += outer_product(e["zj"].delta, e.dst.feature)
