@@ -1,11 +1,11 @@
 for n in g.dst_nodes():
     for e in n.incoming_edges():
-        e.attn.delta = inner_product(n["output"], e.msg)
-        e.msg.delta = e.attn * n["output"]
+        e.attn.delta = inner_product(n["output"].delta, e.msg)
+        e.msg.delta = e.attn * n["output"].delta
 
 for e in g.edges():
     e.raw_attn.delta = e["attn"].delta / e.dst.attn_sum
-    e.dst.attn_sum.delta += - e.raw_attn / (e.dst.attn_sum * e.dst.attn_sum)
+    e.dst.attn_sum.delta += - e.raw_attn.delta / (e.dst.attn_sum * e.dst.attn_sum)
 
 for n in g.dst_nodes():
     for e in n.incoming_edges():

@@ -1,7 +1,7 @@
 for n in g.dst_nodes():
-    n.raw_output.delta = inverse_tanh(n["output"])
+    n.raw_output.delta = inverse_tanh(n["output"].delta)
     for e in n.incoming_edges():
         e.src.feature.delta = e.norm_factor * n["raw_output"].delta *transpose(Wr[e.etype])
         Wr[e.etype].delta += e.norm_factor * outer_product(e.src.feature, n["raw_output"].delta)
     n.feature.delta = n["raw_output"].delta * transpose(W0)
-    W0.delta += outer_product(n.feature, n["raw_output"])
+    W0.delta += outer_product(n.feature, n["raw_output"].delta)

@@ -15,11 +15,11 @@ DAG{
 (EDGEWISE, "msg") = EdgeLinear(input = (SRCNODE, "hs"), weight = (W_msg, EDGETYPE));
 (EDGEWISE, "raw_attn_tmp1") = EdgeLinear(input = (SRCNODE, "hs_attn"), weight = (W_attn, EDGETYPE));
 (EDGEWISE, "raw_attn_tmp2") = EdgeInnerProduct(left = (EDGEWISE, "raw_attn_tmp1"), right = (DSTNODE, "ht_attn"));
-(EDGEWISE, "raw_attn") = NonlinearExp(input = (EDGEWISE, "raw_attn_tmp2"));
+(EDGEWISE, "raw_attn") = Exponential(input = (EDGEWISE, "raw_attn_tmp2"));
 
 // edge softmax
 (DSTNODE, "attn_sum") = NodeSumAccumulation(input = (EDGEWISE, "raw_attn"));
-(EDGEWISE, "attn") = Divide(left = (EDGEWISE, "raw_attn"), right = (DSTNODE, "attn_sum"));
+(EDGEWISE, "attn") = ScalarDivide(left = (EDGEWISE, "raw_attn"), right = (DSTNODE, "attn_sum"));
 
 // node accumulation
 (EDGEWISE, "output_tmp1") = EdgeScalarVectorMul(scalar=(EDGEWISE, "attn"), vector=(EDGEWISE, "msg"));

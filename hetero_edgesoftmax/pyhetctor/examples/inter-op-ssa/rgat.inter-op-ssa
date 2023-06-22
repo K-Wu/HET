@@ -16,11 +16,11 @@ DAG{
 (EDGEWISE, "zizj") = Concatenate(left = (EDGEWISE, "zi"), right = (EDGEWISE, "zj"));
 (EDGEWISE, "raw_attn_tmp1") = EdgeInnerProduct(left = (attn_vec, EDGETYPE), right = (EDGEWISE, "zizj"));
 (EDGEWISE, "raw_attn_tmp2") = LeakyRelu(input = (EDGEWISE, "raw_attn_tmp1"));
-(EDGEWISE, "raw_attn") = NonlinearExp(input = (EDGEWISE, "raw_attn_tmp2"));
+(EDGEWISE, "raw_attn") = Exponential(input = (EDGEWISE, "raw_attn_tmp2"));
 
 // edge softmax
 (DSTNODE, "attn_sum") = NodeSumAccumulation(input = (EDGEWISE, "raw_attn"));
-(EDGEWISE, "attn") = Divide(left = (EDGEWISE, "raw_attn"), right = (DSTNODE, "attn_sum"));
+(EDGEWISE, "attn") = ScalarDivide(left = (EDGEWISE, "raw_attn"), right = (DSTNODE, "attn_sum"));
 
 // node accumulation
 (EDGEWISE, "output_tmp1") = EdgeScalarVectorMul(scalar=(EDGEWISE, "attn"), vector=(EDGEWISE, "msg"));
