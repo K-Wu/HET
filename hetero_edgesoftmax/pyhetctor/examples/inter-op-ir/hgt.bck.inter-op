@@ -22,8 +22,7 @@ for e in g.edges():
 
 for n in g.nodes():
     Q[n.ntype].delta += outer_product(n.feature, n["ht_attn"].delta)
-    n.feature.delta += inner_product(n["ht_attn"], transpose(Q[n.ntype]))
     K[n.ntype].delta += outer_product(n.feature, n["hs_attn"].delta)
-    n.feature.delta += inner_product(n["hs_attn"], transpose(K[n.ntype]))
     V[n.ntype].delta += outer_product(n.feature, n["hs"].delta)
-    n.feature.delta += inner_product(n["hs"], transpose(V[n.ntype]))
+    # TODO: add support to using += to express such accumulation
+    n.feature.delta = inner_product(n["ht_attn"], transpose(Q[n.ntype])) + inner_product(n["hs_attn"], transpose(K[n.ntype])) + inner_product(n["hs"], transpose(V[n.ntype])) 
