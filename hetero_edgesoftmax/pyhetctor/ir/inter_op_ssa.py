@@ -8,6 +8,34 @@ _DataVar = namedtuple("DataVar", ["type", "name"])
 
 _LinearOp = namedtuple("LinearOp", ["result", "left", "right"])
 
+OPs = {
+    "NodeLinear",
+    "EdgeLinear",
+    "EdgeScalarVectorMul",
+    "VectorAdd",
+    "NodeSumAccumulation",
+    "Tanh",
+    "InverseTanh",
+    "Copy",
+    "EdgeInnerProduct",
+    "ScalarDevide",
+    "ScalarMultiply",
+    "negative",
+    "EdgeTypeSumAccumulation",
+    "ScalarAdd",
+    "Exponential",
+    "InverseExponential",
+    "LeakyRelu",
+    "InverseLeakyRelu",
+    "Concatenate",
+    "Split",
+    "EdgeOuterProduct",
+    "MatrixAdd",
+    "SumAccumulation",
+    "NodeOuterProduct",
+    "Transpose",
+}
+
 
 # when inherited, this class provides implementation of from_dict for namedtuples
 class DictLoader:

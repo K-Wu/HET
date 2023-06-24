@@ -26,23 +26,23 @@ DAG{
 (W_attn_transpose, EDGETYPE) = Transpose(input=(W_attn, EDGETYPE));
 (EDGEWISE, "hs_attn_src_delta_tmp1") = EdgeLinear(left = (EDGEWISE, "raw_attn_tmp1_delta"), right = (W_attn_tranpsose, EDGETYPE));
 (SRCNODE, "hs_attn_delta") = NodeSumAccumulation(input=(EDGEWISE, "hs_attn_src_delta_tmp1"));
-(EDGEWISE, "W_attn_delta_tmp1") = OuterProduct(left=(SRCNODE, "hs_attn"), right=(EDGEWISE, "raw_attn_tmp1_delta"));
+(EDGEWISE, "W_attn_delta_tmp1") = EdgeOuterProduct(left=(SRCNODE, "hs_attn"), right=(EDGEWISE, "raw_attn_tmp1_delta"));
 (W_attn_delta, EDGETYPE) = EdgeTypeSumAccumulation(input=(EDDGEWISE, "W_attn_delta_tmp1));
 (W_msg_transpose, EDGETYPE) = Transpose(input=(W_msg, EDGETYPE));
 (SRCNODE, "hs_delta") = EdgeLinear(left =(EDGEWISE, "msg_delta"), right=(W_msg_transpose, EDGETYPE));
-(EDGEWISE, "W_msg_delta_tmp1") = OuterProduct(left=(SRCNODE, "hs"), right=(EDGEWISE, "msg_delta"));
+(EDGEWISE, "W_msg_delta_tmp1") = EdgeOuterProduct(left=(SRCNODE, "hs"), right=(EDGEWISE, "msg_delta"));
 (W_msg_delta,EDGETYPE) = EdgeTypeSumAccumulation(input=(EDGEWISE, "msg_delta"));
 
-(NODEWISE, "Q_delta") = OuterProduct(left=(NODEWISE, "feature"), right=(NODEWISE, "ht_attn_delta"));
+(NODEWISE, "Q_delta") = NodeOuterProduct(left=(NODEWISE, "feature"), right=(NODEWISE, "ht_attn_delta"));
 // TODO; add support to NodeTypeSumAccumulation
 (Q_delta, NODEWISE) = NodeTypeSumAccumulation(input=(NODEWISE, "Q_delta"));
 (Q_transpose, NODETYPE) = Transpose(input=(Q, NODETYPE));
 (NODEWISE, "feature_delta_term1") = NodeInnerProduct(left=(NODEWISE, "ht_attn"), right=(Q_transpose, NODETYPE));
-(NODEWISE, "K_delta") = OuterProduct(left=(NODEWISE, "feature"), right=(NODEWISE, "hs_attn_delta"));
+(NODEWISE, "K_delta") = NodeOuterProduct(left=(NODEWISE, "feature"), right=(NODEWISE, "hs_attn_delta"));
 (K_delta, NODEWISE) = NodeTypeSumAccumulation(input=(NODEWISE, "K_delta"));
 (K_transpose, NODETYPE) = Transpose(input=(K, NODETYPE));
 (NODEWISE, "feature_delta_term2") = NodeInnerProduct(left=(NODEWISE, "hs_attn"), right=(K_transpose, NODETYPE));
-(NODEWISE, "V_delta") = OuterProduct(left=(NODEWISE, "feature"), right=(NODEWISE, "hs_delta"));
+(NODEWISE, "V_delta") = NodeOuterProduct(left=(NODEWISE, "feature"), right=(NODEWISE, "hs_delta"));
 (V_delta, NODEWISE) = NodeTypeSumAccumulation(input=(NODEWISE, "V_delta"));
 (V_transpose, NODETYPE) = Transpose(input=(V, NODETYPE));
 (NODEWISE, "feature_delta_term3") = NodeInnerProduct(left=(NODEWISE, "hs"), right=(V_transpose, NODETYPE));
