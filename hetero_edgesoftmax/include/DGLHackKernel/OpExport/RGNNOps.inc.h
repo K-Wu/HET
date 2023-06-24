@@ -428,15 +428,12 @@ void _InnerProductVariousLeftAndNodeRight(
               separate_coo_col_indices_data_ptr, etype_data, num_edges,
               etype_mapper_data);
     } else {
-      assert(0 && "Not implemented");
-      // HET_inner_product_fw_kernel_edge_parallel<Idx, DType,
-      // CompactAsOfNodeFlag,
-      //                                       true, true, false, false>
-      // <<<nblks_inner_product, nthrs_inner_product, 0, stream>>>(
-      //     gdata, separate_coo_row_indices_data_ptr,
-      //     separate_coo_col_indices_data_ptr, separate_coo_rel_ptrs_data_ptr,
-      //     num_edges, unique_srcs_and_dests_rel_ptr_data_ptr,
-      //     unique_srcs_and_dests_node_indices_data_ptr, num_relations);
+      HET_inner_product_fw_kernel_edge_parallel<Idx, DType, kind, true, true,
+                                                false, false>
+          <<<nblks_inner_product, nthrs_inner_product, 0, stream>>>(
+              gdata, separate_coo_row_indices_data_ptr,
+              separate_coo_col_indices_data_ptr, etype_data, num_edges,
+              etype_mapper_data);
     }
   } else {
     assert(0 && "Not implemented");

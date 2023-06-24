@@ -96,9 +96,12 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
                 &gdata.edge_inner_product[edata_idx * num_heads + head_idx], s);
           }
         } else {
-          CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(
-              FeatSizeNoLessThanWarpSize,
-              "should be non-reachable not implemented");
+          for (Idx sum_idx = hidden_xlen; sum_idx > 0; sum_idx >>= 1) {
+            s += __shfl_down_sync(0xffffffff, s, sum_idx);
+          }
+          if (threadIdx.x % hidden_xlen == 0) {
+            gdata.edge_inner_product[edata_idx * num_heads + head_idx] = s;
+          }
         }
       }
       //}

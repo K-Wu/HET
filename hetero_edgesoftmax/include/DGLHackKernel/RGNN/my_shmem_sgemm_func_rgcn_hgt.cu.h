@@ -71,6 +71,12 @@ class _simplified_basic_MatMulKernel<
 
     // constexpr bool RIGHT_REG_TILED_FLAG = THREADING_BLOCK_SIZE_Y == 1;
 
+    constexpr bool COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT = false;
+    //    !RIGHT_REG_TILED_FLAG;
+    // if the flag is true, each thread is in charge of a fraction of the output
+    // element. Otherwise, each thread is in charge of a fraction of the
+    // multiply-accumulation but still work on all the output elements
+
     constexpr int COARSEN_DIVISOR_FACTOR =
         (SHMEM_BLOCK_SIZE_X * SHMEM_BLOCK_SIZE_Y) /
         (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y);
@@ -86,15 +92,17 @@ class _simplified_basic_MatMulKernel<
                   "");
 
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_B =
-        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X / THREADING_BLOCK_SIZE_X /
-        THREADING_BLOCK_SIZE_Y;
+        (RIGHT_REG_TILED_FLAG && !COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT)
+            ? SHMEM_BLOCK_SIZE_K
+            : (SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X /
+               THREADING_BLOCK_SIZE_X / THREADING_BLOCK_SIZE_Y);
     static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X) %
                           (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y) ==
                       0,
                   "");
     if constexpr (!HGT_INSTEAD_OF_RGCN_FLAG) {
       // assuming this case is RGCN and there is no multiple head
-      assert((blockDim.z == 1));
+      assert((gridDim.z == 1));
     }  // otherwise assuming HGT
     // TODO: use int for blockIdx threadIdx related variables
     // NB: this scheme does not support num_heads > int_max
@@ -134,12 +142,6 @@ class _simplified_basic_MatMulKernel<
       blockRowLoopEnd = ceil_div<>(numARows, (int64_t)SHMEM_BLOCK_SIZE_Y);
       blockRowLoopInc = strideNumBlocksAlongRow;
     }
-
-    constexpr bool COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT =
-        !RIGHT_REG_TILED_FLAG;
-    // if the flag is true, each thread is in charge of a fraction of the output
-    // element. Otherwise, each thread is in charge of a fraction of the
-    // multiply-accumulation but still work on all the output elements
 
     constexpr int NUM_MUL_ACC =
         COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT
@@ -254,7 +256,9 @@ class _simplified_basic_MatMulKernel<
         __shared__ float Bs[RIGHT_REG_TILED_FLAG ? 1 : SHMEM_BLOCK_SIZE_K]
                            [RIGHT_REG_TILED_FLAG ? 1 : SHMEM_BLOCK_SIZE_X];
         float Bs_reg[RIGHT_REG_TILED_FLAG
-                         ? SHMEM_BLOCK_SIZE_K / THREADING_BLOCK_SIZE_Y
+                         ? (COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT
+                                ? SHMEM_BLOCK_SIZE_K
+                                : SHMEM_BLOCK_SIZE_K / THREADING_BLOCK_SIZE_Y)
                          : 1];
 
         if constexpr (DoInnerProductSwitch !=
@@ -524,7 +528,8 @@ class _simplified_basic_MatMulKernel<
                     thIdxFeat];
 
               auto value_locally_accumulated = Cvalue[storeLoopIdx];
-              if constexpr (AtomicUpdateFlag || RIGHT_REG_TILED_FLAG) {
+              if constexpr (AtomicUpdateFlag ||
+                            !COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT) {
                 atomicAdd(&ref_to_global_elem, value_locally_accumulated);
               } else {
                 ref_to_global_elem = value_locally_accumulated;

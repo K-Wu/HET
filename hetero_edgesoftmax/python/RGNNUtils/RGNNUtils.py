@@ -427,8 +427,8 @@ def add_generic_RGNN_args(parser, default_logfilename, filtered_args={}):
         )
     if not "lr" in filtered_args:
         parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
-    if not "n_head" in filtered_args:
-        parser.add_argument("--n_head", type=int, default=1, help="number of heads")
+    if not "num_heads" in filtered_args:
+        parser.add_argument("--num_heads", type=int, default=1, help="number of heads")
     if not "n_epochs" in filtered_args:
         parser.add_argument(
             "-e", "--n_epochs", type=int, default=10, help="number of training epochs"

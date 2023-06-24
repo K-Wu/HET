@@ -21,7 +21,7 @@ class HET_HGTLayerHetero(nn.Module):
         mydglgraph,
         src_node_type_per_canonical_edge_type,
         dst_node_type_per_canonical_edge_type,
-        n_heads=1,
+        num_heads=1,
         dropout=0.2,
         use_norm=False,
         multiply_among_weights_first_flag=False,
@@ -43,8 +43,8 @@ class HET_HGTLayerHetero(nn.Module):
 
         self.multiply_among_weights_first_flag = multiply_among_weights_first_flag
 
-        self.n_heads = n_heads
-        self.d_k = out_dim // n_heads
+        self.num_heads = num_heads
+        self.d_k = out_dim // num_heads
         self.sqrt_dk = math.sqrt(self.d_k)
         self.att = None
 
@@ -56,15 +56,15 @@ class HET_HGTLayerHetero(nn.Module):
         )
 
         if self.multiply_among_weights_first_flag:
-            # this is a varient of the original weights where first the view is changed from (self.num_ntypes, 1, in_dim, out_dim) to (self.num_ntypes, in_dim, self.n_heads, self.d_k) and then a transposition is applied
+            # this is a varient of the original weights where first the view is changed from (self.num_ntypes, 1, in_dim, out_dim) to (self.num_ntypes, in_dim, self.num_heads, self.d_k) and then a transposition is applied
             self.k_linears = nn.Parameter(
-                torch.Tensor(self.num_ntypes, self.n_heads, in_dim, self.d_k)
+                torch.Tensor(self.num_ntypes, self.num_heads, in_dim, self.d_k)
             )
             self.q_linears = nn.Parameter(
-                torch.Tensor(self.num_ntypes, self.n_heads, in_dim, self.d_k)
+                torch.Tensor(self.num_ntypes, self.num_heads, in_dim, self.d_k)
             )
             self.v_linears = nn.Parameter(
-                torch.Tensor(self.num_ntypes, self.n_heads, in_dim, self.d_k)
+                torch.Tensor(self.num_ntypes, self.num_heads, in_dim, self.d_k)
             )
         else:
             self.k_linears = nn.Parameter(
@@ -87,12 +87,12 @@ class HET_HGTLayerHetero(nn.Module):
             if use_norm:
                 self.norms.append(nn.LayerNorm(out_dim))
 
-        self.relation_pri = nn.Parameter(torch.ones(self.num_relations, self.n_heads))
+        self.relation_pri = nn.Parameter(torch.ones(self.num_relations, self.num_heads))
         self.relation_att = nn.Parameter(
-            torch.Tensor(self.num_relations, n_heads, self.d_k, self.d_k)
+            torch.Tensor(self.num_relations, num_heads, self.d_k, self.d_k)
         )
         self.relation_msg = nn.Parameter(
-            torch.Tensor(self.num_relations, n_heads, self.d_k, self.d_k)
+            torch.Tensor(self.num_relations, num_heads, self.d_k, self.d_k)
         )
         self.skip = nn.Parameter(torch.ones(self.num_ntypes, 1, 1, 1))
         self.drop = nn.Dropout(dropout)
@@ -125,19 +125,19 @@ class HET_HGTLayerHetero(nn.Module):
             k_relation_att_q_product = torch.bmm(
                 k_per_canonical_etype.view(-1, self.in_dim, self.d_k),
                 self.relation_att.view(-1, self.d_k, self.d_k),
-            ).view(-1, self.n_heads, self.in_dim, self.d_k)
+            ).view(-1, self.num_heads, self.in_dim, self.d_k)
             k_relation_att_q_product = torch.bmm(
                 k_relation_att_q_product.view(-1, self.in_dim, self.d_k),
                 q_per_canonical_etype.view(-1, self.in_dim, self.d_k).transpose(1, 2),
-            ).view(-1, self.n_heads, self.in_dim, self.in_dim)
+            ).view(-1, self.num_heads, self.in_dim, self.in_dim)
             relation_msg_v_product = torch.bmm(
                 self.relation_msg.view(-1, self.d_k, self.d_k),
                 v_per_canonical_etype.view(-1, self.d_k, self.d_k),
-            ).view(-1, self.n_heads, self.in_dim, self.d_k)
+            ).view(-1, self.num_heads, self.in_dim, self.d_k)
 
             relation_att_weight = k_relation_att_q_product.contiguous()
             relation_msg_weight = relation_msg_v_product.contiguous()
-            k = h.unsqueeze(1).repeat(1, self.n_heads, 1).contiguous()
+            k = h.unsqueeze(1).repeat(1, self.num_heads, 1).contiguous()
             q = k
             v = k
         else:
@@ -145,20 +145,24 @@ class HET_HGTLayerHetero(nn.Module):
             relation_msg_weight = self.relation_msg
             k = B.rgnn_relational_matmul_no_scatter_gather_list(
                 G.get_original_node_type_offsets(), self.k_linears, h
-            ).view(-1, self.n_heads, self.d_k)
+            )
+            k = k.view(-1, self.num_heads, self.d_k)
             q = B.rgnn_relational_matmul_no_scatter_gather_list(
                 G.get_original_node_type_offsets(), self.q_linears, h
-            ).view(-1, self.n_heads, self.d_k)
+            )
+            q = q.view(-1, self.num_heads, self.d_k)
             v = B.rgnn_relational_matmul_no_scatter_gather_list(
                 G.get_original_node_type_offsets(), self.v_linears, h
-            ).view(-1, self.n_heads, self.d_k)
+            )
+            v = v.view(-1, self.num_heads, self.d_k)
 
         if self.hgt_fused_attn_score_flag:
             attn_score = B.hgt_full_graph_hetero_attention_ops_coo(
                 G, relation_att_weight, k, q
-            )  # shape (num_edges, n_heads)
+            )  # shape (num_edges, num_heads)
         else:
             if self.compact_as_of_node_flag:
+                compact_as_of_node_kind = 2 if self.compact_direct_indexing_flag else 1
                 separate_unique_node_indices_dict_single_sided = (
                     G.get_separate_unique_node_indices_single_sided()
                 )
@@ -179,21 +183,12 @@ class HET_HGTLayerHetero(nn.Module):
                     1,  # CompactAsOfNodeKind::Enabled
                 )  # NB: use single side instead without need to modify kernel
 
-                # TODO: update after the API fuse
-                if not self.compact_direct_indexing_flag:
-                    attn_score = B.rgnn_inner_product_right_node(
-                        G,
-                        attn_weight_dst_product_compact,
-                        k,
-                        1,  # CompactAsOfNodeKind::Enabled
-                    )  # NB: use single side instead without need to modify kernel
-                else:
-                    attn_score = B.rgnn_inner_product_right_node(
-                        G,
-                        attn_weight_dst_product_compact,
-                        k,
-                        2,  # CompactAsOfNodeKind::EnabledWithDirectIndexing
-                    )  # NB: use single side instead without need to modify kernel
+                attn_score = B.rgnn_inner_product_right_node(
+                    G,
+                    attn_weight_dst_product_compact,
+                    k,
+                    compact_as_of_node_kind,  # CompactAsOfNodeKind::EnabledWithDirectIndexing(2) or CompactAsOfNodeKind::Enabled (1)
+                )  # NB: use single side instead without need to modify kernel
             else:
                 separate_coo_original_dict = G.get_separate_coo_original()
                 # with nvtx.annotate("hector_op_category = edgewise mm", color="cyan"):
@@ -242,13 +237,13 @@ class HET_HGTLayerHetero(nn.Module):
                 v,
                 False,
                 0,  # CompactAsOfNodeKind::Disabled
-            )  # shape (num_edges, n_heads, d_k)
+            )  # shape (num_edges, num_heads, d_k)
             new_h = B.hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
                 G,
                 message_per_edge,
                 attn_score,
                 (self.relation_pri / self.sqrt_dk),
-            )  # shape (num_nodes, n_heads, d_k)
+            )  # shape (num_nodes, num_heads, d_k)
 
         # with nvtx.annotate("hector_op_category = nodewise mm", color="cyan"):
         new_h = B.rgnn_relational_matmul_no_scatter_gather_list(
@@ -269,7 +264,7 @@ class HET_HGT_DGLHetero(nn.Module):
         out_dim,
         src_node_type_per_canonical_edge_type: torch.Tensor,
         dst_node_type_per_canonical_edge_type: torch.Tensor,
-        n_heads=1,
+        num_heads=1,
         dropout=0.2,
         multiply_among_weights_first_flag=False,
         hgt_fused_attn_score_flag=False,
@@ -289,7 +284,7 @@ class HET_HGT_DGLHetero(nn.Module):
             mydglgraph,
             src_node_type_per_canonical_edge_type,
             dst_node_type_per_canonical_edge_type,
-            n_heads=n_heads,
+            num_heads=num_heads,
             dropout=dropout,
             multiply_among_weights_first_flag=multiply_among_weights_first_flag,
             hgt_fused_attn_score_flag=hgt_fused_attn_score_flag,
@@ -297,8 +292,9 @@ class HET_HGT_DGLHetero(nn.Module):
             compact_direct_indexing_flag=compact_direct_indexing_flag,
             fused_message_mean_aggregation_flag=fused_message_mean_aggregation_flag,
         )
+        # override the last layer's num_heads to 1 if there are multiple layers, i.e., not in benchmarking
         # self.layer1 = HET_HGTLayerHetero(
-        #    h_dim, out_dim, mydglgraph, n_heads=n_heads, dropout=dropout
+        #    h_dim, out_dim, mydglgraph, num_heads=1, dropout=dropout
         # )
 
     def reset_parameters(self):

@@ -18,6 +18,7 @@ def get_single_layer_model(args, mydglgraph):
     print("num_edges ", num_edges)
     print("num_classes ", num_classes)
     print("num_rels ", num_rels)
+    # TODO: pass num_heads if applicable to RGCN
     model = HET_EGLRGCNSingleLayerModel(
         args.n_infeat,
         num_classes,

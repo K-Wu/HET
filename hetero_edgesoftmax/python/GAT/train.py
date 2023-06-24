@@ -120,8 +120,6 @@ def GAT_train(args, single_layer_flag: bool):
     # initialize a DGL graph
     # TODO: incorporate the following modification to mydgl_graph
     # create model
-    if not single_layer_flag:
-        heads = ([args.num_heads] * args.num_layers) + [args.num_out_heads]
     if single_layer_flag:
         model = EglGATSingleLayer(
             mydgl_graph,
@@ -136,6 +134,7 @@ def GAT_train(args, single_layer_flag: bool):
         )
 
     else:
+        heads = ([args.num_heads] * args.num_layers) + [args.num_out_heads]
         model = EglGAT(
             mydgl_graph,
             args.num_layers,

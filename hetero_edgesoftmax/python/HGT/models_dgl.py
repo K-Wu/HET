@@ -20,7 +20,7 @@ class HGTLayerHetero(nn.Module):
         out_dim,
         node_dict,
         edge_dict,
-        n_heads=1,
+        num_heads=1,
         dropout=0.2,
         use_norm=False,
     ):
@@ -33,8 +33,8 @@ class HGTLayerHetero(nn.Module):
         self.num_types = len(node_dict)
         self.num_relations = len(edge_dict)
         self.total_rel = self.num_types * self.num_relations * self.num_types
-        self.n_heads = n_heads
-        self.d_k = out_dim // n_heads
+        self.num_heads = num_heads
+        self.d_k = out_dim // num_heads
         self.sqrt_dk = math.sqrt(self.d_k)
         self.att = None
 
@@ -53,12 +53,12 @@ class HGTLayerHetero(nn.Module):
             if use_norm:
                 self.norms.append(nn.LayerNorm(out_dim))
 
-        self.relation_pri = nn.Parameter(torch.ones(self.num_relations, self.n_heads))
+        self.relation_pri = nn.Parameter(torch.ones(self.num_relations, self.num_heads))
         self.relation_att = nn.Parameter(
-            torch.Tensor(self.num_relations, n_heads, self.d_k, self.d_k)
+            torch.Tensor(self.num_relations, num_heads, self.d_k, self.d_k)
         )
         self.relation_msg = nn.Parameter(
-            torch.Tensor(self.num_relations, n_heads, self.d_k, self.d_k)
+            torch.Tensor(self.num_relations, num_heads, self.d_k, self.d_k)
         )
         self.skip = nn.Parameter(torch.ones(self.num_types))
         self.drop = nn.Dropout(dropout)
@@ -76,9 +76,9 @@ class HGTLayerHetero(nn.Module):
                 v_linear = self.v_linears[node_dict[srctype]]
                 q_linear = self.q_linears[node_dict[dsttype]]
 
-                k = k_linear(h[srctype]).view(-1, self.n_heads, self.d_k)
-                v = v_linear(h[srctype]).view(-1, self.n_heads, self.d_k)
-                q = q_linear(h[dsttype]).view(-1, self.n_heads, self.d_k)
+                k = k_linear(h[srctype]).view(-1, self.num_heads, self.d_k)
+                v = v_linear(h[srctype]).view(-1, self.num_heads, self.d_k)
+                q = q_linear(h[dsttype]).view(-1, self.num_heads, self.d_k)
 
                 # the following is going to be replaced by our own logic
 
@@ -134,7 +134,7 @@ class HGTLayerHetero(nn.Module):
 class HGT_DGLHetero(nn.Module):
     @utils_lite.warn_default_arguments
     def __init__(
-        self, node_dict, edge_dict, in_dim, out_dim, n_heads=1, dropout=0.2
+        self, node_dict, edge_dict, in_dim, out_dim, num_heads=1, dropout=0.2
     ):  # , h_dim
         super(HGT_DGLHetero, self).__init__()
         self.node_dict = node_dict
@@ -144,10 +144,10 @@ class HGT_DGLHetero(nn.Module):
         # self.h_dim = h_dim
         self.out_dim = out_dim
         self.layer0 = HGTLayerHetero(
-            in_dim, out_dim, node_dict, edge_dict, n_heads=n_heads, dropout=dropout
+            in_dim, out_dim, node_dict, edge_dict, num_heads=num_heads, dropout=dropout
         )
         # self.layer1 = HGTLayerHetero(
-        #    h_dim, out_dim, node_dict, edge_dict, n_heads=n_heads, dropout=dropout
+        #    h_dim, out_dim, node_dict, edge_dict, num_heads=num_heads, dropout=dropout
         # )
 
     def forward(self, G, h):

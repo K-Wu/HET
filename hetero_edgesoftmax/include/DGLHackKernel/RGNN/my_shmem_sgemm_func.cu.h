@@ -35,8 +35,8 @@ class _basic_MatMulKernel<
   __device__ __forceinline__ static void execute_function(
       float *A, float *B, float *C, IdxPtr A_gather_list, IdxPtr B_gather_list,
       IdxPtr C_scatter_list,
-      // TODO: remove etype_mapper_data as the two_order acccess scheme is never
-      // used.
+      // TODO: remove etype_mapper_data as the two_order acccess
+      // scheme is never used.
       const ETypeMapperData<Idx, compactKind> etype_mapper_data,
       Idx idx_relation, Idx numARows, Idx blockIdxAlongRowBeg,
       Idx strideNumBlocksAlongRow, Idx blockRowJobEntryBeg, Idx num_A_cols,
@@ -63,6 +63,12 @@ class _basic_MatMulKernel<
     // always input and B the gradient output feature. It is safe to pass
     // num_A_cols as in_dim.
 
+    constexpr bool COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT = false;
+    //    !RIGHT_REG_TILED_FLAG;
+    // if the flag is true, each thread is in charge of a fraction of the output
+    // element. Otherwise, each thread is in charge of a fraction of the
+    // multiply-accumulation but still work on all the output elements
+
     // In register tiled mode, by default each threading block handles an output
     // tile of size (Tm, Tn), produced by A tile in shmem of size (Tm, Tk), and
     // B tile in register of size (Tk, Tn). The threading block size is Tn where
@@ -88,8 +94,10 @@ class _basic_MatMulKernel<
                   "");
 
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_B =
-        SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X / THREADING_BLOCK_SIZE_X /
-        THREADING_BLOCK_SIZE_Y;
+        (RIGHT_REG_TILED_FLAG && !COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT)
+            ? SHMEM_BLOCK_SIZE_K
+            : (SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X /
+               THREADING_BLOCK_SIZE_X / THREADING_BLOCK_SIZE_Y);
     static_assert((SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X) %
                           (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y) ==
                       0,
@@ -102,7 +110,7 @@ class _basic_MatMulKernel<
       CONSTEXPR_TRUE_CLAUSE_STATIC_ASSERT(OuterProductFlag, AtomicUpdateFlag,
                                           "");
     } else {
-      assert((blockDim.z == num_heads));
+      assert((gridDim.z == num_heads));
     }
 
     int blockFeat = blockIdx.x;  // when OuterProductFlag==True, it is in [0,
@@ -123,12 +131,6 @@ class _basic_MatMulKernel<
       blockRowLoopEnd = ceil_div<>(numARows, (int64_t)SHMEM_BLOCK_SIZE_Y);
       blockRowLoopInc = strideNumBlocksAlongRow;
     }
-
-    constexpr bool COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT =
-        !RIGHT_REG_TILED_FLAG;
-    // if the flag is true, each thread is in charge of a fraction of the output
-    // element. Otherwise, each thread is in charge of a fraction of the
-    // multiply-accumulation but still work on all the output elements
 
     constexpr int NUM_MUL_ACC =
         COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT
@@ -191,7 +193,9 @@ class _basic_MatMulKernel<
         __shared__ float Bs[RIGHT_REG_TILED_FLAG ? 1 : SHMEM_BLOCK_SIZE_K]
                            [RIGHT_REG_TILED_FLAG ? 1 : SHMEM_BLOCK_SIZE_X];
         float Bs_reg[RIGHT_REG_TILED_FLAG
-                         ? SHMEM_BLOCK_SIZE_K / THREADING_BLOCK_SIZE_Y
+                         ? (COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT
+                                ? SHMEM_BLOCK_SIZE_K
+                                : SHMEM_BLOCK_SIZE_K / THREADING_BLOCK_SIZE_Y)
                          : 1];
 
         // Get sub-matrix Bsub of B
@@ -231,10 +235,10 @@ class _basic_MatMulKernel<
                           A, A_gather_list, etype_mapper_data, idx_relation,
                           thIdxFeat_A_outer_product + (m)*SHMEM_BLOCK_SIZE_K +
                               blockRowJobEntryBeg,
-                          idx_head,
+                          A_num_head_one_flag ? 0 : idx_head,
                           thIdxRow_A_outer_product +
                               blockRow * SHMEM_BLOCK_SIZE_Y,
-                          num_heads, num_A_cols)
+                          A_num_head_one_flag ? 1 : num_heads, num_A_cols)
                     : 0.0f;
           }
           for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR_LOAD_B;
@@ -403,6 +407,11 @@ class _basic_MatMulKernel<
             // static_assert(!(RIGHT_REG_TILED_FLAG && !AtomicUpdateFlag),
             //          "unsupported");
             // NB: offset dependent on whether one-side num_head is 1
+            // if (isnan(Cvalue[storeLoopIdx])) {
+            //   printf("nan detected (%d %d %d) (%d %d %d) \n", threadIdx.x,
+            //   threadIdx.y,
+            //          threadIdx.z, blockIdx.x, blockIdx.y, blockIdx.z);
+            // }
             atomicAdd(
                 &C[(C_num_head_one_flag ? 0 : idx_head) *
                        num_A_cols /*A is transposed in the fly*/ * num_B_cols +
@@ -418,6 +427,14 @@ class _basic_MatMulKernel<
               blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols;
           if (WriteCInRangeFlag) {
             auto val_locally_accumulated = Cvalue[storeLoopIdx];
+            // printf("%f (%d %d %d) (%d %d %d) \n",val_locally_accumulated,
+            // threadIdx.x, threadIdx.y,
+            //        threadIdx.z, blockIdx.x, blockIdx.y, blockIdx.z);
+            // if (isnan(val_locally_accumulated)) {
+            //   printf("nan detected (%d %d %d) (%d %d %d) \n", threadIdx.x,
+            //   threadIdx.y,
+            //          threadIdx.z, blockIdx.x, blockIdx.y, blockIdx.z);
+            // }
             auto &ref_to_global_mem_elem =
                 GetRowMajorElement<Idx, IdxPtr, CScatterKind, compactKind>(
                     C, C_scatter_list, etype_mapper_data, idx_relation,
@@ -428,7 +445,8 @@ class _basic_MatMulKernel<
                     C_num_head_one_flag ? 1 : num_heads, num_B_cols);
             // TODO: optimize this so that no need to do atomic update when reg
             // tiling is used
-            if constexpr (AtomicUpdateFlag || RIGHT_REG_TILED_FLAG) {
+            if constexpr (AtomicUpdateFlag ||
+                          !COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT) {
               atomicAdd(&ref_to_global_mem_elem, val_locally_accumulated);
             } else {  // !AtomicUpdateFlag
               ref_to_global_mem_elem = val_locally_accumulated;
@@ -469,6 +487,7 @@ class _basic_MatMulKernel<
 // TODO: KWU: tweak launch_bounds via template variables
 // TODO: KWU: add a new reg tile version
 // blockIdx.y == ceil_div (num_edges, BLOCK_SIZE)
+// FIXME: nan here
 template <
     bool RIGHT_REG_TILED_FLAG, int THREADING_BLOCK_SIZE_X,
     int THREADING_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y,
@@ -508,13 +527,11 @@ template <bool RIGHT_REG_TILED_FLAG, int THREADING_BLOCK_SIZE_X,
           int THREADING_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_X,
           int WORK_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_K, typename Idx,
           typename IdxPtr>
-__global__ void __launch_bounds__(THREADING_BLOCK_SIZE_Y == 1 ? 32 : 256,
-                                  THREADING_BLOCK_SIZE_Y == 1 ? 20 : 3)
-    HET_RGNNMatmulNoScatterGatherListFwOrBckProp(
-        float *node_feat_input, float *weights,
-        float *linear_projected_node_feat, IdxPtr ntype_ptrs,
-        int *accum_num_blocks_per_ntype, Idx num_ntypes, Idx input_dim,
-        Idx output_dim) {
+__global__ void NO_SCATTER_GATHER_LAUNCH_BOUNDS
+HET_RGNNMatmulNoScatterGatherListFwOrBckProp(
+    float *node_feat_input, float *weights, float *linear_projected_node_feat,
+    IdxPtr ntype_ptrs, int *accum_num_blocks_per_ntype, Idx num_ntypes,
+    Idx input_dim, Idx output_dim) {
   Idx idx_block_assignment = blockIdx.y;
   Idx idx_ntype = binary_search<int, int *>(
       num_ntypes, accum_num_blocks_per_ntype, idx_block_assignment);

@@ -5,6 +5,9 @@
 #define MY_SGEMM_LAUNCH_BOUNDS                        \
   __launch_bounds__(RIGHT_REG_TILED_FLAG ? 128 : 256, \
                     RIGHT_REG_TILED_FLAG ? 6 : 3)
+#define NO_SCATTER_GATHER_LAUNCH_BOUNDS               \
+  __launch_bounds__(RIGHT_REG_TILED_FLAG ? 128 : 256, \
+                    RIGHT_REG_TILED_FLAG ? 5 : 3)
 
 #define MY_SGEMM_GRID_CONFIG(SUFFIX)                             \
   constexpr int WORK_BLOCK_SIZE##SUFFIX##_X =                    \
@@ -24,6 +27,9 @@
 // TODO: use the reg tiling flag instead of equal_1 checking
 
 #define MY_SGEMM_LAUNCH_BOUNDS                       \
+  __launch_bounds__(RIGHT_REG_TILED_FLAG ? 64 : 256, \
+                    RIGHT_REG_TILED_FLAG ? 8 : 3)
+#define NO_SCATTER_GATHER_LAUNCH_BOUNDS              \
   __launch_bounds__(RIGHT_REG_TILED_FLAG ? 64 : 256, \
                     RIGHT_REG_TILED_FLAG ? 8 : 3)
 

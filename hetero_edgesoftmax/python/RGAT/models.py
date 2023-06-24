@@ -28,7 +28,7 @@ class HET_RelationalAttLayer(nn.Module):
         Output feature size.
     num_rels: int
         Relation names.
-    n_heads : int
+    num_heads : int
         Number of attention heads
     bias : bool, optional
         True if bias is added. Default: True
@@ -46,7 +46,7 @@ class HET_RelationalAttLayer(nn.Module):
         in_feat,
         out_feat,
         num_rels,
-        n_heads,
+        num_heads,
         *,
         bias: bool = True,
         activation=None,
@@ -62,7 +62,7 @@ class HET_RelationalAttLayer(nn.Module):
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.num_rels = num_rels
-        self.n_heads = n_heads
+        self.num_heads = num_heads
         self.bias = bias
         self.activation = activation
         self.self_loop = self_loop
@@ -76,13 +76,17 @@ class HET_RelationalAttLayer(nn.Module):
             num_rels > 1
         ), "dummy proof assertion num_rels should be larger than 1 normally when calling RGAT_HET"
         # NB: RGAT model definition
-        assert out_feat % n_heads == 0, "out_feat must be a multiple of n_heads"
+        assert out_feat % num_heads == 0, "out_feat must be a multiple of num_heads"
 
         self.conv_weights = nn.Parameter(
-            th.Tensor(num_rels, n_heads, in_feat, out_feat // n_heads)
+            th.Tensor(num_rels, num_heads, in_feat, out_feat // num_heads)
         )
-        self.attn_l = nn.Parameter(th.Tensor(num_rels, n_heads, out_feat // n_heads))
-        self.attn_r = nn.Parameter(th.Tensor(num_rels, n_heads, out_feat // n_heads))
+        self.attn_l = nn.Parameter(
+            th.Tensor(num_rels, num_heads, out_feat // num_heads)
+        )
+        self.attn_r = nn.Parameter(
+            th.Tensor(num_rels, num_heads, out_feat // num_heads)
+        )
 
         # bias
         if bias:
@@ -132,63 +136,57 @@ class HET_RelationalAttLayer(nn.Module):
 
         # NB: this line originally calls DGL R(GAT) impl and is now replaced with our own logic
         if self.compact_as_of_node_flag:
+            matmul_compact_as_of_node_kind = (
+                1  # 2 if self.compact_direct_indexing_flag else 1
+            )
+            if self.compact_direct_indexing_flag:
+                print(
+                    "Warning: matmul currently ignore compact direct indexing flag as it is unclear how to benefit from it"
+                )
+            separate_unique_node_indices_single_sided = (
+                g.get_separate_unique_node_indices_single_sided()
+            )
+            args_tensor_dict = {
+                "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
+                    "rel_ptrs_row"
+                ],
+                "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
+                    "node_indices_row"
+                ],
+            }
             if self.multiply_among_weights_first_flag:
                 product_of_conv_weights_attn_r = th.bmm(
                     self.conv_weights.view(
-                        -1, self.in_feat, self.out_feat // self.n_heads
+                        -1, self.in_feat, self.out_feat // self.num_heads
                     ),
-                    self.attn_r.view(-1, self.out_feat // self.n_heads, 1),
-                ).view(-1, self.n_heads, self.in_feat, 1)
+                    self.attn_r.view(-1, self.out_feat // self.num_heads, 1),
+                ).view(-1, self.num_heads, self.in_feat, 1)
                 product_of_conv_weights_attn_l = th.bmm(
                     self.conv_weights.view(
-                        -1, self.in_feat, self.out_feat // self.n_heads
+                        -1, self.in_feat, self.out_feat // self.num_heads
                     ),
-                    self.attn_l.view(-1, self.out_feat // self.n_heads, 1),
-                ).view(-1, self.n_heads, self.in_feat, 1)
-                separate_unique_node_indices_single_sided = (
-                    g.get_separate_unique_node_indices_single_sided()
-                )
+                    self.attn_l.view(-1, self.out_feat // self.num_heads, 1),
+                ).view(-1, self.num_heads, self.in_feat, 1)
                 feat_compact = B.rgnn_relational_matmul(
-                    {
-                        "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
-                            "rel_ptrs_row"
-                        ],
-                        "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
-                            "node_indices_row"
-                        ],
-                    },
+                    args_tensor_dict,
                     self.conv_weights,
                     inputs,
                     True,  # fixme: check if this is correct
-                    1,  # CompactAsOfNodeKind::Enabled
+                    matmul_compact_as_of_node_kind,  # CompactAsOfNodeKind::Enabled or Direct Index
                 )  # NB: use single side instead without need to modify kernel
                 el_compact = B.rgnn_relational_matmul(
-                    {
-                        "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
-                            "rel_ptrs_row"
-                        ],
-                        "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
-                            "node_indices_row"
-                        ],
-                    },
+                    args_tensor_dict,
                     product_of_conv_weights_attn_l,
                     inputs,
                     True,
-                    1,  # CompactAsOfNodeKind::Enabled
+                    matmul_compact_as_of_node_kind,  # CompactAsOfNodeKind::Enabled or Direct Index
                 )  # NB: use single side instead without need to modify kernel
                 er_compact = B.rgnn_relational_matmul(
-                    {
-                        "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
-                            "rel_ptrs_col"
-                        ],
-                        "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
-                            "node_indices_col"
-                        ],
-                    },
+                    args_tensor_dict,
                     product_of_conv_weights_attn_r,
                     inputs,
                     True,
-                    1,  # CompactAsOfNodeKind::Enabled
+                    matmul_compact_as_of_node_kind,  # CompactAsOfNodeKind::Enabled or Direct Index
                 )  # NB: use single side instead without need to modify kernel
             else:
                 separate_unique_node_indices_single_sided = (
@@ -196,34 +194,21 @@ class HET_RelationalAttLayer(nn.Module):
                 )
                 # NB: no need to distinguish feat_compact_src and feat_compact_dst because in our case all datasets are added with inverse edges
                 feat_compact = B.rgnn_relational_matmul(
-                    {
-                        "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
-                            "rel_ptrs_row"
-                        ],
-                        "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
-                            "node_indices_row"
-                        ],
-                    },
+                    args_tensor_dict,
                     self.conv_weights,
                     inputs,
                     True,
-                    1,  # CompactAsOfNodeKind::Enabled
+                    matmul_compact_as_of_node_kind,  # CompactAsOfNodeKind::Enabled or Direct Index
                 )  # NB: use single side instead without need to modify kernel
                 feat_compact_dst = B.rgnn_relational_matmul(
-                    {
-                        "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
-                            "rel_ptrs_col"
-                        ],
-                        "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
-                            "node_indices_col"
-                        ],
-                    },
+                    args_tensor_dict,
                     self.conv_weights,
                     inputs,
                     True,
-                    1,  # CompactAsOfNodeKind::Enabled
+                    matmul_compact_as_of_node_kind,  # CompactAsOfNodeKind::Enabled or Direct Index
                 )  # NB: use single side instead without need to modify kernel
                 # TODO: for performance, the following two lines may as well be implemented with relational_inner_product_compact_and_weight
+                # notice that rgnn_inner_product_right_node is not applicable here because weight is not right-hand-side data
                 el_compact = B.rgnn_relational_matmul_no_scatter_gather_list(
                     separate_unique_node_indices_single_sided["rel_ptrs_row"],
                     self.attn_l.unsqueeze(-1),
@@ -290,10 +275,10 @@ class HET_RelationalAttLayer(nn.Module):
                 # with nvtx.annotate("hector_op_category = weight mm", color="cyan"):
                 product_of_conv_weights_attn_r = th.bmm(
                     self.conv_weights.view(
-                        -1, self.in_feat, self.out_feat // self.n_heads
+                        -1, self.in_feat, self.out_feat // self.num_heads
                     ),
-                    self.attn_r.view(-1, self.out_feat // self.n_heads, 1),
-                ).view(-1, self.n_heads, self.in_feat, 1)
+                    self.attn_r.view(-1, self.out_feat // self.num_heads, 1),
+                ).view(-1, self.num_heads, self.in_feat, 1)
                 # with nvtx.annotate("hector_op_category = edgewise (lin op fused) mm", color="cyan"):
                 er = B.rgnn_relational_matmul(
                     {
@@ -368,7 +353,7 @@ class HET_RelationalGATEncoder(nn.Module):
         Hidden dimension size
     out_dim: int
         Output dimension size
-    n_heads: int
+    num_heads: int
         Number of heads
     num_hidden_layers: int
         Num hidden layers
@@ -387,7 +372,7 @@ class HET_RelationalGATEncoder(nn.Module):
         num_etypes,
         h_dim,
         out_dim,
-        n_heads,
+        num_heads,
         num_hidden_layers=1,
         dropout=0.5,
         use_self_loop: bool = True,
@@ -399,11 +384,11 @@ class HET_RelationalGATEncoder(nn.Module):
     ):
         super(HET_RelationalGATEncoder, self).__init__()
         self.mydglgraph = mydglgraph
-        self.n_heads = n_heads
+        self.num_heads = num_heads
         self.num_etypes = num_etypes
         self.h_dim = h_dim
         self.out_dim = out_dim
-        self.n_heads = n_heads
+        self.num_heads = num_heads
         self.num_hidden_layers = num_hidden_layers
         self.dropout = dropout
         self.use_self_loop = use_self_loop
@@ -424,7 +409,7 @@ class HET_RelationalGATEncoder(nn.Module):
                     self.h_dim,
                     self.h_dim,
                     self.num_etypes,
-                    self.n_heads,
+                    self.num_heads,
                     activation=F.relu,
                     self_loop=self.use_self_loop,
                     dropout=self.dropout,
@@ -434,13 +419,16 @@ class HET_RelationalGATEncoder(nn.Module):
                     gat_edge_parallel_flag=self.gat_edge_parallel_flag,
                 )
             )
+
+        # override the last layer's num_heads to 1 if there are multiple layers, i.e., not in benchmarking
+        final_layer_num_heads = self.num_heads if self.num_hidden_layers == 0 else 1
         # h2o
         self.layers.append(
             HET_RelationalAttLayer(
                 self.h_dim,
                 self.out_dim,
                 self.num_etypes,
-                1,  # overwrting the n_head setting as the classification should be output in this stage
+                final_layer_num_heads,
                 activation=F.relu if self.last_layer_act else None,
                 self_loop=self.use_self_loop,
                 compact_as_of_node_flag=self.compact_as_of_node_flag,

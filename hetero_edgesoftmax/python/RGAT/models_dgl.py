@@ -34,7 +34,7 @@ class RelationalAttLayer(nn.Module):
         Output feature size.
     rel_names : list[str]
         Relation names.
-    n_heads : int
+    num_heads : int
         Number of attention heads
     bias : bool, optional
         True if bias is added. Default: True
@@ -52,7 +52,7 @@ class RelationalAttLayer(nn.Module):
         in_feat,
         out_feat,
         rel_names,
-        n_heads,
+        num_heads,
         *,
         bias=True,
         activation=None,
@@ -69,7 +69,9 @@ class RelationalAttLayer(nn.Module):
 
         self.conv = dglnn.HeteroGraphConv(
             {
-                rel: dglnn.GATConv(in_feat, out_feat // n_heads, n_heads, bias=False)
+                rel: dglnn.GATConv(
+                    in_feat, out_feat // num_heads, num_heads, bias=False
+                )
                 for rel in rel_names
             }
         )  # NB: RGAT model definition
@@ -162,7 +164,7 @@ class RelationalGATEncoder(nn.Module):
         Hidden dimension size
     out_dim: int
         Output dimension size
-    n_heads: int
+    num_heads: int
         Number of heads
     num_hidden_layers: int
         Num hidden layers
@@ -180,18 +182,18 @@ class RelationalGATEncoder(nn.Module):
         g,
         h_dim,
         out_dim,
-        n_heads,
+        num_heads,
         num_hidden_layers=1,
         dropout=0,
         use_self_loop=True,
         last_layer_act=False,
     ):
         super(RelationalGATEncoder, self).__init__()
-        self.n_heads = n_heads
+        self.num_heads = num_heads
         self.g = g
         self.h_dim = h_dim
         self.out_dim = out_dim
-        self.n_heads = n_heads
+        self.num_heads = num_heads
         self.num_hidden_layers = num_hidden_layers
         self.dropout = dropout
         self.use_self_loop = use_self_loop
@@ -208,7 +210,7 @@ class RelationalGATEncoder(nn.Module):
                     self.h_dim,
                     self.h_dim,
                     self.g.etypes,
-                    self.n_heads,
+                    self.num_heads,
                     activation=F.relu,
                     self_loop=self.use_self_loop,
                     dropout=self.dropout,
@@ -220,7 +222,7 @@ class RelationalGATEncoder(nn.Module):
                 self.h_dim,
                 self.out_dim,
                 self.g.etypes,
-                1,  # overwrting the n_head setting as the classification should be output in this stage
+                1,  # overwrting the num_heads setting as the classification should be output in this stage
                 activation=F.relu if self.last_layer_act else None,
                 self_loop=self.use_self_loop,
             )

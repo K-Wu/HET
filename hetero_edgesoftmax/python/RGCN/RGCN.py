@@ -58,6 +58,7 @@ class HET_EglRelGraphConv(nn.Module):
         compact_as_of_node_flag=False,
         compact_direct_indexing_flag=False,
     ):
+        # TODO: pass num_heads if applicable to RGCN
         super(HET_EglRelGraphConv, self).__init__()
         self.hybrid_assign_flag = hybrid_assign_flag
         self.num_blocks_on_node_forward = num_blocks_on_node_forward
@@ -127,6 +128,8 @@ class HET_EglRelGraphConv(nn.Module):
         torch.Tensor
             New node features.
         """
+
+        # TODO: pass num_heads if applicable to RGCN
         if self.num_bases < self.num_rels:
             # generate all weights from bases
             weight = self.weight.view(self.num_bases, self.in_feat * self.out_feat)
@@ -191,6 +194,7 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
         dropout=0.0,
         layer_type=0,
     ):
+        # TODO: pass num_heads if applicable to RGCN
         super(HET_EglRelGraphConv_EdgeParallel, self).__init__()
         if self_loop:
             raise NotImplementedError
@@ -258,6 +262,8 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
         torch.Tensor
             New node features.
         """
+
+        # TODO: pass num_heads if applicable to RGCN
         if self.num_bases < self.num_rels:
             # generate all weights from bases
             weight = self.weight.view(self.num_bases, self.in_feat * self.out_feat)
@@ -333,6 +339,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
         compact_as_of_node_flag,
         compact_direct_indexing_flag,
     ):
+        # TODO: pass num_heads if applicable to RGCN
         super(HET_EGLRGCNSingleLayerModel, self).__init__()
         if sparse_format == "separate_coo":
             self.layer2 = HET_EglRelGraphConv_EdgeParallel(
@@ -649,7 +656,7 @@ def create_RGCN_parser(RGCN_single_layer_flag):
             "--hidden_size", type=int, default=16, help="number of hidden units"
         )
     print(
-        "WARNING: RGCN currently does not support the following batch_size, !full_graph_training, n_head"
+        "WARNING: RGCN currently does not support the following batch_size, !full_graph_training, num_heads"
     )
     parser.add_argument("--gpu", type=int, default=0, help="gpu")
     parser.add_argument(

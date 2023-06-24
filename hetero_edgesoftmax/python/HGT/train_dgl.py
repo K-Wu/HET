@@ -43,7 +43,7 @@ def HGT_get_model(g: dgl.DGLGraph, num_classes, hypermeters):
         hypermeters["n_infeat"],
         # hypermeters["n_hidden"],
         num_classes,
-        n_heads=hypermeters["n_head"],
+        num_heads=hypermeters["num_heads"],
         dropout=hypermeters["dropout"],
     )
     print(embed_layer)
@@ -78,7 +78,7 @@ def HGT_get_our_model(
             dtype=torch.long,
             requires_grad=False,
         ),
-        n_heads=args.n_head,
+        num_heads=args.num_heads,
         dropout=args.dropout,
         multiply_among_weights_first_flag=args.multiply_among_weights_first_flag,
         hgt_fused_attn_score_flag=args.hgt_fused_attn_score_flag,

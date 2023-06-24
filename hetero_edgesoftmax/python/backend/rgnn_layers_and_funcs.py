@@ -507,8 +507,9 @@ def rgnn_inner_product_right_node(
             graph.get_separate_unique_node_indices_single_sided()
         )
         # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
+        # print([separate_coo_original_dict["rel_ptrs"][-1], right_node_vectors.size(1)])
         ret = th.zeros(
-            [separate_coo_original_dict["rel_ptrs"][-1], right_node_vectors.size(1)],
+            (graph.get_num_rels(), right_node_vectors.size(1)),
             dtype=right_node_vectors.dtype,
             device=right_node_vectors.device,
             requires_grad=True,

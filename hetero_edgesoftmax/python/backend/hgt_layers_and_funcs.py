@@ -26,7 +26,7 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             (
                 separate_coo_row_indices.numel(),
                 attn_score_weight.size(1),
-            ),  # weight size (self.num_relations, n_heads, self.d_k, self.d_k)
+            ),  # weight size (self.num_relations, num_heads, self.d_k, self.d_k)
             dtype=attn_score_weight.dtype,
             device=attn_score_weight.device,
             requires_grad=True,
@@ -196,7 +196,6 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCOO(
         ctx,
         gradout,  # delta out node feature
     ):
-
         (
             incsr_row_ptrs,
             incsr_col_indices,
@@ -308,7 +307,6 @@ class HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR(th.autograd.Functio
         message_per_edge,
         new_h,
     ):
-
         K.hgt_full_graph_edge_softmax_ops_csr(
             incsr_row_ptrs,
             incsr_col_indices,
@@ -526,7 +524,7 @@ def hgt_full_graph_edge_softmax_and_message_mean_aggregation_csr(
         requires_grad=True,
     ).contiguous()
 
-    # scale_factor, i.e., sqrt_dk equals math.sqrt(out_dim // n_heads)
+    # scale_factor, i.e., sqrt_dk equals math.sqrt(out_dim // num_heads)
     return HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR.apply(
         incsr_row_ptrs,
         incsr_col_indices,
