@@ -2,7 +2,7 @@
 import re
 
 
-def strip_group_names(pattern):
+def strip_group_names(pattern: str) -> str:
     """Strip group names from pattern string"""
     return re.sub(r"\?P<.*?>", "", pattern)
 

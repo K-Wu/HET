@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 from . import regex_patterns
 import re
+from typing import Union
+import io
 
 
-def strip_white_spaces(line):
+def strip_white_spaces(line: str) -> str:
     """Strip whitespaces from line"""
     return re.sub(r"\s+", "", line)
 
@@ -12,7 +14,7 @@ def strip_white_spaces(line):
 # 1. strip comments, and whitespaces
 # 2. match operator_pattern
 # 3. if matched, extract the substring in the match group "keyword_fields", and apply match_all using keyword_value_pair_pattern
-def loads(lines):
+def loads(lines: Union[list[str], io.TextIOWrapper]) -> list[dict]:
     results = []
     scope_beg = 0
     for idx_line, line in enumerate(lines):
@@ -36,7 +38,7 @@ def loads(lines):
             # TODO: handle scope tags
         match = re.match(regex_patterns.operator_pattern, line)
         if match:
-            curr_instr = dict()
+            curr_op = dict()
             result = match.group("result")
             func_name = match.group("funcname")
             keyword_fields = match.group("keyword_fields")
@@ -44,22 +46,22 @@ def loads(lines):
                 regex_patterns.keyword_value_pair_pattern, keyword_fields
             )
             # print(result, func_name, keyword_fields)
-            curr_instr["result"] = result
-            curr_instr["func_name"] = func_name
-            curr_instr["keyword_value_pairs"] = []
+            curr_op["result"] = result
+            curr_op["func_name"] = func_name
+            curr_op["keyword_value_pairs"] = []
             # print every matched key_value pair
             for keyword_value_pair in keyword_value_pairs:
                 keyword = keyword_value_pair[0]
                 value = keyword_value_pair[1]
                 # print("   ", keyword, value)
-                curr_instr["keyword_value_pairs"].append((keyword, value))
-            results.append(curr_instr)
+                curr_op["keyword_value_pairs"].append((keyword, value))
+            results.append(curr_op)
     return results
 
 
 # TODO: implement this
-# returns a multi-line string that represents the instructions, i.e., in the format of .inter-op-ssa file
-def dumps(instructions):
+# returns a multi-line string that represents the operations, i.e., in the format of .inter-op-ssa file
+def dumps(operations) -> str:
     raise NotImplementedError
 
 

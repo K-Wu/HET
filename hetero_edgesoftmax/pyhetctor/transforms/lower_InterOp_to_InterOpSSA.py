@@ -6,7 +6,7 @@ from .InterOp.pattern_match import matchers
 # the input is canonicalized program, where each node in the module body is a single-statement loop-nest
 # the procedure runs all matchers on all single-statement loop-nest nodes, and put the SSA statement into the returning list once there is a match
 # return program at inter-op-ssa level
-def lower_ops(module_node):
+def lower_ops(module_node) -> list:
     ssa_statements = []
     for node in module_node.body:
         for matcher in matchers:
