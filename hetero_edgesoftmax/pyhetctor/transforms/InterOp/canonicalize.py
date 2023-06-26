@@ -1,24 +1,29 @@
 #!/usr/bin/env python3
 import ast
 
-# This transform 1) breaks down operation chain to multiple operations, and 2) does loop split to faciliate scope analysis
-# e.g.
-# for e in g.edges():
-# e["msg"] = e.src.hs * W_msg[e.etype]
-# e["raw_attn"] = exp(e.src.hs_attn * W_attn[e.etype] * e.dst.ht_attn)
-# =>
-# for e in g.edges():
-#    e["msg"] = e.src.hs * W_msg[e.etype]
-# for e in g.edges():
-#    e["raw_attn_tmp1"] = e.src.hs_attn * W_attn[e.etype]
-# for e in g.edges():
-#    e["raw_attn_tmp2"] = e.raw_attn_tmp1 * e.dst.ht_attn
-# for e in g.edges():
-#   e["raw_attn"] = exp(e.raw_attn_tmp2)
+"""
+This transform 1) breaks down operation chain to multiple operations, and 2) does loop split to faciliate scope analysis
+e.g.
+for e in g.edges():
+e["msg"] = e.src.hs * W_msg[e.etype]
+e["raw_attn"] = exp(e.src.hs_attn * W_attn[e.etype] * e.dst.ht_attn)
+=>
+for e in g.edges():
+   e["msg"] = e.src.hs * W_msg[e.etype]
+for e in g.edges():
+   e["raw_attn_tmp1"] = e.src.hs_attn * W_attn[e.etype]
+for e in g.edges():
+   e["raw_attn_tmp2"] = e.raw_attn_tmp1 * e.dst.ht_attn
+for e in g.edges():
+  e["raw_attn"] = exp(e.raw_attn_tmp2)
+"""
 
 
-# return a list of for nodes: each is a single-statement loop nest where each statement is from the body of this for_node
 def split_for_loop_node(for_node):
+    """
+    return a list of for nodes: each is a single-statement loop nest where each
+    statement is from the body of this for_node
+    """
     results = []
     assert isinstance(for_node, ast.For)
     if len(for_node.orelse) != 0:
@@ -34,9 +39,9 @@ def split_for_loop_node(for_node):
     return results
 
 
-# As an ad hoc solution, we assert the names are canonicalized rather than renaming it
 # TODO: implement renaming if the name is not canonicalized when inputted
 def assert_for_loop_variables_canonicalized(for_node):
+    # As an ad hoc solution, we assert the names are canonicalized rather than renaming it
     assert isinstance(for_node, ast.For)
     assert isinstance(for_node.iter, ast.Call)
     assert isinstance(for_node.iter.func, ast.Attribute)

@@ -7,16 +7,18 @@ import torch.jit
 from typing import Dict, Union
 
 
-# restricted mydglgraph object. no device transfer support. Assuming the data are ready on the desired device during creation from mydglgraph object.
-
-# metadata
-# the mydglgraph object needs to execute get_num_nodes(), get_num_ntypes(), get_sparse_format(both original and transposed), get_device, already
-# original needs to be existent in the mydglgraph object. Transposition and unique are also required if needed
-# Data:
-# self.graph_data["original"], as Dict[str, torch.Tensor], should exist
-# optional: self.graph_data["transposed"], self.graph_data["separate"]["csr"]["original"], self.graph_data["separate"]["csr"]["transposed"], self.graph_data["separate"]["coo"]["original"], self.graph_data["separate"]["coo"]["transposed"], self.graph_data["separate"]["unique_node_indices"], all as Dict[str, torch.Tensor]
 @torch.jit.script
 class ScriptedMyDGLGraph(object):
+    """
+    restricted mydglgraph object. no device transfer support. Assuming the data are ready on the desired device during creation from mydglgraph object.
+    metadata
+    the mydglgraph object needs to execute get_num_nodes(), get_num_ntypes(), get_sparse_format(both original and transposed), get_device, already
+    original needs to be existent in the mydglgraph object. Transposition and unique are also required if needed
+    Data:
+    self.graph_data["original"], as Dict[str, torch.Tensor], should exist
+    optional: self.graph_data["transposed"], self.graph_data["separate"]["csr"]["original"], self.graph_data["separate"]["csr"]["transposed"], self.graph_data["separate"]["coo"]["original"], self.graph_data["separate"]["coo"]["transposed"], self.graph_data["separate"]["unique_node_indices"], all as Dict[str, torch.Tensor]
+    """
+
     def __init__(
         self,
         num_nodes: int,

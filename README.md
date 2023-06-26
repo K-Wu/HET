@@ -11,7 +11,7 @@ The following repos, as submodules in `third_party/`, are required. Please recur
 
 Besides, as we register our kernels in PyTorch (optional cmake build component), pytorch-dev and libtorch are also required.
 
-## CMake Commands
+## CMake commands
 We need to set BUILD_TEST and BUILD_BENCHMARK as they will be passed on to sub-repo sputnik and build necessary components.
 ```
 mkdir build
@@ -39,6 +39,12 @@ Try the following command to push in a submodule:
 ```
 git push origin HEAD:master
 ```
+
+## What's in a name?
+Here is the reference for the naming of `hrt` and `pyctor`.
+
+* [Pictor - Wikipedia](https://en.wikipedia.org/wiki/Pictor)
+* [Heartland (United States) - Wikipedia](https://en.wikipedia.org/wiki/Heartland_(United_States))
 
 ## Contact
 Kun Wu kunwu2 (at) illinois (dot) edu  [![wakatime](https://wakatime.com/badge/github/K-Wu/hetero_edgesoftmax.svg)](https://wakatime.com/badge/github/K-Wu/hetero_edgesoftmax)

@@ -24,12 +24,12 @@ DAG{
 (EDGEWISE, "ht_attn_dst_delta_tmp1") = EdgeScalarVectorMul(scalar=(EDGEWISE, "raw_attn_tmp2_delta"), vector=(EDGEWISE, "raw_attn_tmp1"));
 (DSTNODE, "ht_attn_delta") = NodeSumAccumulation(input=(EDGEWISE, "ht_attn_dst_delta_tmp1"));
 (W_attn_transposed, EDGETYPE) = Transpose(input=(W_attn, EDGETYPE));
-(EDGEWISE, "hs_attn_src_delta_tmp1") = EdgeLinear(input = (EDGEWISE, "raw_attn_tmp1_delta"), weight = (W_attn_tranpsose, EDGETYPE));
+(EDGEWISE, "hs_attn_src_delta_tmp1") = EdgeDense(input = (EDGEWISE, "raw_attn_tmp1_delta"), weight = (W_attn_tranpsose, EDGETYPE));
 (SRCNODE, "hs_attn_delta") = NodeSumAccumulation(input=(EDGEWISE, "hs_attn_src_delta_tmp1"));
 (EDGEWISE, "W_attn_delta_tmp1") = EdgeOuterProduct(left=(SRCNODE, "hs_attn"), right=(EDGEWISE, "raw_attn_tmp1_delta"));
 (W_attn_delta, EDGETYPE) = EdgeTypeSumAccumulation(input=(EDDGEWISE, "W_attn_delta_tmp1));
 (W_msg_transposed, EDGETYPE) = Transpose(input=(W_msg, EDGETYPE));
-(SRCNODE, "hs_delta") = EdgeLinear(input =(EDGEWISE, "msg_delta"), weight=(W_msg_transposed, EDGETYPE));
+(SRCNODE, "hs_delta") = EdgeDense(input =(EDGEWISE, "msg_delta"), weight=(W_msg_transposed, EDGETYPE));
 (EDGEWISE, "W_msg_delta_tmp1") = EdgeOuterProduct(left=(SRCNODE, "hs"), right=(EDGEWISE, "msg_delta"));
 (W_msg_delta,EDGETYPE) = EdgeTypeSumAccumulation(input=(EDGEWISE, "msg_delta"));
 

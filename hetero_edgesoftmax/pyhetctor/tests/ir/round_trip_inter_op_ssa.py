@@ -1,6 +1,8 @@
-from ...ir.InterOpSSA import op_serializer
-from typing import Union
-import io
+#!/usr/bin/env python3
+"""
+use round trip to test the serialize/deserialize of inter-op SSA work as intended.
+"""
+from ...ir.InterOpSSA import ops_serializer
 
 filenames = [
     "pyhetctor/examples/inter-op-ssa/hgt.inter-op-ssa",
@@ -12,13 +14,13 @@ filenames = [
 ]
 
 
-def remove_comment_and_whitespace(lines: Union[list[str], io.TextIOWrapper]) -> str:
+def remove_comment_and_whitespace(lines: list[str]) -> str:
     lines_after_filter = []
     for line in lines:
         if line.find("//") != -1:
             line = line[: line.find("//")]
         line = line.strip()
-        line = op_serializer.strip_white_spaces(line)
+        line = ops_serializer.strip_white_spaces(line)
         # skip empty or comment lines
         if len(line) == 0:
             continue
@@ -29,8 +31,8 @@ def remove_comment_and_whitespace(lines: Union[list[str], io.TextIOWrapper]) -> 
 if __name__ == "__main__":
     for filename in filenames:
         with open(filename) as fd:
-            operations = op_serializer.loads(fd)
-            actual_str = op_serializer.dumps(operations)
+            operations = ops_serializer.loads(fd.readlines())
+            actual_str = ops_serializer.dumps(operations)
         with open(filename) as fd:
-            expected_str = remove_comment_and_whitespace(fd)
+            expected_str = remove_comment_and_whitespace(fd.readlines())
         assert actual_str == expected_str

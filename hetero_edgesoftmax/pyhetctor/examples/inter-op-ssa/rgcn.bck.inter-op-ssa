@@ -10,13 +10,13 @@ DAG{
 (DSTNODE, "raw_output_delta") = InverseTanh(input = (NODEWISE, "output_delta"));
 (EDGEWISE, "feature_delta_tmp1") = EdgeScalarVectorMul(left = (EDGEWISE, "norm_factor"),right= (DSTNODE, "raw_output_delta"));
 (Wr_transposed, EDGETYPE) = Transpose(input=(Wr, EDGETYPE));
-(SRCNODE, "feature_delta_tmp2") = EdgeLinear(input=(EDGEWISE, "feature_delta_tmp1"), weight=(Wr_transposed, EDGETYPE));
+(SRCNODE, "feature_delta_tmp2") = EdgeDense(input=(EDGEWISE, "feature_delta_tmp1"), weight=(Wr_transposed, EDGETYPE));
 (SRCNODE, "feature_delta") = EdgeScalarVectorMul(scalar=(EDGEWISE, "norm_factor"), vector=(SRCNODE, "feature_delta_tmp2"));
 (EDGEWISE, "feature_dst_delta_tmp1") = EdgeOuterProduct(left=(SRCNODE, "feature"), right=(DSTNODE, "raw_output_delta"));
 (EDGEWISE, "feature_dst_delta_tmp2") = EdgeScalarVectorMul(scalar=(EDGEWISE, "norm_factor"), vector=(EDGEWISE, "feature_dst_delta_tmp1"));
 (Wr_delta, EDGETYPE) = EdgeTypeSumAccumulation(input = (EDGEWISE, "feature_dst_delta_tmp2"));
 (W0_transposed, NONE) = Transpose(input=(W0, NONE));
-(DSTNODE, "feature_delta") = NodeLinear(input = (DSTNODE, "feature"), weight = (W0_transposed, NONE));
+(DSTNODE, "feature_delta") = NodeDense(input = (DSTNODE, "feature"), weight = (W0_transposed, NONE));
 // TODO: add support to typeless sum accumulation
 (DSTNODE, "W0_delta_tmp1") = NodeOuterProduct(left=(DSTNODE, "feature"), right=(SRCNODE, "raw_output_delta"));
 (W0_delta, NONE) = SumAccumulation(input = (DSTNODE, "W0_delta_tmp1"));

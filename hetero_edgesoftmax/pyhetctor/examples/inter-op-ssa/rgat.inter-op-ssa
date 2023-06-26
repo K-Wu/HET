@@ -10,8 +10,8 @@ SHAPE{
 /// DAG
 ///
 DAG{
-(EDGEWISE, "zi") = NodeLinear(input = (SRCNODE, "feature"), weight = (W,EDGETYPE));
-(EDGEWISE, "zj") = NodeLinear(input = (DSTNODE, "feature"), weight = (W,EDGETYPE));
+(EDGEWISE, "zi") = NodeDense(input = (SRCNODE, "feature"), weight = (W,EDGETYPE));
+(EDGEWISE, "zj") = NodeDense(input = (DSTNODE, "feature"), weight = (W,EDGETYPE));
 (NODEWISE, "msg") = Copy(input = (EDGEWISE, "zi"));
 (EDGEWISE, "zizj") = Concatenate(left = (EDGEWISE, "zi"), right = (EDGEWISE, "zj"));
 (EDGEWISE, "raw_attn_tmp1") = EdgeInnerProduct(left = (attn_vec, EDGETYPE), right = (EDGEWISE, "zizj"));
