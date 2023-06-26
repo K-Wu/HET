@@ -2,7 +2,7 @@
 """
 use round trip to test the serialize/deserialize of inter-op SSA work as intended.
 """
-from ...ir.InterOpSSA import ops_serializer
+from ...ir.InterOpSSA import programs
 
 filenames = [
     "pyhetctor/examples/inter-op-ssa/hgt.inter-op-ssa",
@@ -20,7 +20,7 @@ def remove_comment_and_whitespace(lines: list[str]) -> str:
         if line.find("//") != -1:
             line = line[: line.find("//")]
         line = line.strip()
-        line = ops_serializer.strip_white_spaces(line)
+        line = programs.strip_white_spaces(line)
         # skip empty or comment lines
         if len(line) == 0:
             continue
@@ -31,8 +31,9 @@ def remove_comment_and_whitespace(lines: list[str]) -> str:
 if __name__ == "__main__":
     for filename in filenames:
         with open(filename) as fd:
-            operations = ops_serializer.loads(fd.readlines())
-            actual_str = ops_serializer.dumps(operations)
+            prog = programs.Program.loads(fd.readlines())
+
+            actual_str = prog.dumps()
         with open(filename) as fd:
             expected_str = remove_comment_and_whitespace(fd.readlines())
         assert actual_str == expected_str

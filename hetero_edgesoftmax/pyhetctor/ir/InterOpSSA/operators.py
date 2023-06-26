@@ -41,11 +41,19 @@ class OpBase(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def differentiate(self) -> bool:
+    def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
     @abc.abstractmethod
     def lower(self) -> bool:
+        raise NotImplementedError
+
+    @abc.abstractclassmethod
+    def get_operands(self) -> list[VarBase]:
+        raise NotImplementedError
+
+    @abc.abstractclassmethod
+    def get_results(self) -> list[VarBase]:
         raise NotImplementedError
 
 
@@ -108,6 +116,12 @@ class SplitOp(_SplitOp, OpBase):
         results_str = ",".join([ele.to_string() for ele in self.results])
         return f"{results_str}={self.get_opname()}(input = {self.input})"
 
+    def get_operands(self) -> list[VarBase]:
+        return [self.input]
+
+    def get_results(self) -> list[VarBase]:
+        return self.results
+
 
 class NodeDenseOp(_NodeDenseOp, OpBase):
     def validate(self) -> None:
@@ -135,6 +149,12 @@ class NodeDenseOp(_NodeDenseOp, OpBase):
 
     def to_string(self) -> str:
         return f"{self.result}={self.get_opname()}(input = {self.input}, weight = {self.weight})"
+
+    def get_operands(self) -> list[VarBase]:
+        return [self.input, self.weight]
+
+    def get_results(self) -> list[VarBase]:
+        return [self.result]
 
 
 class EdgeDenseOp(_EdgeDenseOp, OpBase):
@@ -164,6 +184,12 @@ class EdgeDenseOp(_EdgeDenseOp, OpBase):
     def to_string(self) -> str:
         return f"{self.result}={self.get_opname()}(input = {self.input}, weight = {self.weight})"
 
+    def get_operands(self) -> list[VarBase]:
+        return [self.input, self.weight]
+
+    def get_results(self) -> list[VarBase]:
+        return [self.result]
+
 
 class EdgeScalarVectorMulOp(_EdgeScalarVectorMulOp, OpBase):
     def validate(self) -> None:
@@ -191,6 +217,12 @@ class EdgeScalarVectorMulOp(_EdgeScalarVectorMulOp, OpBase):
     def to_string(self) -> str:
         return f"{self.result}={self.get_opname()}(scalar = {self.scalar}, vector = {self.vector})"
 
+    def get_operands(self) -> list[VarBase]:
+        return [self.scalar, self.vector]
+
+    def get_results(self) -> list[VarBase]:
+        return [self.result]
+
 
 class UnaryOp(_UnaryOp, OpBase):
     def validate(self) -> None:
@@ -215,6 +247,12 @@ class UnaryOp(_UnaryOp, OpBase):
 
     def to_string(self) -> str:
         return f"{self.result}={self.get_opname()}(input = {self.input})"
+
+    def get_operands(self) -> list[VarBase]:
+        return [self.input]
+
+    def get_results(self) -> list[VarBase]:
+        return [self.result]
 
 
 class BinaryOp(_BinaryOp, OpBase):
@@ -245,6 +283,12 @@ class BinaryOp(_BinaryOp, OpBase):
 
     def to_string(self) -> str:
         return f"{self.result}={self.get_opname()}(left = {self.left}, right = {self.right})"
+
+    def get_operands(self) -> list[VarBase]:
+        return [self.left, self.right]
+
+    def get_results(self) -> list[VarBase]:
+        return [self.result]
 
 
 #
@@ -358,7 +402,7 @@ class NodeOuterProductOp(BinaryOp):
         raise NotImplementedError
 
 
-name_to_op: dict[str, Type[OpBase]] = {
+func_name_to_op: dict[str, Type[OpBase]] = {
     "Split": SplitOp,  # (results) input
     "NodeDense": NodeDenseOp,  # input, weight
     "EdgeDense": EdgeDenseOp,  # input, weight

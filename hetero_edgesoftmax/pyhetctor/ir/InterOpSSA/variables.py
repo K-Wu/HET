@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from typing import NamedTuple, Type
+from typing import NamedTuple, Type, Union
 import abc
 
 
@@ -170,8 +170,17 @@ class DataVar(_DataVar, VarBase):
         return DataVar(type=self.type, name=self.name + "_delta")
 
 
-def get_var_class(name: str) -> Type[VarBase]:
+def get_var_class(name: str) -> Union[Type[DataVar], Type[WeightVar]]:
     if '"' in name:
         return DataVar
     else:
         return WeightVar
+
+
+def is_valid_var(var: str) -> bool:
+    var_class = get_var_class(var)
+    try:
+        var_ = var_class.from_string(var)
+        return is_valid_var_name(var_.name)
+    except Exception:
+        return False

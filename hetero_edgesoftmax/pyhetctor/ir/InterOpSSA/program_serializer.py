@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from . import regex_patterns
 import re
-from .context import strip_white_spaces, VariableTable
+from .programs import strip_white_spaces, VariableTable
 from typing import Tuple, Union
 
 
@@ -25,7 +25,8 @@ def loads_op(lines: list[str]) -> list[dict["str", Union["str", list[str]]]]:
     # For every line, do the following steps:
     # 1. strip comments, and whitespaces
     # 2. match operator_pattern
-    # 3. if matched, extract the substring in the match group "keyword_fields", and apply match_all using keyword_value_pair_pattern
+    # 3. if matched, extract the substring in the match group "keyword_fields",
+    # and apply match_all using keyword_value_pair_pattern
     results = []
     scope_beg = 0
     for idx_line, line in enumerate(lines):
@@ -44,7 +45,8 @@ def loads_op(lines: list[str]) -> list[dict["str", Union["str", list[str]]]]:
         elif line.find("}") != -1:
             # end of a scope
             scope_end = idx_line
-            # assert the line should only contain the scope-end symbol "}" for simplicity of parsing for now
+            # assert the line should only contain the scope-end symbol "}" for
+            # simplicity of parsing for now
             assert len(line) == 1
             # TODO: handle scope tags
         match = re.match(regex_patterns.operator_pattern, line)
@@ -75,7 +77,8 @@ def loads_op(lines: list[str]) -> list[dict["str", Union["str", list[str]]]]:
 
 
 def loads_shape_table(lines: list[str]) -> Tuple[VariableTable, int]:
-    """Find the scope with ShapeTable tag, and pass the lines in between to VariableTable.loads"""
+    """Find the scope with ShapeTable tag, and pass the lines in between to
+    VariableTable.loads"""
     shapetable_scope_beg = -1
     for idx_line, line in enumerate(lines):
         if line.find("{") != -1 and line.find("ShapeTable") != -1:
@@ -90,15 +93,9 @@ def loads_shape_table(lines: list[str]) -> Tuple[VariableTable, int]:
     )
 
 
-def loads(lines: list[str]) -> Tuple[VariableTable, list[dict]]:
+def program_loads(lines: list[str]) -> Tuple[VariableTable, list[dict]]:
     var_table, idx_line = loads_shape_table(lines)
     return var_table, loads_op(lines[idx_line:])
-
-
-# TODO: implement this
-def dumps(operations) -> str:
-    """Returns a multi-line string that represents the operations, i.e., in the format of .inter-op-ssa file"""
-    raise NotImplementedError
 
 
 # a simple test
