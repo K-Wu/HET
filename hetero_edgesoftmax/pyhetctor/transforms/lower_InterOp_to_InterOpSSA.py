@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from .InterOp import canonicalize
-from .InterOp.pattern_match import matchers
+from ..ir.InterOp.pattern_match import matchers
 
 
 def lower_ops(module_node) -> list:

@@ -433,11 +433,23 @@ func_name_to_op: dict[str, Type[OpBase]] = {
 }
 
 
+# TODO: implement the following two fuse ops
+class NonGEMMFuseOp:
+    def lower(self):
+        raise NotImplementedError
+
+
+class GEMMFuseOp:
+    def lower(self):
+        raise NotImplementedError
+
+
 if __name__ == "__main__":
     a = DataVar.from_string('(NODEWISE,"a")')
     print(a.to_string())
     b = SplitOp.from_keyval_pairs(
         {
+            "func_name": "Split",
             "results": [
                 '(NODEWISE,"a")',
                 '(EDGEWISE,"b")',

@@ -27,11 +27,11 @@ class VarBase(metaclass=abc.ABCMeta):
     def lower(self):
         raise NotImplementedError
 
-    @abs.abstractmethod
+    @abc.abstractmethod
     def from_dict(cls, d: dict["str", "str"]) -> "VarBase":
         raise NotImplementedError
 
-    @abs.abstractmethod
+    @abc.abstractmethod
     def to_dict(self) -> dict["str", "str"]:
         raise NotImplementedError
 
