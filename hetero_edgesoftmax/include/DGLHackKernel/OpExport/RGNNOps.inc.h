@@ -364,8 +364,8 @@ void _InnerProductVariousLeftAndNodeRight(
     }
 
     ETypeData<Idx, false> etype_data{
-        .etypes = incsr_row_ptr.numel() > 0 ? incsr_row_ptr.data_ptr<Idx>()
-                                            : nullptr};
+        .etypes = incsr_reltypes.numel() > 0 ? incsr_reltypes.data_ptr<Idx>()
+                                             : nullptr};
 
     HET_inner_product_fw_kernel<Idx, DType, kind, true, false, false>
         <<<nblks2, nthrs2, 0, stream>>>(
@@ -494,8 +494,8 @@ void _GatherCompactToNonCompact(
     }
 
     ETypeData<Idx, false> etype_data{
-        .etypes = incsr_row_ptr.numel() > 0 ? incsr_row_ptr.data_ptr<Idx>()
-                                            : nullptr};
+        .etypes = incsr_reltypes.numel() > 0 ? incsr_reltypes.data_ptr<Idx>()
+                                             : nullptr};
     // not implemented!
     assert(0 && "not implemented");
   } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&

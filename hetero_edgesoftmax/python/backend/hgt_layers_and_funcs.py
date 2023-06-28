@@ -112,6 +112,9 @@ class HGTFullGraphHeteroAttentionOps(th.autograd.Function):
             grad_k,
             grad_q,
         )
+        # print("grad_k", grad_k)
+        # print("grad_q", grad_q)
+        # print("grad_attn_weight", grad_attn_weight)
         # NB: black will format the return statement to a multi-line tuple, but causes error in some cases. However in plain autograd function, packing multiple return values as a tuple is fine. We need to figure out if this is a pytorch issue or ours when we have time.
         # fmt: off
         return  None, None, None, None, None, None, None, None,  grad_k, grad_q, grad_attn_weight
@@ -281,7 +284,12 @@ class HGTFullGraphMessageCalcEdgeSoftmaxAndMessageMeanAggregationCOO(
                 grad_mu,
                 sum_incoming_edges_product_softmax_score,
             )
-
+        # print("grad_mu", grad_mu)
+        # print("_grad_normalized_attn_score", grad_normalized_attn_score)
+        # print("grad_unnormalized_attn_score", grad_unnormalized_attn_score)
+        # print("grad_input", grad_input)
+        # print("grad_message_generation_weight", grad_message_generation_weight)
+        # print("gradout", gradout)
         # fmt: off
         return None,None,None,None,None,None,None,None,grad_message_generation_weight,grad_input,grad_unnormalized_attn_score,None,grad_mu,None,None,None
         # fmt: on
@@ -403,6 +411,10 @@ class HGTFullGraphEdgeSoftmaxAndMessageMeanAggregationOpsCSR(th.autograd.Functio
             grad_attn_score,
             grad_mu,
         )
+        # print("grad_mu", grad_mu)
+        # print("grad_attn_score", grad_attn_score)
+        # print("grad_message", grad_message)
+
         # fmt: off
         return None, None, None, None, None, None, None, None, grad_attn_score, grad_mu, None, None, None, grad_message, None, None, None
         # fmt: on

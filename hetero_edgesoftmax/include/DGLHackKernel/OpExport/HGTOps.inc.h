@@ -308,13 +308,13 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
   auto [nblks, nthrs] =
       get_type1_schedule(gdata.num_heads, incsr_row_ptr.numel() - 1);
 
-  ETypeData<Idx, true> etype_data{
+  ETypeData<Idx, false> etype_data{
       .etypes = incsr_reltypes.data_ptr<Idx>(),
-      .num_relations = num_relations,
+      //.num_relations = num_relations,
   };
   // TODO: expose a separate coo version
   HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel<Idx, DType, true,
-                                                            true>
+                                                            false>
       <<<nblks, nthrs, 0, stream>>>(gdata, incsr_row_ptr.data_ptr<Idx>(),
                                     incsr_col_indices.data_ptr<Idx>(),
                                     etype_data, incsr_row_ptr.numel() - 1);
@@ -390,11 +390,11 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
   auto [nblks, nthrs] = get_type2_schedule(
       gdata_attn.num_heads, gdata_attn.message_src_xlen, outcsr_num_rows);
 
-  ETypeData<Idx, true> etype_data{
+  ETypeData<Idx, false> etype_data{
       .etypes = outcsr_reltypes.data_ptr<Idx>(),
-      .num_relations = num_relations,
+      //.num_relations = num_relations,
   };
-  HET_HGTAttnAndMessageSrcFusedBckKernel<Idx, DType, false, true, false,
+  HET_HGTAttnAndMessageSrcFusedBckKernel<Idx, DType, false, false, false,
                                          AttnScoreUseMuAppliedAttnScoreSwitch>
       <<<nblks, nthrs, 0, stream>>>(gdata_attn, grad_message.data_ptr<DType>(),
                                     outcsr_row_ptrs.data_ptr<Idx>(),

@@ -108,6 +108,7 @@ class RgnnRelationalMatmulNoScatterGatherList(th.autograd.Function):
             grad_input,
             grad_weight,
         )
+        # print("grad_weight", grad_weight)
         # fmt: off
         return None,  grad_weight, grad_input, None
         # fmt: on

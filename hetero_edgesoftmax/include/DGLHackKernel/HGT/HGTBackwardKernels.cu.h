@@ -322,7 +322,8 @@ HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO(
             normalized_attn_score;
 
         gdata.grad_unnormalized_attn_score[edge_offset] = delta_a_for_curr_edge;
-
+        // TODO:
+        // FIXME: only first element is non-zero
         atomicAdd(gdata.grad_mu + etype * num_heads + head_idx,
                   delta_mu_for_curr_edge);
       }
@@ -602,7 +603,8 @@ __global__ void HET_HGTEdgeSoftmaxAccumStageOnlyBackwardKernel(
             atomicAdd(gdata.grad_attn_score + edge_offset,
                       grad_for_this_feat_idx * mu);
           }
-
+          // FIXME:
+          // TODO: only the first elemetn is non-zero
           atomicAdd(gdata.grad_mu + etype * num_heads + head_idx,
                     grad_for_this_feat_idx *
                         gdata.unnormalized_attn_score[edge_offset]);

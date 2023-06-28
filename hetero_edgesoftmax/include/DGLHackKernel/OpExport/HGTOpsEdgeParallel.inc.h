@@ -279,13 +279,13 @@ void full_graph_hetero_attention_ops(
   // NB: message_out_dim is the total dim,  the number of elements for each head
   // is message_out_dim//num_heads
 
-  ETypeData<int64_t, true> etype_data{
+  ETypeData<int64_t, false> etype_data{
       .etypes = incsr_reltypes.data_ptr<int64_t>(),
-      .num_relations = num_relations,
+      //.num_relations = num_relations,
   };
 
   HET_HGTQVectType2BackwardKernel<int64_t, float, CompactAsOfNodeKind::Disabled,
-                                  true, true>
+                                  true, false>
       <<<nblks_type2, nthrs_type2, 0, stream>>>(
           gdata, incsr_row_ptr.data_ptr<int64_t>(),
           incsr_col_indices.data_ptr<int64_t>(), etype_data,

@@ -63,7 +63,7 @@ class _basic_MatMulKernel<
     // always input and B the gradient output feature. It is safe to pass
     // num_A_cols as in_dim.
 
-    constexpr bool COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT = false;
+    constexpr bool COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT = true;
     //    !RIGHT_REG_TILED_FLAG;
     // if the flag is true, each thread is in charge of a fraction of the output
     // element. Otherwise, each thread is in charge of a fraction of the
@@ -79,7 +79,7 @@ class _basic_MatMulKernel<
     // corresponding do a fraction of the multiplication-accumulation. Still,
     // each thread's update will span the whole column it belongs to in the
     // output tile.
-    constexpr int COARSEN_DIVISOR_FACTOR =
+    constexpr int COARSEN_DIVISOR_FACTOR_STORE_C =
         (SHMEM_BLOCK_SIZE_X * SHMEM_BLOCK_SIZE_Y) /
         (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y);
     static_assert(SHMEM_BLOCK_SIZE_Y % THREADING_BLOCK_SIZE_Y == 0, "");
@@ -94,7 +94,7 @@ class _basic_MatMulKernel<
                   "");
 
     constexpr int COARSEN_DIVISOR_FACTOR_LOAD_B =
-        (RIGHT_REG_TILED_FLAG && !COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT)
+        (RIGHT_REG_TILED_FLAG && COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT)
             ? SHMEM_BLOCK_SIZE_K
             : (SHMEM_BLOCK_SIZE_K * SHMEM_BLOCK_SIZE_X /
                THREADING_BLOCK_SIZE_X / THREADING_BLOCK_SIZE_Y);
@@ -135,10 +135,10 @@ class _basic_MatMulKernel<
     constexpr int NUM_MUL_ACC =
         COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT
             ? SHMEM_BLOCK_SIZE_K
-            : (SHMEM_BLOCK_SIZE_K * COARSEN_DIVISOR_FACTOR /
+            : (SHMEM_BLOCK_SIZE_K * COARSEN_DIVISOR_FACTOR_STORE_C /
                SHMEM_BLOCK_SIZE_Y);
     constexpr int NUM_OUTPUT_PER_THREAD = COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT
-                                              ? COARSEN_DIVISOR_FACTOR
+                                              ? COARSEN_DIVISOR_FACTOR_STORE_C
                                               : SHMEM_BLOCK_SIZE_Y;
 
     for (int blockRow = blockRowLoopBeg; blockRow < blockRowLoopEnd;
@@ -152,14 +152,18 @@ class _basic_MatMulKernel<
       // Thread row and column within Csub
       float Cvalue[NUM_OUTPUT_PER_THREAD] = {};
 
-      int thIdxRow_initial = threadIdx.y;
-      int thIdxFeat_initial = threadIdx.x;
-      if constexpr (COARSEN_DIVISOR_FACTOR > 1) {
+      int thIdx = threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x;
+      int thIdxRow_initial_BC = threadIdx.y;
+      int thIdxFeat_initial_BC = threadIdx.x;
+      if constexpr (THREADING_BLOCK_SIZE_X != SHMEM_BLOCK_SIZE_X) {
         // redo the thread indexing
-        int thIdx = threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x;
-        thIdxRow_initial = thIdx / SHMEM_BLOCK_SIZE_X;
-        thIdxFeat_initial = thIdx % SHMEM_BLOCK_SIZE_X;
+        thIdxRow_initial_BC = thIdx / SHMEM_BLOCK_SIZE_X;
+        thIdxFeat_initial_BC = thIdx % SHMEM_BLOCK_SIZE_X;
       }
+
+      int thIdxRow_initial_A = thIdx / SHMEM_BLOCK_SIZE_K;
+      int thIdxFeat_initial_A = thIdx % SHMEM_BLOCK_SIZE_K;
+
       // Loop over all the sub-matrices of A and B that are
       // required to compute Csub
       // Multiply each pair of sub-matrices together
@@ -202,25 +206,27 @@ class _basic_MatMulKernel<
         // Load Asub and Bsub from device memory to
         // shared memory Each thread loads one element of each sub-matrix
 
+        // NB: load_A initial should be based on thIdxRow_initial_A,
+        // thIdxFeat_initial_A which uses SHMEM_K as the denominator
         if constexpr (OuterProductFlag) {
           for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR_LOAD_A;
                loadLoopIdx++) {
             // NB: in outer product, m and y are interchanged, and the loading
             // scheme is a transpose in the fly. that is why both thIdxRow and m
             // need to be used during indexing the row
-            int SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT =
-                THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y /
-                SHMEM_BLOCK_SIZE_K;
+            // int SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT =
+            //     THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y /
+            //     SHMEM_BLOCK_SIZE_K;
             int thIdxRow_A_outer_product =
-                (threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x) %
-                    SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT +
-                (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) /
-                    COARSEN_DIVISOR_FACTOR_LOAD_A;
+                (threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x +
+                 loadLoopIdx * THREADING_BLOCK_SIZE_X *
+                     THREADING_BLOCK_SIZE_Y) %
+                SHMEM_BLOCK_SIZE_Y;
             int thIdxFeat_A_outer_product =
-                (threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x) /
-                    SHMEM_BLOCK_DIM_Y_PER_LOAD_A_OUTER_PRODUCT +
-                (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) %
-                    COARSEN_DIVISOR_FACTOR_LOAD_A;
+                (threadIdx.y * THREADING_BLOCK_SIZE_X + threadIdx.x +
+                 loadLoopIdx * THREADING_BLOCK_SIZE_X *
+                     THREADING_BLOCK_SIZE_Y) /
+                SHMEM_BLOCK_SIZE_Y;
 
             // Get sub-matrix Asub of A
             As[thIdxRow_A_outer_product][thIdxFeat_A_outer_product] =
@@ -245,12 +251,12 @@ class _basic_MatMulKernel<
                loadLoopIdx++) {
             // NB: KWU: for outerproduct, the m loop variable is on the K
             // dimension
-            int thIdxRow = thIdxRow_initial +
+            int thIdxRow = thIdxRow_initial_BC +
                            loadLoopIdx * (SHMEM_BLOCK_SIZE_K /
                                           COARSEN_DIVISOR_FACTOR_LOAD_B);
             static_assert(
                 SHMEM_BLOCK_SIZE_K % COARSEN_DIVISOR_FACTOR_LOAD_B == 0, "");
-            int thIdxFeat = thIdxFeat_initial;
+            int thIdxFeat = thIdxFeat_initial_BC;
             float value_to_load =
                 ((m)*SHMEM_BLOCK_SIZE_K + thIdxRow <  //+ blockRowJobEntryBeg <
                      numARows &&
@@ -274,11 +280,11 @@ class _basic_MatMulKernel<
           for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR_LOAD_A;
                loadLoopIdx++) {
             int thIdxRow =
-                thIdxRow_initial + (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) /
-                                       COARSEN_DIVISOR_FACTOR_LOAD_A;
+                thIdxRow_initial_A + (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) /
+                                         COARSEN_DIVISOR_FACTOR_LOAD_A;
             int thIdxFeat =
-                thIdxFeat_initial + (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) %
-                                        COARSEN_DIVISOR_FACTOR_LOAD_A;
+                thIdxFeat_initial_A + (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) %
+                                          COARSEN_DIVISOR_FACTOR_LOAD_A;
             // Get sub-matrix Asub of A
             As[thIdxRow][thIdxFeat] =
                 (thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y < numARows &&
@@ -295,12 +301,12 @@ class _basic_MatMulKernel<
           }
           for (int loadLoopIdx = 0; loadLoopIdx < COARSEN_DIVISOR_FACTOR_LOAD_B;
                loadLoopIdx++) {
-            int thIdxRow = thIdxRow_initial +
+            int thIdxRow = thIdxRow_initial_BC +
                            loadLoopIdx * (SHMEM_BLOCK_SIZE_K /
                                           COARSEN_DIVISOR_FACTOR_LOAD_B);
             static_assert(
                 SHMEM_BLOCK_SIZE_K % COARSEN_DIVISOR_FACTOR_LOAD_B == 0, "");
-            int thIdxFeat = thIdxFeat_initial;
+            int thIdxFeat = thIdxFeat_initial_BC;
             if constexpr (BWeightInsteadOfFeatureFlag) {
               // B matrix the most major dimension is num_heads, i.e.,
               // [num_heads, num_B_rows_feat, num_B_cols_feat] instead of
@@ -363,11 +369,11 @@ class _basic_MatMulKernel<
             if constexpr (RIGHT_REG_TILED_FLAG) {
               right_operand = Bs_reg[idx_mul_acc];
             } else {
-              right_operand = Bs[idx_mul_acc][thIdxFeat_initial];
+              right_operand = Bs[idx_mul_acc][thIdxFeat_initial_BC];
             }
 
             Cvalue[idx_output] +=
-                As[thIdxRow_initial +
+                As[thIdxRow_initial_BC +
                    idx_output * (SHMEM_BLOCK_SIZE_Y / NUM_OUTPUT_PER_THREAD)]
                   [idx_mul_acc] *
                 right_operand;
@@ -384,13 +390,13 @@ class _basic_MatMulKernel<
       for (int storeLoopIdx = 0; storeLoopIdx < NUM_OUTPUT_PER_THREAD;
            storeLoopIdx++) {
         int thIdxRow =
-            thIdxRow_initial +
+            thIdxRow_initial_BC +
             storeLoopIdx * (SHMEM_BLOCK_SIZE_Y / NUM_OUTPUT_PER_THREAD);
         static_assert(
             SHMEM_BLOCK_SIZE_Y % NUM_OUTPUT_PER_THREAD == 0,
             "SHMEM_BLOCK_SIZE_Y must be divisible by NUM_OUTPUT_PER_THREAD");
 
-        int thIdxFeat = thIdxFeat_initial;
+        int thIdxFeat = thIdxFeat_initial_BC;
         if constexpr (OuterProductFlag) {
           // C is weight instead of feature.
           bool WriteCInRangeFlag =
