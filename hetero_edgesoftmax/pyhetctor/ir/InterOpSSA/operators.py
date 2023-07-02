@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 from .variables import VarBase, DataVar, WeightVar, get_var_class
-from typing import NamedTuple, Union, Type
+from typing import NamedTuple, Union, Type, TypeVar
 import abc
+
+T = TypeVar("T")
 
 
 class OpBase(metaclass=abc.ABCMeta):
@@ -13,7 +15,7 @@ class OpBase(metaclass=abc.ABCMeta):
 
     @classmethod
     @abc.abstractmethod
-    def from_keyval_pairs(cls, d: dict["str", "str"]):
+    def from_keyval_pairs(cls: Type[T], d: dict["str", Union[list["str"], "str"]]) -> T:
         """
         from_keyval_pairs takes in keyval pairs parsed by op_serializer.py
         recursively rather instantiated object as keys' values by cls._make(d)
@@ -57,6 +59,41 @@ class OpBase(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
 
+class FusedOpBase(metaclass=abc.ABCMeta):
+    ops: list[OpBase]
+
+    def __init__(self, ops: list[OpBase]):
+        self.ops = ops
+
+    @classmethod
+    def get_opname(cls) -> str:
+        raise NotImplementedError
+
+    @classmethod
+    def from_ops(cls, ops: list[OpBase]):
+        return cls(ops)
+
+    def to_string(self) -> str:
+        result = self.get_opname() + "{\n"
+        for op in self.ops:
+            result += op.to_string()
+            result += "\n"
+        result += "}"
+        return result
+
+    @abc.abstractmethod
+    def validate(self) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def lower(self) -> bool:
+        raise NotImplementedError
+
+
 _SplitOp = NamedTuple("SplitOp", [("results", list[DataVar]), ("input", DataVar)])
 _NodeDenseOp = NamedTuple(
     "NodeDenseOp", [("result", DataVar), ("input", DataVar), ("weight", WeightVar)]
@@ -93,7 +130,9 @@ class SplitOp(_SplitOp, OpBase):
         self.input.validate()
 
     @classmethod
-    def from_keyval_pairs(cls, d: dict["str", Union[list["str"], "str"]]) -> "SplitOp":
+    def from_keyval_pairs(
+        cls: Type["SplitOp"], d: dict["str", Union[list["str"], "str"]]
+    ) -> "SplitOp":
         assert d["func_name"] == "Split"
         assert isinstance(d["results"], list)
         results = []
@@ -120,7 +159,8 @@ class SplitOp(_SplitOp, OpBase):
         return [self.input]
 
     def get_results(self) -> list[VarBase]:
-        return self.results
+        # Unpack and pack again to avoid type error
+        return [*self.results]
 
 
 class NodeDenseOp(_NodeDenseOp, OpBase):
@@ -232,7 +272,7 @@ class UnaryOp(_UnaryOp, OpBase):
         self.input.validate()
 
     @classmethod
-    def from_keyval_pairs(cls, d: dict["str", "str"]) -> "UnaryOp":
+    def from_keyval_pairs(cls: Type[T], d: dict["str", "str"]) -> T:
         result_cls = get_var_class(d["result"])
         input_cls = get_var_class(d["input"])
         result = result_cls.from_string(d["result"])
@@ -265,7 +305,7 @@ class BinaryOp(_BinaryOp, OpBase):
         self.right.validate()
 
     @classmethod
-    def from_keyval_pairs(cls, d: dict["str", "str"]):
+    def from_keyval_pairs(cls: Type[T], d: dict["str", "str"]) -> T:
         result_cls = get_var_class(d["result"])
         left_cls = get_var_class(d["left"])
         right_cls = get_var_class(d["right"])
@@ -434,12 +474,34 @@ func_name_to_op: dict[str, Type[OpBase]] = {
 
 
 # TODO: implement the following two fuse ops
-class NonGEMMFuseOp:
+
+
+class TraversalFusedOp(FusedOpBase):
+    @classmethod
+    def get_opname(cls) -> str:
+        return "TraversalOp"
+
+    def differentiate(self):
+        raise NotImplementedError
+
+    def validate(self):
+        raise NotImplementedError
+
     def lower(self):
         raise NotImplementedError
 
 
-class GEMMFuseOp:
+class GEMMFusedOp(FusedOpBase):
+    @classmethod
+    def get_opname(cls) -> str:
+        return "GEMMOp"
+
+    def differentiate(self):
+        raise NotImplementedError
+
+    def validate(self):
+        raise NotImplementedError
+
     def lower(self):
         raise NotImplementedError
 
@@ -459,3 +521,4 @@ if __name__ == "__main__":
     )
     print(b.results[0].to_string())
     print(b.to_keyval_pairs())
+    print(TraversalFusedOp.from_ops([b, b]).to_string())
