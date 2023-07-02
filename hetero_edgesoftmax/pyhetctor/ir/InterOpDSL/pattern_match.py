@@ -5,28 +5,26 @@ from ..InterOpSSA.operators import *
 from ..InterOpSSA.variables import VarBase
 from ..InterOpSSA.variables import *
 
-# a list contains all matcher functions defined in this file
+# TODO: a list contains all matcher functions defined in this file
 matchers = []
-
-# TODO: there might be a chain of operations in one line, e.g.,
-# n.output = n.feature * transpose(W)
-# TO deal with this, we need to do the match in the following steps after canonicalization pass
-# 1. match assignment. This helps us figure out the output
-# 2. recursively match the right hand side of the assignment, where the right hand side entry function will be finally called at the end of any match function, i.e., after all other non-chain match logic failed
-# note that upon entering the right-hand-side matching function, pass in 1) left-hand side results, and 2) for-loop levels. During recursive call, we can pass in the temporary result name instead. For example.
-# when matchiing n.output = n.feature * transpose(W), the first time right-hand-side match is called, "node-wise iteration" and "n.output" are passed in. The second time right-hand-side match is called, "node-wise iteration" and "n.output_tmp1" are passed in
 
 
 import ast
-
-# import astor
 
 
 def match_loop_nest_and_result(loop_root_node) -> Union[list[OpBase], None]:
     """
     this is the entry point for pattern matchers. It figures out the for loop type and passes the return variable to the corresponding right-hand-side-only matchers.
     """
-    # step 1 find the statement node inside loop nest and determine the loop-nest type
+    # Note that there might be a chain of operations in one line, e.g.,
+    # n.output = n.feature * transpose(W)
+    # TO deal with this, we need to do the match in the following steps after canonicalization pass
+    # 1. match assignment. This helps us figure out the output
+    # 2. recursively match the right hand side of the assignment, where the right hand side entry function will be finally called at the end of any match function, i.e., after all other non-chain match logic failed
+    # note that upon entering the right-hand-side matching function, pass in 1) left-hand side results, and 2) for-loop levels. During recursive call, we can pass in the temporary result name instead. For example.
+    # when matchiing n.output = n.feature * transpose(W), the first time right-hand-side match is called, "node-wise iteration" and "n.output" are passed in. The second time right-hand-side match is called, "node-wise iteration" and "n.output_tmp1" are passed in
+
+    # Step 1: find the statement node inside loop nest and determine the loop-nest type
     assert isinstance(loop_root_node, ast.For)
     curr_node = loop_root_node
     loop_nest = []
@@ -48,39 +46,53 @@ def match_loop_nest_and_result(loop_root_node) -> Union[list[OpBase], None]:
         item[2] for item in loop_nest
     ]  # types in examples involve ["nodes"], ["dst_nodes"], ["dst_nodes", "incoming_edges"], ["edges"]
 
+    # Step 2: match the result
     assert isinstance(curr_node, ast.Assign)
-    # TODO: pass the loop type to right-hand-side match function calls
-    # step 2: match the result
     output_symbol = match_sole_return_value(curr_node)
     if output_symbol is None:
         output_symbol = match_dual_return_values(curr_node)
-        if output_symbol is None:
-            return None
+        if output_symbol is None or (None in output_symbol):
+            raise ValueError("cannot recognize the output symbol")
         # match splitOp
-        return match_unary_functions(output_symbol, loop_type, curr_node.value)
-    # TODO: make this recursive so that chain of operations on the right hand side can be matched
-    ops = match_nonlinear(output_symbol, loop_type, curr_node.value)
+        return match_unary_functions_and_throw_unmatched_func_calls(
+            output_symbol, loop_type, curr_node.value
+        )
+
+    # Step 3: match the right hand side
+    return match_right_hand_side_expr(output_symbol, loop_type, curr_node.value)
+
+
+def match_right_hand_side_expr(
+    output_symbol: VarBase, loop_type: list[tuple[str, str, str]], rhs_node
+) -> Union[list[OpBase], None]:
+    """
+    This is the entry function to match right hand side expression recursively so that chain of operations could be matched
+    """
+    # ops = match_nonlinear(output_symbol, loop_type, curr_node.value)
+    # if ops:
+    #    return ops
+    ops = match_copy_and_negation(output_symbol, loop_type, rhs_node)
     if ops:
         return ops
-    ops = match_copy_and_negation(output_symbol, loop_type, curr_node.value)
+    ops = match_node_linear(output_symbol, loop_type, rhs_node)
     if ops:
         return ops
-    ops = match_unary_functions([output_symbol], loop_type, curr_node.value)
+    # match_unary_functions_and_throw_unmatched_func_calls should occur after all remaining functions because it will catch any unmatched function calls
+    ops = match_unary_functions_and_throw_unmatched_func_calls(
+        [output_symbol], loop_type, rhs_node
+    )
     if ops:
         return ops
-    ops = match_node_linear(output_symbol, loop_type, curr_node.value)
+    ops = match_zero_initialize(output_symbol, loop_type, rhs_node)
     if ops:
         return ops
-    ops = match_zero_initialize(output_symbol, loop_type, curr_node.value)
-    if ops:
-        return ops
-    ops = match_node_multiplication(output_symbol, loop_type, curr_node.value)
+    ops = match_binary_op_and_throw_unmatched(output_symbol, loop_type, rhs_node)
     if ops:
         return ops
 
 
 # TODO: generalize this to handle edgewise as well
-def match_node_multiplication(
+def match_binary_op_and_throw_unmatched(
     target: VarBase, loop_type: list[tuple[str, str, str]], rhs_node
 ) -> Union[list[OpBase], None]:
     """
@@ -93,34 +105,34 @@ def match_node_multiplication(
     for n in g.nodes():
         n["hs"] = linear(V[n.ntype], n.feature)
     """
-    # if not isinstance(node, ast.Assign):
-    #    return None
-    # if len(node.targets) != 1:
-    #    return None
-    # target = node.targets[0]
-    # if not isinstance(target, ast.Attribute):
-    #     return False
-    # if target.attr != "hs":
-    #     return False
     if not isinstance(rhs_node, ast.BinOp):
         return None
-    if rhs_node.op != ast.Mult:
-        return None
-    if not isinstance(rhs_node.left, ast.Name):
-        return None
-    if rhs_node.left.id != "n":
-        # weight is on the left
-        # TODO
-        weight_symbol = match_weight_var(rhs_node.left)
-        input_symbol = match_data_input(rhs_node.right)
+    if rhs_node.op == ast.Mult:
+        # node multiplication
+        # TODO: generalize this to handle edgewise as well
+        if not isinstance(rhs_node.left, ast.Name):
+            return None
+        # NB: op matched. All mismatch will be an error.
+        # TODO: it should be match, match chain, or unreachable after this line
+        if rhs_node.left.id != "n":
+            # weight is on the left
+            weight_symbol = match_weight_var(rhs_node.left)
+            input_symbol = match_data_input(rhs_node.right)
+        else:
+            # weight is on the right
+            weight_symbol = match_weight_var(rhs_node.right)
+            input_symbol = match_data_input(rhs_node.left)
+        if weight_symbol is None or input_symbol is None:
+            return None
+        # determine multiplication type
+    elif rhs_node.op == ast.Add:
+        # TODO: vec add or mat add
+        raise NotImplementedError
+    elif rhs_node.op == ast.Div:
+        # TODO: scalar div
+        raise NotImplementedError
     else:
-        # weight is on the right
-        weight_symbol = match_weight_var(rhs_node.right)
-        input_symbol = match_data_input(rhs_node.left)
-    if weight_symbol is None or input_symbol is None:
-        return None
-    # determine multiplication type
-    raise NotImplementedError
+        raise ValueError("unrecognized binary op")
 
 
 def match_weight_var(node) -> Union[WeightVar, None]:
@@ -138,6 +150,7 @@ def match_weight_var(node) -> Union[WeightVar, None]:
     elif isinstance(node, ast.Name):
         print("Weight(Sliceless): ", node.id)
         return WeightVar.from_dict({"name": node.id, "slice_type": "NONE"})
+    # TODO: it should be match chain after this line
     return None
 
 
@@ -147,6 +160,7 @@ def match_edge_input(node) -> Union[DataVar, None]:
         if node.value.id == "e":
             print("(EDGEWISE) input_key: ", node.attr)
             return DataVar.from_dict({"name": node.attr, "type": "EDGEWISE"})
+    # TODO: it should be match chain after this line
     return None
 
 
@@ -159,6 +173,7 @@ def match_edge_output(node) -> Union[DataVar, None]:
             assert isinstance(node.slice, ast.Constant)
             print("(EDGEWISE) output_key: ", node.value.id, node.slice.value)
             return DataVar.from_dict({"name": node.slice.value, "type": "EDGEWISE"})
+    # TODO: it should be match chain after this line
     return None
 
 
@@ -166,17 +181,13 @@ def match_edge_output(node) -> Union[DataVar, None]:
 def match_zero_initialize(
     output_symbol: VarBase, loop_type: list[tuple[str, str, str]], rhs_node
 ):
-    # if not isinstance(node, ast.Assign):
-    #    return None
-    # output_symbol = match_sole_return_value(node)
-    # if output_symbol is None or (not output_symbol.is_vertex_output()):
-    #    return None
     if isinstance(rhs_node, ast.Constant):
         if rhs_node.value == 0.0:
             print(output_symbol, "is an accumulation node")
             # TODO: return a hint or assertion
             raise NotImplementedError
-    return None
+    # it should be unreachable after this line
+    raise ValueError("zero-initialization does not suppoort chaining")
 
 
 # TODO: distinguish nodewise (g.nodes()), from dst-node (g.dst_nodes())
@@ -187,6 +198,7 @@ def match_vertex_input(node) -> Union[DataVar, None]:
             print("(NODEWISE) input_key: ", node.attr)
             # distinguish DST_NODE, SRC_NODE from NODEWISE
             return DataVar.from_dict({"name": node.attr, "type": "NODEWISE"})
+    # TODO: it should be match chain after this line
     return None
 
 
@@ -194,6 +206,7 @@ def match_data_input(node) -> Union[DataVar, None]:
     input_symbol = match_vertex_input(node)
     if input_symbol is None:
         return match_edge_input(node)
+    # TODO: it should be match chain after this line
     return input_symbol
 
 
@@ -205,6 +218,7 @@ def match_vertex_output(node) -> Union[DataVar, None]:
             assert isinstance(node.slice, ast.Constant)
             print("(NODEWISE) output_key: ", node.value.id, node.slice.value)
             return DataVar.from_dict({"name": node.slice.value, "type": "NODEWISE"})
+    # TODO: it should be match chain after this line
     return None
 
 
@@ -218,8 +232,7 @@ def _match_return_values(node, num_return_values) -> list[Union[VarBase, None]]:
         output_symbol = match_vertex_output(target)
         if output_symbol is None:
             output_symbol = match_edge_output(target)
-            # if output_symbol is None:
-            #    return None
+        # if mismatch, return None anyway and raise Error in the caller
         output_symbols.append(output_symbol)
 
     return output_symbols
@@ -256,12 +269,6 @@ def match_node_linear(
     n["hs"] = linear(V[n.ntype], n.feature)
     """
     # TODO: check scope is foreach node iteration
-    # if not isinstance(node, ast.Assign):
-    #    return False
-    # output_symbol = match_sole_return_value(node)
-    # TODO: implement is_vertex_output(output_symbol)
-    # if output_symbol is None:# or (not output_symbol.is_vertex_output()):
-    #    return False
     if isinstance(rhs_node, ast.Call):
         assert isinstance(rhs_node.func, ast.Name)
         if rhs_node.func.id != "linear":
@@ -273,6 +280,8 @@ def match_node_linear(
             and isinstance(rhs_node.args[0].value, ast.Name)
             and rhs_node.args[0].value.id == "n"
         ):
+            # NB: op matched. All mismatch will be an error
+            # TODO: match-chain handled in the following two match functions
             input_symbol = match_vertex_input(rhs_node.args[0])
             weight_symbol = match_weight_var(rhs_node.args[1])
             assert input_symbol is not None and weight_symbol is not None
@@ -290,6 +299,8 @@ def match_node_linear(
             and isinstance(rhs_node.args[1].value, ast.Name)
             and rhs_node.args[1].value.id == "n"
         ):
+            # NB: op matched. All mismatch will be an error
+            # TODO: match-chain handled in the following two match functions
             input_symbol = match_vertex_input(rhs_node.args[1])
             weight_symbol = match_weight_var(rhs_node.args[0])
             assert input_symbol is not None and weight_symbol is not None
@@ -305,6 +316,7 @@ def match_node_linear(
         else:
             return None
     elif isinstance(rhs_node, ast.BinOp):
+        # TODO: add support to other binop e.g. add as well
         if not isinstance(rhs_node.op, ast.Mult):
             return None
         # if rhs_node.left.value.id == "n":
@@ -313,6 +325,8 @@ def match_node_linear(
             and isinstance(rhs_node.left.value, ast.Name)
             and rhs_node.left.value.id == "n"
         ):
+            # NB: op matched. All mismatch will be an error
+            # TODO: match-chain handled in the following two match functions
             input_symbol = match_vertex_input(rhs_node.left)
             weight_symbol = match_weight_var(rhs_node.right)
             assert input_symbol is not None and weight_symbol is not None
@@ -331,6 +345,8 @@ def match_node_linear(
             and isinstance(rhs_node.right.value, ast.Name)
             and rhs_node.right.value.id == "n"
         ):
+            # NB: op matched. All mismatch will be an error
+            # TODO: match-chain handled in the following two match functions
             input_symbol = match_vertex_input(rhs_node.right)
             weight_symbol = match_weight_var(rhs_node.left)
             assert input_symbol is not None and weight_symbol is not None
@@ -348,23 +364,19 @@ def match_node_linear(
     return None
 
 
-def match_unary_functions(
+def match_unary_functions_and_throw_unmatched_func_calls(
     output_symbols: list[VarBase], loop_type: list[tuple[str, str, str]], rhs_node
 ) -> Union[list[OpBase], None]:
-    """this function matches transpose, concatenation and split"""
-    # if not isinstance(node, ast.Assign):
-    #    return None
-    # if len(node.targets) != 1:
+    """this function matches transpose, concatenation and split, and non-linear functions"""
     if len(output_symbols) != 1:
         # should be split
-        # output_symbols = match_dual_return_values(node)
-        # if output_symbols is None:
-        #    return None
-        assert output_symbols is not None
+        # now only SplitOp output multiple variables. This must be a SplitOp
         assert isinstance(rhs_node, ast.Call)
+        # NB: op matched. All mismatch will be an error
         assert len(rhs_node.args) == 1
         assert isinstance(rhs_node.func, ast.Name)
         assert rhs_node.func.id == "split"
+        # TODO: match-chain handled in the following match function
         input_symbol = match_data_input(rhs_node.args[0])
         if input_symbol is None:
             return None
@@ -372,14 +384,17 @@ def match_unary_functions(
     else:
         # output_symbol = match_sole_return_value(node)
         output_symbol = output_symbols[0]
-        if output_symbol is None:
-            return None
+        # if output_symbol is None:
+        #     return None
         if isinstance(rhs_node, ast.Call):
             assert isinstance(rhs_node.func, ast.Name)
+            # op matched: must be a unary op
+            # NB: op matched. All mismatch will be an error
             if rhs_node.func.id == "transpose":
+                # TODO: match-chain handled in the following match function
                 input_symbol = match_data_input(rhs_node.args[0])
                 if input_symbol is None:
-                    return None
+                    raise ValueError("transpose input not found")
                 return [
                     TransposeOp._make({"result": output_symbol, "input": input_symbol})
                 ]
@@ -391,10 +406,11 @@ def match_unary_functions(
                 assert isinstance(rhs_node.args[0].elts[1], ast.Attribute)
                 assert isinstance(rhs_node.args[0].elts[1].value, ast.Name)
                 print(rhs_node.args[0].elts[1].value.id, rhs_node.args[0].elts[1].attr)
+                # TODO: match-chain handled in the following match functions
                 input_symbol0 = match_data_input(rhs_node.args[0].elts[0])
                 input_symbol1 = match_data_input(rhs_node.args[0].elts[0])
                 if input_symbol0 is None or input_symbol1 is None:
-                    return None
+                    raise ValueError("concatenate input not found")
                 return [
                     ConcatenateOp._make(
                         {
@@ -403,6 +419,7 @@ def match_unary_functions(
                         }
                     )
                 ]
+            return _match_nonlinear(output_symbol, loop_type, rhs_node)
     return None
 
 
@@ -410,41 +427,35 @@ def match_unary_functions(
 def match_copy_and_negation(
     output_symbol: VarBase, loop_type: list[tuple[str, str, str]], rhs_node
 ) -> Union[list[OpBase], None]:
-    # if not isinstance(node, ast.Assign):
-    #    return False
-    # output_symbol = match_sole_return_value(node)
-    # if output_symbol is None:
-    #    return None
-    # UnaryOp(op=USub(), operand=
     if isinstance(rhs_node, ast.UnaryOp):
         # This is a Negation Op
         if isinstance(rhs_node.op, ast.USub):
+            # NB: op matched.
+            # TODO: match-chain handled in the following match function
             input_symbol = match_data_input(rhs_node.operand)
             if input_symbol is None:
-                return None
+                raise ValueError("negation input not found")
             return [NegativeOp._make({"input": input_symbol, "result": output_symbol})]
     else:
+        # NB: let's do copy evasively here: no chaining is allowed to both avoid complicated pattern match and unnecessary feature support.
+        # TODO: match-chain handled in the following match function
         input_symbol = match_data_input(rhs_node)
         if input_symbol is None:
-            return None
+            raise ValueError("copy input not found")
         print(input_symbol, output_symbol)
         return [CopyOp._make({"input": input_symbol, "result": output_symbol})]
 
 
-def match_nonlinear(
+def _match_nonlinear(
     output_symbol: VarBase, loop_type: list[tuple[str, str, str]], rhs_node
 ) -> Union[list[OpBase], None]:
-    # if not isinstance(node, ast.Assign):
-    #    return False
-    # output_symbol = match_sole_return_value(node)
-    # if output_symbol is None:
-    #    return None
     if not isinstance(rhs_node, ast.Call):
         return None
+    # TODO: it should be match, match-chain, or unreachable after this line
     assert isinstance(rhs_node.func, ast.Name)
     if not rhs_node.func.id in ["exp", "tanh"]:
         return None
-    # todo: incorporate single argument function, i.e., concatenate, here
+    # TODO: incorporate single argument function, i.e., concatenate, here
     if len(rhs_node.args) != 1:
         return None
     print("func name, ", rhs_node.func.id)
@@ -465,7 +476,7 @@ def match_nonlinear(
     elif rhs_node.func.id == "InverseLeakyRelu":
         op_cls = InverseLeakyReluOp
     else:
-        return None
+        raise ValueError("Unknown function: ", rhs_node.func.id)
     return [op_cls._make({"input": input_symbol, "result": output_symbol})]
 
 
