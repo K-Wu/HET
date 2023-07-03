@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from .variables import VarBase, is_valid_var_name, DataVar, WeightVar
-from .operators import OpBase, func_name_to_op
+from .operators import OpBase, FusedOpBase, func_name_to_op
 from typing import Union
 from . import program_serializer
 import re
@@ -113,17 +113,36 @@ class VariableTable:
         # create a new variable
         new_var = hint.from_dict(new_temp_var)
         # TODO: get shape
-        self.vars.add(new_var.name)
+        self.vars.add(new_var.get_name())
         return new_var
 
 
+def calc_op_to_seq(operations: list[Union[OpBase, FusedOpBase]]) -> dict[OpBase, int]:
+    """calculate the operation to sequence id mapping. Fused op will be broken down into basic ops and each will be assigned a unique id"""
+    op_to_seq: dict[OpBase, int] = dict()
+    curr_idx = 0
+    for op in operations:
+        if isinstance(op, FusedOpBase):
+            for sub_op in op.ops:
+                op_to_seq[sub_op] = curr_idx
+                curr_idx += 1
+        else:
+            op_to_seq[op] = curr_idx
+        curr_idx += 1
+    return op_to_seq
+
+
 class Program:
-    operations: list[OpBase]
+    operations: list[Union[OpBase, FusedOpBase]]
+    op_to_seq: dict[OpBase, int]
     var_table: VariableTable
 
-    def __init__(self, var_table: VariableTable, operations: list[OpBase]):
+    def __init__(
+        self, var_table: VariableTable, operations: list[Union[OpBase, FusedOpBase]]
+    ):
         self.var_table = var_table
         self.operations = operations
+        self.op_to_seq = calc_op_to_seq(operations)
 
     # TODO: get use-def chain
     def get_users_of_result(self, operation: OpBase) -> list[OpBase]:
@@ -137,6 +156,12 @@ class Program:
         assert op in self.operations
         return self.operations.index(op)
 
+    def assert_define_before_use(self, operand: VarBase, op: OpBase):
+        assert operand in self.var_table.vars
+        # operand should either be a weight, or defined before
+        if not isinstance(operand, WeightVar):
+            assert self.get_seqid(self.get_defining_op(operand)) < self.get_seqid(op)
+
     def validate(self) -> None:
         # returns True if 1) every operation has all key-value pairs correctly
         # defined as specified in this file, and 2) use-def chain is correct
@@ -145,13 +170,13 @@ class Program:
             assert is_valid_var_name(var)
         for op in self.operations:
             op.validate()
-            for operand in op.get_operands():
-                assert operand in self.var_table.vars
-                # operand should either be a weight, or defined before
-                if not isinstance(operand, WeightVar):
-                    assert self.get_seqid(
-                        self.get_defining_op(operand)
-                    ) < self.get_seqid(op)
+            if isinstance(op, FusedOpBase):
+                for op_ in op.ops:
+                    for operand in op_.get_operands():
+                        self.assert_define_before_use(operand, op_)
+            else:
+                for operand in op.get_operands():
+                    self.assert_define_before_use(operand, op)
         return
 
     def dumps(self) -> str:
@@ -160,19 +185,16 @@ class Program:
         .inter-op-ssa file"""
         result = ""
         result += self.var_table.dumps()
-        result + "\nDAG{"
+        result += "\nDAG{"
         for op in self.operations:
             result += op.to_string()
-            result + "\n"
+            result += "\n"
         result += "}\n"
         return result
 
     @classmethod
     def loads(cls, lines: list[str]) -> "Program":
-        var_table, op_strs = program_serializer.program_loads(lines)
-        ops: list[OpBase] = []
-        for op in op_strs:
-            ops.append(func_name_to_op[op["func_name"]].from_keyval_pairs(op))
+        var_table, ops = program_serializer.program_loads(lines)
 
         return cls(var_table, ops)
 
@@ -181,15 +203,20 @@ class Program:
         differentiate the program, and return the differentiated program
         """
         diff_var_table = VariableTable()
-        diff_ops: list[OpBase] = []
+        diff_ops: list[Union[OpBase, FusedOpBase]] = []
         for op in self.operations:
             diff_ops += op.differentiate()
         for op in diff_ops:
-            for result in op.get_results():
-                diff_var_table.vars.add(result.to_string())
+            if isinstance(op, FusedOpBase):
+                for sub_op in op.ops:
+                    for result in sub_op.get_results():
+                        diff_var_table.vars.add(result.to_string())
+            else:
+                for result in op.get_results():
+                    diff_var_table.vars.add(result.to_string())
         return Program(diff_var_table, diff_ops)
 
-    def infer_shapes():
+    def infer_shapes(self):
         """
         after differentiation or pattern match from the inter-op IR, we get all
         operations and unique variable names. We need to infer the shapes of all

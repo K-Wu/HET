@@ -24,6 +24,10 @@ class VarBase(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def get_name(self) -> str:
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def lower(self):
         raise NotImplementedError
 
@@ -106,6 +110,9 @@ class WeightVar(_WeightVar, VarBase):
     def to_dict(self) -> dict["str", "str"]:
         return {"name": self.name, "slice_type": self.slice_type}
 
+    def get_name(self) -> str:
+        return self.name
+
     def to_string(self) -> str:
         return f"({self.name}, {self.slice_type})"
 
@@ -155,6 +162,9 @@ class DataVar(_DataVar, VarBase):
 
     def to_string(self) -> str:
         return f'({self.type}, "{self.name}")'
+
+    def get_name(self) -> str:
+        return self.name
 
     def validate(self):
         assert self.type in DATA_TYPES

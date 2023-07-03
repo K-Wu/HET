@@ -412,7 +412,7 @@ class EdgeInnerProductOp(BinaryOp):
         raise NotImplementedError
 
 
-class ScalarDevideOp(BinaryOp):
+class ScalarDivideOp(BinaryOp):
     def lower(self):
         raise NotImplementedError
 
@@ -442,6 +442,24 @@ class NodeOuterProductOp(BinaryOp):
         raise NotImplementedError
 
 
+class UnrealizedMulOp(BinaryOp):
+    """Op that should be concretized to EdgeInnerProduct, ScalarMultiply, EdgeScalarVectorMul.
+    We temporarily lower InterOpDSL to unrealized operators. After shape inference, we can tell what operators they really are.
+    """
+
+    def lower(self):
+        raise ValueError("UnrealizedMul should not be lowered")
+
+
+class UnrealizedAddOp(BinaryOp):
+    """Op that should be concretized to ScalarAdd, MatrixAdd, VectorAdd.
+    We temporarily lower InterOpDSL to unrealized operators. After shape inference, we can tell what operators they really are.
+    """
+
+    def lower(self):
+        raise ValueError("UnrealizedAdd should not be lowered")
+
+
 func_name_to_op: dict[str, Type[OpBase]] = {
     "Split": SplitOp,  # (results) input
     "NodeDense": NodeDenseOp,  # input, weight
@@ -464,7 +482,7 @@ func_name_to_op: dict[str, Type[OpBase]] = {
     "VectorAdd": VectorAddOp,
     "Concatenate": ConcatenateOp,
     "EdgeInnerProduct": EdgeInnerProductOp,
-    "ScalarDevide": ScalarDevideOp,
+    "ScalarDivide": ScalarDivideOp,
     "ScalarMultiply": ScalarMultiplyOp,
     "ScalarAdd": ScalarAddOp,
     "EdgeOuterProduct": EdgeOuterProductOp,
