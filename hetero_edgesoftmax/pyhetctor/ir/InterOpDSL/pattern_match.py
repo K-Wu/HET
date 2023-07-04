@@ -62,9 +62,9 @@ def match_loop_nest_and_result(
     # Step 2: match the result
     assert isinstance(curr_node, ast.Assign) or isinstance(curr_node, ast.AugAssign)
     assign_type = "assign" if isinstance(curr_node, ast.Assign) else "augAssign"
-    output_symbol = match_sole_return_value(loop_type, curr_node)
+    output_symbol = match_sole_return_value(var_table, loop_type, curr_node)
     if output_symbol is None:
-        output_symbol = match_dual_return_values(loop_type, curr_node)
+        output_symbol = match_dual_return_values(var_table, loop_type, curr_node)
         if output_symbol is None or (None in output_symbol):
             raise ValueError("cannot recognize the output symbol")
         # match splitOp
@@ -384,7 +384,7 @@ def match_unchained_edge_input(
 
 
 # TODO: distinguish edgewise (g.edges()), from (n.incoming_edges())
-def match_edge_output(
+def _match_edge_output(
     loop_type: list[tuple[str, str, str]], node
 ) -> Union[DataVar, None]:
     # Distinguish edgewise (g.edges()), from (n.incoming_edges())
@@ -480,7 +480,7 @@ def match_edge_input(
     return input_symbol, ops
 
 
-def match_vertex_output(
+def _match_vertex_output(
     loop_type: list[tuple[str, str, str]], node
 ) -> Union[DataVar, None]:
     # Distinguish NODEWISE (g.nodes()), from DSTNODE (g.dst_nodes())
@@ -507,9 +507,9 @@ def _match_return_values(
     output_symbols = []
     for idx_target in range(len(node.targets)):
         target = node.targets[idx_target]
-        output_symbol = match_vertex_output(loop_type, target)
+        output_symbol = _match_vertex_output(loop_type, target)
         if output_symbol is None:
-            output_symbol = match_edge_output(loop_type, target)
+            output_symbol = _match_edge_output(loop_type, target)
         # if mismatch, return None anyway and raise Error in the caller
         output_symbols.append(output_symbol)
 
@@ -517,7 +517,7 @@ def _match_return_values(
 
 
 def match_dual_return_values(
-    loop_type: list[tuple[str, str, str]], node
+    var_table: VariableTable, loop_type: list[tuple[str, str, str]], node
 ) -> Union[list[VarBase], None]:
     output_symbols = _match_return_values(loop_type, node, 2)
     if output_symbols[0] is None or output_symbols[1] is None:
@@ -527,15 +527,17 @@ def match_dual_return_values(
     for ele in output_symbols:
         assert ele is not None
         result.append(ele)
+        var_table.register_var(ele)
     return result
 
 
 def match_sole_return_value(
-    loop_type: list[tuple[str, str, str]], node
+    var_table: VariableTable, loop_type: list[tuple[str, str, str]], node
 ) -> Union[VarBase, None]:
     output_symbols = _match_return_values(loop_type, node, 1)
-    if output_symbols is None:
+    if output_symbols is None or output_symbols[0] is None:
         return None
+    var_table.register_var(output_symbols[0])
     return output_symbols[0]
 
 

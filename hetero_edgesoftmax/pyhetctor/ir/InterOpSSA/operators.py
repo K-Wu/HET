@@ -58,6 +58,10 @@ class OpBase(metaclass=abc.ABCMeta):
     def get_results(self) -> list[VarBase]:
         raise NotImplementedError
 
+    @abc.abstractclassmethod
+    def replace_var_with(self: T, old: VarBase, new: VarBase) -> T:
+        raise NotImplementedError
+
 
 class FusedOpBase(metaclass=abc.ABCMeta):
     ops: list[OpBase]
@@ -93,6 +97,9 @@ class FusedOpBase(metaclass=abc.ABCMeta):
     def lower(self) -> bool:
         raise NotImplementedError
 
+    def replace_var_with(self: T, old: VarBase, new: VarBase) -> T:
+        raise NotImplementedError
+
 
 _SplitOp = NamedTuple("SplitOp", [("results", list[DataVar]), ("input", DataVar)])
 _NodeDenseOp = NamedTuple(
@@ -117,6 +124,13 @@ _BinaryOp = NamedTuple(
         ("right", VarBase),
     ],
 )
+
+
+def replace_if_matched(var: VarBase, old: VarBase, new: VarBase) -> ...:
+    if var == old:
+        return new
+    else:
+        return var
 
 
 #
@@ -162,6 +176,12 @@ class SplitOp(_SplitOp, OpBase):
         # Unpack and pack again to avoid type error
         return [*self.results]
 
+    def replace_var_with(self, old: VarBase, new: VarBase):
+        return self.__class__(
+            results=[replace_if_matched(ele, old, new) for ele in self.results],
+            input=replace_if_matched(self.input, old, new),
+        )
+
 
 class NodeDenseOp(_NodeDenseOp, OpBase):
     def validate(self) -> None:
@@ -195,6 +215,13 @@ class NodeDenseOp(_NodeDenseOp, OpBase):
 
     def get_results(self) -> list[VarBase]:
         return [self.result]
+
+    def replace_var_with(self, old: VarBase, new: VarBase):
+        return self.__class__(
+            result=replace_if_matched(self.result, old, new),
+            input=replace_if_matched(self.input, old, new),
+            weight=replace_if_matched(self.weight, old, new),
+        )
 
 
 class EdgeDenseOp(_EdgeDenseOp, OpBase):
@@ -230,6 +257,13 @@ class EdgeDenseOp(_EdgeDenseOp, OpBase):
     def get_results(self) -> list[VarBase]:
         return [self.result]
 
+    def replace_var_with(self, old: VarBase, new: VarBase):
+        return self.__class__(
+            result=replace_if_matched(self.result, old, new),
+            input=replace_if_matched(self.input, old, new),
+            weight=replace_if_matched(self.weight, old, new),
+        )
+
 
 class EdgeScalarVectorMulOp(_EdgeScalarVectorMulOp, OpBase):
     def validate(self) -> None:
@@ -263,6 +297,13 @@ class EdgeScalarVectorMulOp(_EdgeScalarVectorMulOp, OpBase):
     def get_results(self) -> list[VarBase]:
         return [self.result]
 
+    def replace_var_with(self, old: VarBase, new: VarBase):
+        return self.__class__(
+            result=replace_if_matched(self.result, old, new),
+            scalar=replace_if_matched(self.scalar, old, new),
+            vector=replace_if_matched(self.vector, old, new),
+        )
+
 
 class UnaryOp(_UnaryOp, OpBase):
     def validate(self) -> None:
@@ -293,6 +334,12 @@ class UnaryOp(_UnaryOp, OpBase):
 
     def get_results(self) -> list[VarBase]:
         return [self.result]
+
+    def replace_var_with(self, old: VarBase, new: VarBase):
+        return self.__class__(
+            result=replace_if_matched(self.result, old, new),
+            input=replace_if_matched(self.input, old, new),
+        )
 
 
 class BinaryOp(_BinaryOp, OpBase):
@@ -329,6 +376,13 @@ class BinaryOp(_BinaryOp, OpBase):
 
     def get_results(self) -> list[VarBase]:
         return [self.result]
+
+    def replace_var_with(self, old: VarBase, new: VarBase):
+        return self.__class__(
+            result=replace_if_matched(self.result, old, new),
+            left=replace_if_matched(self.left, old, new),
+            right=replace_if_matched(self.right, old, new),
+        )
 
 
 #
