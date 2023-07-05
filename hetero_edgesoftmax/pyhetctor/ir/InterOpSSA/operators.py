@@ -202,6 +202,15 @@ class SplitOp(_SplitOp, OpBase, metaclass=FinalOpMeta):
             "input": self.input.to_string(),
         }
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
+    def lower(self) -> bool:
+        raise NotImplementedError
+
     def to_string(self) -> str:
         results_str = ",".join([ele.to_string() for ele in self.results])
         return f"{results_str}={self.get_opname()}(input = {self.input})"

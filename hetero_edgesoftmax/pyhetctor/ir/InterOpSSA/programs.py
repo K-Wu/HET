@@ -37,7 +37,7 @@ class VariableTable:
     vars_input: set[VarBase]
 
     vars_shape: dict[VarBase, str]
-    dsl_temp_vars: Annotated[
+    dsl_vars: Annotated[
         set[VarBase], "variables defined during the lowering from Inter Op DSL to SSA"
     ]
     numbered_val_to_name: Annotated[
@@ -75,7 +75,7 @@ class VariableTable:
         if var_table is not None:
             # shallow copies
             self.vars_shape = var_table.vars_shape.copy()
-            self.dsl_temp_vars = var_table.dsl_temp_vars.copy()
+            self.dsl_vars = var_table.dsl_vars.copy()
             self.vars_input = var_table.vars_input.copy()
             self.numbered_name_vals = var_table.numbered_name_vals.copy()
             self.numbered_val_to_name = var_table.numbered_val_to_name.copy()
@@ -83,7 +83,7 @@ class VariableTable:
         else:
             # creation from scratch
             self.vars_shape = dict()
-            self.dsl_temp_vars = set()
+            self.dsl_vars = set()
             self.vars_input = set()
             self.numbered_name_vals = dict()
             self.numbered_val_to_name = dict()
@@ -220,7 +220,7 @@ class VariableTable:
                 )
                 if (
                     hint.__class__.from_dict(new_temp_var).to_string()
-                    not in self.dsl_temp_vars
+                    not in self.dsl_vars
                 ):
                     break
         else:
@@ -247,7 +247,7 @@ class VariableTable:
         produced yet.
         """
         new_var = self._get_temp_var(hint)
-        self.register_dsl_temp_var(new_var)
+        self.register_dsl_var(new_var)
         return new_var
 
     def register_input_and_weight_var(self, var: VarBase) -> None:
@@ -257,7 +257,7 @@ class VariableTable:
         self.vars_input.add(var)
         self.register_value_zero(var)
 
-    def register_dsl_temp_var(self, var: VarBase) -> None:
+    def register_dsl_var(self, var: VarBase) -> None:
         """
         This method registers a variable name. This is done to every op result,
         i.e., def op result, during the lowering from Inter Op DSL to Inter Op
@@ -267,7 +267,7 @@ class VariableTable:
         """
         # self.numbered_val_to_name[var.to_string()] = var.to_string()
         # self.numbered_name_vals[var.to_string()] = [var.to_string()]
-        self.dsl_temp_vars.add(var)
+        self.dsl_vars.add(var)
 
     def register_value_zero(self, var: VarBase) -> None:
         """
@@ -390,6 +390,11 @@ class VariableTable:
                     assert isinstance(dict_record, list)
                     dict_record[-1].use_ops.append(op)
 
+    def differentiate(
+        self, diff_ops: list[Union[OpBase, FusedOpBase]]
+    ) -> "VariableTable":
+        raise NotImplementedError
+
 
 def calc_op_to_seq(operations: list[Union[OpBase, FusedOpBase]]) -> dict[OpBase, int]:
     """calculate the operation to sequence id mapping. Fused op will be broken
@@ -498,21 +503,13 @@ class Program:
         """
         differentiate the program, and return the differentiated program
         """
-        diff_var_table = VariableTable()
         diff_ops: list[Union[OpBase, FusedOpBase]] = []
         for op in self.operations:
             diff_ops += op.differentiate()
         # Reconstruct the variable table
         # Notice that if the differentiation is done after forward pass value
         # numbering, the value number chain of the same name may not be preserved
-        for op in diff_ops:
-            if isinstance(op, FusedOpBase):
-                for sub_op in op.ops:
-                    for result in sub_op.get_results():
-                        diff_var_table.numbered_val_to_name.add(result.to_string())
-            else:
-                for result in op.get_results():
-                    diff_var_table.numbered_val_to_name.add(result.to_string())
+        diff_var_table = self.var_table.differentiate(diff_ops)
         return Program(diff_var_table, diff_ops)
 
     def infer_shapes(self):

@@ -499,7 +499,7 @@ def match_dual_return_values(
     for ele in output_symbols:
         assert ele is not None
         result.append(ele)
-        var_table.register_var_dsl(ele)
+        var_table.register_dsl_var(ele)
     return result
 
 
@@ -509,7 +509,7 @@ def match_sole_return_value(
     output_symbols = _match_return_values(loop_type, node, 1)
     if output_symbols is None or output_symbols[0] is None:
         return None
-    var_table.register_var_dsl(output_symbols[0])
+    var_table.register_dsl_var(output_symbols[0])
     return output_symbols[0]
 
 
