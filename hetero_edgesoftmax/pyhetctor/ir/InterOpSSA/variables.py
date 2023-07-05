@@ -2,6 +2,8 @@
 from typing import Type, Union, NamedTuple
 import abc
 
+Shape = NamedTuple("Shape", [("type", str)])
+
 
 class VarBase(metaclass=abc.ABCMeta):
     @classmethod
