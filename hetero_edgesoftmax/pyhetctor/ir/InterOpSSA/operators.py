@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-from .variables import VarBase, DataVar, WeightVar, get_var_class
-from typing import NamedTuple, Union, Type, TypeVar
+from .variables import VarBase, DataVar, WeightVar, parse_var_class
+from typing import Union, Type, TypeVar  # , NamedTuple
 import abc
+from recordclass import make_dataclass, dataobject
+
 
 T = TypeVar("T")
 
@@ -18,7 +20,9 @@ class OpBase(metaclass=abc.ABCMeta):
     def from_keyval_pairs(cls: Type[T], d: dict["str", Union[list["str"], "str"]]) -> T:
         """
         from_keyval_pairs takes in keyval pairs parsed by op_serializer.py
-        recursively rather instantiated object as keys' values by cls._make(d)
+        recursively rather than instantiated object as keys' values by something
+        like namedtuple's cls._make(d), and now we only use namedtuple for
+        variables and use recordclass.dataobject for operators
         """
         raise NotImplementedError
 
@@ -26,7 +30,9 @@ class OpBase(metaclass=abc.ABCMeta):
     def to_keyval_pairs(self) -> dict["str", "str"]:
         """
         to_keyval_pairs returns dict of strings recursively rather than
-        instantiated objects as keys' values self._asdict()
+        instantiated objects as keys' values by something like namedtuple's
+        self._asdict(), and now we only use namedtuple for variables and use
+        recordclass.dataobject for operators
         """
         raise NotImplementedError
 
@@ -50,17 +56,35 @@ class OpBase(metaclass=abc.ABCMeta):
     def lower(self) -> bool:
         raise NotImplementedError
 
-    @abc.abstractclassmethod
+    @abc.abstractmethod
     def get_operands(self) -> list[VarBase]:
         raise NotImplementedError
 
-    @abc.abstractclassmethod
+    @abc.abstractmethod
     def get_results(self) -> list[VarBase]:
         raise NotImplementedError
 
-    @abc.abstractclassmethod
-    def replace_var_with(self: T, old: VarBase, new: VarBase) -> T:
+    @abc.abstractmethod
+    def inplace_replace_all_operands_with(
+        self: ..., old: VarBase, new: VarBase
+    ) -> None:
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def inplace_replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def replace_all_operands_with(self: ..., old: VarBase, new: VarBase) -> ...:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> ...:
+        raise NotImplementedError
+
+
+class FinalOpMeta(type(dataobject), type(OpBase)):
+    pass
 
 
 class FusedOpBase(metaclass=abc.ABCMeta):
@@ -74,7 +98,7 @@ class FusedOpBase(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @classmethod
-    def from_ops(cls, ops: list[OpBase]):
+    def from_ops(cls: Type[T], ops: list[OpBase]) -> T:
         return cls(ops)
 
     def to_string(self) -> str:
@@ -97,26 +121,35 @@ class FusedOpBase(metaclass=abc.ABCMeta):
     def lower(self) -> bool:
         raise NotImplementedError
 
-    def replace_var_with(self: T, old: VarBase, new: VarBase) -> T:
-        raise NotImplementedError
+    def inplace_replace_all_operands_with(self: T, old: VarBase, new: VarBase) -> None:
+        raise NotImplementedError("Fused ops are not supposed to use this API")
+
+    def inplace_replace_all_results_with(self: T, old: VarBase, new: VarBase) -> None:
+        raise NotImplementedError("Fused ops are not supposed to use this API")
+
+    def replace_all_operands_with(self: T, old: VarBase, new: VarBase) -> T:
+        raise NotImplementedError("Fused ops are not supposed to use this API")
+
+    def replace_all_results_with(self: T, old: VarBase, new: VarBase) -> T:
+        raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
-_SplitOp = NamedTuple("SplitOp", [("results", list[DataVar]), ("input", DataVar)])
-_NodeDenseOp = NamedTuple(
+_SplitOp = make_dataclass("SplitOp", [("results", list[DataVar]), ("input", DataVar)])
+_NodeDenseOp = make_dataclass(
     "NodeDenseOp", [("result", DataVar), ("input", DataVar), ("weight", WeightVar)]
 )
-_EdgeDenseOp = NamedTuple(
+_EdgeDenseOp = make_dataclass(
     "EdgeDenseOp", [("result", DataVar), ("input", DataVar), ("weight", WeightVar)]
 )
-_EdgeScalarVectorMulOp = NamedTuple(
+_EdgeScalarVectorMulOp = make_dataclass(
     "EdgeScalarVectorMulOp",
     [("result", DataVar), ("scalar", DataVar), ("vector", DataVar)],
 )
-_UnaryOp = NamedTuple(
+_UnaryOp = make_dataclass(
     "_UnaryOp",
     [("result", VarBase), ("input", VarBase)],
 )
-_BinaryOp = NamedTuple(
+_BinaryOp = make_dataclass(
     "_BinaryOp",
     [
         ("result", VarBase),
@@ -137,10 +170,14 @@ def replace_if_matched(var: VarBase, old: VarBase, new: VarBase) -> ...:
 # Operators that neither fits in ordinary unary ops' fields nor binary ops'
 # fields
 #
-class SplitOp(_SplitOp, OpBase):
+class SplitOp(_SplitOp, OpBase, metaclass=FinalOpMeta):
+    input: DataVar
+    results: list[DataVar]
+
     def validate(self) -> None:
-        for ele in self.results:
+        for ele in self.get_results():
             ele.validate()
+
         self.input.validate()
 
     @classmethod
@@ -176,14 +213,32 @@ class SplitOp(_SplitOp, OpBase):
         # Unpack and pack again to avoid type error
         return [*self.results]
 
-    def replace_var_with(self, old: VarBase, new: VarBase):
+    def inplace_replace_all_operands_with(
+        self: ..., old: VarBase, new: VarBase
+    ) -> None:
+        self.input = replace_if_matched(self.input, old, new)
+
+    def inplace_replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> None:
+        self.results = [replace_if_matched(ele, old, new) for ele in self.results]
+
+    def replace_all_operands_with(self: ..., old: VarBase, new: VarBase) -> ...:
         return self.__class__(
-            results=[replace_if_matched(ele, old, new) for ele in self.results],
+            results=self.results,
             input=replace_if_matched(self.input, old, new),
         )
 
+    def replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> ...:
+        return self.__class__(
+            results=[replace_if_matched(ele, old, new) for ele in self.results],
+            input=self.input,
+        )
 
-class NodeDenseOp(_NodeDenseOp, OpBase):
+
+class NodeDenseOp(_NodeDenseOp, OpBase, metaclass=FinalOpMeta):
+    result: DataVar
+    input: DataVar
+    weight: WeightVar
+
     def validate(self) -> None:
         # Delta of weight is not possible to be the output: it needs outer-product
         assert isinstance(self.result, DataVar)
@@ -199,6 +254,15 @@ class NodeDenseOp(_NodeDenseOp, OpBase):
         input = DataVar.from_string(d["input"])
         weight = WeightVar.from_string(d["weight"])
         return cls(result=result, input=input, weight=weight)
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
+    def lower(self) -> bool:
+        raise NotImplementedError
 
     def to_keyval_pairs(self) -> dict["str", "str"]:
         return {
@@ -216,15 +280,35 @@ class NodeDenseOp(_NodeDenseOp, OpBase):
     def get_results(self) -> list[VarBase]:
         return [self.result]
 
-    def replace_var_with(self, old: VarBase, new: VarBase):
+    def inplace_replace_all_operands_with(
+        self: ..., old: VarBase, new: VarBase
+    ) -> None:
+        self.input = replace_if_matched(self.input, old, new)
+        self.weight = replace_if_matched(self.weight, old, new)
+
+    def inplace_replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> None:
+        self.result = replace_if_matched(self.result, old, new)
+
+    def replace_all_operands_with(self: ..., old: VarBase, new: VarBase) -> ...:
         return self.__class__(
-            result=replace_if_matched(self.result, old, new),
+            result=self.result,
             input=replace_if_matched(self.input, old, new),
             weight=replace_if_matched(self.weight, old, new),
         )
 
+    def replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> ...:
+        return self.__class__(
+            result=replace_if_matched(self.result, old, new),
+            input=self.input,
+            weight=self.weight,
+        )
 
-class EdgeDenseOp(_EdgeDenseOp, OpBase):
+
+class EdgeDenseOp(_EdgeDenseOp, OpBase, metaclass=FinalOpMeta):
+    result: DataVar
+    input: DataVar
+    weight: WeightVar
+
     def validate(self) -> None:
         # Delta of weight is not possible to be the output: it needs outer-product
         assert isinstance(self.result, DataVar)
@@ -248,6 +332,15 @@ class EdgeDenseOp(_EdgeDenseOp, OpBase):
             "weight": self.weight.to_string(),
         }
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
+    def lower(self) -> bool:
+        raise NotImplementedError
+
     def to_string(self) -> str:
         return f"{self.result}={self.get_opname()}(input = {self.input}, weight = {self.weight})"
 
@@ -257,15 +350,35 @@ class EdgeDenseOp(_EdgeDenseOp, OpBase):
     def get_results(self) -> list[VarBase]:
         return [self.result]
 
-    def replace_var_with(self, old: VarBase, new: VarBase):
+    def inplace_replace_all_operands_with(
+        self: ..., old: VarBase, new: VarBase
+    ) -> None:
+        self.input = replace_if_matched(self.input, old, new)
+        self.weight = replace_if_matched(self.weight, old, new)
+
+    def inplace_replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> None:
+        self.result = replace_if_matched(self.result, old, new)
+
+    def replace_all_operands_with(self: ..., old: VarBase, new: VarBase) -> ...:
         return self.__class__(
-            result=replace_if_matched(self.result, old, new),
+            result=self.result,
             input=replace_if_matched(self.input, old, new),
             weight=replace_if_matched(self.weight, old, new),
         )
 
+    def replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> ...:
+        return self.__class__(
+            result=replace_if_matched(self.result, old, new),
+            input=self.input,
+            weight=self.weight,
+        )
 
-class EdgeScalarVectorMulOp(_EdgeScalarVectorMulOp, OpBase):
+
+class EdgeScalarVectorMulOp(_EdgeScalarVectorMulOp, OpBase, metaclass=FinalOpMeta):
+    result: DataVar
+    scalar: DataVar
+    vector: DataVar
+
     def validate(self) -> None:
         assert isinstance(self.result, DataVar)
         assert isinstance(self.scalar, DataVar)
@@ -297,15 +410,34 @@ class EdgeScalarVectorMulOp(_EdgeScalarVectorMulOp, OpBase):
     def get_results(self) -> list[VarBase]:
         return [self.result]
 
-    def replace_var_with(self, old: VarBase, new: VarBase):
+    def inplace_replace_all_operands_with(
+        self: ..., old: VarBase, new: VarBase
+    ) -> None:
+        self.scalar = replace_if_matched(self.scalar, old, new)
+        self.vector = replace_if_matched(self.vector, old, new)
+
+    def inplace_replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> None:
+        self.result = replace_if_matched(self.result, old, new)
+
+    def replace_all_operands_with(self: ..., old: VarBase, new: VarBase) -> ...:
         return self.__class__(
-            result=replace_if_matched(self.result, old, new),
+            result=self.result,
             scalar=replace_if_matched(self.scalar, old, new),
             vector=replace_if_matched(self.vector, old, new),
         )
 
+    def replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> ...:
+        return self.__class__(
+            result=replace_if_matched(self.result, old, new),
+            scalar=self.scalar,
+            vector=self.vector,
+        )
 
-class UnaryOp(_UnaryOp, OpBase):
+
+class UnaryOp(_UnaryOp, OpBase, metaclass=FinalOpMeta):
+    result: VarBase
+    input: VarBase
+
     def validate(self) -> None:
         assert isinstance(self.result, (DataVar, WeightVar))
         assert isinstance(self.input, (DataVar, WeightVar))
@@ -314,8 +446,8 @@ class UnaryOp(_UnaryOp, OpBase):
 
     @classmethod
     def from_keyval_pairs(cls: Type[T], d: dict["str", "str"]) -> T:
-        result_cls = get_var_class(d["result"])
-        input_cls = get_var_class(d["input"])
+        result_cls = parse_var_class(d["result"])
+        input_cls = parse_var_class(d["input"])
         result = result_cls.from_string(d["result"])
         input = input_cls.from_string(d["input"])
         return cls(result=result, input=input)
@@ -335,14 +467,32 @@ class UnaryOp(_UnaryOp, OpBase):
     def get_results(self) -> list[VarBase]:
         return [self.result]
 
-    def replace_var_with(self, old: VarBase, new: VarBase):
+    def inplace_replace_all_operands_with(
+        self: ..., old: VarBase, new: VarBase
+    ) -> None:
+        self.input = replace_if_matched(self.input, old, new)
+
+    def inplace_replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> None:
+        self.result = replace_if_matched(self.result, old, new)
+
+    def replace_all_operands_with(self: ..., old: VarBase, new: VarBase) -> ...:
         return self.__class__(
-            result=replace_if_matched(self.result, old, new),
+            result=self.result,
             input=replace_if_matched(self.input, old, new),
         )
 
+    def replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> ...:
+        return self.__class__(
+            result=replace_if_matched(self.result, old, new),
+            input=self.input,
+        )
 
-class BinaryOp(_BinaryOp, OpBase):
+
+class BinaryOp(_BinaryOp, OpBase, metaclass=FinalOpMeta):
+    result: VarBase
+    left: VarBase
+    right: VarBase
+
     def validate(self) -> None:
         assert isinstance(self.result, (DataVar, WeightVar))
         assert isinstance(self.left, (DataVar, WeightVar))
@@ -353,9 +503,9 @@ class BinaryOp(_BinaryOp, OpBase):
 
     @classmethod
     def from_keyval_pairs(cls: Type[T], d: dict["str", "str"]) -> T:
-        result_cls = get_var_class(d["result"])
-        left_cls = get_var_class(d["left"])
-        right_cls = get_var_class(d["right"])
+        result_cls = parse_var_class(d["result"])
+        left_cls = parse_var_class(d["left"])
+        right_cls = parse_var_class(d["right"])
         result = result_cls.from_string(d["result"])
         left = left_cls.from_string(d["left"])
         right = right_cls.from_string(d["right"])
@@ -377,11 +527,27 @@ class BinaryOp(_BinaryOp, OpBase):
     def get_results(self) -> list[VarBase]:
         return [self.result]
 
-    def replace_var_with(self, old: VarBase, new: VarBase):
+    def inplace_replace_all_operands_with(
+        self: ..., old: VarBase, new: VarBase
+    ) -> None:
+        self.left = replace_if_matched(self.left, old, new)
+        self.right = replace_if_matched(self.right, old, new)
+
+    def inplace_replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> None:
+        self.result = replace_if_matched(self.result, old, new)
+
+    def replace_all_operands_with(self: ..., old: VarBase, new: VarBase) -> ...:
         return self.__class__(
-            result=replace_if_matched(self.result, old, new),
+            result=self.result,
             left=replace_if_matched(self.left, old, new),
             right=replace_if_matched(self.right, old, new),
+        )
+
+    def replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> ...:
+        return self.__class__(
+            result=replace_if_matched(self.result, old, new),
+            left=self.left,
+            right=self.right,
         )
 
 
@@ -392,9 +558,21 @@ class NodeSumAccumulationOp(UnaryOp):
     def lower(self):
         raise NotImplementedError
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
 
 class TanhOp(UnaryOp):
     def lower(self):
+        raise NotImplementedError
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
 
@@ -402,9 +580,21 @@ class InverseTanhOp(UnaryOp):
     def lower(self):
         raise NotImplementedError
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
 
 class CopyOp(UnaryOp):
     def lower(self):
+        raise NotImplementedError
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
 
@@ -412,9 +602,21 @@ class NegativeOp(UnaryOp):
     def lower(self):
         raise NotImplementedError
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
 
 class EdgeTypeSumAccumulationOp(UnaryOp):
     def lower(self):
+        raise NotImplementedError
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
 
@@ -422,9 +624,21 @@ class ExponentialOp(UnaryOp):
     def lower(self):
         raise NotImplementedError
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
 
 class InverseExponentialOp(UnaryOp):
     def lower(self):
+        raise NotImplementedError
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
 
@@ -432,9 +646,21 @@ class LeakyReluOp(UnaryOp):
     def lower(self):
         raise NotImplementedError
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
 
 class InverseLeakyReluOp(UnaryOp):
     def lower(self):
+        raise NotImplementedError
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
 
@@ -442,9 +668,21 @@ class SumAccumulationOp(UnaryOp):
     def lower(self):
         raise NotImplementedError
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
 
 class TransposeOp(UnaryOp):
     def lower(self):
+        raise NotImplementedError
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
 
@@ -455,9 +693,21 @@ class ConcatenateOp(BinaryOp):
     def lower(self):
         raise NotImplementedError
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
 
 class VectorAddOp(BinaryOp):
     def lower(self):
+        raise NotImplementedError
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
 
@@ -465,9 +715,21 @@ class EdgeInnerProductOp(BinaryOp):
     def lower(self):
         raise NotImplementedError
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
 
 class ScalarDivideOp(BinaryOp):
     def lower(self):
+        raise NotImplementedError
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
 
@@ -475,9 +737,21 @@ class ScalarMultiplyOp(BinaryOp):
     def lower(self):
         raise NotImplementedError
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
 
 class ScalarAddOp(BinaryOp):
     def lower(self):
+        raise NotImplementedError
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
 
@@ -485,9 +759,21 @@ class EdgeOuterProductOp(BinaryOp):
     def lower(self):
         raise NotImplementedError
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
 
 class MatrixAddOp(BinaryOp):
     def lower(self):
+        raise NotImplementedError
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
 
@@ -495,11 +781,23 @@ class NodeOuterProductOp(BinaryOp):
     def lower(self):
         raise NotImplementedError
 
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
 
 class UnrealizedMulOp(BinaryOp):
     """Op that should be concretized to EdgeInnerProduct, ScalarMultiply, EdgeScalarVectorMul.
     We temporarily lower InterOpDSL to unrealized operators. After shape inference, we can tell what operators they really are.
     """
+
+    def differentiate(self) -> list["OpBase"]:
+        raise ValueError("UnrealizedMul should not be differentiated")
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise ValueError("UnrealizedMul should not be fused")
 
     def lower(self):
         raise ValueError("UnrealizedMul should not be lowered")
@@ -509,6 +807,12 @@ class UnrealizedAddOp(BinaryOp):
     """Op that should be concretized to ScalarAdd, MatrixAdd, VectorAdd.
     We temporarily lower InterOpDSL to unrealized operators. After shape inference, we can tell what operators they really are.
     """
+
+    def differentiate(self) -> list["OpBase"]:
+        raise ValueError("UnrealizedAdd should not be differentiated")
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise ValueError("UnrealizedAdd should not be fused")
 
     def lower(self):
         raise ValueError("UnrealizedAdd should not be lowered")
@@ -571,7 +875,7 @@ class GEMMFusedOp(FusedOpBase):
     def differentiate(self):
         raise NotImplementedError
 
-    def validate(self):
+    def validate(self) -> None:
         raise NotImplementedError
 
     def lower(self):

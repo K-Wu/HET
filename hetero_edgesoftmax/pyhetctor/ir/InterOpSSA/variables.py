@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from typing import NamedTuple, Type, Union
+from typing import Type, Union, NamedTuple
 import abc
 
 
@@ -16,7 +16,7 @@ class VarBase(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def validate(self):
+    def validate(self) -> None:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -31,12 +31,18 @@ class VarBase(metaclass=abc.ABCMeta):
     def lower(self):
         raise NotImplementedError
 
+    @classmethod
     @abc.abstractmethod
     def from_dict(cls, d: dict["str", "str"]) -> "VarBase":
         raise NotImplementedError
 
     @abc.abstractmethod
     def to_dict(self) -> dict["str", "str"]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_numbered_var(self, name: str) -> "VarBase":
+        """preserve all the rest of the information, but change the name to name"""
         raise NotImplementedError
 
 
@@ -116,7 +122,7 @@ class WeightVar(_WeightVar, VarBase):
     def to_string(self) -> str:
         return f"({self.name}, {self.slice_type})"
 
-    def validate(self):
+    def validate(self) -> None:
         assert self.slice_type in WEIGHT_SLICE_TYPES
         assert is_valid_var_name(self.name)
 
@@ -135,6 +141,9 @@ class WeightVar(_WeightVar, VarBase):
 
     def differentiate(self) -> "WeightVar":
         return WeightVar(name=self.name + "_delta", slice_type=self.slice_type)
+
+    def get_numbered_var(self, name: str) -> "WeightVar":
+        return WeightVar(name=name, slice_type=self.slice_type)
 
 
 class DataVar(_DataVar, VarBase):
@@ -166,7 +175,7 @@ class DataVar(_DataVar, VarBase):
     def get_name(self) -> str:
         return self.name
 
-    def validate(self):
+    def validate(self) -> None:
         assert self.type in DATA_TYPES
         assert is_valid_var_name(self.name)
 
@@ -179,8 +188,11 @@ class DataVar(_DataVar, VarBase):
     def differentiate(self):
         return DataVar(type=self.type, name=self.name + "_delta")
 
+    def get_numbered_var(self, name: str) -> "DataVar":
+        return DataVar(name=name, type=self.type)
 
-def get_var_class(name: str) -> Union[Type[DataVar], Type[WeightVar]]:
+
+def parse_var_class(name: str) -> Union[Type[DataVar], Type[WeightVar]]:
     if '"' in name:
         return DataVar
     else:
@@ -188,7 +200,7 @@ def get_var_class(name: str) -> Union[Type[DataVar], Type[WeightVar]]:
 
 
 def is_valid_var(var: str) -> bool:
-    var_class = get_var_class(var)
+    var_class = parse_var_class(var)
     try:
         var_ = var_class.from_string(var)
         return is_valid_var_name(var_.name)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-from .variables import VarBase, is_valid_var_name, DataVar, WeightVar
+from .variables import VarBase, is_valid_var_name, DataVar, WeightVar, parse_var_class
 from .operators import OpBase, FusedOpBase, func_name_to_op
-from typing import Union, NamedTuple, Annotated
+from typing import Union, NamedTuple, Annotated, Tuple, Type
 from . import program_serializer
 import re
 
@@ -12,7 +12,8 @@ def strip_white_spaces(line: str) -> str:
 
 
 DefUseEntry = NamedTuple(
-    "DefUseEntry", [("name", str), ("def_op_idx", int), ("use_op_idx", list[int])]
+    "DefUseEntry",
+    [("name", str), ("def_op", Union[OpBase, None]), ("use_ops", list[OpBase])],
 )
 
 
@@ -33,46 +34,61 @@ class VariableTable:
     and only stores their name with (slice_)type omitted
     """
 
-    vars_shape: dict[str, str]
+    vars_input: set[VarBase]
+
+    vars_shape: dict[VarBase, str]
+    dsl_temp_vars: Annotated[
+        set[VarBase], "variables defined during the lowering from Inter Op DSL to SSA"
+    ]
     numbered_val_to_name: Annotated[
-        dict[str, str],
+        dict[VarBase, VarBase],
         """map the full string representation to full string representation, e.g., (EDGEWISE, "var_name2") to (EDGEWISE, "var_name")""",
     ]
     numbered_name_vals: Annotated[
-        dict[str, list[str]],
+        dict[VarBase, list[VarBase]],
         """
     reverse of numbered_val_to_name""",
     ]
     def_use_table: Annotated[
         # after SSA numbering, each value will be a single DefUseEntry
-        Union[dict[str, DefUseEntry], dict[str, list[DefUseEntry]]],
+        dict[VarBase, Union[DefUseEntry, list[DefUseEntry]]],
         """
-    numbered_val_table and def_use_table together store the value numbering information
-    before value numbering, each (key, value) in numbered_val_table looks like
-    (var_name, [var_name]) (var2_name, [var2_name]) ...
-    after value numbering, the above entry may now look like
-    (var_name, [var_name, var_name2, var_name3]) (var2_name, [var2_name])
+    numbered_name_vals and def_use_table together store the value numbering information
 
+    numbered_name_vals
+    before value numbering, each (key, value) in numbered_name_vals looks like
+    (var_name, [var_name]) (another_var, [another_var]) ...
+    after value numbering, the above entry may now look like
+    (var_name, [var_name, var_name2, var_name3]) (another_var, [another_var])
+
+    def_use_table
     before value numbering, each (key, value) in def_use_table looks like
     (var_name, [DefUseEntry(var_name, opid0, [opid1]), DefUseEntry(var_name, opid2, [opid3, opid4])])
     after value numbering, the above entry may now look like
-    (var_name, [DefUseEntry(var_name, opid0, opid1)]),
-    (var_name2, [DefUseEntry(var_name2, opid2, [opid3, opid4])])
+    (var_name, DefUseEntry(var_name, opid0, opid1)),
+    (var_name2, DefUseEntry(var_name2, opid2, [opid3, opid4]))
     """,
     ]
 
-    def __init__(self, vars_shape: Union[dict[str, str], None] = None):
+    def __init__(self, var_table: Union["VariableTable", None] = None):
         """create a variable table from a shape table or from scratch"""
-        if vars_shape is not None:
-            # creation from a shape table
-            self.vars_shape = vars_shape
-            self.numbered_val_to_name = {k: k for k in vars_shape.keys()}
+        if var_table is not None:
+            # shallow copies
+            self.vars_shape = var_table.vars_shape.copy()
+            self.dsl_temp_vars = var_table.dsl_temp_vars.copy()
+            self.vars_input = var_table.vars_input.copy()
+            self.numbered_name_vals = var_table.numbered_name_vals.copy()
+            self.numbered_val_to_name = var_table.numbered_val_to_name.copy()
+            self.def_use_table = var_table.def_use_table.copy()
         else:
             # creation from scratch
-            self.numbered_val_to_name = dict()
             self.vars_shape = dict()
+            self.dsl_temp_vars = set()
+            self.vars_input = set()
+            self.numbered_name_vals = dict()
+            self.numbered_val_to_name = dict()
+            self.def_use_table = dict()
 
-    # TODO: update to reflect the new serialize scheme
     @classmethod
     def loads(cls, lines: list[str]) -> "VariableTable":
         """
@@ -81,37 +97,87 @@ class VariableTable:
         specify this parameter as fd.readlines()
         For now, we assume nothing else left in the first and the last line
         """
+        var_table = cls()
+
         assert strip_white_spaces(lines[0].strip()) == "ShapeTable{"
         assert strip_white_spaces(lines[-1].strip()) == "}"
-        vars_shape: dict[str, str] = dict()
-        for line in lines[1:-1]:
-            line = line.strip()
-            if len(line) == 0:
-                continue
-            var, shape = line.split(":")
-            var = var.strip()
-            shape = shape.strip()
-            vars_shape[var] = shape
-        return cls(vars_shape)
+        lines = lines[1:-1]
 
-    # TODO: update to reflect the new serialize scheme
+        # load initial variables and weights
+        scopes = program_serializer.find_first_level_scopes(lines)
+        for scope_beg, scope_end, scope_tag in scopes:
+            if scope_tag == "InitialVariablesAndWeights":
+                for line in lines[scope_beg + 1 : scope_end]:
+                    line_var_strs = line.replace(")", "))").split(")")
+                    line_var_strs = [var_str.strip() for var_str in line_var_strs]
+                    line_var_strs = [
+                        var_str[1:] for var_str in line_var_strs if var_str[0] == ","
+                    ]
+                    line_var_strs = {var_str.strip() for var_str in line_var_strs}
+                    line_vars: set[VarBase] = {
+                        parse_var_class(var_str).from_string(var_str)
+                        for var_str in line_var_strs
+                    }
+                    var_table.vars_input.update(line_vars)  # in place update
+
+            elif scope_tag == "VariableNumbersAndShapes":
+                # load shape info, each line stores a variable's shape and all its numbered values, i.e.,
+                #  shape: var_str <- var_name2 <- var_name3 <- ...
+                for line in lines[scope_beg + 1 : scope_end]:
+                    line = line.strip()
+                    if len(line) == 0:
+                        continue
+                    shape, vars_str = line.split(":")
+                    shape = shape.strip()
+                    var_varnames_strs = vars_str.split("<-")
+                    var_varnames_strs = [
+                        var_str.strip() for var_str in var_varnames_strs
+                    ]
+                    var = parse_var_class(var_varnames_strs[0]).from_string(
+                        var_varnames_strs[0]
+                    )
+                    varnames = var_varnames_strs[1:]
+                    var_table.vars_shape[var] = shape
+
+                    var_table.numbered_name_vals[var] = [var]
+                    var_table.numbered_val_to_name[var] = var
+                    for varname in varnames:
+                        var_newer = var.get_numbered_var(varname)
+                        var_table.numbered_name_vals[var].append(var_newer)
+                        var_table.numbered_val_to_name[var_newer] = var
+                    var_table.vars_shape[var] = shape
+        return cls(var_table)
+
     def dumps(self) -> str:
         """output the variable table in the text, i.e., the shape table"""
         result = "ShapeTable{\n"
+        # Step 1: Output initial variables and weights
+        result += "InitialVariablesAndWeights{\n"
+        result += ", ".join([var.to_string() for var in self.vars_input])
+        result += "\n}\n"
+
+        # Step 2: Output shape info
+        result += "VariableNumbersAndShapes{\n"
         for var, shape in self.vars_shape.items():
-            result += f"{var}: {shape}"
+            result += f"{shape}: {var.to_string()}"
+            if var in self.numbered_name_vals:
+                for var_newer in self.numbered_name_vals[var][1:]:
+                    result += f" <- {var_newer.to_string()}"
             result += "\n"
+        result += "}\n"
+
         result += "}"
+
         return result
 
     # TODO: implement shape in this table
     def get_shape(self, var: Union[DataVar, WeightVar]):
         """get the shape of a variable"""
-        if var.name not in self.vars_shape:
+        if var not in self.vars_shape:
             raise ValueError(
-                f"Variable {var.name} not found in the table. please run infer_shapes() first"
+                f"Variable {var.get_name()} not found in the table. please run infer_shapes() first"
             )
-        return self.vars_shape[var.name]
+        return self.vars_shape[var]
 
     def _get_var_by(self, hint: VarBase, suffix: str) -> VarBase:
         """
@@ -153,15 +219,15 @@ class VariableTable:
                     1,
                 )
                 if (
-                    hint.from_dict(new_temp_var).to_string()
-                    not in self.numbered_val_to_name
+                    hint.__class__.from_dict(new_temp_var).to_string()
+                    not in self.dsl_temp_vars
                 ):
                     break
         else:
             new_temp_var["name"] += "_{suffix}1".format(suffix=suffix)
 
         # create a new variable
-        new_var = hint.from_dict(new_temp_var)
+        new_var = hint.__class__.from_dict(new_temp_var)
         return new_var
 
     def _get_temp_var(self, hint: VarBase) -> VarBase:
@@ -171,7 +237,7 @@ class VariableTable:
     # def _get_var_decollision(self, hint: VarBase) -> VarBase:
     #     return self._get_var_by(hint, "decollision")
 
-    def get_temp_var(self, hint: VarBase) -> VarBase:
+    def get_temp_var_dsl(self, hint: VarBase) -> VarBase:
         """
         This method creates and returns a new variable, and add it to the table.
         It can be used during the pattern matching process that lowers Inter Op
@@ -180,14 +246,18 @@ class VariableTable:
         and all the rest of the information in the variable table are not
         produced yet.
         """
-        # TODO: get shape
         new_var = self._get_temp_var(hint)
-        # self.numbered_val_to_name[new_var.to_string()] = new_var.to_string()
-        # self.numbered_name_vals[new_var.to_string()] = [new_var.to_string()]
-        self.register_var(new_var)
+        self.register_dsl_temp_var(new_var)
         return new_var
 
-    def register_var(self, var: VarBase):
+    def register_input_and_weight_var(self, var: VarBase) -> None:
+        """
+        This method is called to register a variable that is the input data or weight variable
+        """
+        self.vars_input.add(var)
+        self.register_value_zero(var)
+
+    def register_dsl_temp_var(self, var: VarBase) -> None:
         """
         This method registers a variable name. This is done to every op result,
         i.e., def op result, during the lowering from Inter Op DSL to Inter Op
@@ -195,23 +265,130 @@ class VariableTable:
         is necessary to make sure during creating temporary variable names, no
         name collision happens.
         """
-        self.numbered_val_to_name[var.to_string()] = var.to_string()
-        self.numbered_name_vals[var.to_string()] = [var.to_string()]
+        # self.numbered_val_to_name[var.to_string()] = var.to_string()
+        # self.numbered_name_vals[var.to_string()] = [var.to_string()]
+        self.dsl_temp_vars.add(var)
 
-    def get_numbered_val(self, hint: VarBase) -> VarBase:
+    def register_value_zero(self, var: VarBase) -> None:
+        """
+        Register the first value of a variable name.
+        """
+        self.numbered_name_vals[var] = [var]
+        self.numbered_val_to_name[var] = var
+
+    def increase_and_register_value_number(self, var: VarBase) -> VarBase:
         """
         This method creates and returns a new variable indicating numbered value
-        of hint, and add it to the table.
+        of var, and add it to the table.
         This method is to be used after the Inter Op SSA program is complete,
         i.e., after the lowering from Inter Op DSL to Inter Op SSA.
         At this time all the operations from the statements should be ready for
         analysis. And this process is usually called during the value numbering,
         when def-use chain analysis has been done.
         """
-        new_var = self._get_temp_var(hint)
-        self.numbered_val_to_name[new_var.to_string()] = hint.to_string()
-        self.numbered_name_vals[hint.to_string()].append(new_var.to_string())
+        # TODO: for now, we reuse the _tmp suffix to number values
+        new_var = self._get_temp_var(var)
+        self.numbered_val_to_name[new_var] = var
+        self.numbered_name_vals[var].append(new_var)
         return new_var
+
+    @classmethod
+    def _do_value_number_on_program(
+        cls, ops: list[OpBase]
+    ) -> Tuple["VariableTable", list[OpBase]]:
+        """
+        This method does value numbering on all the operations in a program.
+        numbered_name_vals and numbered_val_to_name will be updated accordingly.
+        """
+        var_table = cls()
+        new_ops = []
+        for op in ops:
+            new_op: OpBase = op
+            # Use set to deduplicate for cases where one operand/result shows multiple times, so that only one replacement for all these occurrence will be applied
+            for opr in {*op.get_operands()}:
+                # For operands, use the latest numbered value
+                if opr.to_string() in var_table.numbered_name_vals:
+                    new_opr = var_table.numbered_name_vals[opr][-1]
+                    new_op = new_op.replace_all_operands_with(opr, new_opr)
+                else:
+                    # register the variable as data input or weights
+                    var_table.register_input_and_weight_var(opr)
+
+            for opr in {*op.get_results()}:
+                # For results, increase the value number if already defined
+                if opr.to_string() in var_table.numbered_name_vals:
+                    # increment the number
+                    new_opr = var_table.increase_and_register_value_number(opr)
+                    new_op = new_op.replace_all_results_with(opr, new_opr)
+                else:
+                    # register the 0th value of the variable
+                    var_table.register_value_zero(opr)
+            new_ops.append(new_op)
+        return var_table, new_ops
+
+    def do_value_number_on_program(self, ops: list[OpBase]) -> list[OpBase]:
+        new_var_table, new_ops = self._do_value_number_on_program(ops)
+        self.numbered_name_vals = new_var_table.numbered_name_vals
+        self.numbered_val_to_name = new_var_table.numbered_val_to_name
+        self.vars_input = new_var_table.vars_input
+        return new_ops
+
+    def do_data_input_and_weight_var_analysis(self, ops: list[OpBase]) -> None:
+        new_var_table, _ = self._do_value_number_on_program(ops)
+        self.vars_input = new_var_table.vars_input
+        return
+
+    def do_def_use_chain_analysis(
+        self, ops: list[OpBase], after_value_numbering: bool
+    ) -> None:
+        """
+        This method does def-use chain analysis on all the operations in a
+        program, and creates def_use_table.
+        No fused op is allowed.
+        """
+        if len(self.def_use_table) != 0:
+            print("Warning: def_use_table is not empty, will be overwritten.")
+        self.def_use_table = dict()
+
+        # Step 1 create dummy entry for input variables and weight variables
+        if not after_value_numbering:
+            # TODO: skip this step if this pass is already done though not after_value_numbering
+            self.do_data_input_and_weight_var_analysis(ops)
+        for var in self.vars_input:
+            # Set def_op as none to indicate input and weight variables
+            entry = DefUseEntry(name=var.get_name(), def_op=None, use_ops=[])
+            if after_value_numbering:
+                self.def_use_table[var] = entry
+            else:
+                self.def_use_table[var] = [entry]
+
+        # Step 2 process every operation
+        for op in ops:
+            # Each definition corresponds to one DefUseEntry.
+            # Before ssa numbering is done, key value pair in the dict is (var_name, list[DefUseEntry])
+            # After ssa numbering is done, key value pair in the dict is (value, DefUseEntry)
+            for res in {*op.get_results()}:
+                entry = DefUseEntry(name=res.get_name(), def_op=op, use_ops=[])
+                # Whether after_value_numbering is True or not, we don't need to (calculate and ) refer to numbered_val_to_name to find the dictionary key
+                if after_value_numbering:
+                    self.def_use_table[res] = entry
+                else:
+                    if res not in self.def_use_table:
+                        self.def_use_table[res] = []
+                    dict_record = self.def_use_table[res]
+                    assert isinstance(dict_record, list)
+                    dict_record.append(entry)
+
+            for opr in {*op.get_operands()}:
+                # Whether after_value_numbering is True or not, we can use opr.to_string() as the dictionary key
+                assert opr in self.def_use_table
+                dict_record = self.def_use_table[opr]
+                if after_value_numbering:
+                    assert isinstance(dict_record, DefUseEntry)
+                    dict_record.use_ops.append(op)
+                else:
+                    assert isinstance(dict_record, list)
+                    dict_record[-1].use_ops.append(op)
 
 
 def calc_op_to_seq(operations: list[Union[OpBase, FusedOpBase]]) -> dict[OpBase, int]:
@@ -242,12 +419,28 @@ class Program:
         self.operations = operations
         self.op_to_seq = calc_op_to_seq(operations)
 
-    # TODO: get use-def chain
-    def get_users_of_result(self, operation: OpBase) -> list[OpBase]:
-        raise NotImplementedError
+    # TODO: remove if not used
+    # def get_users_of_result(self, operation: OpBase) -> list[OpBase]:
+    #     raise NotImplementedError
 
-    def get_defining_op(self, var: str) -> OpBase:
-        raise NotImplementedError
+    def get_defining_op(self, var: VarBase) -> Union[OpBase, None]:
+        """returns the operation that defines the variable.
+        This function will return None if the variable is an input or weight variable,
+        and this function will raise Error if the variable is not found in the program.
+        """
+        if var not in self.var_table.numbered_val_to_name:
+            raise ValueError(
+                f"Variable {var} is not found in this program. Make sure the analysis is run before calling get_defining_op!"
+            )
+        if isinstance(self.var_table.def_use_table[var], list):
+            for entry in self.var_table.def_use_table[var]:
+                assert isinstance(entry, DefUseEntry)
+                if entry.name == var.get_name():
+                    return entry.def_op
+        else:
+            entry = self.var_table.def_use_table[var]
+            assert isinstance(entry, DefUseEntry)
+            return entry.def_op
 
     def get_seqid(self, op: OpBase) -> int:
         """returns the sequence id of the operation"""
@@ -258,14 +451,19 @@ class Program:
         assert operand in self.var_table.numbered_val_to_name
         # operand should either be a weight, or defined before
         if not isinstance(operand, WeightVar):
-            assert self.get_seqid(self.get_defining_op(operand)) < self.get_seqid(op)
+            operand_def_op = self.get_defining_op(operand)
+            if operand_def_op is None:
+                # this is an input variable or weight. Skipping the seqid check
+                return
+
+            assert self.get_seqid(operand_def_op) < self.get_seqid(op)
 
     def validate(self) -> None:
         # returns True if 1) every operation has all key-value pairs correctly
         # defined as specified in this file, and 2) use-def chain is correct
         for var in self.var_table.numbered_val_to_name:
             assert self.get_defining_op(var) is not None
-            assert is_valid_var_name(var)
+            assert is_valid_var_name(var.get_name())
         for op in self.operations:
             op.validate()
             if isinstance(op, FusedOpBase):

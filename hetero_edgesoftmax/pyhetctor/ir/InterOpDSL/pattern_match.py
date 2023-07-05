@@ -99,8 +99,8 @@ def match_right_hand_side_expr(
         )
         assert input_symbol1 is not None
         return ops1 + [
-            UnrealizedAddOp._make(
-                {"result": output_symbol, "left": output_symbol, "right": input_symbol1}
+            UnrealizedAddOp(
+                result=output_symbol, left=output_symbol, right=input_symbol1
             )
         ]
     elif assign_type == "assign":
@@ -161,11 +161,7 @@ def match_binary_op_and_throw_unmatched(
         return (
             ops0
             + ops1
-            + [
-                UnrealizedAddOp._make(
-                    {"result": target, "left": input_symbol0, "right": input_symbol1}
-                )
-            ]
+            + [UnrealizedAddOp(result=target, left=input_symbol0, right=input_symbol1)]
         )
     elif rhs_node.op == ast.Div:
         # We only support ScalarDivide for now so it will be lowered to ScalarDivide.
@@ -179,11 +175,7 @@ def match_binary_op_and_throw_unmatched(
         return (
             ops0
             + ops1
-            + [
-                ScalarDivideOp._make(
-                    {"result": target, "left": input_symbol0, "right": input_symbol1}
-                )
-            ]
+            + [ScalarDivideOp(result=target, left=input_symbol0, right=input_symbol1)]
         )
 
     elif rhs_node.op == ast.Mult:
@@ -211,12 +203,8 @@ def match_binary_op_and_throw_unmatched(
                         ops0
                         + ops1
                         + [
-                            NodeDenseOp._make(
-                                {
-                                    "input": input_symbol,
-                                    "weight": weight_symbol,
-                                    "result": target,
-                                }
+                            NodeDenseOp(
+                                input=input_symbol, weight=weight_symbol, result=target
                             )
                         ]
                     )
@@ -229,12 +217,8 @@ def match_binary_op_and_throw_unmatched(
                         ops0
                         + ops1
                         + [
-                            EdgeDenseOp._make(
-                                {
-                                    "input": input_symbol,
-                                    "weight": weight_symbol,
-                                    "result": target,
-                                }
+                            EdgeDenseOp(
+                                input=input_symbol, weight=weight_symbol, result=target
                             )
                         ]
                     )
@@ -256,12 +240,8 @@ def match_binary_op_and_throw_unmatched(
                         ops0
                         + ops1
                         + [
-                            NodeDenseOp._make(
-                                {
-                                    "input": input_symbol,
-                                    "weight": weight_symbol,
-                                    "result": target,
-                                }
+                            NodeDenseOp(
+                                input=input_symbol, weight=weight_symbol, result=target
                             )
                         ]
                     )
@@ -274,12 +254,8 @@ def match_binary_op_and_throw_unmatched(
                         ops0
                         + ops1
                         + [
-                            EdgeDenseOp._make(
-                                {
-                                    "input": input_symbol,
-                                    "weight": weight_symbol,
-                                    "result": target,
-                                }
+                            EdgeDenseOp(
+                                input=input_symbol, weight=weight_symbol, result=target
                             )
                         ]
                     )
@@ -296,12 +272,8 @@ def match_binary_op_and_throw_unmatched(
                 ops0
                 + ops1
                 + [
-                    UnrealizedMulOp._make(
-                        {
-                            "result": target,
-                            "left": input_symbol0,
-                            "right": input_symbol1,
-                        }
+                    UnrealizedMulOp(
+                        result=target, left=input_symbol0, right=input_symbol1
                     )
                 ]
             )
@@ -366,7 +338,7 @@ def match_weight_var(
                 "slice_type": weight_symbol.slice_type,
             }
         )
-        ops += [TransposeOp._make({"input": weight_symbol, "result": output_symbol})]
+        ops += [TransposeOp(input=weight_symbol, result=output_symbol)]
         return output_symbol, ops
     raise ValueError("unrecognized weight var")
 
@@ -442,7 +414,7 @@ def match_data_input(
         return input_symbol, []
 
     # It should be match chain after this line. For now, we assume the intermediate data is of the same type, i.e., edgewise or nodewise, as output symbol
-    output_temp_symbol = var_table.get_temp_var(output_symbol)
+    output_temp_symbol = var_table.get_temp_var_dsl(output_symbol)
     # treat chaining as regular assignment, compared to augAssign
     ops = match_right_hand_side_expr(
         var_table, output_temp_symbol, loop_type, node, "assign"
@@ -527,7 +499,7 @@ def match_dual_return_values(
     for ele in output_symbols:
         assert ele is not None
         result.append(ele)
-        var_table.register_var(ele)
+        var_table.register_var_dsl(ele)
     return result
 
 
@@ -537,7 +509,7 @@ def match_sole_return_value(
     output_symbols = _match_return_values(loop_type, node, 1)
     if output_symbols is None or output_symbols[0] is None:
         return None
-    var_table.register_var(output_symbols[0])
+    var_table.register_var_dsl(output_symbols[0])
     return output_symbols[0]
 
 
@@ -567,12 +539,8 @@ def match_outer_product(
             ops0
             + ops1
             + [
-                EdgeOuterProductOp._make(
-                    {
-                        "left": input_symbol0,
-                        "right": input_symbol1,
-                        "output": output_symbol,
-                    }
+                EdgeOuterProductOp(
+                    left=input_symbol0, right=input_symbol1, output=output_symbol
                 )
             ]
         )
@@ -581,12 +549,8 @@ def match_outer_product(
             ops0
             + ops1
             + [
-                NodeOuterProductOp._make(
-                    {
-                        "left": input_symbol0,
-                        "right": input_symbol1,
-                        "output": output_symbol,
-                    }
+                NodeOuterProductOp(
+                    left=input_symbol0, right=input_symbol1, output=output_symbol
                 )
             ]
         )
@@ -630,12 +594,10 @@ def match_dense_func_call(
                         ops0
                         + ops1
                         + [
-                            NodeDenseOp._make(
-                                {
-                                    "input": input_symbol,
-                                    "weight": weight_symbol,
-                                    "result": output_symbol,
-                                }
+                            NodeDenseOp(
+                                input=input_symbol,
+                                weight=weight_symbol,
+                                result=output_symbol,
                             )
                         ]
                     )
@@ -649,12 +611,10 @@ def match_dense_func_call(
                         ops0
                         + ops1
                         + [
-                            EdgeDenseOp._make(
-                                {
-                                    "input": input_symbol,
-                                    "weight": weight_symbol,
-                                    "result": output_symbol,
-                                }
+                            EdgeDenseOp(
+                                input=input_symbol,
+                                weight=weight_symbol,
+                                result=output_symbol,
                             )
                         ]
                     )
@@ -676,12 +636,10 @@ def match_dense_func_call(
                         ops0
                         + ops1
                         + [
-                            NodeDenseOp._make(
-                                {
-                                    "input": input_symbol,
-                                    "weight": weight_symbol,
-                                    "result": output_symbol,
-                                }
+                            NodeDenseOp(
+                                input=input_symbol,
+                                weight=weight_symbol,
+                                result=output_symbol,
                             )
                         ]
                     )
@@ -695,12 +653,10 @@ def match_dense_func_call(
                         ops0
                         + ops1
                         + [
-                            EdgeDenseOp._make(
-                                {
-                                    "input": input_symbol,
-                                    "weight": weight_symbol,
-                                    "result": output_symbol,
-                                }
+                            EdgeDenseOp(
+                                input=input_symbol,
+                                weight=weight_symbol,
+                                result=output_symbol,
                             )
                         ]
                     )
@@ -730,7 +686,7 @@ def match_unary_functions_and_throw_unmatched_func_calls(
         )
         if input_symbol is None:
             return None
-        return ops + [SplitOp._make({"input": input_symbol, "results": output_symbols})]
+        return ops + [SplitOp(input=input_symbol, results=output_symbols)]
     else:
         output_symbol = output_symbols[0]
         if isinstance(rhs_node, ast.Call):
@@ -744,9 +700,7 @@ def match_unary_functions_and_throw_unmatched_func_calls(
                 )
                 if input_symbol is None:
                     raise ValueError("transpose input not found")
-                return ops + [
-                    TransposeOp._make({"result": output_symbol, "input": input_symbol})
-                ]
+                return ops + [TransposeOp(result=output_symbol, input=input_symbol)]
             elif rhs_node.func.id == "concatenate":
                 assert isinstance(rhs_node.args[0], ast.List)
                 assert isinstance(rhs_node.args[0].elts[0], ast.Attribute)
@@ -768,11 +722,8 @@ def match_unary_functions_and_throw_unmatched_func_calls(
                     ops0
                     + ops1
                     + [
-                        ConcatenateOp._make(
-                            {
-                                "result": output_symbol,
-                                "input": [input_symbol0, input_symbol1],
-                            }
+                        ConcatenateOp(
+                            result=output_symbol, input=[input_symbol0, input_symbol1]
                         )
                     ]
                 )
@@ -797,9 +748,7 @@ def match_copy_and_negation(
             )
             if input_symbol is None:
                 raise ValueError("negation input not found")
-            return ops + [
-                NegativeOp._make({"input": input_symbol, "result": output_symbol})
-            ]
+            return ops + [NegativeOp(input=input_symbol, result=output_symbol)]
     else:
         # NB: let's do copy evasively here: no chaining is allowed to both avoid complicated pattern match and unnecessary feature support.
         # Match-chain handled in the following match function
@@ -809,7 +758,7 @@ def match_copy_and_negation(
         if input_symbol is None:
             raise ValueError("copy input not found")
         print(input_symbol, output_symbol)
-        return ops + [CopyOp._make({"input": input_symbol, "result": output_symbol})]
+        return ops + [CopyOp(input=input_symbol, result=output_symbol)]
 
 
 def _match_nonlinear(
@@ -847,7 +796,7 @@ def _match_nonlinear(
         op_cls = InverseLeakyReluOp
     else:
         raise ValueError("Unknown function: ", rhs_node.func.id)
-    return ops + [op_cls._make({"input": input_symbol, "result": output_symbol})]
+    return ops + [op_cls(input=input_symbol, result=output_symbol)]
 
 
 if __name__ == "__main__":
