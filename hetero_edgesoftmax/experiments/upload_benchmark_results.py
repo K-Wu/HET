@@ -1,4 +1,5 @@
-# some code is from https://github.com/COVID19Tracking/ltc-data-processing
+# Some code is from https://github.com/COVID19Tracking/ltc-data-processing
+# And https://github.com/nlioc4/FSBot/blob/f7f1a000ec7d02056c136fe68b7f0ca2271c80ae/modules/accounts_handler.py#L326
 # To create a credential, or set up a new spreasheet, follow instruction at https://docs.gspread.org/en/latest/oauth2.html#for-bots-using-service-account
 import gspread
 from gspread import Worksheet, WorksheetNotFound
@@ -37,11 +38,11 @@ def extract_results_from_folder(path):
                 lines = f.readlines()
                 for line in lines:
                     if line.startswith("Mean forward time"):
-                        name_info.append(line.split(":")[1].strip().split()[0])
+                        name_info.append(float(line.split(":")[1].strip().split()[0]))
                     elif line.startswith("Mean backward time"):
-                        name_info.append(line.split(":")[1].strip().split()[0])
+                        name_info.append(float(line.split(":")[1].strip().split()[0]))
                     elif line.startswith("Mean training time"):
-                        name_info.append(line.split(":")[1].strip().split()[0])
+                        name_info.append(float(line.split(":")[1].strip().split()[0]))
             all_names_and_info.append(name_info)
     return all_names_and_info
 
@@ -66,14 +67,19 @@ def update_gspread(entries, target_sheet_url, target_gid, cell_range=None):
         num_rows = len(entries)
         num_cols = max([len(row) for row in entries])
         cell_range += gspread.utils.rowcol_to_a1(num_rows, num_cols)
-
+    ws.format(cell_range, {"numberFormat": {"type": "NUMBER", "pattern": "0.0000"}})
     ws.update(cell_range, entries)
+    # Format example:
+    # cells_list = ws.range(1, 1, num_rows, num_cols) # row, column, row_end, column_end. 1 1 stands for A1
+    # cells_list = ws.range("E1:G120")
+    # ws.format(cell_range, {"numberFormat": {"type": "DATE", "pattern": "mmmm dd"}, "horizontalAlignment": "CENTER"})
 
 
 if __name__ == "__main__":
     dir_to_upload = find_latest_subdirectory("misc/artifacts", "benchmark_all_")
     print("Uploading results from", dir_to_upload)
     names_and_info = extract_results_from_folder(dir_to_upload)
+    print(names_and_info)
     update_gspread(
         names_and_info,
         "https://docs.google.com/spreadsheets/d/1qMklewOvYRVRHTYlMErvyd67afJvaVNwd79sMrKw__4/",
