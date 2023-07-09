@@ -102,7 +102,7 @@ class _simplified_basic_MatMulKernel<
                           (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y) ==
                       0,
                   "");
-    if constexpr (!HGT_INSTEAD_OF_RGCN_FLAG) {
+    if constexpr (!HGT_INSTEAD_OF_RGCN_FLAG && !OuterProductFlag) {
       // assuming this case is RGCN and there is no multiple head
       assert((gridDim.z == 1));
     }  // otherwise assuming HGT
