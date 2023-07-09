@@ -11,4 +11,5 @@ my_loops() {
 }
 
 # Call the function with different statements as arguments
-my_loops "echo \"Hello, world!\"" "echo \"Hello, kitty!\""
+my_loops "echo \"Hello, world!\""\
+ "echo \"Hello, kitty!\""
