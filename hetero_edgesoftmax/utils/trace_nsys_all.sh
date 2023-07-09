@@ -4,6 +4,8 @@ declare -a CompactFlag=("--compact_as_of_node_flag" "")
 declare -a MulFlag=("--multiply_among_weights_first_flag" "")
 declare -a Datasets=("aifb" "mutag" "bgs" "am" "mag" "wikikg2" "fb15k" "biokg")
 
+OUTPUT_DIR="misc/artifacts/nsys_trace_`date +%Y%m%d%H%M`"
+
 for m in ${MODELS[@]}
 do
     for d in ${Datasets[@]}

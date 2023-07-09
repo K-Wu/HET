@@ -15,6 +15,21 @@ import os
 # OUTPUT_DIR="misc/artifacts/benchmark_all_`date +%Y%m%d%H%M`"
 #
 
+SPREADSHEET_URL = (
+    "https://docs.google.com/spreadsheets/d/1qMklewOvYRVRHTYlMErvyd67afJvaVNwd79sMrKw__4/",
+)
+WORKSHEET_GIDS = [
+    893574800,
+    721906000,
+    1311240734,
+    478745927,
+    1807654113,
+    802529064,
+    1406431095,
+    1558424981,
+    75558257,
+]
+
 
 def extract_info_from(filename):
     # model_name.dataset_name.mul_flag.compact_flag.result.log
@@ -69,6 +84,7 @@ def update_gspread(entries, target_sheet_url, target_gid, cell_range=None):
         cell_range += gspread.utils.rowcol_to_a1(num_rows, num_cols)
     ws.format(cell_range, {"numberFormat": {"type": "NUMBER", "pattern": "0.0000"}})
     ws.update(cell_range, entries)
+    ws.update_title("[GID0]TestTitle")
     # Format example:
     # cells_list = ws.range(1, 1, num_rows, num_cols) # row, column, row_end, column_end. 1 1 stands for A1
     # cells_list = ws.range("E1:G120")
@@ -82,6 +98,6 @@ if __name__ == "__main__":
     print(names_and_info)
     update_gspread(
         names_and_info,
-        "https://docs.google.com/spreadsheets/d/1qMklewOvYRVRHTYlMErvyd67afJvaVNwd79sMrKw__4/",
-        "0",
+        SPREADSHEET_URL,
+        "0",  # GID0 reserved for testing
     )

@@ -26,3 +26,6 @@ do
     nv-nsight-cu-cli --csv --section regex:Speed --import "RGCNSingleLayer.$d.ncu-rep" >"RGCNSingleLayer.$d.log" 2>&1
     nv-nsight-cu-cli --csv --details --import "RGCNSingleLayer.$d.ncu-rep" | grep Roofline >"RGCNSingleLayer.$d.roofline.log" 2>&1
 done
+
+# Example to print metric 
+# ncu --import RGAT.train.wikikg2_mutag.compact.direct.indexing.ncu-rep --print-metric-name label-name --csv| grep __sass
