@@ -67,6 +67,9 @@ class HET_HGTLayerHetero(nn.Module):
                 torch.Tensor(self.num_ntypes, self.num_heads, in_dim, self.d_k)
             )
         else:
+            assert (
+                num_heads == 1
+            ), "unsupported num_heads>1 when multiply_among_weights_first_flag is True"
             self.k_linears = nn.Parameter(
                 torch.Tensor(self.num_ntypes, 1, in_dim, out_dim)
             )
@@ -188,6 +191,7 @@ class HET_HGTLayerHetero(nn.Module):
                     attn_weight_dst_product_compact,
                     k,
                     compact_as_of_node_kind,  # CompactAsOfNodeKind::EnabledWithDirectIndexing(2) or CompactAsOfNodeKind::Enabled (1)
+                    left_mapper_suffix="_col",
                 )  # NB: use single side instead without need to modify kernel
             else:
                 separate_coo_original_dict = G.get_separate_coo_original()
@@ -211,6 +215,7 @@ class HET_HGTLayerHetero(nn.Module):
                     attn_weight_dst_product_per_edge,
                     k,
                     0,  # CompactAsOfNodeKind::Disabled
+                    left_mapper_suffix="_col",
                 )
 
         # NB: the scaling is: attn_score = relation_pri / self.sqrt_dk * attn_score

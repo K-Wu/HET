@@ -24,10 +24,11 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
                                           at::Tensor &inputs, at::Tensor &ret) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
 
-  assert(weights.size(1) == 1 && "assertion n_head == 1 failed");
+  const int64_t num_heads = weights.size(1);
   const int64_t num_input_dim = weights.size(2);
-  const int64_t num_output_dim = weights.size(3);  // weight shape (num_ntypes,
-                                                   // in_feat, out_feat)
+  const int64_t num_output_dim_per_head =
+      weights.size(3);  // weight shape (num_ntypes,
+                        // in_feat, out_feat)
   int64_t num_ntypes = ntype_offset_ptrs.numel() - 1;
   int64_t num_nodes = inputs.size(0);
 
@@ -63,10 +64,10 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
       num_blocks_assignment_for_all_prev_ntype_vect.end());
   // NB: my shmem sgemm matmul scheme
   // in NoScatterScatter scenario, there is no such thing as multi-headed
-  const dim3 nblks(ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE_X),
-                   grid_dim_y, 1);
+  const dim3 nblks(ceil_div<>(num_output_dim_per_head, (long)WORK_BLOCK_SIZE_X),
+                   grid_dim_y, num_heads);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
-  HET_RGNNMatmulNoScatterGatherListFwOrBckProp<
+  HET_RGNNMatmulNoScatterGatherListFwProp<
       REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
       WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
       int64_t *><<<nblks, nthrs, 0, stream>>>(
@@ -75,7 +76,7 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
 
       thrust::raw_pointer_cast(
           dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
-      num_ntypes, num_input_dim, num_output_dim);
+      num_ntypes, num_heads, num_input_dim, num_output_dim_per_head);
 }
 
 // TODO: check if the two folloing could be merged into one
@@ -666,9 +667,9 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
                                           at::Tensor &grad_weights,
                                           at::Tensor &grad_node_feat_input) {
   cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
-  assert(weights_transposed.size(1) == 1 && "assertion n_head == 1 failed");
+  const int64_t num_heads = weights_transposed.size(1);
   const int64_t num_input_dim = weights_transposed.size(3);
-  const int64_t num_output_dim =
+  const int64_t num_output_dim_per_head =
       weights_transposed.size(2);  // weight shape (num_ntypes,
                                    // in_feat, out_feat)
   int64_t num_ntypes = ntype_offset_ptrs.numel() - 1;
@@ -707,9 +708,9 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
   // NB: my shmem sgemm matmul scheme
   // in NoScatterGather scenario, there is no such thing as multi-headed
   const dim3 nblks(ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE_X),
-                   grid_dim_y, 1);
+                   grid_dim_y, num_heads);
   const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
-  HET_RGNNMatmulNoScatterGatherListFwOrBckProp<
+  HET_RGNNMatmulNoScatterGatherDeltaFeatBckProp<
       REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
       WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
       int64_t *><<<nblks, nthrs, 0, stream>>>(
@@ -719,10 +720,10 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
       ntype_offset_ptrs.data_ptr<int64_t>(),
       thrust::raw_pointer_cast(
           dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
-      num_ntypes, num_output_dim, num_input_dim);
+      num_ntypes, num_heads, num_input_dim, num_output_dim_per_head);
   // NB: my shmem sgemm matmul scheme
   const dim3 nblks_outer_product(
-      ceil_div<>(num_output_dim, (long)WORK_BLOCK_SIZE_X),
+      ceil_div<>(num_output_dim_per_head, (long)WORK_BLOCK_SIZE_X),
       ceil_div<>(num_input_dim, (long)WORK_BLOCK_SIZE_Y), grid_dim_y);
   // TODO: use a separate reg tiling flag
   HET_RGNNDeltaWeightNoScatterGatherListBckProp<
@@ -731,7 +732,8 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
       int64_t *><<<nblks_outer_product, nthrs, 0, stream>>>(
       node_feat_input.data_ptr<float>(),
       grad_node_feat_output.data_ptr<float>(), grad_weights.data_ptr<float>(),
-      ntype_offset_ptrs.data_ptr<int64_t>(), num_input_dim, num_output_dim,
+      ntype_offset_ptrs.data_ptr<int64_t>(), num_input_dim,
+      num_output_dim_per_head, num_heads,
       thrust::raw_pointer_cast(
           dev_num_blocks_assignment_for_all_prev_ntype_vect.data()),
       num_ntypes);
@@ -957,9 +959,7 @@ void RelationalMatMul(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
           unique_srcs_and_dests_rel_ptrs, unique_srcs_and_dests_node_indices,
           weights_transposed, node_feat, gradout, grad_node_feat, grad_weights);
     } else {
-      _BackwardRelationalMatMul<
-
-          32, CompactAsOfNodeKind::Enabled, false, false>(
+      _BackwardRelationalMatMul<32, CompactAsOfNodeKind::Enabled, false, false>(
           dummy_tensor, dummy_tensor, dummy_tensor,
           unique_srcs_and_dests_rel_ptrs, unique_srcs_and_dests_node_indices,
           weights_transposed, node_feat, gradout, grad_node_feat, grad_weights);
@@ -972,6 +972,7 @@ void RelationalMatMul(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
         arg_tensor_dict.at("separate_coo_node_indices");
     at::Tensor separate_coo_eids = arg_tensor_dict.at("separate_coo_eids");
     if (separate_coo_eids.data_ptr() == separate_coo_node_indices.data_ptr()) {
+      // THis means template variable ACGatherScatterListIdenticalFlag is true
       if (InputNumHeadOneFlag) {
         _BackwardRelationalMatMul<32, CompactAsOfNodeKind::Disabled, true,
                                   true>(
@@ -986,6 +987,7 @@ void RelationalMatMul(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
             grad_node_feat, grad_weights);
       }
     } else {
+      // THis means template variable ACGatherScatterListIdenticalFlag is false
       if (InputNumHeadOneFlag) {
         _BackwardRelationalMatMul<32, CompactAsOfNodeKind::Disabled, false,
                                   true>(

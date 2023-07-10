@@ -207,8 +207,13 @@ class HET_RelationalAttLayer(nn.Module):
                     True,
                     matmul_compact_as_of_node_kind,  # CompactAsOfNodeKind::Enabled or Direct Index
                 )  # NB: use single side instead without need to modify kernel
-                # TODO: for performance, the following two lines may as well be implemented with relational_inner_product_compact_and_weight
-                # notice that rgnn_inner_product_right_node is not applicable here because weight is not right-hand-side data
+                # notice that rgnn_inner_product_right_node is not applicable here because weight is not right-hand-side data. So it should be something like relational_inner_product_compact_and_weight. We use the GEMM for convenience as an ad-hoc solution
+
+                # TODO: for performance, the following two lines may as well be implemented with relational_inner_product_compact_and_weight rather than GEMM
+
+                # Originally, the fw and bck kernels assert head == 1 because they were originally implemented for HGT.
+                # We generalize them so that they can work in this case even if num_head > 1
+                # print(feat_compact.shape, self.attn_l.unsqueeze(-1).shape)
                 el_compact = B.rgnn_relational_matmul_no_scatter_gather_list(
                     separate_unique_node_indices_single_sided["rel_ptrs_row"],
                     self.attn_l.unsqueeze(-1),

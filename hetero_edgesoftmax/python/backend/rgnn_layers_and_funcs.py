@@ -467,7 +467,7 @@ def rgnn_relational_matmul_no_scatter_gather_list(
         dtype=weights.dtype,
         device=weights.device,
         # requires_grad=True,
-    )
+    )  # .contiguous()
     return RgnnRelationalMatmulNoScatterGatherList.apply(
         ntype_offset_ptrs,
         weights,
@@ -481,6 +481,7 @@ def rgnn_inner_product_right_node(
     left_side_data,
     right_node_vectors,
     compact_as_of_node_kind,
+    left_mapper_suffix: str,  # _row or _col or None to determine tensor keys
 ):
     if compact_as_of_node_kind == 0:  # CompactAsOfNodeKind::Disabled
         left_edge_data = left_side_data
@@ -516,8 +517,12 @@ def rgnn_inner_product_right_node(
             requires_grad=True,
         )
         return RgnnInnerProductNodeCompactAndNode.apply(
-            separate_unique_node_indices_dict_single_sided["rel_ptrs_col"],
-            separate_unique_node_indices_dict_single_sided["node_indices_col"],
+            separate_unique_node_indices_dict_single_sided[
+                "rel_ptrs" + left_mapper_suffix
+            ],
+            separate_unique_node_indices_dict_single_sided[
+                "node_indices" + left_mapper_suffix
+            ],
             separate_coo_original_dict["rel_ptrs"],
             separate_coo_original_dict["eids"],
             separate_coo_original_dict["row_indices"],
@@ -541,7 +546,7 @@ def rgnn_inner_product_right_node(
         )
         return RgnnInnerProductNodeCompactAndNodeWithDirectIndexing.apply(
             separate_unique_node_indices_dict_single_sided_inverse_idx[
-                "inverse_indices_col"
+                "inverse_indices" + left_mapper_suffix
             ],
             separate_coo_original_dict["rel_ptrs"],
             separate_coo_original_dict["eids"],
