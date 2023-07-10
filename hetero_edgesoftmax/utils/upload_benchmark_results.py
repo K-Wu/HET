@@ -49,15 +49,37 @@ def extract_results_from_folder(path):
     for filename in os.listdir(path):
         if filename.endswith(".result.log"):
             name_info = extract_info_from(filename)
+            avg_forward_time = "NotFound"
+            avg_backward_time = "NotFound"
+            avg_training_time = "NotFound"
+            status = []
             with open(os.path.join(path, filename), "r") as f:
                 lines = f.readlines()
                 for line in lines:
                     if line.startswith("Mean forward time"):
-                        name_info.append(float(line.split(":")[1].strip().split()[0]))
+                        avg_forward_time = float(line.split(":")[1].strip().split()[0])
                     elif line.startswith("Mean backward time"):
-                        name_info.append(float(line.split(":")[1].strip().split()[0]))
+                        avg_backward_time = float(line.split(":")[1].strip().split()[0])
                     elif line.startswith("Mean training time"):
-                        name_info.append(float(line.split(":")[1].strip().split()[0]))
+                        avg_training_time = float(line.split(":")[1].strip().split()[0])
+                    if line.lower().find("error") != -1:
+                        status.append(line.strip())
+            if len(status) == 0:
+                if "NotFound" in [
+                    avg_forward_time,
+                    avg_backward_time,
+                    avg_training_time,
+                ]:
+                    status = ["Silent Error (Likely OOM or SEGV)"]
+                else:
+                    status = ["OK"]
+            status_str = "; ".join(status)
+            name_info += [
+                avg_forward_time,
+                avg_backward_time,
+                avg_training_time,
+                status_str,
+            ]
             all_names_and_info.append(name_info)
     return all_names_and_info
 
