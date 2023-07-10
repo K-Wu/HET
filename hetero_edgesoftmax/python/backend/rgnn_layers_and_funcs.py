@@ -492,7 +492,7 @@ def rgnn_inner_product_right_node(
             dtype=right_node_vectors.dtype,
             device=right_node_vectors.device,
             requires_grad=True,
-        )
+        ).contiguous()
         return RgnnInnerProductEdgeAndNode.apply(
             separate_coo_original_dict["rel_ptrs"],
             separate_coo_original_dict["eids"],
@@ -511,11 +511,11 @@ def rgnn_inner_product_right_node(
         # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
         # print([separate_coo_original_dict["rel_ptrs"][-1], right_node_vectors.size(1)])
         ret = th.zeros(
-            (graph.get_num_rels(), right_node_vectors.size(1)),
+            (separate_coo_original_dict["rel_ptrs"][-1], right_node_vectors.size(1)),
             dtype=right_node_vectors.dtype,
             device=right_node_vectors.device,
             requires_grad=True,
-        )
+        ).contiguous()
         return RgnnInnerProductNodeCompactAndNode.apply(
             separate_unique_node_indices_dict_single_sided[
                 "rel_ptrs" + left_mapper_suffix
@@ -543,7 +543,7 @@ def rgnn_inner_product_right_node(
             dtype=right_node_vectors.dtype,
             device=right_node_vectors.device,
             requires_grad=True,
-        )
+        ).contiguous()
         return RgnnInnerProductNodeCompactAndNodeWithDirectIndexing.apply(
             separate_unique_node_indices_dict_single_sided_inverse_idx[
                 "inverse_indices" + left_mapper_suffix
