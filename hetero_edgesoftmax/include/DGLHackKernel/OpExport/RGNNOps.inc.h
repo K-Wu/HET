@@ -295,6 +295,8 @@ void RelationalMatMul(torch::Dict<std::string, at::Tensor> args_tensor_dict,
 }
 }  // namespace SeparateCOO
 
+// TODO: use enum instead of bool to indicate if it is CSR or COO
+
 // NB: We may refer to (edge parallel version)
 // HET_HGTExpermentalEdgeAttentionConcatenatedSecondStageSrcInnerProductDestIntemediateCOOKernel
 // in hetero_edgesoftmax/include/EdgeSoftmax_4/EdgeSoftmaxMultiCOOs_4.h and

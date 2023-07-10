@@ -117,6 +117,7 @@ __device__ __forceinline__ Idx linear_search(Idx num_elements, const IdxPtr arr,
       return lo - 1;
     }
   }
+  return num_elements - 1;
 }
 
 template <typename Idx>

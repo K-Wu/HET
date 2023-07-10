@@ -78,6 +78,8 @@ void _full_graph_edge_softmax_ops(
     ETypeData<Idx, true> etype_data{
         .etypes = incsr_or_sep_coo_reltypes_or_relptrs.data_ptr<Idx>(),
         .num_relations = num_relations};
+    // The compact type is always disabled because attn score is edge-wise
+    // scalars anyway
     HET_HGTEdgeSoftmaxAccumStageOnlyKernel_edgeparallel<
         Idx, DType, CompactAsOfNodeKind::Disabled, true, true, false,
         OutputMuAppliedAttnScoreSwitch><<<nblks, nthrs, 0, stream>>>(

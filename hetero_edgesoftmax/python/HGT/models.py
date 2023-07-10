@@ -56,6 +56,9 @@ class HET_HGTLayerHetero(nn.Module):
         )
 
         if self.multiply_among_weights_first_flag:
+            assert (
+                num_heads == 1
+            ), "unsupported num_heads>1 when multiply_among_weights_first_flag is True"
             # this is a varient of the original weights where first the view is changed from (self.num_ntypes, 1, in_dim, out_dim) to (self.num_ntypes, in_dim, self.num_heads, self.d_k) and then a transposition is applied
             self.k_linears = nn.Parameter(
                 torch.Tensor(self.num_ntypes, self.num_heads, in_dim, self.d_k)
@@ -67,9 +70,6 @@ class HET_HGTLayerHetero(nn.Module):
                 torch.Tensor(self.num_ntypes, self.num_heads, in_dim, self.d_k)
             )
         else:
-            assert (
-                num_heads == 1
-            ), "unsupported num_heads>1 when multiply_among_weights_first_flag is True"
             self.k_linears = nn.Parameter(
                 torch.Tensor(self.num_ntypes, 1, in_dim, out_dim)
             )
@@ -171,6 +171,7 @@ class HET_HGTLayerHetero(nn.Module):
                 )
 
                 # NB: the todo here to implement single-sided matmul for compact_as_of_node_flag does not make sense
+                # FIXME: need to use double-sided unique_node_indices
                 attn_weight_dst_product_compact = B.rgnn_relational_matmul(
                     {
                         "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_dict_single_sided[
@@ -193,6 +194,11 @@ class HET_HGTLayerHetero(nn.Module):
                     compact_as_of_node_kind,  # CompactAsOfNodeKind::EnabledWithDirectIndexing(2) or CompactAsOfNodeKind::Enabled (1)
                     left_mapper_suffix="_col",
                 )  # NB: use single side instead without need to modify kernel
+
+                # separate_unique_node_indices_dict_single_sided = (G.get_separate_unique_node_indices_single_sided())
+                # print("!!!!!!!")
+                # print(separate_unique_node_indices_dict_single_sided["rel_ptrs_col"])
+                # print(separate_unique_node_indices_dict_single_sided["node_indices_col"])
             else:
                 separate_coo_original_dict = G.get_separate_coo_original()
                 # with nvtx.annotate("hector_op_category = edgewise mm", color="cyan"):

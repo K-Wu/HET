@@ -146,12 +146,21 @@ class HET_RelationalAttLayer(nn.Module):
             separate_unique_node_indices_single_sided = (
                 g.get_separate_unique_node_indices_single_sided()
             )
-            args_tensor_dict = {
+            # TODO: check if it is okay to pass single sided unique node indices to compact relational_matmul
+            args_tensor_dict_row = {
                 "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
                     "rel_ptrs_row"
                 ],
                 "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
                     "node_indices_row"
+                ],
+            }
+            args_tensor_dict_col = {
+                "unique_srcs_and_dests_rel_ptrs": separate_unique_node_indices_single_sided[
+                    "rel_ptrs_col"
+                ],
+                "unique_srcs_and_dests_node_indices": separate_unique_node_indices_single_sided[
+                    "node_indices_col"
                 ],
             }
             if self.multiply_among_weights_first_flag:
@@ -168,21 +177,21 @@ class HET_RelationalAttLayer(nn.Module):
                     self.attn_l.view(-1, self.out_feat // self.num_heads, 1),
                 ).view(-1, self.num_heads, self.in_feat, 1)
                 feat_compact = B.rgnn_relational_matmul(
-                    args_tensor_dict,
+                    args_tensor_dict_row,
                     self.conv_weights,
                     inputs,
                     True,  # fixme: check if this is correct
                     matmul_compact_as_of_node_kind,  # CompactAsOfNodeKind::Enabled or Direct Index
                 )  # NB: use single side instead without need to modify kernel
                 el_compact = B.rgnn_relational_matmul(
-                    args_tensor_dict,
+                    args_tensor_dict_row,
                     product_of_conv_weights_attn_l,
                     inputs,
                     True,
                     matmul_compact_as_of_node_kind,  # CompactAsOfNodeKind::Enabled or Direct Index
                 )  # NB: use single side instead without need to modify kernel
                 er_compact = B.rgnn_relational_matmul(
-                    args_tensor_dict,
+                    args_tensor_dict_col,
                     product_of_conv_weights_attn_r,
                     inputs,
                     True,
@@ -194,14 +203,14 @@ class HET_RelationalAttLayer(nn.Module):
                 )
                 # NB: no need to distinguish feat_compact_src and feat_compact_dst because in our case all datasets are added with inverse edges
                 feat_compact = B.rgnn_relational_matmul(
-                    args_tensor_dict,
+                    args_tensor_dict_row,
                     self.conv_weights,
                     inputs,
                     True,
                     matmul_compact_as_of_node_kind,  # CompactAsOfNodeKind::Enabled or Direct Index
                 )  # NB: use single side instead without need to modify kernel
                 feat_compact_dst = B.rgnn_relational_matmul(
-                    args_tensor_dict,
+                    args_tensor_dict_col,
                     self.conv_weights,
                     inputs,
                     True,

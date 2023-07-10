@@ -133,6 +133,7 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
             ret,
         )
         ctx.input_num_head_one_flag = input_num_head_one_flag
+
         K.rgnn_relational_matmul(
             {
                 "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptrs,
@@ -144,6 +145,8 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
             ret,
             input_num_head_one_flag,
         )
+        # print(unique_srcs_and_dests_rel_ptrs)
+        # print(unique_srcs_and_dests_node_indices)
         return ret
 
     @staticmethod
@@ -160,6 +163,8 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
         grad_node_feat = th.zeros_like(node_feat, memory_format=th.contiguous_format)
         # FIXME: illegal reading A data when BGS compactAsOfNode is true perhaps bug in schedule_by_relation
         # FIXME: seems there is a bug in gradout when bgs compactAsOfNode is true perhaps the scheming scheme to grad_feat_src is faulty
+        # print(unique_srcs_and_dests_rel_ptrs)
+        # print(unique_srcs_and_dests_node_indices)
         K.backward_rgnn_relational_matmul(
             {
                 "unique_srcs_and_dests_rel_ptrs": unique_srcs_and_dests_rel_ptrs,
@@ -474,6 +479,9 @@ def rgnn_relational_matmul_no_scatter_gather_list(
         inputs,
         ret,
     )
+
+
+# TODO: this is now using dst as left-hand side data and src as right-hand side data
 
 
 def rgnn_inner_product_right_node(
