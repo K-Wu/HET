@@ -3,6 +3,7 @@ import inspect
 from functools import wraps
 import traceback
 
+
 # usage example:
 # @warn_default_arguments
 # def foo(a, b=1):
@@ -26,7 +27,10 @@ def warn_default_arguments(f):
             )
             INDENT = 4 * " "
             callstack = "------->|" + "\n".join(
-                [INDENT + line.strip() for line in traceback.format_stack()][:-1]
+                [
+                    "------->|" + INDENT + line.strip()
+                    for line in traceback.format_stack()
+                ][:-1]
             )
             print("------->|{}() called:".format(f.__name__))
             print(callstack)
@@ -37,6 +41,7 @@ def warn_default_arguments(f):
 
 # code from https://stackoverflow.com/questions/58597680/how-can-a-python-decorator-change-calls-in-decorated-function
 from types import FunctionType
+
 
 # usage example:
 # @reroute_namespace(argparse=test_args_dummy)
