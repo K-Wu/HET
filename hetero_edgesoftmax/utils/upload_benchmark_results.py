@@ -15,9 +15,7 @@ import os
 # OUTPUT_DIR="misc/artifacts/benchmark_all_`date +%Y%m%d%H%M`"
 #
 
-SPREADSHEET_URL = (
-    "https://docs.google.com/spreadsheets/d/1qMklewOvYRVRHTYlMErvyd67afJvaVNwd79sMrKw__4/",
-)
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1qMklewOvYRVRHTYlMErvyd67afJvaVNwd79sMrKw__4/"
 WORKSHEET_GIDS = [
     893574800,
     721906000,
