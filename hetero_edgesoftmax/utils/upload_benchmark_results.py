@@ -84,6 +84,8 @@ def extract_results_from_folder(path) -> "list[list[Union[float, str, int]]]":
 
 
 def open_worksheet(target_sheet_url: str, target_gid: str):
+    if target_gid != "0":
+        raise NotImplementedError("To avoid data loss, only gid=0 is supported for now")
     gc = gspread.service_account()
     sh = gc.open_by_url(target_sheet_url)
     sheet_data = sh.fetch_sheet_metadata()
