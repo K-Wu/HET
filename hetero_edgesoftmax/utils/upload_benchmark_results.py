@@ -4,6 +4,7 @@
 import gspread
 from gspread import Worksheet, WorksheetNotFound
 from gspread.utils import finditem
+from typing import Union
 
 import os
 
@@ -42,7 +43,7 @@ def find_latest_subdirectory(root, prefix):
     return os.path.join(root, max(candidates))
 
 
-def extract_results_from_folder(path):
+def extract_results_from_folder(path) -> "list[list[Union[float, str, int]]]":
     all_names_and_info = []
     for filename in os.listdir(path):
         if filename.endswith(".result.log"):
@@ -82,7 +83,7 @@ def extract_results_from_folder(path):
     return all_names_and_info
 
 
-def update_gspread(entries, target_sheet_url, target_gid, cell_range=None):
+def open_worksheet(target_sheet_url: str, target_gid: str):
     gc = gspread.service_account()
     sh = gc.open_by_url(target_sheet_url)
     sheet_data = sh.fetch_sheet_metadata()
@@ -95,7 +96,16 @@ def update_gspread(entries, target_sheet_url, target_gid, cell_range=None):
         ws = Worksheet(sh, item["properties"])
     except (StopIteration, KeyError):
         raise WorksheetNotFound(target_gid)
+    return ws
 
+
+def create_worksheet(target_sheet_url: str, title: str) -> Worksheet:
+    gc = gspread.service_account()
+    sh = gc.open_by_url(target_sheet_url)
+    return sh.add_worksheet(title=title, rows=100, cols=20)
+
+
+def update_gspread(entries, ws: Worksheet, cell_range=None):
     if cell_range is None:
         # start from A1
         cell_range = "A1:"
@@ -104,7 +114,8 @@ def update_gspread(entries, target_sheet_url, target_gid, cell_range=None):
         cell_range += gspread.utils.rowcol_to_a1(num_rows, num_cols)
     ws.format(cell_range, {"numberFormat": {"type": "NUMBER", "pattern": "0.0000"}})
     ws.update(cell_range, entries)
-    ws.update_title("[GID0]TestTitle")
+    # ws.update_title("[GID0]TestTitle")
+
     # Format example:
     # cells_list = ws.range(1, 1, num_rows, num_cols) # row, column, row_end, column_end. 1 1 stands for A1
     # cells_list = ws.range("E1:G120")
@@ -116,8 +127,12 @@ if __name__ == "__main__":
     print("Uploading results from", dir_to_upload)
     names_and_info = extract_results_from_folder(dir_to_upload)
     print(names_and_info)
+    import socket
+
+    worksheet_title = f"[{socket.gethostname()}]{dir_to_upload.split('/')[-1]}"
+
     update_gspread(
         names_and_info,
-        SPREADSHEET_URL,
-        "0",  # GID0 reserved for testing
+        create_worksheet(SPREADSHEET_URL, worksheet_title)
+        # open_worksheet(SPREADSHEET_URL, "0") # GID0 reserved for testing
     )
