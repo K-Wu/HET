@@ -28,8 +28,13 @@ def warn_default_arguments(f):
             INDENT = 4 * " "
             callstack = "------->|" + "\n".join(
                 [
-                    "------->|" + INDENT + line.strip()
-                    for line in traceback.format_stack()
+                    "\n".join(
+                        [
+                            "------->|" + INDENT + line.strip()
+                            for line in entry.split("\n")
+                        ]
+                    )
+                    for entry in traceback.format_stack()
                 ][:-1]
             )
             print("------->|{}() called:".format(f.__name__))

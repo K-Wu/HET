@@ -5,6 +5,7 @@ import torch
 if "concat" not in torch.__dict__:
     torch.concat = torch.hstack
 
+
 # NB: return inverse_indices here so that we can direct index rather than binary search
 @torch.no_grad()
 def generate_separate_unique_node_indices_single_sided_for_each_etype(
@@ -61,7 +62,6 @@ def generate_separate_unique_node_indices_single_sided_for_each_etype(
         result_rel_ptrs_row.append(
             (result_rel_ptrs_row[-1] + node_indices_for_curr_relation_row.shape[0])
         )
-        # fixme: add bias
         result_node_indices_row_inverse_indices.append(
             node_indices_for_curr_relation_row_inverse_indices
         )
