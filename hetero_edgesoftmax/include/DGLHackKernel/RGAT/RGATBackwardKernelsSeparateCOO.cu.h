@@ -124,7 +124,7 @@ HET_fusedGatBackwardGradElErFeatSrcFused_relational_separate_coo(
     const ETypeMapperData<Idx, kind> etype_mapper_data_col) {
   _fusedGatBackwardGradElErFeatSrcFused_edge_parallel<Idx, DType, kind, true>(
       gdata, etype_data, row_indices, col_indices, num_edges, etype_mapper_data,
-      etype_mapper_data);
+      etype_mapper_data_col);
 }
 
 // edge-centric schedule cf. HET_fusedGatBackwardGradFeatSrc in
