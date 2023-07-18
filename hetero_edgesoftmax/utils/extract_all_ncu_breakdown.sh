@@ -1,3 +1,4 @@
+# TODO: update to use _do_all_cases.sh
 declare -a MODELS=("HGT.train" "RGAT.train")
 # ("HGT.train" "RGAT.train" "RGCN.RGCNSingleLayer")
 declare -a CompactFlag=("--compact_as_of_node_flag" "")

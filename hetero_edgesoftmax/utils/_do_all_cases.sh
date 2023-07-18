@@ -1,5 +1,5 @@
 do_all_cases() {
-  declare -a MODELS=("RGAT") #"HGT" 
+  declare -a MODELS=("RGAT" "HGT")
   # declare -a MODELS=("RGAT")
   declare -a CompactFlag=("--compact_as_of_node_flag" "" "--compact_as_of_node_flag --compact_direct_indexing_flag")
   declare -a MulFlag=("--multiply_among_weights_first_flag" "")
