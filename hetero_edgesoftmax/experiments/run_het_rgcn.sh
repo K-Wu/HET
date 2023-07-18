@@ -11,38 +11,38 @@
 # NB: As we have not implemented self-loop in our dataset loading, we switch off the self-loop in the baseline experiements.
 
 python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 128 --num_classes 16 --sparse_format="csr"
-python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 128 --num_classes 16 --sparse_format="csr" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 128 --num_classes 16 --sparse_format="csr" --sort_by_src
 python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 128 --num_classes 8 --sparse_format="csr"
-python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 128 --num_classes 8 --sparse_format="csr" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 128 --num_classes 8 --sparse_format="csr" --sort_by_src
 python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 32 --num_classes 16 --sparse_format="csr"
-python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 32 --num_classes 16 --sparse_format="csr" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 32 --num_classes 16 --sparse_format="csr" --sort_by_src
 python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 32 --num_classes 8 --sparse_format="csr"
-python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 32 --num_classes 8 --sparse_format="csr" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 32 --num_classes 8 --sparse_format="csr" --sort_by_src
 
 python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 128 --num_classes 16 --sparse_format="coo"
-python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 128 --num_classes 16 --sparse_format="coo" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 128 --num_classes 16 --sparse_format="coo" --sort_by_src
 python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 128 --num_classes 8 --sparse_format="coo"
-python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 128 --num_classes 8 --sparse_format="coo" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 128 --num_classes 8 --sparse_format="coo" --sort_by_src
 python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 32 --num_classes 16 --sparse_format="coo"
-python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 32 --num_classes 16 --sparse_format="coo" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 32 --num_classes 16 --sparse_format="coo" --sort_by_src
 python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 32 --num_classes 8 --sparse_format="coo"
-python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 32 --num_classes 8 --sparse_format="coo" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d fb15k --n_infeat 32 --num_classes 8 --sparse_format="coo" --sort_by_src
 
 
 python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 128 --num_classes 16 --sparse_format="csr"
-python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 128 --num_classes 16 --sparse_format="csr" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 128 --num_classes 16 --sparse_format="csr" --sort_by_src
 python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 128 --num_classes 8 --sparse_format="csr"
-python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 128 --num_classes 8 --sparse_format="csr" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 128 --num_classes 8 --sparse_format="csr" --sort_by_src
 python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 32 --num_classes 16 --sparse_format="csr"
-python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 32 --num_classes 16 --sparse_format="csr" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 32 --num_classes 16 --sparse_format="csr" --sort_by_src
 python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 32 --num_classes 8 --sparse_format="csr"
-python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 32 --num_classes 8 --sparse_format="csr" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 32 --num_classes 8 --sparse_format="csr" --sort_by_src
 
 python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 128 --num_classes 16 --sparse_format="coo"
-python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 128 --num_classes 16 --sparse_format="coo" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 128 --num_classes 16 --sparse_format="coo" --sort_by_src
 python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 128 --num_classes 8 --sparse_format="coo"
-python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 128 --num_classes 8 --sparse_format="coo" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 128 --num_classes 8 --sparse_format="coo" --sort_by_src
 python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 32 --num_classes 16 --sparse_format="coo"
-python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 32 --num_classes 16 --sparse_format="coo" --sort_by_src 
+python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 32 --num_classes 16 --sparse_format="coo" --sort_by_src
 python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 32 --num_classes 8 --sparse_format="coo"
 python -m python.RGCN.RGCNSingleLayer -d wikikg2 --n_infeat 32 --num_classes 8 --sparse_format="coo" --sort_by_src 

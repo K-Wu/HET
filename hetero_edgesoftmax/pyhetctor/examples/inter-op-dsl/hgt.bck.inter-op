@@ -25,4 +25,4 @@ for n in g.nodes():
     K[n.ntype].delta += outer_product(n.feature, n["hs_attn"].delta)
     V[n.ntype].delta += outer_product(n.feature, n["hs"].delta)
     # TODO: add support to using += to express such accumulation
-    n.feature.delta = inner_product(n["ht_attn"], transpose(Q[n.ntype])) + inner_product(n["hs_attn"], transpose(K[n.ntype])) + inner_product(n["hs"], transpose(V[n.ntype])) 
+    n.feature.delta = inner_product(n["ht_attn"], transpose(Q[n.ntype])) + inner_product(n["hs_attn"], transpose(K[n.ntype])) + inner_product(n["hs"], transpose(V[n.ntype]))
