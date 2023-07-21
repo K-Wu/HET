@@ -283,8 +283,9 @@ class _basic_MatMulKernel<
                 thIdxRow_initial_A + (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) /
                                          COARSEN_DIVISOR_FACTOR_LOAD_A;
             int thIdxFeat =
-                thIdxFeat_initial_A + (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) %
-                                          COARSEN_DIVISOR_FACTOR_LOAD_A;
+                thIdxFeat_initial_A + (loadLoopIdx * THREADING_BLOCK_SIZE_X *
+                                       THREADING_BLOCK_SIZE_Y) %
+                                          SHMEM_BLOCK_SIZE_K;
             // Get sub-matrix Asub of A
             As[thIdxRow][thIdxFeat] =
                 (thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y < numARows &&

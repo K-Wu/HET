@@ -352,8 +352,12 @@ class _simplified_basic_MatMulKernel<
                 thIdxRow_initial_BC + (loadLoopIdx * SHMEM_BLOCK_SIZE_K /
                                        COARSEN_DIVISOR_FACTOR_LOAD_B);
             int thIdxFeat =
-                thIdxFeat_initial_BC + (loadLoopIdx * SHMEM_BLOCK_SIZE_K) %
-                                           COARSEN_DIVISOR_FACTOR_LOAD_B;
+                thIdxFeat_initial_BC +
+                (RIGHT_REG_TILED_FLAG && COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT
+                     ? 0
+                     : (loadLoopIdx * THREADING_BLOCK_SIZE_X *
+                        THREADING_BLOCK_SIZE_Y) %
+                           SHMEM_BLOCK_SIZE_X);
             float value_to_load =
                 ((m)*SHMEM_BLOCK_SIZE_K + thIdxRow <  //+ blockRowJobEntryBeg <
                      numARows &&  // TODO: idx_head < num_heads
@@ -376,9 +380,11 @@ class _simplified_basic_MatMulKernel<
             int thIdxRow =
                 thIdxRow_initial_A + (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) /
                                          COARSEN_DIVISOR_FACTOR_LOAD_A;
+            // TODO: fix this
             int thIdxFeat =
-                thIdxFeat_initial_A + (loadLoopIdx * SHMEM_BLOCK_SIZE_Y) %
-                                          COARSEN_DIVISOR_FACTOR_LOAD_A;
+                thIdxFeat_initial_A + (loadLoopIdx * THREADING_BLOCK_SIZE_X *
+                                       THREADING_BLOCK_SIZE_Y) %
+                                          SHMEM_BLOCK_SIZE_K;
             // Get sub-matrix Asub of A
             float enorm =
                 (NoEdgeNormFlag

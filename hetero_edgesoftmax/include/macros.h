@@ -60,7 +60,7 @@
   constexpr int WORK_BLOCK_SIZE##SUFFIX##_X =                    \
       REG_TILING_FLAG##SUFFIX ? 32 : 32;                         \
   constexpr int WORK_BLOCK_SIZE##SUFFIX##_Y =                    \
-      REG_TILING_FLAG##SUFFIX ? 8 : 32;                          \
+      REG_TILING_FLAG##SUFFIX ? 32 : 32;                         \
   constexpr int WORK_BLOCK_SIZE##SUFFIX##_K =                    \
       REG_TILING_FLAG##SUFFIX ? 8 : 32;                          \
   constexpr int THREADING_BLOCK_SIZE##SUFFIX##_X =               \
