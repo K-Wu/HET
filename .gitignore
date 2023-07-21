@@ -13,6 +13,9 @@ cmake-build**/
 *.pyc
 __pycache__/
 dataset/
+data/MyHybData
+data/MyWikiKG2
+data/ogbn_mag
 *.out
 *.npy
 *.json
