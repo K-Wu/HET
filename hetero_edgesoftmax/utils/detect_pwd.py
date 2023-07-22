@@ -50,6 +50,14 @@ def is_het_root_path(path: str) -> bool:
         return False
 
 
+def is_pwd_het_dev_root() -> bool:
+    # return if pwd is get_het_root_path()/hetero_edgesoftmax
+    return (
+        is_het_root_path(os.path.dirname(os.getcwd()))
+        and os.path.basename(os.getcwd()) == "hetero_edgesoftmax"
+    )
+
+
 def get_env_name_from_setup() -> str:
     # read hetero_edgesoftmax/script/setup_dev_env.sh and get the conda env name
     setup_script_path = os.path.join(

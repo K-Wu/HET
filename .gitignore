@@ -20,3 +20,4 @@ data/ogbn_mag
 *.npy
 *.json
 **/misc/artifacts/**.txt
+*.pkl
