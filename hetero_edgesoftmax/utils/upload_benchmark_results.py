@@ -7,6 +7,7 @@ from gspread.utils import finditem
 from typing import Union
 
 import os
+import socket
 
 # TODO: find and extract the following pattern from the result folder
 #
@@ -43,7 +44,48 @@ def find_latest_subdirectory(root, prefix):
     return os.path.join(root, max(candidates))
 
 
-def extract_results_from_folder(path) -> "list[list[Union[float, str, int]]]":
+def extract_result_from_graphiler_log(
+    file_path: str,
+) -> "list[list[Union[float,str,int]]]":
+    result: list[list[Union[float, str, int]]] = []
+    with open(file_path, "r") as f:
+        curr_dataset_name = ""
+        for line in f:
+            if line.find("benchmarking on") == 0:
+                curr_dataset_name = line.split(" ")[-1].strip()
+            elif line.find("elapsed time:") != -1:
+                experiment_name = line.split(" ")[0].strip()
+                experiment_unit = line.split(" ")[-1].strip()
+                experiment_value = float(line.split(" ")[-2].strip())
+                result.append(
+                    [
+                        curr_dataset_name,
+                        experiment_name + "," + experiment_unit,
+                        experiment_value,
+                    ]
+                )
+    return result
+
+
+def extract_graphiler_and_its_baselines_results_from_folder(
+    results_dir: str,
+) -> "list[list[Union[float, str, int]]]":
+    result: list[list[Union[float, str, int]]] = []
+    for model in ["HGT", "RGAT", "RGCN"]:
+        curr_result = extract_result_from_graphiler_log(
+            os.path.join(results_dir, model + ".log")
+        )
+        curr_result = [[model, "graphiler"] + row for row in curr_result]
+        result += curr_result
+        curr_result = extract_result_from_graphiler_log(
+            os.path.join(results_dir, model + "_baseline_standalone.log")
+        )
+        curr_result = [[model, "baselines"] + row for row in curr_result]
+        result += curr_result
+    return result
+
+
+def extract_het_results_from_folder(path) -> "list[list[Union[float, str, int]]]":
     all_names_and_info = []
     for filename in os.listdir(path):
         if filename.endswith(".result.log"):
@@ -125,14 +167,23 @@ def update_gspread(entries, ws: Worksheet, cell_range=None):
 
 
 if __name__ == "__main__":
+    graphiler_dir_to_upload = find_latest_subdirectory("misc/artifacts", "graphiler_")
+    graphiler_names_and_info = extract_graphiler_and_its_baselines_results_from_folder(
+        graphiler_dir_to_upload
+    )
+    graphiler_worksheet_title = (
+        f"[{socket.gethostname()}]{graphiler_dir_to_upload.split('/')[-1]}"
+    )
+    update_gspread(
+        graphiler_names_and_info,
+        create_worksheet(SPREADSHEET_URL, graphiler_worksheet_title)
+        # open_worksheet(SPREADSHEET_URL, "0") # GID0 reserved for testing
+    )
+
     dir_to_upload = find_latest_subdirectory("misc/artifacts", "benchmark_all_")
     print("Uploading results from", dir_to_upload)
-    names_and_info = extract_results_from_folder(dir_to_upload)
-    print(names_and_info)
-    import socket
-
+    names_and_info = extract_het_results_from_folder(dir_to_upload)
     worksheet_title = f"[{socket.gethostname()}]{dir_to_upload.split('/')[-1]}"
-
     update_gspread(
         names_and_info,
         create_worksheet(SPREADSHEET_URL, worksheet_title)

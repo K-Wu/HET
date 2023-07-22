@@ -2,6 +2,7 @@
 # some code are from in third_party/sputnik/codegen/utils.py
 import subprocess
 import os
+import datetime
 
 
 def check_git_existence() -> None:
@@ -78,6 +79,18 @@ def get_conda_current_environment() -> str:
     # Check if CONDA_SHLVL is set
     assert is_conda_activated(), "Fatal! CONDA_SHLVL is not set. Is conda activated?"
     return os.environ["CONDA_DEFAULT_ENV"]
+
+
+RESULTS_DIR = os.path.join(
+    get_het_root_path(), "hetero_edgesoftmax", "misc", "artifacts"
+)
+
+
+def create_new_results_dir(prefix: str) -> str:
+    curr_time = datetime.datetime.now().strftime("%Y%m%d%H%M")
+    new_dir = os.path.join(RESULTS_DIR, prefix + curr_time)
+    os.makedirs(new_dir)
+    return new_dir
 
 
 if __name__ == "__main__":
