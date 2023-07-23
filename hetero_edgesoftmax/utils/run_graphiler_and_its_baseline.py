@@ -10,7 +10,7 @@ from .detect_pwd import (
 def run_grapiler(results_dir: str):
     for model in ["HGT", "RGAT", "RGCN"]:
         subprocess.run(
-            f"conda run -n {GRAPHILER_CONDA_ENV_NAME} python3 {get_het_root_path()}/third_party/OthersArtifacts/graphiler/examples/{model}/{model}.py all 64 64 >{results_dir}/{model}.log 2>&1",
+            f"yes | conda run -n {GRAPHILER_CONDA_ENV_NAME} python3 {get_het_root_path()}/third_party/OthersArtifacts/graphiler/examples/{model}/{model}.py all 64 64 >{results_dir}/{model}.log 2>&1",
             shell=True,
         )
 
@@ -18,7 +18,7 @@ def run_grapiler(results_dir: str):
 def run_baselines(results_dir: str):
     for model in ["HGT", "RGAT", "RGCN"]:
         subprocess.run(
-            f"conda run -n {HET_CONDA_ENV_NAME} python3 {get_het_root_path()}/third_party/OthersArtifacts/graphiler/examples/{model}/{model}_baseline_standalone.py all 64 64 >{results_dir}/{model}_baseline_standalone.log 2>&1",
+            f"yes | conda run -n {HET_CONDA_ENV_NAME} python3 {get_het_root_path()}/third_party/OthersArtifacts/graphiler/examples/{model}/{model}_baseline_standalone.py all 64 64 >{results_dir}/{model}_baseline_standalone.log 2>&1",
             shell=True,
         )
 
