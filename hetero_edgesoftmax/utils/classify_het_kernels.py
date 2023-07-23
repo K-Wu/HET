@@ -43,6 +43,10 @@ def classify_het_kernels(func_name: str) -> str:
         return "Non-HET Others"
 
 
+# TODO: load nsys report and output the time portion of the three types of kernels.
+# cuda_gpu_kern_sum.py
+
+
 if __name__ == "__main__":
     print(is_ctags_installed())
     print(get_GEMM_kernel_names())

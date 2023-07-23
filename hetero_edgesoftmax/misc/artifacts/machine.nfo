@@ -1,7 +1,0 @@
-csl-227-99
-Driver 510.108.03
-CUDA Version 11.6
-OS Ubuntu 18.04.5 (5.4.0-135-generic)
-dgl 0.9.1
-torch 1.12.1
-Python 3.9.13
