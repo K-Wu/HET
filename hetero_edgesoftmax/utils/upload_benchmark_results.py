@@ -167,25 +167,35 @@ def update_gspread(entries, ws: Worksheet, cell_range=None):
 
 
 if __name__ == "__main__":
-    graphiler_dir_to_upload = find_latest_subdirectory("misc/artifacts", "graphiler_")
-    graphiler_names_and_info = extract_graphiler_and_its_baselines_results_from_folder(
-        graphiler_dir_to_upload
-    )
-    graphiler_worksheet_title = (
-        f"[{socket.gethostname()}]{graphiler_dir_to_upload.split('/')[-1]}"
-    )
-    update_gspread(
-        graphiler_names_and_info,
-        create_worksheet(SPREADSHEET_URL, graphiler_worksheet_title)
-        # open_worksheet(SPREADSHEET_URL, "0") # GID0 reserved for testing
-    )
+    try:
+        graphiler_dir_to_upload = find_latest_subdirectory(
+            "misc/artifacts", "graphiler_"
+        )
+        graphiler_names_and_info = (
+            extract_graphiler_and_its_baselines_results_from_folder(
+                graphiler_dir_to_upload
+            )
+        )
+        graphiler_worksheet_title = (
+            f"[{socket.gethostname()}]{graphiler_dir_to_upload.split('/')[-1]}"
+        )
+        update_gspread(
+            graphiler_names_and_info,
+            create_worksheet(SPREADSHEET_URL, graphiler_worksheet_title)
+            # open_worksheet(SPREADSHEET_URL, "0") # GID0 reserved for testing
+        )
+    except Exception as e:
+        print("Failed to upload graphiler results:", e)
 
-    dir_to_upload = find_latest_subdirectory("misc/artifacts", "benchmark_all_")
-    print("Uploading results from", dir_to_upload)
-    names_and_info = extract_het_results_from_folder(dir_to_upload)
-    worksheet_title = f"[{socket.gethostname()}]{dir_to_upload.split('/')[-1]}"
-    update_gspread(
-        names_and_info,
-        create_worksheet(SPREADSHEET_URL, worksheet_title)
-        # open_worksheet(SPREADSHEET_URL, "0") # GID0 reserved for testing
-    )
+    try:
+        dir_to_upload = find_latest_subdirectory("misc/artifacts", "benchmark_all_")
+        print("Uploading results from", dir_to_upload)
+        names_and_info = extract_het_results_from_folder(dir_to_upload)
+        worksheet_title = f"[{socket.gethostname()}]{dir_to_upload.split('/')[-1]}"
+        update_gspread(
+            names_and_info,
+            create_worksheet(SPREADSHEET_URL, worksheet_title)
+            # open_worksheet(SPREADSHEET_URL, "0") # GID0 reserved for testing
+        )
+    except Exception as e:
+        print("Failed to upload results:", e)
