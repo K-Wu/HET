@@ -70,13 +70,20 @@ def extract_roofline_from_ncu_folder(path: str) -> "list[list[Union[float, str, 
 
 
 def check_metric_units_all_identical_from_ncu_folder(path) -> bool:
+    """
+    check_metric_units_all_identical_from_ncu_folder("misc/artifacts/ncu_breakdown_202307180518") returns False after printing
+    Metric derived__memory_l1_wavefronts_shared_excessive has different units: {'Kbyte', 'byte', 'Mbyte'}
+    """
     metric_units: dict[str, set[str]] = dict()
     for filename in os.listdir(path):
         if filename.endswith(".ncu-rep"):
-            raw_csv = load_ncu_report(os.path.join(path, filename), "raw")
+            raw_csv: list[list[str]] = load_ncu_report(
+                os.path.join(path, filename), "raw"
+            )
+
             for idx in range(len(raw_csv[0])):
-                metric = raw_csv[0][idx]
-                unit = raw_csv[1][idx]
+                metric: str = raw_csv[0][idx]
+                unit: str = raw_csv[1][idx]
                 if metric not in metric_units:
                     metric_units[metric] = set()
                 metric_units[metric].add(unit)
@@ -93,5 +100,5 @@ def check_metric_units_all_identical_from_ncu_folder(path) -> bool:
 if __name__ == "__main__":
     assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
     dirname = ask_subdirectory("misc/artifacts", "ncu_breakdown_")
-
+    print(check_metric_units_all_identical_from_ncu_folder(dirname))
     pass

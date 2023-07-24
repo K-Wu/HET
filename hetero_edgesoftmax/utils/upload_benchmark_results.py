@@ -111,7 +111,10 @@ def ask_subdirectory(root, prefix) -> str:
     """
     candidate = find_latest_subdirectory(root, prefix)
     print(
-        "With prefix ", prefix, ", the latest directory is ", os.path.dirname(candidate)
+        "With prefix ",
+        prefix,
+        ", the latest directory is ",
+        os.path.basename(candidate),
     )
     user_input = input(
         "Press enter to use it, or please input the directory you want to upload: "
