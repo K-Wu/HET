@@ -1,7 +1,10 @@
-from .detect_pwd import get_het_root_path
+from .detect_pwd import get_het_root_path, run_once
+from functools import lru_cache
 import os
 
 
+@lru_cache(maxsize=None)
+@run_once
 def is_ctags_installed() -> bool:
     return os.system("ctags --version >/dev/null 2>/dev/null") == 0
 
@@ -34,7 +37,7 @@ def get_GEMM_kernel_names() -> set[str]:
 GEMM_kernels: set[str] = get_GEMM_kernel_names()
 
 
-def classify_het_kernels(func_name: str) -> str:
+def classify_het_kernel(func_name: str) -> str:
     if func_name in GEMM_kernels:
         return "GEMM"
     elif func_name.startswith("HET_"):

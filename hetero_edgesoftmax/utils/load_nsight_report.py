@@ -3,6 +3,7 @@ import re
 from .detect_pwd import is_pwd_het_dev_root, run_once
 from functools import lru_cache
 from typing import Tuple
+from .classify_het_kernels import classify_het_kernel
 
 
 @lru_cache(maxsize=None)
@@ -71,16 +72,32 @@ def construct_raw_column_idx(
 
 def extract_ncu_values_from_raws(
     nsys_details_csv: "list[list[str]]",
+    # It seems arithmetic intensity is AchievedWorkPerSecond/BytesPerSecond
+    # It is safe to duplicate entries because raw_metrics is a set
     raw_metrics: "set[str]" = {
-        "smsp__sass_thread_inst_executed_op_fadd_pred_on.sum.per_cycle_elapsed",
-        "smsp__sass_thread_inst_executed_op_fmul_pred_on.sum.per_cycle_elapsed",
-        "derived__smsp__sass_thread_inst_executed_op_ffma_pred_on_x2",
-        "smsp__cycles_elapsed.avg.per_second",
-        "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second",
-        "l1tex__m_xbar2l1tex_read_bytes.sum.per_second",
-        "dram__bytes.sum.per_second",
-        "derived__sm__sass_thread_inst_executed_op_ffma_pred_on_x2",
-        "smsp__cycles_elapsed.avg.per_second",
+        # Achieved work
+        "smsp__sass_thread_inst_executed_op_fadd_pred_on.sum.per_cycle_elapsed",  # value per cycle (1/3)
+        "smsp__sass_thread_inst_executed_op_fmul_pred_on.sum.per_cycle_elapsed",  # value per cycle (2/3)
+        "derived__smsp__sass_thread_inst_executed_op_ffma_pred_on_x2",  # Predicated-On FFMA Operations Per Cycle value per cycle (3/3)
+        "smsp__cycles_elapsed.avg.per_second",  # "SM Frequency" cycle per second
+        # L2 achieved traffic
+        "l1tex__m_xbar2l1tex_read_bytes.sum.per_second",  # L2 Cache bandwidth achieved value
+        # L1 achieved traffic
+        "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second",  # L1 Cache Bandwidth (Global/Local) achieved traffic
+        # DRAM achieved traffic
+        "dram__bytes.sum.per_second",  # DRAM Bandwidth achieved value
+        # Compute roofline
+        "derived__sm__sass_thread_inst_executed_op_ffma_pred_on_x2",  # Theoretical Predicated-On FFMA Operations value per cycle
+        "sm__cycles_elapsed.avg.per_second",  # "SM Frequency" cycle per second
+        # DRAM roofline
+        "dram__bytes.sum.peak_sustained",  # "Theoretical DRAM Bytes Accessible"
+        "dram__cycles_elapsed.avg.per_second",  # DRAM frequency cycle per second
+        # L1 roofline
+        "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained",  # Theoretical L1/TEX Cache Bytes Accessible
+        "l1tex__cycles_elapsed.avg.per_second",  # L1 cache frequency cycle per second
+        # L2 roofline
+        "l1tex__m_xbar2l1tex_read_bytes.sum.peak_sustained",  # "Theoretical L2 Cache Bytes Accessible" value per cycle
+        "lts__cycles_elapsed.avg.per_second",  # "L2 cache frequency" cycle per second
     },
 ) -> "list[list[str]]":
     header: list[str] = nsys_details_csv[0]
@@ -91,6 +108,8 @@ def extract_ncu_values_from_raws(
         header,
         raw_metrics,
     )
+    for idx in NCU_DETAILS_COLUMN_IDX.values():
+        print(f"header[{idx}] = {header[idx]}, units[{idx}] = {units[idx]}")
     results: list[list[str]] = [
         ["ID", "Pretty Name", "Kernel Name"] + [key for key in NCU_DETAILS_COLUMN_IDX],
         ["", "", ""]
@@ -108,16 +127,67 @@ def extract_ncu_values_from_raws(
     return results
 
 
-def duplicate_metrics_exists(metrics_and_units: "set[Tuple[str, str]]") -> bool:
+def reorder_columns_in_raw_csv(
+    kernel_instances_per_row: "list[list[str]]",
+    metric_front: "list[Tuple[str,str]]",
+    metric_end: "list[Tuple[str,str]]",
+) -> "list[list[str]]":
     """
-    Assert there are no two metrics with the same name (i.e., with different units)
+    Reorder the columns in raw csv so that the first few columns are those specified in front, and the last few columns are those specified in end
     """
-    metrics: set[str] = set()
-    for metric, unit in metrics_and_units:
-        if metric in metrics:
-            return True  # f"Duplicate metric {metric} with different units"
-        metrics.add(metric)
-    return False
+    header: list[str] = kernel_instances_per_row[0]
+    units: list[str] = kernel_instances_per_row[1]
+    header_and_units: list[Tuple[str, str]] = [
+        (header[i], units[i]) for i in range(len(header))
+    ]
+    kernel_identifier_columns: list[Tuple[str, str]] = [
+        ("ID", ""),
+        ("Pretty Name", ""),
+        ("Kernel Name", ""),
+    ]
+    new_header_and_units: list[Tuple[str, str]] = (
+        kernel_identifier_columns
+        + metric_front
+        + list(
+            set(header_and_units)
+            .difference(set(metric_front))
+            .difference(set(metric_end))
+            .difference(set(kernel_identifier_columns))
+        )
+        + metric_end
+    )
+    column_idx_to_original_idx: list[int] = [
+        header_and_units.index(ele) for ele in new_header_and_units
+    ]
+    results: list[list[str]] = [
+        [ele[0] for ele in new_header_and_units],
+        [ele[1] for ele in new_header_and_units],
+    ]
+    for row in kernel_instances_per_row[2:]:
+        results.append([row[idx] for idx in column_idx_to_original_idx])
+    return results
+
+
+def derive_rooflines(
+    kernel_instances_metrics: dict[Tuple[str, str, str], dict[Tuple[str, str], str]],
+    metrics_and_units: set[Tuple[str, str]],
+) -> None:
+    """compute rooflines and achieved values and add them to kernel_instances_metrics, and headers to metrics_and_units"""
+    # TODO
+    pass
+
+
+def derive_kernel_categories(
+    kernel_instances_metrics: dict[Tuple[str, str, str], dict[Tuple[str, str], str]],
+    metrics_and_units: set[Tuple[str, str]],
+) -> None:
+    metrics_and_units.add(("Kernel Category", ""))
+    for kernel_identifier in kernel_instances_metrics:
+        kernel_instances_metrics[kernel_identifier][
+            ("Kernel Category", "")
+        ] = classify_het_kernel(
+            kernel_identifier[2]
+        )  # kernel_identifier[2] is kernel name
 
 
 def consolidate_ncu_details(metric_per_row: "list[list[str]]") -> "list[list[str]]":
@@ -133,24 +203,31 @@ def consolidate_ncu_details(metric_per_row: "list[list[str]]") -> "list[list[str
     metric_columns_idx: dict[str, int] = {
         key: header.index(key) for key in metric_columns
     }
-    results_dict: dict[Tuple[str, str, str], dict[str, Tuple[str, str]]] = {}
+    kernel_instances_metrics: dict[
+        Tuple[str, str, str], dict[Tuple[str, str], str]
+    ] = {}
 
-    metrics_and_units: set[Tuple[str, str]] = {}
+    metrics_and_units: set[Tuple[str, str]] = set()
     for row in metric_per_row[1:]:
-        key = (
+        kernel_identifier: tuple[str, str, str] = (
             row[name_columns_idx["ID"]],
             row[name_columns_idx["Pretty Name"]],
             row[name_columns_idx["Kernel Name"]],
         )
-        if key not in results_dict:
-            results_dict[key] = dict()
+        if kernel_identifier not in kernel_instances_metrics:
+            kernel_instances_metrics[kernel_identifier] = dict()
         assert (
-            row[metric_columns_idx["Metric Name"]] not in results_dict[key]
-        ), f"Duplicate metric name {row[metric_columns_idx['Metric Name']]} for {key}"
-        results_dict[key][row[metric_columns_idx["Metric Name"]]] = (
+            row[metric_columns_idx["Metric Name"]],
             row[metric_columns_idx["Metric Unit"]],
-            row[metric_columns_idx["Metric Value"]],
-        )
+        ) not in kernel_instances_metrics[kernel_identifier], f"Duplicate metric: {row}"
+
+        kernel_instances_metrics[kernel_identifier][
+            (
+                row[metric_columns_idx["Metric Name"]],
+                row[metric_columns_idx["Metric Unit"]],
+            )
+        ] = row[metric_columns_idx["Metric Value"]]
+
         metrics_and_units.add(
             (
                 row[metric_columns_idx["Metric Name"]],
@@ -158,18 +235,85 @@ def consolidate_ncu_details(metric_per_row: "list[list[str]]") -> "list[list[str
             )
         )
 
-    assert not duplicate_metrics_exists(
-        metrics_and_units
-    ), f"Duplicate metrics exist: {metrics_and_units}"
+    derive_rooflines(kernel_instances_metrics, metrics_and_units)
+    derive_kernel_categories(kernel_instances_metrics, metrics_and_units)
+    # TODO: add support to metric orders in output
+
     results: list[list[str]] = [
         name_columns + [ele[0] for ele in metrics_and_units],
         [""] * len(name_columns) + [ele[1] for ele in metrics_and_units],
     ]
-    for key in results_dict:
-        row = list(key)
-        for metric in metric_columns:
-            # print("Warning: ", metric, "not in", key)
-            row += results_dict[key][metric]
+    for kernel_identifier in kernel_instances_metrics:
+        row = list(kernel_identifier)
+        for metric, unit in metrics_and_units:
+            if (metric, unit) not in kernel_instances_metrics[kernel_identifier]:
+                row.append("")
+            else:
+                row.append(kernel_instances_metrics[kernel_identifier][(metric, unit)])
+        results.append(row)
+    return results
+
+
+def combine_ncu_raw_csvs(
+    kernel_instances_metrics_list: "list[list[list[str]]]",
+) -> list[list[str]]:
+    """
+    Combine multiple raw csvs from ncu into one
+    """
+    assert len(kernel_instances_metrics_list) > 0
+    kernel_instances_metrics: dict[
+        Tuple[str, str, str], dict[Tuple[str, str], str]
+    ] = {}
+    metrics_and_units: set[Tuple[str, str]] = set()
+    for kernel_instances_metrics_ in kernel_instances_metrics_list:
+        header = kernel_instances_metrics_[0]
+        units = kernel_instances_metrics_[1]
+        assert header[0] == "ID", f"header[0] = {header[0]} != ID"
+        assert header[1] == "Pretty Name", f"header[1] = {header[1]} != Pretty Name"
+        assert header[2] == "Kernel Name", f"header[2] = {header[2]} != Kernel Name"
+        for row in kernel_instances_metrics_[2:]:
+            kernel_identifier: tuple[str, str, str] = (
+                row[0],
+                row[1],
+                row[2],
+            )
+            if kernel_identifier not in kernel_instances_metrics:
+                kernel_instances_metrics[kernel_identifier] = dict()
+            for metric_idx in range(3, len(row)):
+                curr_metric = header[metric_idx]
+                curr_unit = units[metric_idx]
+                curr_value = row[metric_idx]
+                if (curr_metric, curr_unit) not in kernel_instances_metrics[
+                    kernel_identifier
+                ]:
+                    kernel_instances_metrics[kernel_identifier][
+                        (curr_metric, curr_unit)
+                    ] = curr_value
+                    metrics_and_units.add((curr_metric, curr_unit))
+                else:
+                    print(
+                        "Warning: duplicate metric",
+                        curr_metric,
+                        curr_unit,
+                        curr_value,
+                        kernel_identifier,
+                        kernel_instances_metrics[kernel_identifier][
+                            (curr_metric, curr_unit)
+                        ],
+                    )
+
+    result_header = ["ID", "Pretty Name", "Kernel Name"] + [
+        ele[0] for ele in metrics_and_units
+    ]
+    result_units = [""] * 3 + [ele[1] for ele in metrics_and_units]
+    results: list[list[str]] = [result_header, result_units]
+    for kernel_identifier in kernel_instances_metrics:
+        row = list(kernel_identifier)
+        for metric, unit in metrics_and_units:
+            if (metric, unit) not in kernel_instances_metrics[kernel_identifier]:
+                row.append("")
+            else:
+                row.append(kernel_instances_metrics[kernel_identifier][(metric, unit)])
         results.append(row)
     return results
 
@@ -268,28 +412,22 @@ def extract_func_name_from_signature(func_signature: str) -> str:
 if __name__ == "__main__":
     assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
 
-    try:
-        print(
-            load_nsys_report(
-                "utils/test/graphiler_hgt_fb15k.nsys-rep",
-                "cuda_gpu_trace",
-            )
+    print(
+        load_nsys_report(
+            "utils/test/graphiler_hgt_fb15k.nsys-rep",
+            "cuda_gpu_trace",
         )
-    except Exception as e:
-        print("Error occurred", e)
+    )
 
-    try:
-        print(
-            load_nsys_report(
-                "utils/test/graphiler_hgt_fb15k.nsys-rep",
-                "cuda_gpu_trace,nvtx_sum,osrt_sum,cuda_api_sum,cuda_gpu_kern_sum,cuda_gpu_mem_size_sum,cuda_gpu_mem_time_sum",
-            )
+    print(
+        load_nsys_report(
+            "utils/test/graphiler_hgt_fb15k.nsys-rep",
+            "cuda_gpu_trace,nvtx_sum,osrt_sum,cuda_api_sum,cuda_gpu_kern_sum,cuda_gpu_mem_size_sum,cuda_gpu_mem_time_sum",
         )
-    except Exception as e:
-        print("Error occurred2", e)
+    )
 
-    try:
-        print(
+    print(
+        consolidate_ncu_details(
             extract_ncu_values_from_details(
                 load_ncu_report(
                     "utils/test/HGT.aifb...64.64.1.ncu-rep",
@@ -297,5 +435,24 @@ if __name__ == "__main__":
                 )
             )
         )
-    except Exception as e:
-        print("Error occurred3", e)
+    )
+
+    print(
+        reorder_columns_in_raw_csv(
+            extract_ncu_values_from_raws(
+                load_ncu_report(
+                    "utils/test/HGT.aifb...64.64.1.ncu-rep",
+                    "raw",
+                )
+            ),
+            metric_front=[],
+            metric_end=[],
+        )
+    )
+
+    extract_ncu_values_from_raws(
+        load_ncu_report(
+            "utils/test/HGT.aifb...64.64.1.ncu-rep",
+            "raw",
+        )
+    )
