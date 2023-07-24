@@ -5,7 +5,7 @@ import gspread
 from gspread import Worksheet, WorksheetNotFound
 from gspread.utils import finditem
 from typing import Union
-from .detect_pwd import is_pwd_het_dev_root
+from .detect_pwd import is_pwd_het_dev_root, RESULTS_RELATIVE_DIR
 
 import os
 import socket
@@ -122,6 +122,9 @@ def ask_subdirectory_or_file(root, prefix) -> str:
     if len(user_input) == 0:
         result = candidate
     else:
+        if user_input.startswith("///"):  # user input is a relative path to het root
+            assert user_input[3:].startswith(RESULTS_RELATIVE_DIR)
+            user_input = os.path.relpath(user_input[3:], RESULTS_RELATIVE_DIR)
         result = os.path.join(root, user_input)
     assert os.path.exists(result), f"{result} does not exist"
     return result

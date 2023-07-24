@@ -68,6 +68,7 @@ def extract_from_ncu_folder(
 ) -> "list[list[str]]":
     results = []
     for filename in os.listdir(path):
+        print("extract_from_ncu_folder Processing", filename)
         if filename.endswith(".ncu-rep"):
             results += extract_from_ncu_file(
                 os.path.join(path, filename), extract_mem_flag, extract_roofline_flag
