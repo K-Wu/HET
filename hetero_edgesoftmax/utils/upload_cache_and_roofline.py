@@ -1,69 +1,88 @@
 from .detect_pwd import is_pwd_het_dev_root
-from .upload_benchmark_results import ask_subdirectory
+from .upload_benchmark_results import ask_subdirectory_or_file
 from .load_nsight_report import (
     extract_ncu_values_from_details,
     extract_ncu_values_from_raws,
     load_ncu_report,
     extract_csv_from_nsys_cli_output,
+    calculate_roofline_for_ncu_raw_csvs,
     combine_ncu_raw_csvs,
+    consolidate_ncu_details,
 )
-from typing import Union
-from .upload_benchmark_results import NameCanonicalizer, update_gspread
+from .upload_benchmark_results import (
+    NameCanonicalizer,
+    update_gspread,
+    SPREADSHEET_URL,
+    create_worksheet,
+)
 import os
+import socket
 
 
-def extract_info_from_ncu(filename) -> "list[str]":
+def extract_info_from_ncu(file_path: str) -> "list[str]":
     # model_name.dataset_name.mul_flag.compact_flag.ncu-rep
+    file_path = os.path.basename(file_path)
     return NameCanonicalizer.to_list(
-        filename[: filename.rfind(".ncu-rep")],
+        file_path[: file_path.rfind(".ncu-rep")],
         "model.dataset.flag_mul.flag_compact.ax_in.ax_out.ax_head",
     )
 
 
-def extract_info_from_nsys(filename) -> "list[str]":
+def extract_info_from_nsys(file_path: str) -> "list[str]":
     # model_name.dataset_name.mul_flag.compact_flag.nsys-rep
+    file_path = os.path.basename(file_path)
     return NameCanonicalizer.to_list(
-        filename[: filename.rfind(".nsys-rep")],
+        file_path[: file_path.rfind(".nsys-rep")],
         "model.dataset.flag_mul.flag_compact.ax_in.ax_out.ax_head",
     )
+
+
+def extract_from_ncu_file(
+    file_path: str, extract_mem_flag: bool, extract_roofline_flag: bool
+) -> "list[list[str]]":
+    assert file_path.endswith(".ncu-rep"), "filename must end with .ncu-rep"
+    name_and_info: list[str] = extract_info_from_ncu(file_path)
+    func_and_metric_csvs: list[list[list[str]]] = []
+    if extract_mem_flag:
+        func_and_metric_csvs.append(
+            consolidate_ncu_details(
+                extract_ncu_values_from_details(load_ncu_report(file_path, "details"))
+            )
+        )
+    if extract_roofline_flag:
+        func_and_metric_csvs.append(
+            calculate_roofline_for_ncu_raw_csvs(
+                extract_ncu_values_from_raws(load_ncu_report(file_path, "raw"))
+            )
+        )
+    if len(func_and_metric_csvs) == 1:
+        results = [name_and_info + f_ for f_ in func_and_metric_csvs[0]]
+    else:
+        func_and_metric = combine_ncu_raw_csvs(func_and_metric_csvs)
+        results = [name_and_info + f_ for f_ in func_and_metric]
+    return results
 
 
 def extract_from_ncu_folder(
     path: str, extract_mem_flag: bool, extract_roofline_flag: bool
-) -> "list[list[Union[float, str, int]]]":
+) -> "list[list[str]]":
     results = []
     for filename in os.listdir(path):
         if filename.endswith(".ncu-rep"):
-            name_and_info: list[str] = extract_info_from_ncu(filename)
-            func_and_metric_list: list[list[list[str]]] = []
-            if extract_mem_flag:
-                func_and_metric_list.append(
-                    extract_ncu_values_from_details(
-                        load_ncu_report(os.path.join(path, filename), "details")
-                    )
-                )
-            if extract_roofline_flag:
-                func_and_metric_list.append(
-                    extract_ncu_values_from_raws(
-                        load_ncu_report(os.path.join(path, filename), "raw")
-                    )
-                )
-            if len(func_and_metric_list) == 1:
-                results.append([name_and_info + f_ for f_ in func_and_metric_list[0]])
-            else:
-                func_and_metric = combine_ncu_raw_csvs(func_and_metric_list)
-                results.append([name_and_info + f_ for f_ in func_and_metric])
+            results += extract_from_ncu_file(
+                os.path.join(path, filename), extract_mem_flag, extract_roofline_flag
+            )
 
     return results
 
 
-def extract_memory_from_ncu_folder(path: str) -> "list[list[Union[float, str, int]]]":
+def extract_memory_from_ncu_folder(path: str) -> "list[list[str]]":
     return extract_from_ncu_folder(
         path, extract_mem_flag=True, extract_roofline_flag=False
     )
 
 
-def extract_roofline_from_ncu_folder(path: str) -> "list[list[Union[float, str, int]]]":
+def extract_roofline_from_ncu_folder(path: str) -> "list[list[str]]":
     return extract_from_ncu_folder(
         path, extract_mem_flag=False, extract_roofline_flag=True
     )
@@ -99,6 +118,20 @@ def check_metric_units_all_identical_from_ncu_folder(path) -> bool:
 
 if __name__ == "__main__":
     assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
-    dirname = ask_subdirectory("misc/artifacts", "ncu_breakdown_")
-    print(check_metric_units_all_identical_from_ncu_folder(dirname))
-    pass
+    path_name = ask_subdirectory_or_file("misc/artifacts", "ncu_breakdown_")
+    if os.path.isdir(path_name):
+        csv_rows = extract_from_ncu_folder(path_name, True, True)
+    else:
+        csv_rows = extract_from_ncu_file(path_name, True, True)
+
+    print(csv_rows)
+
+    worksheet_title = f"[{socket.gethostname()}]{path_name.split('/')[-1]}"[:100]
+    try:
+        update_gspread(
+            csv_rows,
+            create_worksheet(SPREADSHEET_URL, worksheet_title)
+            # open_worksheet(SPREADSHEET_URL, "0") # GID0 reserved for testing
+        )
+    except Exception as e:
+        print("Failed to upload graphiler results:", e)

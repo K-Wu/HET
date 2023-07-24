@@ -103,7 +103,7 @@ def find_latest_subdirectory(root, prefix) -> str:
     return os.path.join(root, max(candidates))
 
 
-def ask_subdirectory(root, prefix) -> str:
+def ask_subdirectory_or_file(root, prefix) -> str:
     """
     Show latest directory and request user input
     If user input is empty then choose the latest directory
@@ -120,9 +120,11 @@ def ask_subdirectory(root, prefix) -> str:
         "Press enter to use it, or please input the directory you want to upload: "
     )
     if len(user_input) == 0:
-        return candidate
+        result = candidate
     else:
-        return os.path.join(root, user_input)
+        result = os.path.join(root, user_input)
+    assert os.path.exists(result), f"{result} does not exist"
+    return result
 
 
 def extract_result_from_graphiler_log(
@@ -238,7 +240,7 @@ def update_gspread(entries, ws: Worksheet, cell_range=None) -> None:
         num_cols = max([len(row) for row in entries])
         cell_range += gspread.utils.rowcol_to_a1(num_rows, num_cols)
     ws.format(cell_range, {"numberFormat": {"type": "NUMBER", "pattern": "0.0000"}})
-    ws.update(range_name=cell_range, values=entries)
+    ws.update(cell_range, entries)
     # ws.update_title("[GID0]TestTitle")
 
     # Format example:

@@ -181,7 +181,9 @@ def derive_rooflines(
     kernel_instances_metrics: dict[Tuple[str, str, str], dict[Tuple[str, str], str]],
     metrics_and_units: set[Tuple[str, str]],
 ) -> None:
-    """compute rooflines and achieved values and add them to kernel_instances_metrics, and headers to metrics_and_units"""
+    """compute rooflines and achieved values and add them to kernel_instances_metrics, and headers to metrics_and_units
+    The units are from profiling results from RTX 3090. It may be subject to models and hardware.
+    """
     metrics_and_units.add(("Achieved Work", "GFLOPs"))
     metrics_and_units.add(("Compute Roofline", "GFLOPs"))
     metrics_and_units.add(("DRAM Roofline", "Gbyte/second"))
@@ -192,14 +194,14 @@ def derive_rooflines(
         # terms of flops_per_cycle are always inst/cycle
         peak_flop_per_cycle: float = get_float_metric_or_zero(
             kernel_instances_metrics[kernel_identifier],
-            ("derived__sm__sass_thread_inst_executed_op_ffma_pred_on_x2", "inst/cycle"),
+            ("derived__sm__sass_thread_inst_executed_op_ffma_pred_on_x2", "inst"),
         )
         flop_per_cycle: float = (
             get_float_metric_or_zero(
                 kernel_instances_metrics[kernel_identifier],
                 (
                     "derived__smsp__sass_thread_inst_executed_op_ffma_pred_on_x2",
-                    "inst/cycle",
+                    "inst",  # This is what ncu reports, instead of inst/cycle
                 ),
             )
             + get_float_metric_or_zero(
@@ -230,7 +232,7 @@ def derive_rooflines(
 
         dram_peak_bandwidth: float = get_float_metric_or_zero(
             kernel_instances_metrics[kernel_identifier],
-            ("dram__bytes.sum.peak_sustained", "Kbyte/cycle"),
+            ("dram__bytes.sum.peak_sustained", "byte/cycle"),
         )
         dram_cycle_per_second: float = get_float_metric_or_zero(
             kernel_instances_metrics[kernel_identifier],
@@ -242,7 +244,7 @@ def derive_rooflines(
         )
         kernel_instances_metrics[kernel_identifier][
             ("DRAM Roofline", "Gbyte/second")
-        ] = str(dram_peak_bandwidth * dram_cycle_per_second * 1000)
+        ] = str(dram_peak_bandwidth * dram_cycle_per_second)
         kernel_instances_metrics[kernel_identifier][
             ("DRAM Achieved Traffic", "Gbyte/second")
         ] = str(dram_achieved_traffic)
@@ -272,8 +274,8 @@ def derive_kernel_categories(
         kernel_instances_metrics[kernel_identifier][
             ("Kernel Category", "")
         ] = classify_het_kernel(
-            kernel_identifier[2]
-        )  # kernel_identifier[2] is kernel name
+            kernel_identifier[1]
+        )  # kernel_identifier[2] is pretty name
 
 
 def consolidate_ncu_details(metric_per_row: "list[list[str]]") -> "list[list[str]]":
@@ -335,6 +337,7 @@ def consolidate_ncu_details(metric_per_row: "list[list[str]]") -> "list[list[str
             else:
                 row.append(kernel_instances_metrics[kernel_identifier][(metric, unit)])
         results.append(row)
+    assert "Metric Name" not in results[0]
     return results
 
 
@@ -418,6 +421,7 @@ def calculate_roofline_for_ncu_raw_csvs(
     )
 
 
+# TODO: right now there are multiple headers, one for each raw_csv. merge them into one
 def combine_ncu_raw_csvs(
     raw_csv_list: "list[list[list[str]]]",
 ) -> list[list[str]]:
@@ -551,8 +555,8 @@ def extract_ncu_values_from_details(
         "ID",
         "L2 Cache Throughput",
         "L1/TEX Cache Throughput",
-        "DRAM Throughput",
-        "Memory Throughput",
+        "DRAM Throughput",  # dram__bytes.sum.per_second
+        "Memory Throughput",  # %
     },
 ) -> "list[list[str]]":
     header: list[str] = nsys_details_csv[0]
@@ -604,7 +608,7 @@ def load_csv_from_multiline_string(csv_string: str) -> "list[list[str]]":
                 result.append(line[1:-2].split('","'))
             continue
 
-        print('Warning: line does not start with " or end with ",:', line)
+        print('Warning:  line does not start with " or end with " skipping:', line)
     return result
 
 
