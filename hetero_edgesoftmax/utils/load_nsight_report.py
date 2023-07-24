@@ -1,19 +1,24 @@
 import os
 import re
-from .detect_pwd import is_pwd_het_dev_root
+from .detect_pwd import is_pwd_het_dev_root, run_once
+from functools import lru_cache
 
 
-def is_nsys_exist() -> bool:
+@lru_cache(maxsize=None)
+@run_once
+def nsys_exists() -> bool:
     """Check if nsys is installed."""
     return os.system("nsys --version >/dev/null 2>/dev/null") == 0
 
 
-def is_ncu_exist() -> bool:
+@lru_cache(maxsize=None)
+@run_once
+def ncu_exists() -> bool:
     """Check if ncu is installed."""
     return os.system("ncu --version >/dev/null 2>/dev/null") == 0
 
 
-def extract_csv_from_nsys_cli_output(nsys_cli_output: str) -> list[list[str]]:
+def extract_csv_from_nsys_cli_output(nsys_cli_output: str) -> "list[list[str]]":
     """Extract csv from nsys cli output."""
     lines = nsys_cli_output.split("\n")
     result = []
@@ -31,9 +36,9 @@ def extract_csv_from_nsys_cli_output(nsys_cli_output: str) -> list[list[str]]:
     return result
 
 
-def load_nsys_report(filename: str, report_name: str) -> list[list[str]]:
+def load_nsys_report(filename: str, report_name: str) -> "list[list[str]]":
     """Load a report from a nsys report file."""
-    assert is_nsys_exist(), "nsys is not installed"
+    assert nsys_exists(), "nsys is not installed"
     nsys_cli_output: str = os.popen(
         f"nsys stats -f csv -r {report_name} {filename}"
     ).read()
@@ -52,7 +57,15 @@ NCU_DETAILS_COLUMN_IDX = {
 }
 
 
-def extract_ncu_values_from(nsys_details_csv: list[list[str]]):
+def extract_ncu_values_from(
+    nsys_details_csv: "list[list[str]]",
+    metric_names: "set[str]" = {
+        "L2 Cache Throughput",
+        "L1/TEX Cache Throughput",
+        "DRAM Throughput",
+        "Memory Throughput",
+    },
+):
     header = nsys_details_csv[0]
 
     results = []
@@ -61,12 +74,7 @@ def extract_ncu_values_from(nsys_details_csv: list[list[str]]):
             header[NCU_DETAILS_COLUMN_IDX[key]] == key
         ), f"header[{NCU_DETAILS_COLUMN_IDX[key]}] = {header[NCU_DETAILS_COLUMN_IDX[key]]} != {key}"
     for row in nsys_details_csv[1:]:
-        if row[NCU_DETAILS_COLUMN_IDX["Metric Name"]] in {
-            "L2 Cache Throughput",
-            "L1/TEX Cache Throughput",
-            "DRAM THroughput",
-            "Memory Throughput",
-        }:
+        if row[NCU_DETAILS_COLUMN_IDX["Metric Name"]] in metric_names:
             results.append(
                 [
                     extract_func_name_from_signature(
@@ -81,7 +89,7 @@ def extract_ncu_values_from(nsys_details_csv: list[list[str]]):
     return results
 
 
-def load_csv_from_multiline_string(csv_string: str) -> list[list[str]]:
+def load_csv_from_multiline_string(csv_string: str) -> "list[list[str]]":
     # ncu output is multiline csv where each cell value is wrapped by double quotes.
     # We need to remove the double quotes and split the string by comma.
     result = []
@@ -101,9 +109,9 @@ def load_csv_from_multiline_string(csv_string: str) -> list[list[str]]:
     return result
 
 
-def load_ncu_report(filename: str, page_name: str) -> list[list[str]]:
+def load_ncu_report(filename: str, page_name: str) -> "list[list[str]]":
     """Load a report from a ncu report file."""
-    assert is_ncu_exist(), "ncu is not installed"
+    assert ncu_exists(), "ncu is not installed"
     nsys_cli_output: str = os.popen(
         f"ncu --page {page_name} --csv  --import {filename}"
     ).read()

@@ -3,9 +3,23 @@
 import subprocess
 import os
 import datetime
+from functools import lru_cache
 
 
-def check_git_existence() -> None:
+# From https://stackoverflow.com/a/4104188
+def run_once(f):
+    def wrapper(*args, **kwargs):
+        if not wrapper.has_run:
+            wrapper.has_run = True
+            return f(*args, **kwargs)
+
+    wrapper.has_run = False
+    return wrapper
+
+
+@lru_cache(maxsize=None)
+@run_once
+def git_exists() -> None:
     """Check if git is installed and available in the path."""
     try:
         subprocess.check_output(["git", "--version"])
@@ -15,7 +29,7 @@ def check_git_existence() -> None:
 
 def get_git_root_path() -> str:
     """Get the root path of the git repository."""
-    check_git_existence()
+    git_exists()
     return os.path.normpath(
         subprocess.check_output(["git", "rev-parse", "--show-toplevel"])
         .decode("utf-8")
@@ -73,6 +87,7 @@ def get_env_name_from_setup() -> str:
 
 
 GRAPHILER_CONDA_ENV_NAME = "graphiler"
+# GRAPHILER_CONDA_ENV_NAME = "graphiler-new"
 HET_CONDA_ENV_NAME = get_env_name_from_setup()
 
 

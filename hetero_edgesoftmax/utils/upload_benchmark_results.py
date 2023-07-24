@@ -5,6 +5,7 @@ import gspread
 from gspread import Worksheet, WorksheetNotFound
 from gspread.utils import finditem
 from typing import Union
+from .detect_pwd import is_pwd_het_dev_root
 
 import os
 import socket
@@ -31,17 +32,94 @@ WORKSHEET_GIDS = [
 ]
 
 
-def extract_info_from(filename):
+class ConfigCanonicalizer:
+    @classmethod
+    def permute(cls, input_fmt: str, config: "list[str]") -> "list[str]":
+        """
+        sort the config list according to reverse-alphabetical order of input_fmt
+        """
+        input_fmt_: list[str] = input_fmt.split(".")
+        assert len(input_fmt_) == len(config)
+        return [
+            c
+            for _, c in sorted(
+                zip(input_fmt_, config), key=lambda pair: pair[0], reverse=True
+            )
+        ]
+
+    @classmethod
+    def to_list(cls, config: "list[str]", input_fmt: str) -> "list[str]":
+        if input_fmt is not None:
+            config = cls.permute(input_fmt, config)
+        return [c[2:] if c.startswith("--") else c for c in config]
+
+    @classmethod
+    def to_str(cls, config: "list[str]", input_fmt: str) -> str:
+        return ".".join(cls.to_list(config, input_fmt))
+
+
+class NameCanonicalizer:
+    @classmethod
+    def to_list(cls, name: str, input_fmt: str) -> "list[str]":
+        input_fmt_: list[str] = input_fmt.split(".")
+        name_: list[str] = name.split(".")
+        assert len(input_fmt_) == len(name_)
+        config_fmt = ".".join(
+            [ele for ele in input_fmt_ if ele not in {"model", "dataset"}]
+        )
+        model = name_[input_fmt_.index("model")]
+        dataset = name_[input_fmt_.index("dataset")]
+        configs = [
+            name_[idx]
+            for idx in range(len(name_))
+            if input_fmt_[idx] not in {"model", "dataset"}
+        ]
+        return [model, dataset] + ConfigCanonicalizer.to_list(configs, config_fmt)
+
+    @classmethod
+    def to_str(cls, name: str, input_fmt: str) -> str:
+        return ".".join(cls.to_list(name, input_fmt))
+
+
+def extract_info_from(filename) -> "list[str]":
     # model_name.dataset_name.mul_flag.compact_flag.result.log
-    return filename.split(".")[:-2]
+    return NameCanonicalizer.to_list(
+        filename[: filename.rfind(".result.log")],
+        "model.dataset.flag_mul.flag_compact.ax_in.ax_out.ax_head",
+    )
+    # model, dataset = filename.split(".")[:2]
+    # config: list[str] = filename.split(".")[2:-2]
+
+    # return [model, dataset] + ConfigCanonicalizer.to_list(
+    #     config, input_fmt="flag_mul.flag_compact.ax_in.ax_out.ax_head"
+    # )
 
 
-def find_latest_subdirectory(root, prefix):
+def find_latest_subdirectory(root, prefix) -> str:
     candidates = []
     for subdir in os.listdir(root):
         if subdir.startswith(prefix):
             candidates.append(subdir)
     return os.path.join(root, max(candidates))
+
+
+def ask_subdirectory(root, prefix) -> str:
+    """
+    Show latest directory and request user input
+    If user input is empty then choose the latest directory
+    otherwise, choose the user input
+    """
+    candidate = find_latest_subdirectory(root, prefix)
+    print(
+        "With prefix ", prefix, ", the latest directory is ", os.path.dirname(candidate)
+    )
+    user_input = input(
+        "Press enter to use it, or please input the directory you want to upload: "
+    )
+    if len(user_input) == 0:
+        return candidate
+    else:
+        return os.path.join(root, user_input)
 
 
 def extract_result_from_graphiler_log(
@@ -149,7 +227,7 @@ def create_worksheet(target_sheet_url: str, title: str) -> Worksheet:
     return sh.add_worksheet(title=title, rows=100, cols=20)
 
 
-def update_gspread(entries, ws: Worksheet, cell_range=None):
+def update_gspread(entries, ws: Worksheet, cell_range=None) -> None:
     if cell_range is None:
         # start from A1
         cell_range = "A1:"
@@ -157,7 +235,7 @@ def update_gspread(entries, ws: Worksheet, cell_range=None):
         num_cols = max([len(row) for row in entries])
         cell_range += gspread.utils.rowcol_to_a1(num_rows, num_cols)
     ws.format(cell_range, {"numberFormat": {"type": "NUMBER", "pattern": "0.0000"}})
-    ws.update(cell_range, entries)
+    ws.update(range_name=cell_range, values=entries)
     # ws.update_title("[GID0]TestTitle")
 
     # Format example:
@@ -167,18 +245,17 @@ def update_gspread(entries, ws: Worksheet, cell_range=None):
 
 
 if __name__ == "__main__":
+    assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
+
+    graphiler_dir_to_upload = find_latest_subdirectory("misc/artifacts", "graphiler_")
+    print("Uploading results from", graphiler_dir_to_upload)
+    graphiler_names_and_info = extract_graphiler_and_its_baselines_results_from_folder(
+        graphiler_dir_to_upload
+    )
+    graphiler_worksheet_title = (
+        f"[{socket.gethostname()}]{graphiler_dir_to_upload.split('/')[-1]}"
+    )
     try:
-        graphiler_dir_to_upload = find_latest_subdirectory(
-            "misc/artifacts", "graphiler_"
-        )
-        graphiler_names_and_info = (
-            extract_graphiler_and_its_baselines_results_from_folder(
-                graphiler_dir_to_upload
-            )
-        )
-        graphiler_worksheet_title = (
-            f"[{socket.gethostname()}]{graphiler_dir_to_upload.split('/')[-1]}"
-        )
         update_gspread(
             graphiler_names_and_info,
             create_worksheet(SPREADSHEET_URL, graphiler_worksheet_title)
@@ -187,11 +264,12 @@ if __name__ == "__main__":
     except Exception as e:
         print("Failed to upload graphiler results:", e)
 
+    dir_to_upload = find_latest_subdirectory("misc/artifacts", "benchmark_all_")
+    print("Uploading results from", dir_to_upload)
+    names_and_info = extract_het_results_from_folder(dir_to_upload)
+    print(names_and_info)
+    worksheet_title = f"[{socket.gethostname()}]{dir_to_upload.split('/')[-1]}"
     try:
-        dir_to_upload = find_latest_subdirectory("misc/artifacts", "benchmark_all_")
-        print("Uploading results from", dir_to_upload)
-        names_and_info = extract_het_results_from_folder(dir_to_upload)
-        worksheet_title = f"[{socket.gethostname()}]{dir_to_upload.split('/')[-1]}"
         update_gspread(
             names_and_info,
             create_worksheet(SPREADSHEET_URL, worksheet_title)
