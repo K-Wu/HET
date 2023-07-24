@@ -8,6 +8,9 @@ cmake-build**/
 *.log
 *.ncu-rep
 *.nsys-rep
+*.sqlite
+!**/utils/test/**.ncu-rep
+!**/utils/test/**.nsys-rep
 *.do_not_use
 *.cubin
 *.pyc

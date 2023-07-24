@@ -271,7 +271,7 @@ if __name__ == "__main__":
     try:
         print(
             load_nsys_report(
-                "../third_party/OthersArtifacts/graphiler/graphiler_hgt_fb15k.nsys-rep",
+                "utils/test/graphiler_hgt_fb15k.nsys-rep",
                 "cuda_gpu_trace",
             )
         )
@@ -281,7 +281,7 @@ if __name__ == "__main__":
     try:
         print(
             load_nsys_report(
-                "../third_party/OthersArtifacts/graphiler/graphiler_hgt_fb15k.nsys-rep",
+                "utils/test/graphiler_hgt_fb15k.nsys-rep",
                 "cuda_gpu_trace,nvtx_sum,osrt_sum,cuda_api_sum,cuda_gpu_kern_sum,cuda_gpu_mem_size_sum,cuda_gpu_mem_time_sum",
             )
         )
