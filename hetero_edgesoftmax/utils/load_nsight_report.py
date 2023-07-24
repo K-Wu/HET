@@ -292,7 +292,7 @@ if __name__ == "__main__":
         print(
             extract_ncu_values_from_details(
                 load_ncu_report(
-                    "../third_party/OthersArtifacts/graphiler/graphiler.bgs.HGT.64.64.ncu-rep",
+                    "utils/test/HGT.aifb...64.64.1.ncu-rep",
                     "details",
                 )
             )
