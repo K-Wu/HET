@@ -5,7 +5,7 @@ import socket
 
 
 if __name__ == "__main__":
-    print("host name:", socket.gethostname())
+    print("Host name:", socket.gethostname())
 
     gpu_info = [
         item
@@ -15,6 +15,15 @@ if __name__ == "__main__":
 
     print("GPU driver:", gpu_info[-2])
     print("CUDA:", gpu_info[-1])
+
+    ncu_version_info = [
+        ele for ele in os.popen("ncu --version").read().split("\n") if len(ele) > 0
+    ][-1].strip()
+    nsys_version_info = [
+        ele for ele in os.popen("nsys --version").read().split("\n") if len(ele) > 0
+    ][-1].strip()
+    print("NVIDIA NCU:", ncu_version_info)
+    print("NVIDIA NSYS:", nsys_version_info)
 
     with open("/etc/os-release") as fd:
         for line in fd.readlines():
