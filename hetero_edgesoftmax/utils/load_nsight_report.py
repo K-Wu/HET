@@ -67,6 +67,9 @@ def construct_raw_column_idx(
     result: dict[str, int] = {}
     for column in columns:
         result[column] = header.index(column)
+        assert (
+            column not in header[result[column] + 1 :]
+        ), "single-metric multi-column not supported yet in construct_raw_column_idx"
     return result
 
 
@@ -100,6 +103,7 @@ def extract_ncu_values_from_raws(
         "lts__cycles_elapsed.avg.per_second",  # "L2 cache frequency" cycle per second
     },
 ) -> "list[list[str]]":
+    # TODO: use to kernel_instances_metrics and to ncu_raw_csv
     header: list[str] = nsys_details_csv[0]
     units: list[str] = nsys_details_csv[1]
     assert header[0] == "ID", f"header[0] = {header[0]} != ID"
@@ -234,6 +238,14 @@ def derive_rooflines(
             kernel_instances_metrics[kernel_identifier],
             ("dram__bytes.sum.peak_sustained", "byte/cycle"),
         )
+        if dram_peak_bandwidth == 0.0:  # A100 special handling
+            dram_peak_bandwidth = (
+                get_float_metric_or_zero(
+                    kernel_instances_metrics[kernel_identifier],
+                    ("dram__bytes.sum.peak_sustained", "Kbyte/cycle"),
+                )
+                * 1000
+            )
         dram_cycle_per_second: float = get_float_metric_or_zero(
             kernel_instances_metrics[kernel_identifier],
             ("dram__cycles_elapsed.avg.per_second", "cycle/nsecond"),
@@ -242,6 +254,14 @@ def derive_rooflines(
             kernel_instances_metrics[kernel_identifier],
             ("dram__bytes.sum.per_second", "Gbyte/second"),
         )
+        if dram_achieved_traffic == 0.0:  # A100 special handling
+            dram_achieved_traffic = (
+                get_float_metric_or_zero(
+                    kernel_instances_metrics[kernel_identifier],
+                    ("dram__bytes.sum.per_second", "Tbyte/second"),
+                )
+                * 1000
+            )
         kernel_instances_metrics[kernel_identifier][
             ("DRAM Roofline", "Gbyte/second")
         ] = str(dram_peak_bandwidth * dram_cycle_per_second)
@@ -556,7 +576,12 @@ def extract_ncu_values_from_details(
         "L2 Cache Throughput",
         "L1/TEX Cache Throughput",
         "DRAM Throughput",  # dram__bytes.sum.per_second
-        "Memory Throughput",  # %
+        "Memory Throughput",  # %, Gbyte/second, Kbyte/second
+    },
+    metric_unit_conversion: "dict[Tuple[str, str], Tuple[str, int]]" = {
+        ("Memory Throughput", "Kbyte/second"): ("Gbyte/second", -6),
+        ("Memory Throughput", "Mbyte/second"): ("Gbyte/second", -3),
+        ("Memory Throughput", "Tbyte/second"): ("Gbyte/second", 3),
     },
 ) -> "list[list[str]]":
     header: list[str] = nsys_details_csv[0]
@@ -577,6 +602,16 @@ def extract_ncu_values_from_details(
         ), f"header[{NCU_DETAILS_COLUMN_IDX[key]}] = {header[NCU_DETAILS_COLUMN_IDX[key]]} != {key}"
     for row in nsys_details_csv[1:]:
         if row[NCU_DETAILS_COLUMN_IDX["Metric Name"]] in metric_names:
+            curr_metric_name = row[NCU_DETAILS_COLUMN_IDX["Metric Name"]]
+            curr_metric_unit = row[NCU_DETAILS_COLUMN_IDX["Metric Unit"]]
+            curr_metric_value = row[NCU_DETAILS_COLUMN_IDX["Metric Value"]]
+            if (curr_metric_name, curr_metric_unit) in metric_unit_conversion:
+                curr_metric_unit, exponential_to_apply = metric_unit_conversion[
+                    (curr_metric_name, curr_metric_unit)
+                ]
+                curr_metric_value = str(
+                    float(curr_metric_value) * 10**exponential_to_apply
+                )
             results.append(
                 [
                     row[NCU_DETAILS_COLUMN_IDX["ID"]],
@@ -585,8 +620,8 @@ def extract_ncu_values_from_details(
                     ),
                     row[NCU_DETAILS_COLUMN_IDX["Kernel Name"]],
                     row[NCU_DETAILS_COLUMN_IDX["Metric Name"]],
-                    row[NCU_DETAILS_COLUMN_IDX["Metric Unit"]],
-                    row[NCU_DETAILS_COLUMN_IDX["Metric Value"]],
+                    curr_metric_unit,
+                    curr_metric_value,
                 ]
             )
     return results
