@@ -1,14 +1,282 @@
-from typing import Union
+from typing import Union, Callable
+from upload_benchmark_results import ConfigCanonicalizer
+import numpy as np
 
 
+class BenchAllRecords:
+    # [inference/training][dataset][model][config]
+    # for HET, config is canonicalized string and ConfigCanonicalizer should provide the necesary apis.
+    # for baseline system, config is system name and requires function to figure out its system, i.e., graphiler, DGL, PyG, etc.
+
+    all_records: "dict[str, dict[str, dict[str, dict[str, str]]]]"
+    cfg_canonicalizer: Callable[["list[str]"], str]
+    get_dimensions_from_cfg: Callable[["str"], "str"]
+    get_rest_from_cfg: Callable[["str"], "str"]
+
+    def __init__(self, cfg_canonicalizer: Callable[["list[str]"], str]):
+        self.cfg_canonicalizer = cfg_canonicalizer
+        self.all_records = {}
+
+    def get_all_dataset(self) -> "set[str]":
+        return set(self.all_records["inference"].keys()).union(
+            set(self.all_records["training"].keys())
+        )
+
+    def get_all_model(self) -> "set[str]":
+        result: set[str] = set()
+        for mode in ["inference", "training"]:
+            for dataset in self.all_records[mode]:
+                result = result.union(set(self.all_records[mode][dataset].keys()))
+        return result
+
+    def get_all_config(
+        self, models_filter: Union["set[str]", None] = None
+    ) -> "set[str]":
+        result: set[str] = set()
+        for mode in ["inference", "training"]:
+            for dataset in self.all_records[mode]:
+                for model in self.all_records[mode][dataset]:
+                    # skip if model is not in the filter
+                    if models_filter is not None and model not in models_filter:
+                        continue
+                    result = result.union(
+                        set(self.all_records[mode][dataset][model].keys())
+                    )
+        return result
+
+    def get_record(self, mode: str, dataset: str, model: str, config: str) -> str:
+        assert mode in ["inference", "training"]
+        if (
+            mode not in self.all_records
+            and dataset not in self.all_records[mode]
+            and model not in self.all_records[mode][dataset]
+            and config not in self.all_records[mode][dataset][model]
+        ):
+            return "Not Presented"
+        return self.all_records[mode][dataset][model][config]
+
+    def store_record(
+        self, mode: str, dataset: str, model: str, config: str, value: str
+    ) -> None:
+        assert mode in ["inference", "training"]
+        if mode not in self.all_records:
+            self.all_records[mode] = {}
+        if dataset not in self.all_records[mode]:
+            self.all_records[mode][dataset] = {}
+        if model not in self.all_records[mode][dataset]:
+            self.all_records[mode][dataset][model] = {}
+        if config not in self.all_records[mode][dataset][model]:
+            self.all_records[mode][dataset][model][config] = value
+
+    @classmethod
+    def get_HETAllRecords(cls, cfg_fmt: str) -> "BenchAllRecords":
+        def cfg_canonicalizer(cfg: "list[str]") -> str:
+            return ConfigCanonicalizer.to_str(cfg, cfg_fmt)
+
+        return cls(cfg_canonicalizer)
+
+    # TODO: support in_dim, out_dim, num_heads as parameters in the future. Right now we only collect 64.64.1
+    @classmethod
+    def load_baseline_results_from_uploader(
+        cls, out_csv: "list[list[Union[float, str, int]]]"
+    ) -> "dict[str, BenchAllRecords]":
+        """
+        This function takes in the csv from extract_graphiler_and_its_baselines_results_from_folder and store all the records in the result object
+        Each row is in the format of
+        model,	graphiler/baseline,dataset,	config_name, training/inference, time
+        """
+        time_records = dict()
+        time_records["64.64.1"] = cls.get_BaselineAllRecords()
+        for row in out_csv:
+            row = list(map(str, row))
+            model, _, dataset, cfg, mode, time = (
+                row[0],
+                row[1],
+                row[2],
+                row[3],
+                row[4],
+                row[5],
+            )
+            system = cls.get_base_system(cfg)
+            time_records["64.64.1"].store_record(mode, dataset, model, system, time)
+        return time_records
+
+    @classmethod
+    def load_HET_results_from_uploader(
+        cls, out_csv: "list[list[Union[float, str, int]]]", cfg_fmt: str
+    ) -> "tuple[dict[str, BenchAllRecords], dict[str, BenchAllRecords]]":
+        """
+        This function takes in the csv from extract_het_results_from_folder and store all the records in the result object
+        cfg_format corresponds to the one specified in extract_info_from(filename) in upload_benchmark_results.py
+        Each row is in the format of
+        Model,	Dataset,    Config0,    Config1,    ...,	Inference Time, Backward Propagation Time,		Training Time,    Status
+        """
+        time_records = dict()  # cls.get_HETAllRecords(cfg_fmt)
+        status_records = dict()  # cls.get_HETAllRecords(cfg_fmt)
+        for row in out_csv:
+            row = list(map(str, row))
+            model, dataset = row[0], row[1]
+            inference_time = row[-4]
+            # Omitting row[-3], which is backward prop time
+            training_time = row[-2]
+            status = row[-1]
+            configs = list(map(str, row[2:-4]))
+            configs_dimensions = ConfigCanonicalizer.get_dimensions(configs, cfg_fmt)
+            configs_rest = ConfigCanonicalizer.get_configs_other_than_dimensions(
+                configs, cfg_fmt
+            )
+            if configs_dimensions not in time_records:
+                time_records[configs_dimensions] = cls.get_HETAllRecords(cfg_fmt)
+                status_records[configs_dimensions] = cls.get_HETAllRecords(cfg_fmt)
+            time_records[configs_dimensions].store_record(
+                "inference",
+                dataset,
+                model,
+                configs_rest,
+                inference_time,
+            )
+            time_records[configs_dimensions].store_record(
+                "training",
+                dataset,
+                model,
+                configs_rest,
+                training_time,
+            )
+            status_records[configs_dimensions].store_record(
+                "inference",
+                dataset,
+                model,
+                configs_rest,
+                status,
+            )
+            status_records[configs_dimensions].store_record(
+                "training",
+                dataset,
+                model,
+                configs_rest,
+                status,
+            )
+        return time_records, status_records
+
+    @classmethod
+    def get_BaselineAllRecords(cls) -> "BenchAllRecords":
+        def cfg_canonicalizer(cfg: "list[str]") -> str:
+            return ".".join(cfg)
+
+        return cls(cfg_canonicalizer)
+
+    @classmethod
+    def get_base_system(cls, cfg: str) -> str:
+        """
+        For use of BaselineAllRecords only, not HETAllRecords.
+        """
+        # TODO: collect Seastar and HGL
+        BASELINE_SYSTEMS = {"DGL", "PyG", "Graphiler"}
+        for candidate in BASELINE_SYSTEMS:
+            if candidate in cfg:
+                return candidate
+        raise ValueError(
+            f"Cannot find baseline system in {cfg}. Either this is a HET benchmark, or the config is not in the expected format."
+        )
+
+
+def is_float(input: str) -> bool:
+    try:
+        float(input)
+        return True
+    except ValueError:
+        return False
+
+
+def _recalc_best(
+    time_records: "dict[str, BenchAllRecords]",
+    dimensions_cfg: str,  # e.g. "64.64.1"
+    status_records: Union["dict[str, BenchAllRecords]", None] = None,
+):
+    records: "dict[str, dict[str, dict[str, dict[str, str]]]]" = (
+        {}
+    )  # [mode][model][config][dataset]
+    # Iterate through [inference/training], [dataset], [model], [config] in order
+    for mode in ["inference", "training"]:
+        for dataset in time_records[dimensions_cfg].all_records[mode]:
+            for model in time_records[dimensions_cfg].all_records[mode][dataset]:
+                # keep track of the best time and config
+                best_time = float("inf")
+                best_config = "$UNDEFINED"
+                for config in time_records[dimensions_cfg].all_records[mode][dataset][
+                    model
+                ]:
+                    time = time_records[dimensions_cfg].get_record(
+                        mode, dataset, model, config
+                    )
+                    if mode not in records:
+                        records[mode] = {}
+                    if model not in records:
+                        records[mode][model] = {}
+                    if config not in records[model]:
+                        records[mode][model][config] = {}
+                    if (
+                        status_records is not None
+                        and status_records[dimensions_cfg].get_record(
+                            mode, dataset, model, config
+                        )
+                        != "OK"
+                    ):
+                        records[mode][model][config][dataset] = status_records[
+                            dimensions_cfg
+                        ].get_record(mode, dataset, model, config)
+                    records[mode][model][config][dataset] = time
+                    if is_float(time) and float(time) < best_time:
+                        best_time = float(time)
+                        best_config = config
+                if "$BEST" not in records[mode][model]:
+                    records[mode][model]["$BEST"] = {}
+                    records[mode][model]["$BESTCONFIG"] = {}
+                records[mode][model]["$BEST"][dataset] = str(best_time)
+                records[mode][model]["$BESTCONFIG"][dataset] = best_config
+
+    # TODO: calculate the best
+    # Now print
+    results: "list[list[str]]" = []
+    for mode in ["inference", "training"]:
+        for model in records[mode]:
+            results += [[mode, model]]
+            datasets: set[str] = set()
+            for config in records[mode][model]:
+                for dataset in records[mode][model][config]:
+                    datasets.add(dataset)
+            datasets_: list[str] = sorted(list(datasets))
+            results.append(datasets_)
+            # put $BEST at the end
+            for config in list(
+                set(records[mode][model]).difference({"$BEST", "$BESTCONFIG"})
+            ) + ["$BEST"]:
+                row = [config]
+                for dataset in datasets:
+                    if dataset not in records[mode][model][config]:
+                        row.append("Not Presented")
+                    else:
+                        row.append(records[mode][model][config][dataset])
+                results.append(row)
+            results.append([])
+    return results
+
+
+# TODO: support in_dim, out_dim, num_heads as parameters in the future. Right now we only collect 64.64.1
 def recalc_best_from_baselines(
-    all_baseline_csv: "list[list[Union[float, str, int]]]",
+    all_time_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
     model: str,
     in_dim: int,
     out_dim: int,
     num_heads: int,
 ):
     """
+    If not done, first obtain BenchAllRecords by
+
+    baseline_records = BenchAllRecords.load_baseline_results_from_uploader(
+        all_baseline_csv
+    )
+
     An example output:
                           Inference
               aifb  mutag	bgs   am	  mag	  wikikg2	fb15k	biokg
@@ -25,17 +293,27 @@ def recalc_best_from_baselines(
     Seastar   x.xx  x.xx  x.xx  x.xx  x.xx  x.xx    x.xx  x.xx
     BEST      x.xx  x.xx  x.xx  x.xx  x.xx  x.xx    x.xx  x.xx
     """
-    pass
+
+    assert in_dim == 64, "Only support 64.64.1 for now"
+    assert out_dim == 64, "Only support 64.64.1 for now"
+    assert num_heads == 1, "Only support 64.64.1 for now"
+    dimensions_cfg: str = ConfigCanonicalizer.get_dimensions(
+        [str(in_dim), str(out_dim), str(num_heads)], "ax_in.ax_out.ax_head"
+    )
+    return _recalc_best(all_time_records_per_dimension_cfg, dimensions_cfg)
 
 
 def recalc_best_of_hector(
-    all_hector_csv: "list[list[Union[float, str, int]]]",
-    model: str,
+    all_time_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
+    all_status_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
     in_dim: int,
     out_dim: int,
     num_heads: int,
 ):
     """
+    If not done, first obtain BenchAllRecords by
+    records = BenchAllRecords.load_HET_results_from_uploader(all_hector_csv, cfg_fmt)
+
     An example output:
                           Inference
         aifb  mutag	bgs   am	  mag	  wikikg2	fb15k	biokg
@@ -52,39 +330,113 @@ def recalc_best_of_hector(
     C+F x.xx  x.xx  x.xx  x.xx  x.xx  x.xx    x.xx  x.xx
     BST x.xx  x.xx  x.xx  x.xx  x.xx  x.xx    x.xx  x.xx
     """
-    pass
+
+    dimensions_cfg: str = ConfigCanonicalizer.get_dimensions(
+        [str(in_dim), str(out_dim), str(num_heads)], "ax_in.ax_out.ax_head"
+    )
+    return _recalc_best(
+        all_time_records_per_dimension_cfg,
+        dimensions_cfg,
+        all_status_records_per_dimension_cfg,
+    )
 
 
 def recalc_worst_mean_best(
-    all_hector_csv: "list[list[Union[float, str, int]]]",
-    all_baseline_csv: "list[list[Union[float, str, int]]]",
-    model: str,
+    all_HET_time_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
+    all_baseline_time_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
     in_dim: int,
     out_dim: int,
     num_heads: int,
+    unoptimized_cfg: str = "",
+    most_optimized_cfg: str = "$BEST",
 ):
     """
     An example output:
           Training					Inference
       #degradation	worst	mean	best	#oom by competitors	#degradation	worst	mean	best	#oom by competitors
                               unoptimized
-        RGCN	1.00	0.93	1.80	4.59	2.00	1.00	0.97	1.44	3.74	0.00
+      RGCN	1.00	0.93	1.80	4.59	2.00	1.00	0.97	1.44	3.74	0.00
       RGAT	0.00	4.36	4.93	5.59	6.00	0.00	5.31	6.39	7.76	2.00
-      HGT	  1.00	1.66	1.88	0.98	2.00	0.00	0.77	1.19	1.98	2.00
+      HGT	1.00	1.66	1.88	0.98	2.00	0.00	0.77	1.19	1.98	2.00
                               most optimized
       RGCN	1.00	0.93	1.80	4.59	2.00	1.00	0.97	1.44	3.74	0.00
       RGAT	0.00	4.36	4.93	5.59	6.00	0.00	5.31	6.39	7.76	2.00
-      HGT	  1.00	1.66	1.88	0.98	2.00	0.00	0.77	1.19	1.98	2.00
+      HGT	1.00	1.66	1.88	0.98	2.00	0.00	0.77	1.19	1.98	2.00
     """
-    pass
+    dimension_cfg = ConfigCanonicalizer.get_dimensions(
+        [str(in_dim), str(out_dim), str(num_heads)], "ax_in.ax_out.ax_head"
+    )
+    HET_time_records: BenchAllRecords = all_HET_time_records_per_dimension_cfg[
+        dimension_cfg
+    ]
+    baseline_time_records: BenchAllRecords = (
+        all_baseline_time_records_per_dimension_cfg[dimension_cfg]
+    )
+    result_csv: "list[list[str]]" = [["UNOPTIMIZED"]]
+    result_csv += _recalc_worst_mean_best(
+        HET_time_records, baseline_time_records, unoptimized_cfg
+    )
+    result_csv += [[]]
+    result_csv += [["MOST OPTIMIZED"]]
+    result_csv += _recalc_worst_mean_best(
+        HET_time_records, baseline_time_records, most_optimized_cfg
+    )
+    return result_csv
+
+
+def _recalc_worst_mean_best(
+    HET_time_records: BenchAllRecords,
+    baseline_time_records: BenchAllRecords,
+    HET_cfg: str,
+):
+    result_csv: "list[list[str]]" = [
+        ["Model"] + ["Training"] * 6 + ["Inference"] * 6,
+        ["#degradation", "worst", "mean", "best", "HET #oom", "Baseline #oom"] * 2,
+    ]
+    for model in HET_time_records.get_all_model():
+        row: list[str] = [model]
+        for mode in ["inference", "training"]:
+            speed_ups: "list[float]" = []
+            # worst_ratio: float = 0.0
+            # best_ratio: float = float("inf")
+            # mean_ratio: float = 0.0
+            num_oom_baseline: int = 0
+            num_oom_HET: int = 0
+            num_degradation: int = 0
+            for dataset in HET_time_records.get_all_dataset():
+                best_baseline = baseline_time_records.get_record(
+                    mode, dataset, model, "$BEST"
+                )
+                best_HET = HET_time_records.get_record(mode, dataset, model, HET_cfg)
+                if not is_float(best_baseline):
+                    num_oom_baseline += 1
+                if not is_float(best_HET):
+                    num_oom_HET += 1
+                if is_float(best_baseline) and is_float(best_HET):
+                    speed_ups.append(float(best_baseline) / float(best_HET))
+                    if speed_ups[-1] < 1.0:
+                        num_degradation += 1
+            worst: float = min(speed_ups)
+            best: float = max(speed_ups)
+            geomean = float(np.array(speed_ups).prod() ** (1.0 / len(speed_ups)))
+            row += [
+                str(num_degradation),
+                str(worst),
+                str(geomean),
+                str(best),
+                str(num_oom_HET),
+                str(num_oom_baseline),
+            ]
+        result_csv.append(row)
+    return result_csv
 
 
 def recalc_opt_matrix(
-    all_hector_csv: "list[list[Union[float, str, int]]]",
-    model: str,
+    all_HET_time_records_per_dimension_cfg: "dict[str,BenchAllRecords]",
     in_dim: int,
     out_dim: int,
     num_heads: int,
+    unoptimized_cfg: str = "",
 ):
     """
     An example output:
@@ -111,4 +463,74 @@ def recalc_opt_matrix(
       biokg	1.04	1.02	1.15	1.05	1.05	0.95
       AVERAGE	1.22	1.12	1.26	1.28	1.29	1.11
     """
-    pass
+    # TODO
+    # 1) Transpose the result of recalc_best_of_hector, 2) calculate the speed up ratio for each cell, and then 3) calculate the average
+    dimension_cfg = ConfigCanonicalizer.get_dimensions(
+        [str(in_dim), str(out_dim), str(num_heads)], "ax_in.ax_out.ax_head"
+    )
+    HET_time_records: BenchAllRecords = all_HET_time_records_per_dimension_cfg[
+        dimension_cfg
+    ]
+    return _recalc_opt_matrix(HET_time_records, unoptimized_cfg)
+
+
+def _recalc_opt_matrix(HET_time_records: BenchAllRecords, unoptimized_cfg: str):
+    """
+    by default unoptimized_cfg is empty string "" (specified in recalc_opt_matrix)
+    """
+    num_configs = len(
+        HET_time_records.get_all_config().difference(
+            {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
+        )
+    )
+
+    result_csv: "list[list[str]]" = [
+        ["Dataset"] + ["Training Opt."] * num_configs + ["Inference Opt."] * num_configs
+    ]
+    for model in HET_time_records.get_all_model():
+        csv_for_current_model: "list[list[str]]" = []
+        for dataset in HET_time_records.get_all_dataset():
+            row: list[str] = [model, dataset]
+            for mode in ["training", "inference"]:
+                unoptimized = HET_time_records.get_record(
+                    mode, dataset, model, unoptimized_cfg
+                )
+                if not is_float(unoptimized):
+                    # find the largest time
+                    for config in HET_time_records.get_all_config().difference(
+                        {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
+                    ):
+                        curr = HET_time_records.get_record(mode, dataset, model, config)
+                        if is_float(curr):
+                            if is_float(unoptimized):
+                                unoptimized = max(unoptimized, curr)
+                            else:
+                                unoptimized = curr
+                            unoptimized = curr
+                unoptimized = float(unoptimized)
+                for config in HET_time_records.get_all_config().difference(
+                    {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
+                ):
+                    curr = HET_time_records.get_record(mode, dataset, model, config)
+                    if not is_float(curr):
+                        row.append("OOM")
+                    curr = float(curr)
+                    row.append(str(curr / unoptimized))
+                csv_for_current_model.append(row)
+        average_row = [model, "AVERAGE"]
+        # Calculate the average
+        for column_idx in range(
+            2, len(csv_for_current_model[-1])
+        ):  # not involving model and dataset
+            numerics = [
+                float(row[column_idx])
+                for row in csv_for_current_model
+                if is_float(row[column_idx])
+            ]
+            geomean = float(np.array(numerics).prod() ** (1.0 / len(numerics)))
+            average_row.append(str(geomean))
+
+        csv_for_current_model.append(average_row)
+        csv_for_current_model.append([])
+        result_csv += csv_for_current_model
+    return result_csv

@@ -48,14 +48,48 @@ class ConfigCanonicalizer:
         ]
 
     @classmethod
-    def to_list(cls, config: "list[str]", input_fmt: str) -> "list[str]":
+    def validate_config_fmt(cls, input_fmt: str) -> None:
+        configs = input_fmt.split(".")
+        assert "ax_in" in configs
+        assert "ax_out" in configs
+        assert "ax_head" in configs
+
+    @classmethod
+    def canonicalize_list(cls, config: "list[str]", input_fmt: str) -> "list[str]":
+        """
+        Example of input_fmt: "flag_mul.flag_compact.ax_in.ax_out.ax_head"
+        """
+        cls.validate_config_fmt(input_fmt)
         if input_fmt is not None:
             config = cls.permute(input_fmt, config)
         return [c[2:] if c.startswith("--") else c for c in config]
 
     @classmethod
+    def get_dimensions(cls, config: "list[str]", input_fmt: str) -> str:
+        input_fmts = input_fmt.split(".")
+        ax_in_idx = input_fmts.index("ax_in")
+        ax_out_idx = input_fmts.index("ax_out")
+        ax_head_idx = input_fmts.index("ax_head")
+        return f"{config[ax_in_idx]}.{config[ax_out_idx]}.{config[ax_head_idx]}"
+
+    @classmethod
+    def get_configs_other_than_dimensions(
+        cls, config: "list[str]", input_fmt: str
+    ) -> "list[str]":
+        config = cls.canonicalize_list(config, input_fmt)
+        input_fmts = input_fmt.split(".")
+        ax_in_idx = input_fmts.index("ax_in")
+        ax_out_idx = input_fmts.index("ax_out")
+        ax_head_idx = input_fmts.index("ax_head")
+        return [
+            c
+            for idx, c in enumerate(config)
+            if idx not in {ax_in_idx, ax_out_idx, ax_head_idx}
+        ]
+
+    @classmethod
     def to_str(cls, config: "list[str]", input_fmt: str) -> str:
-        return ".".join(cls.to_list(config, input_fmt))
+        return ".".join(cls.canonicalize_list(config, input_fmt))
 
 
 class NameCanonicalizer:
@@ -74,7 +108,9 @@ class NameCanonicalizer:
             for idx in range(len(name_))
             if input_fmt_[idx] not in {"model", "dataset"}
         ]
-        return [model, dataset] + ConfigCanonicalizer.to_list(configs, config_fmt)
+        return [model, dataset] + ConfigCanonicalizer.canonicalize_list(
+            configs, config_fmt
+        )
 
     @classmethod
     def to_str(cls, name: str, input_fmt: str) -> str:
@@ -87,12 +123,6 @@ def extract_info_from(filename) -> "list[str]":
         filename[: filename.rfind(".result.log")],
         "model.dataset.flag_mul.flag_compact.ax_in.ax_out.ax_head",
     )
-    # model, dataset = filename.split(".")[:2]
-    # config: list[str] = filename.split(".")[2:-2]
-
-    # return [model, dataset] + ConfigCanonicalizer.to_list(
-    #     config, input_fmt="flag_mul.flag_compact.ax_in.ax_out.ax_head"
-    # )
 
 
 def find_latest_subdirectory(root, prefix) -> str:
@@ -134,6 +164,15 @@ def extract_result_from_graphiler_log(
     file_path: str,
 ) -> "list[list[Union[float,str,int]]]":
     result: list[list[Union[float, str, int]]] = []
+
+    def get_infer_or_training(experiment_unit: str) -> str:
+        # experiment_unit is either ms/infer or ms/training
+        if experiment_unit == "ms/training":
+            return "training"
+        elif experiment_unit == "ms/infer":
+            return "inference"
+        raise ValueError(f"Unknown experiment_unit {experiment_unit}")
+
     with open(file_path, "r") as f:
         curr_dataset_name = ""
         for line in f:
@@ -146,7 +185,8 @@ def extract_result_from_graphiler_log(
                 result.append(
                     [
                         curr_dataset_name,
-                        experiment_name + "," + experiment_unit,
+                        experiment_name,
+                        get_infer_or_training(experiment_unit),
                         experiment_value,
                     ]
                 )
