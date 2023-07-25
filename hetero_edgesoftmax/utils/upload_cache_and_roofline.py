@@ -58,7 +58,9 @@ def extract_from_ncu_file(
     if len(func_and_metric_csvs) == 1:
         results = [name_and_info + f_ for f_ in func_and_metric_csvs[0]]
     else:
-        func_and_metric = combine_ncu_raw_csvs(func_and_metric_csvs)
+        # number of frozen columns is 3, i.e., (id, pretty name, kernel name)
+        # names and infos will be added after the combination
+        func_and_metric = combine_ncu_raw_csvs(3, func_and_metric_csvs)
         results = [name_and_info + f_ for f_ in func_and_metric]
     return results
 
@@ -66,15 +68,27 @@ def extract_from_ncu_file(
 def extract_from_ncu_folder(
     path: str, extract_mem_flag: bool, extract_roofline_flag: bool
 ) -> "list[list[str]]":
-    results = []
+    raw_csvs: list[list[list[str]]] = []
+    len_name_and_info: int = -1
     for filename in os.listdir(path):
         print("extract_from_ncu_folder Processing", filename)
         if filename.endswith(".ncu-rep"):
-            results += extract_from_ncu_file(
-                os.path.join(path, filename), extract_mem_flag, extract_roofline_flag
+            raw_csvs.append(
+                extract_from_ncu_file(
+                    os.path.join(path, filename),
+                    extract_mem_flag,
+                    extract_roofline_flag,
+                )
             )
+        if (
+            len(extract_info_from_ncu(filename)) != len_name_and_info
+            and len_name_and_info != -1
+        ):
+            raise ValueError("Number of frozen columns not consistent")
+        len_name_and_info = len(extract_info_from_ncu(filename))
+    # number of frozen columns equals to the number of columns in name_and_info and (id, pretty name, kernel name)
 
-    return results
+    return combine_ncu_raw_csvs(len_name_and_info + 3, raw_csvs)
 
 
 def extract_memory_from_ncu_folder(path: str) -> "list[list[str]]":
