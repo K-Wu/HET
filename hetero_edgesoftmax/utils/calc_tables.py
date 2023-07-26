@@ -2,8 +2,21 @@
 This file contains table-making logic, mostly reproducing our tables in the Jan 2023 submission.
 """
 from typing import Union, Callable
-from upload_benchmark_results import ConfigCanonicalizer
+from .upload_benchmark_results import (
+    ConfigCanonicalizer,
+    is_pwd_het_dev_root,
+    ask_subdirectory,
+    extract_graphiler_and_its_baselines_results_from_folder,
+    extract_het_results_from_folder,
+    update_gspread,
+    create_worksheet,
+    get_cell_range_from_A1,
+    SPREADSHEET_URL,
+    count_cols,
+    count_rows,
+)
 import numpy as np
+import socket
 
 
 class BenchAllRecords:
@@ -24,6 +37,21 @@ class BenchAllRecords:
         return set(self.all_records["inference"].keys()).union(
             set(self.all_records["training"].keys())
         )
+
+    def datasets_in(self, mode: str) -> "set[str]":
+        assert mode in ["inference", "training"]
+        return set(self.all_records[mode].keys())
+
+    def models_in(self, mode: str, dataset: str) -> "set[str]":
+        assert mode in ["inference", "training"]
+        assert dataset in self.all_records[mode]
+        return set(self.all_records[mode][dataset].keys())
+
+    def configs_in(self, mode: str, dataset: str, model: str) -> "set[str]":
+        assert mode in ["inference", "training"]
+        assert dataset in self.all_records[mode]
+        assert model in self.all_records[mode][dataset]
+        return set(self.all_records[mode][dataset][model].keys())
 
     def get_all_model(self) -> "set[str]":
         result: set[str] = set()
@@ -51,9 +79,9 @@ class BenchAllRecords:
         assert mode in ["inference", "training"]
         if (
             mode not in self.all_records
-            and dataset not in self.all_records[mode]
-            and model not in self.all_records[mode][dataset]
-            and config not in self.all_records[mode][dataset][model]
+            or dataset not in self.all_records[mode]
+            or model not in self.all_records[mode][dataset]
+            or config not in self.all_records[mode][dataset][model]
         ):
             return "Not Presented"
         return self.all_records[mode][dataset][model][config]
@@ -114,8 +142,12 @@ class BenchAllRecords:
         Each row is in the format of
         Model,	Dataset,    Config0,    Config1,    ...,	Inference Time, Backward Propagation Time,		Training Time,    Status
         """
-        time_records = dict()  # cls.get_HETAllRecords(cfg_fmt)
-        status_records = dict()  # cls.get_HETAllRecords(cfg_fmt)
+        time_records: dict[
+            str, BenchAllRecords
+        ] = dict()  # cls.get_HETAllRecords(cfg_fmt)
+        status_records: dict[
+            str, BenchAllRecords
+        ] = dict()  # cls.get_HETAllRecords(cfg_fmt)
         for row in out_csv:
             row = list(map(str, row))
             model, dataset = row[0], row[1]
@@ -125,7 +157,7 @@ class BenchAllRecords:
             status = row[-1]
             configs = list(map(str, row[2:-4]))
             configs_dimensions = ConfigCanonicalizer.get_dimensions(configs, cfg_fmt)
-            configs_rest = ConfigCanonicalizer.get_configs_other_than_dimensions(
+            configs_rest: str = ConfigCanonicalizer.get_configs_other_than_dimensions(
                 configs, cfg_fmt
             )
             if configs_dimensions not in time_records:
@@ -195,29 +227,30 @@ def _calc_best(
     time_records: "dict[str, BenchAllRecords]",
     dimensions_cfg: str,  # e.g. "64.64.1"
     status_records: Union["dict[str, BenchAllRecords]", None] = None,
-):
-    records: "dict[str, dict[str, dict[str, dict[str, str]]]]" = (
+    flag_store_to_input_records: bool = True,
+) -> "list[list[str]]":
+    tmp_records: "dict[str, dict[str, dict[str, dict[str, str]]]]" = (
         {}
     )  # [mode][model][config][dataset]
     # Iterate through [inference/training], [dataset], [model], [config] in order
     for mode in ["inference", "training"]:
-        for dataset in time_records[dimensions_cfg].all_records[mode]:
-            for model in time_records[dimensions_cfg].all_records[mode][dataset]:
+        for dataset in time_records[dimensions_cfg].datasets_in(mode):
+            for model in time_records[dimensions_cfg].models_in(mode, dataset):
                 # keep track of the best time and config
                 best_time = float("inf")
                 best_config = "$UNDEFINED"
-                for config in time_records[dimensions_cfg].all_records[mode][dataset][
-                    model
-                ]:
+                for config in time_records[dimensions_cfg].configs_in(
+                    mode, dataset, model
+                ):
                     time = time_records[dimensions_cfg].get_record(
                         mode, dataset, model, config
                     )
-                    if mode not in records:
-                        records[mode] = {}
-                    if model not in records:
-                        records[mode][model] = {}
-                    if config not in records[model]:
-                        records[mode][model][config] = {}
+                    if mode not in tmp_records:
+                        tmp_records[mode] = {}
+                    if model not in tmp_records[mode]:
+                        tmp_records[mode][model] = {}
+                    if config not in tmp_records[mode][model]:
+                        tmp_records[mode][model][config] = {}
                     if (
                         status_records is not None
                         and status_records[dimensions_cfg].get_record(
@@ -225,53 +258,62 @@ def _calc_best(
                         )
                         != "OK"
                     ):
-                        records[mode][model][config][dataset] = status_records[
+                        tmp_records[mode][model][config][dataset] = status_records[
                             dimensions_cfg
                         ].get_record(mode, dataset, model, config)
-                    records[mode][model][config][dataset] = time
+                    tmp_records[mode][model][config][dataset] = time
                     if is_float(time) and float(time) < best_time:
                         best_time = float(time)
                         best_config = config
-                if "$BEST" not in records[mode][model]:
-                    records[mode][model]["$BEST"] = {}
-                    records[mode][model]["$BESTCONFIG"] = {}
-                records[mode][model]["$BEST"][dataset] = str(best_time)
-                records[mode][model]["$BESTCONFIG"][dataset] = best_config
+                if "$BEST" not in tmp_records[mode][model]:
+                    tmp_records[mode][model]["$BEST"] = {}
+                    tmp_records[mode][model]["$BESTCONFIG"] = {}
+                tmp_records[mode][model]["$BEST"][dataset] = str(best_time)
+                tmp_records[mode][model]["$BESTCONFIG"][dataset] = best_config
+                if flag_store_to_input_records:
+                    time_records[dimensions_cfg].store_record(
+                        mode, dataset, model, "$BEST", str(best_time)
+                    )
+                    time_records[dimensions_cfg].store_record(
+                        mode, dataset, model, "$BESTCONFIG", best_config
+                    )
 
     # TODO: calculate the best
     # Now print
     results: "list[list[str]]" = []
     for mode in ["inference", "training"]:
-        for model in records[mode]:
+        for model in tmp_records[mode]:
+            # Title of the sub-table
             results += [[mode, model]]
             datasets: set[str] = set()
-            for config in records[mode][model]:
-                for dataset in records[mode][model][config]:
+            for config in tmp_records[mode][model]:
+                for dataset in tmp_records[mode][model][config]:
                     datasets.add(dataset)
             datasets_: list[str] = sorted(list(datasets))
-            results.append(datasets_)
+            # Header of the sub-table
+            results.append(["system"] + datasets_)
             # put $BEST at the end
             for config in list(
-                set(records[mode][model]).difference({"$BEST", "$BESTCONFIG"})
+                set(tmp_records[mode][model]).difference({"$BEST", "$BESTCONFIG"})
             ) + ["$BEST"]:
                 row = [config]
                 for dataset in datasets:
-                    if dataset not in records[mode][model][config]:
+                    if dataset not in tmp_records[mode][model][config]:
                         row.append("Not Presented")
                     else:
-                        row.append(records[mode][model][config][dataset])
+                        row.append(tmp_records[mode][model][config][dataset])
                 results.append(row)
             results.append([])
     return results
 
 
 # TODO: support in_dim, out_dim, num_heads as parameters in the future. Right now we only collect 64.64.1
-def calc_best_from_baselines(
+def calc_best_baselines_and_show_all(
     all_time_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
     in_dim: int,
     out_dim: int,
     num_heads: int,
-):
+) -> "list[list[str]]":
     """
     If not done, first obtain BenchAllRecords by
 
@@ -305,13 +347,13 @@ def calc_best_from_baselines(
     return _calc_best(all_time_records_per_dimension_cfg, dimensions_cfg)
 
 
-def calc_best_of_hector(
+def calc_best_HET_and_show_all(
     all_time_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
     all_status_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
     in_dim: int,
     out_dim: int,
     num_heads: int,
-):
+) -> "list[list[str]]":
     """
     If not done, first obtain BenchAllRecords by
     records = BenchAllRecords.load_HET_results_from_uploader(all_hector_csv, cfg_fmt)
@@ -349,7 +391,7 @@ def calc_worst_mean_best(
     in_dim: int,
     out_dim: int,
     num_heads: int,
-    unoptimized_cfg: str = "",
+    unoptimized_cfg: str = "$UNOPT",
     most_optimized_cfg: str = "$BEST",
 ):
     """
@@ -390,10 +432,11 @@ def _calc_worst_mean_best(
     HET_time_records: BenchAllRecords,
     baseline_time_records: BenchAllRecords,
     HET_cfg: str,
-):
+) -> "list[list[str]]":
     result_csv: "list[list[str]]" = [
         ["Model"] + ["Training"] * 6 + ["Inference"] * 6,
-        ["#degradation", "worst", "mean", "best", "HET #oom", "Baseline #oom"] * 2,
+        ["Model", "#degradation", "worst", "mean", "best", "HET #oom", "Baseline #oom"]
+        * 2,
     ]
     for model in HET_time_records.get_all_model():
         row: list[str] = [model]
@@ -418,9 +461,13 @@ def _calc_worst_mean_best(
                     speed_ups.append(float(best_baseline) / float(best_HET))
                     if speed_ups[-1] < 1.0:
                         num_degradation += 1
-            worst: float = min(speed_ups)
-            best: float = max(speed_ups)
-            geomean = float(np.array(speed_ups).prod() ** (1.0 / len(speed_ups)))
+            worst: float = min(speed_ups) if len(speed_ups) > 0 else float("inf")
+            best: float = max(speed_ups) if len(speed_ups) > 0 else 0.0
+            geomean = (
+                float(np.array(speed_ups).prod() ** (1.0 / len(speed_ups)))
+                if len(speed_ups) > 0
+                else 0.0
+            )
             row += [
                 str(num_degradation),
                 str(worst),
@@ -438,8 +485,8 @@ def calc_opt_matrix(
     in_dim: int,
     out_dim: int,
     num_heads: int,
-    unoptimized_cfg: str = "",
-):
+    unoptimized_cfg: str = "$UNOPT",
+) -> "list[list[str]]":
     """
     An example output:
         Training Opt.			Inference Opt.
@@ -466,7 +513,7 @@ def calc_opt_matrix(
       AVERAGE	1.22	1.12	1.26	1.28	1.29	1.11
     """
     # TODO
-    # 1) Transpose the result of calc_best_of_hector, 2) calculate the speed up ratio for each cell, and then 3) calculate the average
+    # 1) Transpose the result of calc_best_HET_and_show_all, 2) calculate the speed up ratio for each cell, and then 3) calculate the average
     dimension_cfg = ConfigCanonicalizer.get_dimensions(
         [str(in_dim), str(out_dim), str(num_heads)], "ax_in.ax_out.ax_head"
     )
@@ -476,7 +523,9 @@ def calc_opt_matrix(
     return _calc_opt_matrix(HET_time_records, unoptimized_cfg)
 
 
-def _calc_opt_matrix(HET_time_records: BenchAllRecords, unoptimized_cfg: str):
+def _calc_opt_matrix(
+    HET_time_records: BenchAllRecords, unoptimized_cfg: str
+) -> "list[list[str]]":
     """
     by default unoptimized_cfg is empty string "" (specified in calc_opt_matrix)
     """
@@ -487,11 +536,23 @@ def _calc_opt_matrix(HET_time_records: BenchAllRecords, unoptimized_cfg: str):
     )
 
     result_csv: "list[list[str]]" = [
-        ["Dataset"] + ["Training Opt."] * num_configs + ["Inference Opt."] * num_configs
+        ["Model", "Dataset"]
+        + ["Training Opt."] * num_configs
+        + ["Inference Opt."] * num_configs
     ]
     for model in HET_time_records.get_all_model():
-        csv_for_current_model: "list[list[str]]" = []
+        csv_for_current_model: "list[list[str]]" = [
+            ["Model", "Dataset"]
+            + [
+                config
+                for config in HET_time_records.get_all_config().difference(
+                    {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
+                )
+            ]
+            * 2
+        ]
         for dataset in HET_time_records.get_all_dataset():
+            # Each row shows runs on one dataset with different configs
             row: list[str] = [model, dataset]
             for mode in ["training", "inference"]:
                 unoptimized = HET_time_records.get_record(
@@ -516,9 +577,10 @@ def _calc_opt_matrix(HET_time_records: BenchAllRecords, unoptimized_cfg: str):
                     curr = HET_time_records.get_record(mode, dataset, model, config)
                     if not is_float(curr):
                         row.append("OOM")
-                    curr = float(curr)
-                    row.append(str(curr / unoptimized))
-                csv_for_current_model.append(row)
+                    else:
+                        curr = float(curr)
+                        row.append(str(curr / unoptimized))
+            csv_for_current_model.append(row)
         average_row = [model, "AVERAGE"]
         # Calculate the average
         for column_idx in range(
@@ -527,12 +589,118 @@ def _calc_opt_matrix(HET_time_records: BenchAllRecords, unoptimized_cfg: str):
             numerics = [
                 float(row[column_idx])
                 for row in csv_for_current_model
-                if is_float(row[column_idx])
+                if column_idx < len(row) and is_float(row[column_idx])
             ]
-            geomean = float(np.array(numerics).prod() ** (1.0 / len(numerics)))
+            geomean = (
+                float(np.array(numerics).prod() ** (1.0 / len(numerics)))
+                if len(numerics) > 0
+                else 0.0
+            )
             average_row.append(str(geomean))
 
         csv_for_current_model.append(average_row)
         csv_for_current_model.append([])
         result_csv += csv_for_current_model
     return result_csv
+
+
+if __name__ == "__main__":
+    assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
+    # Load data from the results folder
+    graphiler_results_dir = ask_subdirectory("misc/artifacts", "graphiler_")
+    print("Obtaining results from", graphiler_results_dir)
+    graphiler_names_and_info = extract_graphiler_and_its_baselines_results_from_folder(
+        graphiler_results_dir
+    )
+    het_results_dir = ask_subdirectory("misc/artifacts", "benchmark_all_")
+    print("Obtaining results from", het_results_dir)
+    het_names_and_info = extract_het_results_from_folder(het_results_dir)
+    all_baseline_records = BenchAllRecords.load_baseline_results_from_uploader(
+        graphiler_names_and_info
+    )
+    (
+        all_het_time_records,
+        all_het_status_records,
+    ) = BenchAllRecords.load_HET_results_from_uploader(
+        het_names_and_info, "flag_mul.flag_compact.ax_in.ax_out.ax_head"
+    )
+
+    # Draw tables
+    tab_best_baseline = calc_best_baselines_and_show_all(
+        all_baseline_records, 64, 64, 1
+    )
+    tab_best_het = calc_best_HET_and_show_all(
+        all_het_time_records, all_het_status_records, 64, 64, 1
+    )
+    tab_worst_mean_best = calc_worst_mean_best(
+        all_het_time_records, all_baseline_records, 64, 64, 1
+    )
+    tab_opt_matrix = calc_opt_matrix(all_het_time_records, 64, 64, 1)
+
+    # upload it
+    worksheet_title = f"[{socket.gethostname()}]tables.{graphiler_results_dir.split('/')[-1]}.{het_results_dir.split('/')[-1]}"
+    try:
+        worksheet = create_worksheet(SPREADSHEET_URL, worksheet_title)
+
+        # Increase the size of grid if needed
+        default_rows = 100
+        default_cols = 26
+        total_num_rows = max(
+            [
+                count_rows(tab_best_baseline),
+                count_rows(tab_best_het),
+                count_rows(tab_worst_mean_best),
+                count_rows(tab_opt_matrix),
+            ]
+        )
+        total_num_cols = (
+            count_cols(tab_best_baseline)
+            + count_cols(tab_best_het)
+            + count_cols(tab_worst_mean_best)
+            + count_cols(tab_opt_matrix)
+        )
+        if total_num_rows > default_rows or total_num_cols > default_cols:
+            worksheet.resize(total_num_rows, total_num_cols)
+        update_gspread(
+            tab_best_baseline,
+            worksheet,
+            cell_range=get_cell_range_from_A1(
+                count_rows(tab_best_baseline), count_cols(tab_best_baseline), 0, 0
+            ),
+        )
+        update_gspread(
+            tab_best_het,
+            worksheet,
+            cell_range=get_cell_range_from_A1(
+                count_rows(tab_best_het),
+                count_cols(tab_best_het),
+                0,
+                count_cols(tab_best_baseline),
+            ),
+        )
+        update_gspread(
+            tab_worst_mean_best,
+            worksheet,
+            cell_range=get_cell_range_from_A1(
+                count_rows(tab_worst_mean_best),
+                count_cols(tab_worst_mean_best),
+                0,
+                count_cols(tab_best_baseline) + count_cols(tab_best_het),
+            ),
+        )
+        update_gspread(
+            tab_opt_matrix,
+            worksheet,
+            cell_range=get_cell_range_from_A1(
+                count_rows(tab_opt_matrix),
+                count_cols(tab_opt_matrix),
+                0,
+                count_cols(tab_best_baseline)
+                + count_cols(tab_best_het)
+                + count_cols(tab_worst_mean_best),
+            ),
+        )
+
+    except Exception as e:
+        print(e)
+        print("Failure.")

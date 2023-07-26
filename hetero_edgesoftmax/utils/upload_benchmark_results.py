@@ -4,7 +4,7 @@
 import gspread
 from gspread import Worksheet, WorksheetNotFound
 from gspread.utils import finditem
-from typing import Union
+from typing import Union, Any
 from .detect_pwd import is_pwd_het_dev_root, RESULTS_RELATIVE_DIR
 
 import os
@@ -30,6 +30,14 @@ WORKSHEET_GIDS = [
     1558424981,
     75558257,
 ]
+
+
+def count_rows(csv_rows: "list[list[Any]]") -> int:
+    return len(csv_rows)
+
+
+def count_cols(csv_rows: "list[list[Any]]") -> int:
+    return max([len(row) for row in csv_rows])
 
 
 class ConfigCanonicalizer:
@@ -75,17 +83,22 @@ class ConfigCanonicalizer:
     @classmethod
     def get_configs_other_than_dimensions(
         cls, config: "list[str]", input_fmt: str
-    ) -> "list[str]":
+    ) -> str:
         config = cls.canonicalize_list(config, input_fmt)
         input_fmts = input_fmt.split(".")
         ax_in_idx = input_fmts.index("ax_in")
         ax_out_idx = input_fmts.index("ax_out")
         ax_head_idx = input_fmts.index("ax_head")
-        return [
+        other_configs: "list[str]" = [
             c
             for idx, c in enumerate(config)
             if idx not in {ax_in_idx, ax_out_idx, ax_head_idx}
         ]
+        if max([len(c) for c in other_configs]) == 0:
+            # Use $UNOPT to represent the unoptimized config
+            return "$UNOPT"
+        else:
+            return ".".join(other_configs)
 
     @classmethod
     def to_str(cls, config: "list[str]", input_fmt: str) -> str:
@@ -363,24 +376,27 @@ def upload_folder(
                 names_and_info,
                 worksheet,
                 cell_range=get_cell_range_from_A1(
-                    len(names_and_info), len(names_and_info[0]), 0, 0
+                    count_rows(names_and_info), count_cols(names_and_info), 0, 0
                 ),
             )
             update_gspread(
                 names_and_info,
                 worksheet,
                 cell_range=get_cell_range_from_A1(
-                    len(names_and_info), len(names_and_info[0]), len(names_and_info), 0
-                ),
-            )
-            update_gspread(
-                names_and_info,
-                worksheet,
-                cell_range=get_cell_range_from_A1(
-                    len(names_and_info),
-                    len(names_and_info[0]),
+                    count_rows(names_and_info),
+                    count_cols(names_and_info),
+                    count_rows(names_and_info),
                     0,
-                    len(names_and_info[0]),
+                ),
+            )
+            update_gspread(
+                names_and_info,
+                worksheet,
+                cell_range=get_cell_range_from_A1(
+                    count_rows(names_and_info),
+                    count_cols(names_and_info),
+                    0,
+                    count_cols(names_and_info),
                 ),
             )
     except Exception as e:
