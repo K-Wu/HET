@@ -9,6 +9,7 @@ from .detect_pwd import is_pwd_het_dev_root, RESULTS_RELATIVE_DIR
 
 import os
 import socket
+import traceback
 
 # TODO: find and extract the following pattern from the result folder
 #
@@ -401,6 +402,7 @@ def upload_folder(
             )
     except Exception as e:
         print("Failed to upload results:", e)
+        print(traceback.format_exc())
 
 
 if __name__ == "__main__":

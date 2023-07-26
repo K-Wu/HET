@@ -17,6 +17,7 @@ from .upload_benchmark_results import (
 )
 import os
 import socket
+import traceback
 
 
 def extract_info_from_ncu(file_path: str) -> "list[str]":
@@ -150,3 +151,4 @@ if __name__ == "__main__":
         )
     except Exception as e:
         print("Failed to upload ncu results:", e)
+        print(traceback.format_exc())

@@ -17,6 +17,7 @@ from .upload_benchmark_results import (
 )
 import numpy as np
 import socket
+import traceback
 
 
 class BenchAllRecords:
@@ -703,4 +704,4 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(e)
-        print("Failure.")
+        print(traceback.format_exc())
