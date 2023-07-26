@@ -160,6 +160,16 @@ def ask_subdirectory_or_file(root, prefix) -> str:
     return result
 
 
+def ask_subdirectory(root, prefix) -> str:
+    while 1:
+        result = ask_subdirectory_or_file(root, prefix)
+        if os.path.isdir(result):
+            return result
+        else:
+            print(result, "is not a directory. try again")
+    raise RuntimeError("Unreachable")
+
+
 def extract_result_from_graphiler_log(
     file_path: str,
 ) -> "list[list[Union[float,str,int]]]":
@@ -275,15 +285,50 @@ def create_worksheet(target_sheet_url: str, title: str) -> Worksheet:
     return sh.add_worksheet(title=title, rows=100, cols=20)
 
 
+def get_cell_range_from_A1(
+    num_rows: int, num_cols: int, row_idx_beg: int = 0, col_idx_beg: int = 0
+) -> str:
+    """
+    In future, we may use a1_range_to_grid_range to get the boundary of an existent worksheet.
+    a1_range_to_grid_range returns (beg, end] for both row and column, i.e.,
+    a1_range_to_grid_range('A1:A1')
+    {'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 1}
+    """
+    # rowcol_to_a1(1,1) == 'A1'
+    cell_range = gspread.utils.rowcol_to_a1(row_idx_beg + 1, col_idx_beg + 1)
+    cell_range += ":"
+    cell_range += gspread.utils.rowcol_to_a1(
+        row_idx_beg + num_rows, col_idx_beg + num_cols
+    )
+    print(cell_range)
+    return cell_range
+
+
+def try_best_to_numeric(
+    csv_rows: "list[list[Union[float, str, int]]]",
+) -> "list[list[Union[float, str, int]]]":
+    new_csv_rows: "list[list[Union[float, str, int]]]" = []
+    for row in csv_rows:
+        new_row = []
+        for ele in row:
+            if isinstance(ele, str) and ele.isnumeric():
+                new_row.append(int(ele))
+            elif isinstance(ele, str) and ele.replace(".", "", 1).isnumeric():
+                new_row.append(float(ele))
+            else:
+                new_row.append(ele)
+        new_csv_rows.append(new_row)
+    return new_csv_rows
+
+
 def update_gspread(entries, ws: Worksheet, cell_range=None) -> None:
     if cell_range is None:
         # start from A1
-        cell_range = "A1:"
         num_rows = len(entries)
         num_cols = max([len(row) for row in entries])
-        cell_range += gspread.utils.rowcol_to_a1(num_rows, num_cols)
+        cell_range = get_cell_range_from_A1(num_rows, num_cols)
     ws.format(cell_range, {"numberFormat": {"type": "NUMBER", "pattern": "0.0000"}})
-    ws.update(cell_range, entries)
+    ws.update(cell_range, try_best_to_numeric(entries))
     # ws.update_title("[GID0]TestTitle")
 
     # Format example:
@@ -292,36 +337,58 @@ def update_gspread(entries, ws: Worksheet, cell_range=None) -> None:
     # ws.format(cell_range, {"numberFormat": {"type": "DATE", "pattern": "mmmm dd"}, "horizontalAlignment": "CENTER"})
 
 
-if __name__ == "__main__":
-    assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
-
-    graphiler_dir_to_upload = find_latest_subdirectory("misc/artifacts", "graphiler_")
-    print("Uploading results from", graphiler_dir_to_upload)
-    graphiler_names_and_info = extract_graphiler_and_its_baselines_results_from_folder(
-        graphiler_dir_to_upload
-    )
-    graphiler_worksheet_title = (
-        f"[{socket.gethostname()}]{graphiler_dir_to_upload.split('/')[-1]}"
-    )
-    try:
-        update_gspread(
-            graphiler_names_and_info,
-            create_worksheet(SPREADSHEET_URL, graphiler_worksheet_title)
-            # open_worksheet(SPREADSHEET_URL, "0") # GID0 reserved for testing
-        )
-    except Exception as e:
-        print("Failed to upload graphiler results:", e)
-
-    dir_to_upload = find_latest_subdirectory("misc/artifacts", "benchmark_all_")
+def upload_folder(
+    root: str, prefix: str, is_graphiler_flag: bool, test_repeat_x_y: bool = False
+):
+    dir_to_upload = find_latest_subdirectory(root, prefix)
     print("Uploading results from", dir_to_upload)
-    names_and_info = extract_het_results_from_folder(dir_to_upload)
+    if is_graphiler_flag:
+        names_and_info = extract_graphiler_and_its_baselines_results_from_folder(
+            dir_to_upload
+        )
+    else:
+        names_and_info = extract_het_results_from_folder(dir_to_upload)
     print(names_and_info)
     worksheet_title = f"[{socket.gethostname()}]{dir_to_upload.split('/')[-1]}"
     try:
-        update_gspread(
-            names_and_info,
-            create_worksheet(SPREADSHEET_URL, worksheet_title)
-            # open_worksheet(SPREADSHEET_URL, "0") # GID0 reserved for testing
-        )
+        worksheet = create_worksheet(SPREADSHEET_URL, worksheet_title)
+        if not test_repeat_x_y:
+            update_gspread(
+                names_and_info,
+                worksheet
+                # open_worksheet(SPREADSHEET_URL, "0") # GID0 reserved for testing
+            )
+        else:  # Repeat once in each dimension to test the indexing scheme
+            update_gspread(
+                names_and_info,
+                worksheet,
+                cell_range=get_cell_range_from_A1(
+                    len(names_and_info), len(names_and_info[0]), 0, 0
+                ),
+            )
+            update_gspread(
+                names_and_info,
+                worksheet,
+                cell_range=get_cell_range_from_A1(
+                    len(names_and_info), len(names_and_info[0]), len(names_and_info), 0
+                ),
+            )
+            update_gspread(
+                names_and_info,
+                worksheet,
+                cell_range=get_cell_range_from_A1(
+                    len(names_and_info),
+                    len(names_and_info[0]),
+                    0,
+                    len(names_and_info[0]),
+                ),
+            )
     except Exception as e:
         print("Failed to upload results:", e)
+
+
+if __name__ == "__main__":
+    assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
+
+    upload_folder("misc/artifacts", "graphiler_", True, False)
+    upload_folder("misc/artifacts", "benchmark_all_", False, False)

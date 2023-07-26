@@ -149,4 +149,4 @@ if __name__ == "__main__":
             # open_worksheet(SPREADSHEET_URL, "0") # GID0 reserved for testing
         )
     except Exception as e:
-        print("Failed to upload graphiler results:", e)
+        print("Failed to upload ncu results:", e)
