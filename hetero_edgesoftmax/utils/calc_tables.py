@@ -1,3 +1,6 @@
+"""
+This file contains table-making logic, mostly reproducing our tables in the Jan 2023 submission.
+"""
 from typing import Union, Callable
 from upload_benchmark_results import ConfigCanonicalizer
 import numpy as np
@@ -188,7 +191,7 @@ def is_float(input: str) -> bool:
         return False
 
 
-def _recalc_best(
+def _calc_best(
     time_records: "dict[str, BenchAllRecords]",
     dimensions_cfg: str,  # e.g. "64.64.1"
     status_records: Union["dict[str, BenchAllRecords]", None] = None,
@@ -263,9 +266,8 @@ def _recalc_best(
 
 
 # TODO: support in_dim, out_dim, num_heads as parameters in the future. Right now we only collect 64.64.1
-def recalc_best_from_baselines(
+def calc_best_from_baselines(
     all_time_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
-    model: str,
     in_dim: int,
     out_dim: int,
     num_heads: int,
@@ -300,10 +302,10 @@ def recalc_best_from_baselines(
     dimensions_cfg: str = ConfigCanonicalizer.get_dimensions(
         [str(in_dim), str(out_dim), str(num_heads)], "ax_in.ax_out.ax_head"
     )
-    return _recalc_best(all_time_records_per_dimension_cfg, dimensions_cfg)
+    return _calc_best(all_time_records_per_dimension_cfg, dimensions_cfg)
 
 
-def recalc_best_of_hector(
+def calc_best_of_hector(
     all_time_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
     all_status_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
     in_dim: int,
@@ -334,14 +336,14 @@ def recalc_best_of_hector(
     dimensions_cfg: str = ConfigCanonicalizer.get_dimensions(
         [str(in_dim), str(out_dim), str(num_heads)], "ax_in.ax_out.ax_head"
     )
-    return _recalc_best(
+    return _calc_best(
         all_time_records_per_dimension_cfg,
         dimensions_cfg,
         all_status_records_per_dimension_cfg,
     )
 
 
-def recalc_worst_mean_best(
+def calc_worst_mean_best(
     all_HET_time_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
     all_baseline_time_records_per_dimension_cfg: "dict[str, BenchAllRecords]",
     in_dim: int,
@@ -373,18 +375,18 @@ def recalc_worst_mean_best(
         all_baseline_time_records_per_dimension_cfg[dimension_cfg]
     )
     result_csv: "list[list[str]]" = [["UNOPTIMIZED"]]
-    result_csv += _recalc_worst_mean_best(
+    result_csv += _calc_worst_mean_best(
         HET_time_records, baseline_time_records, unoptimized_cfg
     )
     result_csv += [[]]
     result_csv += [["MOST OPTIMIZED"]]
-    result_csv += _recalc_worst_mean_best(
+    result_csv += _calc_worst_mean_best(
         HET_time_records, baseline_time_records, most_optimized_cfg
     )
     return result_csv
 
 
-def _recalc_worst_mean_best(
+def _calc_worst_mean_best(
     HET_time_records: BenchAllRecords,
     baseline_time_records: BenchAllRecords,
     HET_cfg: str,
@@ -431,7 +433,7 @@ def _recalc_worst_mean_best(
     return result_csv
 
 
-def recalc_opt_matrix(
+def calc_opt_matrix(
     all_HET_time_records_per_dimension_cfg: "dict[str,BenchAllRecords]",
     in_dim: int,
     out_dim: int,
@@ -464,19 +466,19 @@ def recalc_opt_matrix(
       AVERAGE	1.22	1.12	1.26	1.28	1.29	1.11
     """
     # TODO
-    # 1) Transpose the result of recalc_best_of_hector, 2) calculate the speed up ratio for each cell, and then 3) calculate the average
+    # 1) Transpose the result of calc_best_of_hector, 2) calculate the speed up ratio for each cell, and then 3) calculate the average
     dimension_cfg = ConfigCanonicalizer.get_dimensions(
         [str(in_dim), str(out_dim), str(num_heads)], "ax_in.ax_out.ax_head"
     )
     HET_time_records: BenchAllRecords = all_HET_time_records_per_dimension_cfg[
         dimension_cfg
     ]
-    return _recalc_opt_matrix(HET_time_records, unoptimized_cfg)
+    return _calc_opt_matrix(HET_time_records, unoptimized_cfg)
 
 
-def _recalc_opt_matrix(HET_time_records: BenchAllRecords, unoptimized_cfg: str):
+def _calc_opt_matrix(HET_time_records: BenchAllRecords, unoptimized_cfg: str):
     """
-    by default unoptimized_cfg is empty string "" (specified in recalc_opt_matrix)
+    by default unoptimized_cfg is empty string "" (specified in calc_opt_matrix)
     """
     num_configs = len(
         HET_time_records.get_all_config().difference(

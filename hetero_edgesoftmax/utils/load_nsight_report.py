@@ -39,7 +39,7 @@ def extract_csv_from_nsys_cli_output(nsys_cli_output: str) -> "list[list[str]]":
 
 
 def load_nsys_report(filename: str, report_name: str) -> "list[list[str]]":
-    """Load a report from a nsys report file."""
+    """Load a report from a nsys report file. The output, list[list[str]] is each cell in each row in the csv format output."""
     assert nsys_exists(), "nsys is not installed"
     assert os.path.exists(filename), f"{filename} does not exist"
     nsys_cli_output: str = os.popen(
@@ -149,7 +149,7 @@ def extract_ncu_values_from_raws(
         results.append(
             [
                 row[0],  # ID
-                extract_func_name_from_signature(row[4]),  # Kernel Name
+                prettify_name_from_func_signature(row[4]),  # Kernel Name
                 row[4],  # Kernel Name
             ]
             + [
@@ -659,7 +659,7 @@ def extract_ncu_values_from_details(
             results.append(
                 [
                     row[NCU_DETAILS_COLUMN_IDX["ID"]],
-                    extract_func_name_from_signature(
+                    prettify_name_from_func_signature(
                         row[NCU_DETAILS_COLUMN_IDX["Kernel Name"]]
                     ),
                     row[NCU_DETAILS_COLUMN_IDX["Kernel Name"]],
@@ -701,7 +701,7 @@ def load_ncu_report(filename: str, page_name: str) -> "list[list[str]]":
     return load_csv_from_multiline_string(nsys_cli_output)
 
 
-def extract_func_name_from_signature(func_signature: str) -> str:
+def prettify_name_from_func_signature(func_signature: str) -> str:
     # func_signature: HET_XXX<XX,XX,XX>(XXX, XXX, XXX)
     result: str = (
         func_signature.split("(")[0]

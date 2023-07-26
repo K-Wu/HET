@@ -17,7 +17,7 @@ def get_functions_from_ctags_table(ctags_table: str) -> set[str]:
     return result
 
 
-def get_GEMM_kernel_names() -> set[str]:
+def get_GEMM_kernel_names() -> "set[str]":
     assert is_ctags_installed(), "ctags is not installed"
     # HET_ functions defined in the two files are GEMM kernels.
     GEMM_files = [
@@ -34,7 +34,7 @@ def get_GEMM_kernel_names() -> set[str]:
     return get_functions_from_ctags_table("\n".join(ctags_tables))
 
 
-GEMM_kernels: set[str] = get_GEMM_kernel_names()
+GEMM_kernels: "set[str]" = get_GEMM_kernel_names()
 
 
 def classify_het_kernel(func_name: str) -> str:
