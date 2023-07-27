@@ -483,14 +483,13 @@ def RGCN_main_procedure(args, g, model, feats):
     use_cuda = args.gpu >= 0 and torch.cuda.is_available()
     if use_cuda:
         torch.cuda.set_device(args.gpu)
-        g.cuda().contiguous()
+        g = g.cuda().contiguous()
         feats = feats.cuda()
-        edge_type = g["original"]["rel_types"]
+        # print(feats.shape)
+        # edge_type = g["original"]["rel_types"]
         edge_norm = edge_norm.cuda()
         labels = labels.cuda()
-
-    if use_cuda:
-        model.cuda()
+        model = model.cuda()
 
     # optimizer
     optimizer = torch.optim.Adam(

@@ -53,7 +53,12 @@ def RGCNSingleLayer_main(args):
     )
     model = get_single_layer_model(args, g)
     num_nodes = g.get_num_nodes()
-    feats = th.randn(num_nodes, args.n_infeat, requires_grad=True)
+    feats = th.randn(
+        num_nodes,
+        args.n_infeat,
+        requires_grad=True,
+        device=th.device(f"cuda:{args.gpu}"),
+    )
     if args.sparse_format == "separate_coo":
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=False)
