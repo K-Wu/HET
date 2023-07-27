@@ -298,7 +298,7 @@ def _calc_best(
                 set(tmp_records[mode][model]).difference({"$BEST", "$BESTCONFIG"})
             ) + ["$BEST"]:
                 row = [config]
-                for dataset in datasets:
+                for dataset in datasets_:
                     if dataset not in tmp_records[mode][model][config]:
                         row.append("Not Presented")
                     else:
@@ -436,12 +436,12 @@ def _calc_worst_mean_best(
 ) -> "list[list[str]]":
     result_csv: "list[list[str]]" = [
         ["Model"] + ["Training"] * 6 + ["Inference"] * 6,
-        ["Model", "#degradation", "worst", "mean", "best", "HET #oom", "Baseline #oom"]
-        * 2,
+        ["Model"]
+        + ["#degradation", "worst", "mean", "best", "HET #oom", "Baseline #oom"] * 2,
     ]
     for model in HET_time_records.get_all_model():
         row: list[str] = [model]
-        for mode in ["inference", "training"]:
+        for mode in ["training", "inference"]:
             speed_ups: "list[float]" = []
             # worst_ratio: float = 0.0
             # best_ratio: float = float("inf")

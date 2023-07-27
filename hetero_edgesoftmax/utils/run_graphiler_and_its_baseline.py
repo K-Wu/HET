@@ -7,26 +7,30 @@ from .detect_pwd import (
     is_pwd_het_dev_root,
 )
 
+DATASETS = ["aifb", "mutag", "bgs", "am", "mag", "wikikg2", "fb15k", "biokg"]
+
 
 def run_grapiler(results_dir: str):
+    # Run one experiment in each process to contain errors if those happen.
     for model in ["HGT", "RGAT", "RGCN"]:
-        subprocess.run(
-            f"yes | conda run -n {GRAPHILER_CONDA_ENV_NAME} python3 {get_het_root_path()}/third_party/OthersArtifacts/graphiler/examples/{model}/{model}.py all 64 64 >{results_dir}/{model}.log 2>&1",
-            shell=True,
-        )
+        for dataset in DATASETS:
+            subprocess.run(
+                f"yes | conda run -n {GRAPHILER_CONDA_ENV_NAME} python3 {get_het_root_path()}/third_party/OthersArtifacts/graphiler/examples/{model}/{model}.py {dataset} 64 64 >>{results_dir}/{model}.log 2>&1",
+                shell=True,
+            )
 
 
 def run_baselines(results_dir: str):
     for model in ["HGT", "RGAT", "RGCN"]:
-        subprocess.run(
-            f"yes | conda run -n {HET_CONDA_ENV_NAME} python3 {get_het_root_path()}/third_party/OthersArtifacts/graphiler/examples/{model}/{model}_baseline_standalone.py all 64 64 >{results_dir}/{model}_baseline_standalone.log 2>&1",
-            shell=True,
-        )
+        for dataset in DATASETS:
+            subprocess.run(
+                f"yes | conda run -n {HET_CONDA_ENV_NAME} python3 {get_het_root_path()}/third_party/OthersArtifacts/graphiler/examples/{model}/{model}_baseline_standalone.py {dataset} 64 64 >>{results_dir}/{model}_baseline_standalone.log 2>&1",
+                shell=True,
+            )
 
 
 def run_seastar_RGCN(results_dir: str):
-    datasets = ["aifb", "mutag", "bgs", "am", "mag", "wikikg2", "fb15k", "biokg"]
-    for dataset in datasets:
+    for dataset in DATASETS:
         subprocess.run(
             f'yes | conda run -n {HET_CONDA_ENV_NAME} python3 -m python.RGCN.RGCNSingleLayer -d {dataset} --n_infeat 64 --num_classes 64 --sparse_format="csr" >{results_dir}/seastar_rgcn.{dataset}.64.64.1.baseline.log 2>&1',
             shell=True,

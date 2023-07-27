@@ -383,7 +383,7 @@ def consolidate_ncu_details(metric_per_row: "list[list[str]]") -> "list[list[str
     ]
     for kernel_identifier in kernel_instances_metrics:
         row = list(kernel_identifier)
-        for metric, unit in metrics_and_units:
+        for metric, unit in sorted(metrics_and_units, reverse=True):
             if (metric, unit) not in kernel_instances_metrics[kernel_identifier]:
                 row.append("")
             else:
@@ -404,7 +404,7 @@ def convert_kernel_instances_metrics_to_ncu_raw_csv(
     results: list[list[str]] = [result_header, result_units]
     for kernel_identifier in kernel_instances_metrics:
         row = list(kernel_identifier)
-        for metric, unit in metrics_and_units:
+        for metric, unit in sorted(metrics_and_units, reverse=True):
             if (metric, unit) not in kernel_instances_metrics[kernel_identifier]:
                 row.append("")
             else:
@@ -535,7 +535,7 @@ def combine_ncu_raw_csvs(
     results: list[list[str]] = [result_header, result_units]
     for kernel_identifier in kernel_instances_metrics:
         row = list(kernel_identifier)
-        for metric, unit in metrics_and_units:
+        for metric, unit in sorted(metrics_and_units, reverse=True):
             if (metric, unit) not in kernel_instances_metrics[kernel_identifier]:
                 row.append("")
             else:

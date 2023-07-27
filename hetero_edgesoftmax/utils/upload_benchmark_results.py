@@ -199,10 +199,19 @@ def extract_result_from_graphiler_log(
 
     with open(file_path, "r") as f:
         curr_dataset_name = ""
-        for line in f:
+        lines = [l.strip() for l in f.readlines()]
+        for idx_line, line in enumerate(lines):
             if line.find("benchmarking on") == 0:
                 curr_dataset_name = line.split(" ")[-1].strip()
             elif line.find("elapsed time:") != -1:
+                # Detect silent error by checking if memory use == 0.0 MB
+                assert lines[idx_line + 1].find("memory usage:") != -1
+                memory_use = float(
+                    lines[idx_line + 1].split(" ")[-2].strip()
+                )  # remove "MB"
+                if memory_use == 0.0:
+                    # Skipping
+                    continue
                 experiment_name = line.split(" ")[0].strip()
                 experiment_unit = line.split(" ")[-1].strip()
                 experiment_value = float(line.split(" ")[-2].strip())
