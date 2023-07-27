@@ -490,7 +490,7 @@ def RGCN_main_procedure(args, g, model, feats):
         edge_norm = edge_norm.cuda()
         labels = labels.cuda()
         model = model.cuda()
-
+    feats.requires_grad_(True)
     # optimizer
     optimizer = torch.optim.Adam(
         model.parameters(), lr=args.lr, weight_decay=args.l2norm
