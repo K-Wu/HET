@@ -526,8 +526,6 @@ def combine_ncu_raw_csvs(
                             (curr_metric, curr_unit)
                         ],
                     )
-                if num_frozen_columns > 3 and curr_metric == "Kernel Category":
-                    print("Kernel Category", curr_value, kernel_identifier)
 
     # using stale values
     result_header: list[str] = header[:num_frozen_columns] + [

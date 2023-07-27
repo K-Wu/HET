@@ -617,6 +617,8 @@ def _calc_opt_matrix(
 
 
 if __name__ == "__main__":
+    # TODO: filter out "Fusion.Compact" and ".Compact"
+
     assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
     # Load data from the results folder
     graphiler_results_dir = ask_subdirectory("misc/artifacts", "graphiler_")

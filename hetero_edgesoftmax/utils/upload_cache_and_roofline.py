@@ -98,8 +98,8 @@ def extract_from_ncu_folder(
         len_info_from_filename = len(extract_info_from_ncu(filename))
 
     # number of frozen columns equals to the number of columns in info_from_filename and (id, pretty name, kernel name)
-    # return combine_ncu_raw_csvs(len_info_from_filename + 3, raw_csvs)
-    return [item for sublist in raw_csvs for item in sublist]
+    return combine_ncu_raw_csvs(len_info_from_filename + 3, raw_csvs)
+    # return [item for sublist in raw_csvs for item in sublist]
 
 
 def extract_memory_from_ncu_folder(path: str) -> "list[list[str]]":
@@ -145,20 +145,25 @@ def check_metric_units_all_identical_from_ncu_folder(path) -> bool:
 if __name__ == "__main__":
     assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
     path_name = ask_subdirectory_or_file("misc/artifacts", "ncu_breakdown_")
+
+    # Create worksheet
+    worksheet_title = f"[{get_pretty_hostname()}]{path_name.split('/')[-1]}"[:100]
+    try:
+        worksheet = create_worksheet(SPREADSHEET_URL, worksheet_title)
+    except Exception as e:
+        print("Failed to create worksheet:", e)
+        print(traceback.format_exc())
+        exit(1)
+
+    # Extract results
     if os.path.isdir(path_name):
         csv_rows = extract_from_ncu_folder(path_name, True, True)
     else:
         csv_rows = extract_from_ncu_file(path_name, True, True)
 
-    # print(csv_rows)
-
-    worksheet_title = f"[{get_pretty_hostname()}]{path_name.split('/')[-1]}"[:100]
+    # Upload
     try:
-        update_gspread(
-            csv_rows,
-            create_worksheet(SPREADSHEET_URL, worksheet_title)
-            # open_worksheet(SPREADSHEET_URL, "0") # GID0 reserved for testing
-        )
+        update_gspread(csv_rows, worksheet)
     except Exception as e:
         print("Failed to upload ncu results:", e)
         print(traceback.format_exc())
