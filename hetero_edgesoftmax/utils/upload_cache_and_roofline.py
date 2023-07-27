@@ -4,7 +4,6 @@ from .load_nsight_report import (
     extract_ncu_values_from_details,
     extract_ncu_values_from_raws,
     load_ncu_report,
-    extract_csv_from_nsys_cli_output,
     calculate_roofline_for_ncu_raw_csvs,
     combine_ncu_raw_csvs,
     consolidate_ncu_details,
@@ -14,6 +13,7 @@ from .upload_benchmark_results import (
     update_gspread,
     SPREADSHEET_URL,
     create_worksheet,
+    get_pretty_hostname,
 )
 import os
 import socket
@@ -42,7 +42,7 @@ def extract_from_ncu_file(
     file_path: str, extract_mem_flag: bool, extract_roofline_flag: bool
 ) -> "list[list[str]]":
     assert file_path.endswith(".ncu-rep"), "filename must end with .ncu-rep"
-    name_and_info: list[str] = extract_info_from_ncu(file_path)
+    info_from_filename: list[str] = extract_info_from_ncu(file_path)
     func_and_metric_csvs: list[list[list[str]]] = []
     if extract_mem_flag:
         func_and_metric_csvs.append(
@@ -57,12 +57,21 @@ def extract_from_ncu_file(
             )
         )
     if len(func_and_metric_csvs) == 1:
-        results = [name_and_info + f_ for f_ in func_and_metric_csvs[0]]
+        func_and_metric = func_and_metric_csvs[0]
     else:
-        # number of frozen columns is 3, i.e., (id, pretty name, kernel name)
-        # names and infos will be added after the combination
+        # Combine csvs if there are multiple csvs
+        # Number of frozen columns is 3, i.e., (id, pretty name, kernel name)
+        # Names and infos will be added after the combination
         func_and_metric = combine_ncu_raw_csvs(3, func_and_metric_csvs)
-        results = [name_and_info + f_ for f_ in func_and_metric]
+
+    # Add info_from_filename to the beginning of each row except for headers
+    results = [info_from_filename + f_ for f_ in func_and_metric]
+    for idx_row in range(2):
+        for idx_col in range(len(info_from_filename)):
+            if idx_row == 0:
+                results[idx_row][idx_col] = f"CFG.IN.NAME[{idx_col}]"
+            else:
+                results[idx_row][idx_col] = ""
     return results
 
 
@@ -70,7 +79,7 @@ def extract_from_ncu_folder(
     path: str, extract_mem_flag: bool, extract_roofline_flag: bool
 ) -> "list[list[str]]":
     raw_csvs: list[list[list[str]]] = []
-    len_name_and_info: int = -1
+    len_info_from_filename: int = -1
     for filename in os.listdir(path):
         print("extract_from_ncu_folder Processing", filename)
         if filename.endswith(".ncu-rep"):
@@ -82,14 +91,15 @@ def extract_from_ncu_folder(
                 )
             )
         if (
-            len(extract_info_from_ncu(filename)) != len_name_and_info
-            and len_name_and_info != -1
+            len(extract_info_from_ncu(filename)) != len_info_from_filename
+            and len_info_from_filename != -1
         ):
             raise ValueError("Number of frozen columns not consistent")
-        len_name_and_info = len(extract_info_from_ncu(filename))
-    # number of frozen columns equals to the number of columns in name_and_info and (id, pretty name, kernel name)
+        len_info_from_filename = len(extract_info_from_ncu(filename))
 
-    return combine_ncu_raw_csvs(len_name_and_info + 3, raw_csvs)
+    # number of frozen columns equals to the number of columns in info_from_filename and (id, pretty name, kernel name)
+    # return combine_ncu_raw_csvs(len_info_from_filename + 3, raw_csvs)
+    return [item for sublist in raw_csvs for item in sublist]
 
 
 def extract_memory_from_ncu_folder(path: str) -> "list[list[str]]":
@@ -140,9 +150,9 @@ if __name__ == "__main__":
     else:
         csv_rows = extract_from_ncu_file(path_name, True, True)
 
-    print(csv_rows)
+    # print(csv_rows)
 
-    worksheet_title = f"[{socket.gethostname()}]{path_name.split('/')[-1]}"[:100]
+    worksheet_title = f"[{get_pretty_hostname()}]{path_name.split('/')[-1]}"[:100]
     try:
         update_gspread(
             csv_rows,

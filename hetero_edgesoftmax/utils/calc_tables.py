@@ -14,6 +14,7 @@ from .upload_benchmark_results import (
     SPREADSHEET_URL,
     count_cols,
     count_rows,
+    get_pretty_hostname,
 )
 import numpy as np
 import socket
@@ -544,15 +545,17 @@ def _calc_opt_matrix(
     for model in HET_time_records.get_all_model():
         csv_for_current_model: "list[list[str]]" = [
             ["Model", "Dataset"]
-            + [
-                config
-                for config in HET_time_records.get_all_config().difference(
-                    {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
-                )
-            ]
+            + sorted(
+                [
+                    config
+                    for config in HET_time_records.get_all_config().difference(
+                        {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
+                    )
+                ]
+            )
             * 2
         ]
-        for dataset in HET_time_records.get_all_dataset():
+        for dataset in sorted(HET_time_records.get_all_dataset()):
             # Each row shows runs on one dataset with different configs
             row: list[str] = [model, dataset]
             for mode in ["training", "inference"]:
@@ -570,10 +573,18 @@ def _calc_opt_matrix(
                                 unoptimized = max(unoptimized, curr)
                             else:
                                 unoptimized = curr
-                            unoptimized = curr
+                if not is_float(unoptimized):
+                    # all OOM
+                    for config in HET_time_records.get_all_config().difference(
+                        {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
+                    ):
+                        row.append("OOM")
+                    continue
                 unoptimized = float(unoptimized)
-                for config in HET_time_records.get_all_config().difference(
-                    {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
+                for config in sorted(
+                    HET_time_records.get_all_config().difference(
+                        {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
+                    )
                 ):
                     curr = HET_time_records.get_record(mode, dataset, model, config)
                     if not is_float(curr):
@@ -639,7 +650,7 @@ if __name__ == "__main__":
     tab_opt_matrix = calc_opt_matrix(all_het_time_records, 64, 64, 1)
 
     # upload it
-    worksheet_title = f"[{socket.gethostname()}]tables.{graphiler_results_dir.split('/')[-1]}.{het_results_dir.split('/')[-1]}"
+    worksheet_title = f"[{get_pretty_hostname()}]tables.{graphiler_results_dir.split('/')[-1]}.{het_results_dir.split('/')[-1]}"
     try:
         worksheet = create_worksheet(SPREADSHEET_URL, worksheet_title)
 
@@ -701,7 +712,6 @@ if __name__ == "__main__":
                 + count_cols(tab_worst_mean_best),
             ),
         )
-
     except Exception as e:
         print(e)
         print(traceback.format_exc())

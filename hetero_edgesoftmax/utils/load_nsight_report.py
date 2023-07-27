@@ -378,8 +378,9 @@ def consolidate_ncu_details(metric_per_row: "list[list[str]]") -> "list[list[str
     derive_kernel_categories(kernel_instances_metrics, metrics_and_units)
 
     results: list[list[str]] = [
-        name_columns + [ele[0] for ele in metrics_and_units],
-        [""] * len(name_columns) + [ele[1] for ele in metrics_and_units],
+        name_columns + [ele[0] for ele in sorted(metrics_and_units, reverse=True)],
+        [""] * len(name_columns)
+        + [ele[1] for ele in sorted(metrics_and_units, reverse=True)],
     ]
     for kernel_identifier in kernel_instances_metrics:
         row = list(kernel_identifier)
@@ -502,7 +503,8 @@ def combine_ncu_raw_csvs(
             kernel_identifier: tuple[str, ...] = tuple(row[:num_frozen_columns])
             if kernel_identifier not in kernel_instances_metrics:
                 kernel_instances_metrics[kernel_identifier] = dict()
-            for metric_idx in range(3, len(row)):
+            # Metric columns start from num_frozen_columns
+            for metric_idx in range(num_frozen_columns, len(row)):
                 curr_metric = header[metric_idx]
                 curr_unit = units[metric_idx]
                 curr_value = row[metric_idx]
@@ -524,13 +526,15 @@ def combine_ncu_raw_csvs(
                             (curr_metric, curr_unit)
                         ],
                     )
+                if num_frozen_columns > 3 and curr_metric == "Kernel Category":
+                    print("Kernel Category", curr_value, kernel_identifier)
 
     # using stale values
     result_header: list[str] = header[:num_frozen_columns] + [
-        ele[0] for ele in metrics_and_units
+        ele[0] for ele in sorted(metrics_and_units, reverse=True)
     ]
     result_units: list[str] = units[:num_frozen_columns] + [
-        ele[1] for ele in metrics_and_units
+        ele[1] for ele in sorted(metrics_and_units, reverse=True)
     ]
     results: list[list[str]] = [result_header, result_units]
     for kernel_identifier in kernel_instances_metrics:

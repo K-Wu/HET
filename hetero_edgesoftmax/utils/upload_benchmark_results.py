@@ -33,6 +33,16 @@ WORKSHEET_GIDS = [
 ]
 
 
+def get_pretty_hostname() -> str:
+    # kwu-csl227-99-CEntosREfugee will be kwu-csl227-99
+    hostname = socket.gethostname()
+    hostname_parts = hostname.split("-")
+    if len(hostname_parts) > 2:
+        return hostname_parts[0] + "-" + hostname_parts[1] + "-" + hostname_parts[2]
+    else:
+        return hostname
+
+
 def count_rows(csv_rows: "list[list[Any]]") -> int:
     return len(csv_rows)
 
@@ -64,14 +74,25 @@ class ConfigCanonicalizer:
         assert "ax_head" in configs
 
     @classmethod
-    def canonicalize_list(cls, config: "list[str]", input_fmt: str) -> "list[str]":
+    def canonicalize_list(
+        cls,
+        config: "list[str]",
+        input_fmt: str,
+        prettifier_rule: "dict[str,str]" = {
+            "multiply_among_weights_first_flag": "Fusion",
+            "compact_as_of_node_flag--compact_direct_indexing_flag": "CompactDirect",
+            "compact_as_of_node_flag": "Compact",
+        },
+    ) -> "list[str]":
         """
         Example of input_fmt: "flag_mul.flag_compact.ax_in.ax_out.ax_head"
         """
         cls.validate_config_fmt(input_fmt)
         if input_fmt is not None:
             config = cls.permute(input_fmt, config)
-        return [c[2:] if c.startswith("--") else c for c in config]
+        ret: list[str] = [c[2:] if c.startswith("--") else c for c in config]
+        ret = [prettifier_rule[c] if c in prettifier_rule else c for c in ret]
+        return ret
 
     @classmethod
     def get_dimensions(cls, config: "list[str]", input_fmt: str) -> str:
@@ -372,7 +393,7 @@ def upload_folder(
     else:
         names_and_info = extract_het_results_from_folder(dir_to_upload)
     print(names_and_info)
-    worksheet_title = f"[{socket.gethostname()}]{dir_to_upload.split('/')[-1]}"
+    worksheet_title = f"[{get_pretty_hostname()}]{dir_to_upload.split('/')[-1]}"
     try:
         worksheet = create_worksheet(SPREADSHEET_URL, worksheet_title)
         if not test_repeat_x_y:
