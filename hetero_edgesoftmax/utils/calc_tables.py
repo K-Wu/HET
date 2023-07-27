@@ -580,7 +580,7 @@ def _calc_opt_matrix(
                         row.append("OOM")
                     else:
                         curr = float(curr)
-                        row.append(str(curr / unoptimized))
+                        row.append(str(unoptimized / curr))
             csv_for_current_model.append(row)
         average_row = [model, "AVERAGE"]
         # Calculate the average
