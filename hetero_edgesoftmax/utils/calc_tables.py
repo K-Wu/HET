@@ -287,16 +287,14 @@ def _calc_best(
         for model in sorted(tmp_records[mode], reverse=True):
             # Title of the sub-table
             results += [[mode, model]]
-            datasets: set[str] = set()
-            for config in tmp_records[mode][model]:
-                for dataset in tmp_records[mode][model][config]:
-                    datasets.add(dataset)
-            datasets_: list[str] = sorted(list(datasets))
+            datasets_: list[str] = sorted(
+                time_records[dimensions_cfg].get_all_dataset(), reverse=True
+            )
             # Header of the sub-table
             results.append(["system"] + datasets_)
             # put $BEST at the end
-            for config in list(
-                set(tmp_records[mode][model]).difference({"$BEST", "$BESTCONFIG"})
+            for config in sorted(
+                list(set(tmp_records[mode][model]).difference({"$BEST", "$BESTCONFIG"}))
             ) + ["$BEST"]:
                 row = [config]
                 for dataset in datasets_:

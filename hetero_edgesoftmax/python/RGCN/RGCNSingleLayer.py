@@ -56,7 +56,7 @@ def RGCNSingleLayer_main(args):
     feats = th.randn(
         num_nodes,
         args.n_infeat,
-        requires_grad=True,
+        requires_grad=False,
         device=th.device(f"cuda:{args.gpu}"),
     )
     if args.sparse_format == "separate_coo":
@@ -75,6 +75,8 @@ def RGCNSingleLayer_main(args):
                     "node_indices_col"
                 ].shape,
             )
+
+        # g.separate_coo_rel_ptrs_cpu_contiguous = g.graph_data["separate"]["coo"]["original"]["rel_ptrs"].cpu().contiguous()
     g.canonicalize_eids()
     RGCN_main_procedure(args, g, model, feats)
 
