@@ -280,11 +280,11 @@ def _calc_best(
                         mode, dataset, model, "$BESTCONFIG", best_config
                     )
 
-    # TODO: calculate the best
     # Now print
     results: "list[list[str]]" = []
     for mode in ["inference", "training"]:
-        for model in tmp_records[mode]:
+        # Keep the order same as the excel used in previous submission
+        for model in sorted(tmp_records[mode], reverse=True):
             # Title of the sub-table
             results += [[mode, model]]
             datasets: set[str] = set()
@@ -440,7 +440,8 @@ def _calc_worst_mean_best(
         ["Model"]
         + ["#degradation", "worst", "mean", "best", "HET #oom", "Baseline #oom"] * 2,
     ]
-    for model in HET_time_records.get_all_model():
+    # All model order in tables are reverse alphabetic order
+    for model in sorted(HET_time_records.get_all_model(), reverse=True):
         row: list[str] = [model]
         for mode in ["training", "inference"]:
             speed_ups: "list[float]" = []
@@ -542,7 +543,9 @@ def _calc_opt_matrix(
         + ["Training Opt."] * num_configs
         + ["Inference Opt."] * num_configs
     ]
-    for model in HET_time_records.get_all_model():
+
+    # All model order in tables are reverse alphabetic order
+    for model in sorted(HET_time_records.get_all_model(), reverse=True):
         csv_for_current_model: "list[list[str]]" = [
             ["Model", "Dataset"]
             + sorted(
