@@ -69,7 +69,7 @@ def extract_from_ncu_file(
     for idx_row in range(2):
         for idx_col in range(len(info_from_filename)):
             if idx_row == 0:
-                results[idx_row][idx_col] = f"CFG.IN.NAME[{idx_col}]"
+                results[idx_row][idx_col] = f"INFO[{idx_col}]"
             else:
                 results[idx_row][idx_col] = ""
     return results
