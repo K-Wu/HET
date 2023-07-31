@@ -20,7 +20,7 @@ def ncu_exists() -> bool:
     return os.system("ncu --version >/dev/null 2>/dev/null") == 0
 
 
-def extract_csv_from_nsys_cli_output(nsys_cli_output: str) -> "list[list[str]]":
+def _extract_csv_from_nsys_cli_output(nsys_cli_output: str) -> "list[list[str]]":
     """Extract csv from nsys cli output."""
     lines: list[str] = nsys_cli_output.split("\n")
     result: list[list[str]] = []
@@ -45,7 +45,7 @@ def load_nsys_report(filename: str, report_name: str) -> "list[list[str]]":
     nsys_cli_output: str = os.popen(
         f"nsys stats -f csv -r {report_name} {filename}"
     ).read()
-    return extract_csv_from_nsys_cli_output(nsys_cli_output)
+    return _extract_csv_from_nsys_cli_output(nsys_cli_output)
 
 
 NCU_DETAILS_COLUMN_IDX: "dict[str, int]" = {
