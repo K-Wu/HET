@@ -254,17 +254,22 @@ def derive_rooflines(
                     "inst/cycle",
                 ),
             )
-        )
-        sm_cycle_per_second: float = get_float_metric_or_zero(
+        )  # warp size 32
+        sm_cycle_per_nano_second: float = get_float_metric_or_zero(
             kernel_instances_metrics[kernel_identifier],
             ("smsp__cycles_elapsed.avg.per_second", "cycle/nsecond"),
         )
         kernel_instances_metrics[kernel_identifier][("Achieved Work", "GFLOPs")] = str(
-            flop_per_cycle * sm_cycle_per_second
+            flop_per_cycle * sm_cycle_per_nano_second
         )
+        # print(str(
+        #     flop_per_cycle * sm_cycle_per_nano_second
+        # ))
         kernel_instances_metrics[kernel_identifier][
             ("Compute Roofline", "GFLOPs")
-        ] = str(peak_flop_per_cycle * sm_cycle_per_second)
+        ] = str(
+            peak_flop_per_cycle * sm_cycle_per_nano_second
+        )  # warp size * 32
 
         dram_peak_bandwidth: float = get_float_metric_or_zero(
             kernel_instances_metrics[kernel_identifier],
@@ -399,9 +404,11 @@ def convert_kernel_instances_metrics_to_ncu_raw_csv(
     metrics_and_units: "set[Tuple[str, str]]",
 ) -> "list[list[str]]":
     result_header: list[str] = ["ID", "Pretty Name", "Kernel Name"] + [
-        ele[0] for ele in metrics_and_units
+        ele[0] for ele in sorted(metrics_and_units, reverse=True)
     ]
-    result_units: list[str] = [""] * 3 + [ele[1] for ele in metrics_and_units]
+    result_units: list[str] = [""] * 3 + [
+        ele[1] for ele in sorted(metrics_and_units, reverse=True)
+    ]
     results: list[list[str]] = [result_header, result_units]
     for kernel_identifier in kernel_instances_metrics:
         row = list(kernel_identifier)
