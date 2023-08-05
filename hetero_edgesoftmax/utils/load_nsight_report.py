@@ -639,8 +639,14 @@ def extract_ncu_values_from_details(
         "L2 Cache Throughput",
         "L1/TEX Cache Throughput",
         "DRAM Throughput",  # dram__bytes.sum.per_second
-        "Memory Throughput",  # %, Gbyte/second, Kbyte/second
+        "Memory Throughput",  # unit: "%", "Gbyte/second", "Kbyte/second"
         "Elapsed Cycles",
+        "Issued Warp Per Scheduler",  # unit: ""
+        "Compute (SM) Throughput",  # unit: "%"
+        "Achieved Occupancy",  # unit: "%"
+        "Achieved Active Warps Per SM",  # unit: "warp"
+        "Executed Ipc Active",  # unit: "inst/cycle"
+        "Executed Ipc Elapsed",  # unit: "inst/cycle"
         "Duration",
     },
     metric_unit_conversion: "dict[Tuple[str, str], Tuple[str, int]]" = {

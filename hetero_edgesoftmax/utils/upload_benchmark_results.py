@@ -182,7 +182,7 @@ def ask_subdirectory_or_file(root, prefix) -> str:
         os.path.basename(candidate),
     )
     user_input = input(
-        "Press enter to use it, or please input the directory you want to upload: "
+        "Press enter to use it, or please input the directory you want to upload:"
     )
     if len(user_input) == 0:
         result = candidate
