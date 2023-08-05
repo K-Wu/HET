@@ -149,7 +149,7 @@ if __name__ == "__main__":
     # Create worksheet
     worksheet_title = f"[{get_pretty_hostname()}]{path_name.split('/')[-1]}"[:100]
     try:
-        worksheet = create_worksheet(SPREADSHEET_URL, worksheet_title)
+        worksheet = create_worksheet(SPREADSHEET_URL, worksheet_title, retry=True)
     except Exception as e:
         print("Failed to create worksheet:", e)
         print(traceback.format_exc())

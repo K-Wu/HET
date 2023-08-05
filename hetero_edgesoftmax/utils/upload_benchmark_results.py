@@ -323,10 +323,20 @@ def open_worksheet(target_sheet_url: str, target_gid: str):
     return ws
 
 
-def create_worksheet(target_sheet_url: str, title: str) -> Worksheet:
+def create_worksheet(target_sheet_url: str, title: str, retry=False) -> Worksheet:
     gc = gspread.service_account()
     sh = gc.open_by_url(target_sheet_url)
-    return sh.add_worksheet(title=title, rows=100, cols=20)
+    title_suffix = ""
+    # when retry is True, we will ask user to specify a suffix if the title already exists
+    if retry:
+        while True:
+            if (title + title_suffix)[:100] in [ws.title for ws in sh.worksheets()]:
+                # ask user to specify a suffix
+                title_suffix = input("title already exists, please specify a suffix:")
+            else:
+                break
+
+    return sh.add_worksheet(title=title + title_suffix, rows=100, cols=20)
 
 
 def get_cell_range_from_A1(

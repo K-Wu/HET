@@ -83,19 +83,23 @@ def get_fw_bw_host_func_names() -> Tuple[set[str], set[str]]:
     return fw_kernels, bw_kernels
 
 
-def classify_fw_bw_kernel(func_name: str) -> str:
+def classify_fw_bw_kernel(func_pretty_name: str) -> str:
     if (
-        "Delta" in func_name
-        or "BckProp" in func_name
-        or "_bck_" in func_name
-        or "Backward" in func_name
+        "Delta" in func_pretty_name
+        or "BckProp" in func_pretty_name
+        or "_bck_" in func_pretty_name
+        or "Backward" in func_pretty_name
     ):
         return "BckProp"
     else:
-        if "FwProp" in func_name or "_fw_" in func_name or "Forward" in func_name:
+        if (
+            "FwProp" in func_pretty_name
+            or "_fw_" in func_pretty_name
+            or "Forward" in func_pretty_name
+        ):
             return "FwProp"
         else:
-            print(f"Warning: assuming {func_name} is a forward kernel")
+            print(f"Warning: assuming {func_pretty_name} is a forward kernel")
             return "FwProp"
 
 
@@ -107,13 +111,13 @@ def test_classify_fw_bw_kernel():
         for line in f:
             kernel_names.add(line.strip())
 
-    for func_name in kernel_names:
-        if classify_fw_bw_kernel(func_name) == "FwProp":
+    for func_pretty_name in kernel_names:
+        if classify_fw_bw_kernel(func_pretty_name) == "FwProp":
             continue
-        elif classify_fw_bw_kernel(func_name) == "BckProp":
+        elif classify_fw_bw_kernel(func_pretty_name) == "BckProp":
             continue
         else:
-            print(f"{func_name} is neither a forward nor a backward kernel")
+            print(f"{func_pretty_name} is neither a forward nor a backward kernel")
             assert 0
 
 

@@ -3,7 +3,7 @@ import re
 from .detect_pwd import is_pwd_het_dev_root, run_once
 from functools import lru_cache
 from typing import Tuple
-from .classify_het_kernels import classify_het_kernel
+from .classify_het_kernels import classify_het_kernel, classify_fw_bw_kernel
 
 
 @lru_cache(maxsize=None)
@@ -335,6 +335,19 @@ def derive_kernel_categories(
         )  # kernel_identifier[2] is pretty name
 
 
+def derive_kernel_forward_or_backward(
+    kernel_instances_metrics: "dict[Tuple[str, str, str], dict[Tuple[str, str], str]]",
+    metrics_and_units: "set[Tuple[str, str]]",
+) -> None:
+    metrics_and_units.add(("Kernel Forward or Backward", ""))
+    for kernel_identifier in kernel_instances_metrics:
+        kernel_instances_metrics[kernel_identifier][
+            ("Kernel Forward or Backward", "")
+        ] = classify_fw_bw_kernel(
+            kernel_identifier[2]
+        )  # kernel_identifier[2] is pretty name
+
+
 def consolidate_ncu_details(metric_per_row: "list[list[str]]") -> "list[list[str]]":
     """
     The original output from extract_ncu_values_from_details shows one metric in each row,
@@ -381,6 +394,7 @@ def consolidate_ncu_details(metric_per_row: "list[list[str]]") -> "list[list[str
         )
 
     derive_kernel_categories(kernel_instances_metrics, metrics_and_units)
+    derive_kernel_forward_or_backward(kernel_instances_metrics, metrics_and_units)
 
     results: list[list[str]] = [
         name_columns + [ele[0] for ele in sorted(metrics_and_units, reverse=True)],
