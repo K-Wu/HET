@@ -82,6 +82,7 @@ class ConfigCanonicalizer:
             "multiply_among_weights_first_flag": "Fusion",
             "compact_as_of_node_flag--compact_direct_indexing_flag": "CompactDirect",
             "compact_as_of_node_flag": "Compact",
+            "": "None",  # Replace null values to allow joining in Tableau
         },
     ) -> "list[str]":
         """
