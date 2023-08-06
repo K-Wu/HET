@@ -22,9 +22,10 @@ def ncu_exists() -> bool:
 
 def _extract_csv_from_nsys_cli_output(nsys_cli_output: str) -> "list[list[str]]":
     """Extract csv from nsys cli output."""
-    lines: list[str] = nsys_cli_output.split("\n")
-    result: list[list[str]] = []
-    for line in lines:
+    import csv
+
+    raw_csv_lines: list[str] = []
+    for line in nsys_cli_output.split("\n"):
         line = line.strip()
         if len(line) == 0:
             continue
@@ -32,10 +33,36 @@ def _extract_csv_from_nsys_cli_output(nsys_cli_output: str) -> "list[list[str]]"
             r"Processing \[([\.\w\/\-])+\] with \[([\.\w\/\-])+\]\.\.\.", line
         ):
             continue
+        elif line.find("Generating SQLite file") != -1:
+            continue
         else:
             # print(line)
-            result.append(line.split(","))
-    return result
+            # result.append(line.split(","))
+            raw_csv_lines.append(line)
+
+    # Use csv instead of .split(",") to handle the case where substring is put in double quotes, e.g., kernel name with comma
+    # From https://stackoverflow.com/questions/49117525/how-to-parse-csv-with-quoted-strings-advanced-case
+    raw_csv_lines = [line.replace('"', '"""') for line in raw_csv_lines]
+    cr = csv.reader(raw_csv_lines, skipinitialspace=True)
+    csv_rows: "list[list[str]]" = [*cr]
+
+    # Add pretty name and HET_ID
+    header = csv_rows[0]
+    kernel_name_col_idx = header.index("Kernel Name")
+    header.append("Pretty Name")
+    header.append("HET_ID")
+    het_id = 0
+    for row in csv_rows[1:]:
+        kernel_name = row[kernel_name_col_idx]
+        pretty_name = prettify_name_from_func_signature(kernel_name)
+        row.append(pretty_name)
+        if classify_het_kernel(pretty_name) != "Non-HET Others":
+            row.append(str(het_id))
+            het_id += 1
+        else:
+            row.append("")
+
+    return csv_rows
 
 
 def load_nsys_report(filename: str, report_name: str) -> "list[list[str]]":
@@ -730,6 +757,7 @@ def load_ncu_report(filename: str, page_name: str) -> "list[list[str]]":
     return load_csv_from_multiline_string(nsys_cli_output)
 
 
+# TODO: handle the cases where <unnamed>:: or ::<unnamed>:: causes name substring after :: to be truncated
 def prettify_name_from_func_signature(func_signature: str) -> str:
     # func_signature: HET_XXX<XX,XX,XX>(XXX, XXX, XXX)
     result: str = (

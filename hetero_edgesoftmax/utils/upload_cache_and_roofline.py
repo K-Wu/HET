@@ -20,12 +20,25 @@ import socket
 import traceback
 
 
-def extract_info_from_ncu(file_path: str) -> "list[str]":
-    # model_name.dataset_name.mul_flag.compact_flag.ncu-rep
+def _extract_info_from_file(file_path: str, suffix: str, format: str) -> "list[str]":
     file_path = os.path.basename(file_path)
     return NameCanonicalizer.to_list(
-        file_path[: file_path.rfind(".ncu-rep")],
-        "model.dataset.flag_mul.flag_compact.ax_in.ax_out.ax_head",
+        file_path[: file_path.rfind(suffix)],
+        format,
+    )
+
+
+def extract_info_from_nsys(file_path: str) -> "list[str]":
+    # model_name.dataset_name.mul_flag.compact_flag.nsys-rep
+    return _extract_info_from_file(
+        file_path, ".nsys-rep", "model.dataset.flag_mul.flag_compact"
+    )
+
+
+def extract_info_from_ncu(file_path: str) -> "list[str]":
+    # model_name.dataset_name.mul_flag.compact_flag.ncu-rep
+    return _extract_info_from_file(
+        file_path, ".ncu-rep", "model.dataset.flag_mul.flag_compact"
     )
 
 
@@ -69,8 +82,10 @@ def extract_from_ncu_file(
     for idx_row in range(2):
         for idx_col in range(len(info_from_filename)):
             if idx_row == 0:
+                # Header name row
                 results[idx_row][idx_col] = f"INFO[{idx_col}]"
             else:
+                # Header unit row
                 results[idx_row][idx_col] = ""
     return results
 
