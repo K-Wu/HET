@@ -5,10 +5,10 @@
 template <typename Idx, typename DType, int ELL_logical_width,
           int ELL_physical_width>
 __global__ void HET_Seastar_RgcnLayer1BackwardMyHYBKernelImpl(
-    const Idx* ellcolidx_data, const Idx* ellreltype_data,
-    const Idx* elleids_data, Idx* ranges, Idx* dst_ids, Idx* eids, Idx* types,
-    DType* hidden, DType* weight, DType* norm, DType* grad_out,
-    DType* grad_hidden, DType* grad_weight, Idx num_nodes, Idx feat_len_y,
+    const Idx *ellcolidx_data, const Idx *ellreltype_data,
+    const Idx *elleids_data, Idx *ranges, Idx *dst_ids, Idx *eids, Idx *types,
+    DType *hidden, DType *weight, DType *norm, DType *grad_out,
+    DType *grad_hidden, DType *grad_weight, Idx num_nodes, Idx feat_len_y,
     Idx feat_len_x, Idx ntypes) {
   if (blockIdx.x < num_nodes) {
     // ell portion
@@ -23,9 +23,9 @@ __global__ void HET_Seastar_RgcnLayer1BackwardMyHYBKernelImpl(
       for (; ellbeg < ellend; ellbeg++) {
         Idx dst_id = __ldg(ellcolidx_data + ellbeg);
         if (dst_id ==
-            MyHyb_NONEXISTENT_ELEMENT)  // TODO: check if in transposed hyb
-                                        // dst_id is uninitalized and is
-                                        // MyHyb_NONEXISTENT_ELEMENT
+            MyHyb_NONEXISTENT_ELEMENT) // TODO: check if in transposed hyb
+                                       // dst_id is uninitalized and is
+                                       // MyHyb_NONEXISTENT_ELEMENT
           break;
         Idx eid = __ldg(elleids_data + ellbeg);
         Idx type_id = __ldg(ellreltype_data + ellbeg);

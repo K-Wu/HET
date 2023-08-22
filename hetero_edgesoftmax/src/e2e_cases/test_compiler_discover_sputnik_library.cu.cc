@@ -36,8 +36,7 @@ namespace sputnik {
 using ::testing::NanSensitiveFloatNear;
 using ::testing::Pointwise;
 
-template <int kDimM_, int kDimK_, int kDimN_, int kNonZeros_>
-struct Problem {
+template <int kDimM_, int kDimK_, int kDimN_, int kNonZeros_> struct Problem {
   static_assert(kNonZeros_ <= kDimM_ * kDimK_,
                 "Number of non-zero must fit in the matrix.");
 
@@ -47,9 +46,8 @@ struct Problem {
   static const int kNonZeros = kNonZeros_;
 };
 
-template <typename Problem>
-class SpmmTest : public ::testing::Test {
- public:
+template <typename Problem> class SpmmTest : public ::testing::Test {
+public:
   const int kDimM = Problem::kDimM;
   const int kDimK = Problem::kDimK;
   const int kDimN = Problem::kDimN;
@@ -99,18 +97,18 @@ typedef ::testing::Types<
 TYPED_TEST_SUITE(SpmmTest, TestProblems);
 
 typedef std::function<cudaError_t(
-    int,            // m: number of rows in lhs & output.
-    int,            // k: number of cols in lhs and rows in rhs.
-    int,            // n: number of cols in rhs/output.
-    int,            // nonzeros: number of nonzero values in lhs.
-    const int *,    // row_indices: ptr to row index swizzle map.
-    const float *,  // values: ptr to lhs values.
-    const int *,    // row_offsets: ptr to lhs row offsets.
-    const int *,    // column_indices: ptr to lhs column indices.
-    const float *,  // dense_matrix: ptr to rhs matrix.
-    const float *,  // bias: ptr to bias.
-    float *,        // output_matrix: ptr to output matrix.
-    cudaStream_t)>  // stream: stream to execute in.
+    int,           // m: number of rows in lhs & output.
+    int,           // k: number of cols in lhs and rows in rhs.
+    int,           // n: number of cols in rhs/output.
+    int,           // nonzeros: number of nonzero values in lhs.
+    const int *,   // row_indices: ptr to row index swizzle map.
+    const float *, // values: ptr to lhs values.
+    const int *,   // row_offsets: ptr to lhs row offsets.
+    const int *,   // column_indices: ptr to lhs column indices.
+    const float *, // dense_matrix: ptr to rhs matrix.
+    const float *, // bias: ptr to bias.
+    float *,       // output_matrix: ptr to output matrix.
+    cudaStream_t)> // stream: stream to execute in.
     FloatSpmmFn;
 
 template <typename Problem>
@@ -164,18 +162,18 @@ void TestFn(FloatSpmmFn spmm_fn, SpmmTest<Problem> *obj) {
 }
 
 typedef std::function<cudaError_t(
-    int,             // m: number of rows in lhs & output.
-    int,             // k: number of cols in lhs and rows in rhs.
-    int,             // n: number of cols in rhs/output.
-    int,             // nonzeros: number of nonzero values in lhs.
-    const int *,     // row_indices: ptr to row index swizzle map.
-    const half2 *,   // values: ptr to lhs values.
-    const int *,     // row_offsets: ptr to lhs row offsets.
-    const short2 *,  // column_indices: ptr to lhs column indices.
-    const half2 *,   // dense_matrix: ptr to rhs matrix.
-    const float *,   // bias: ptr to bias.
-    half2 *,         // output_matrix: ptr to output matrix.
-    cudaStream_t)>   // stream: stream to execute in.
+    int,            // m: number of rows in lhs & output.
+    int,            // k: number of cols in lhs and rows in rhs.
+    int,            // n: number of cols in rhs/output.
+    int,            // nonzeros: number of nonzero values in lhs.
+    const int *,    // row_indices: ptr to row index swizzle map.
+    const half2 *,  // values: ptr to lhs values.
+    const int *,    // row_offsets: ptr to lhs row offsets.
+    const short2 *, // column_indices: ptr to lhs column indices.
+    const half2 *,  // dense_matrix: ptr to rhs matrix.
+    const float *,  // bias: ptr to bias.
+    half2 *,        // output_matrix: ptr to output matrix.
+    cudaStream_t)>  // stream: stream to execute in.
     HalfSpmmFn;
 
 template <typename Problem>
@@ -223,16 +221,16 @@ void HalfTestFn(HalfSpmmFn spmm_fn, SpmmTest<Problem> *obj) {
 #define CONCAT(x, y) CONCAT_(x, y)
 #define ANONYMOUS_NAME(x) CONCAT(x, __COUNTER__)
 
-#define REGISTER_TESTCASE(name, fn) \
+#define REGISTER_TESTCASE(name, fn)                                            \
   TYPED_TEST(SpmmTest, name) { TestFn(fn, this); }
 
-#define REGISTER_FLOAT_TESTCASE_HELPER(name, tname, fn, stype, dtype, mt, kt, \
-                                       nt, bs)                                \
-  const auto &tname = fn<SpmmConfig<float, stype, dtype, mt, kt, nt, bs>>;    \
+#define REGISTER_FLOAT_TESTCASE_HELPER(name, tname, fn, stype, dtype, mt, kt,  \
+                                       nt, bs)                                 \
+  const auto &tname = fn<SpmmConfig<float, stype, dtype, mt, kt, nt, bs>>;     \
   REGISTER_TESTCASE(name##_##stype##x##dtype##x##mt##x##kt##x##nt##x##bs, tname)
 
-#define REGISTER_FLOAT_TESTCASE(name, fn, stype, dtype, mt, kt, nt, bs)    \
-  REGISTER_FLOAT_TESTCASE_HELPER(name, ANONYMOUS_NAME(spmm_fn), fn, stype, \
+#define REGISTER_FLOAT_TESTCASE(name, fn, stype, dtype, mt, kt, nt, bs)        \
+  REGISTER_FLOAT_TESTCASE_HELPER(name, ANONYMOUS_NAME(spmm_fn), fn, stype,     \
                                  dtype, mt, kt, nt, bs)
 
 /* 1-d tiling with blocksize 64 */
@@ -277,16 +275,16 @@ REGISTER_FLOAT_TESTCASE(CudaSpmmEx, CudaSpmmEx, float4, float, 4, 32, 8, 8);
 #undef REGISTER_FLOAT_TESTCASE_HELPER
 #undef REGISTER_TESTCASE
 
-#define REGISTER_TESTCASE(name, fn) \
+#define REGISTER_TESTCASE(name, fn)                                            \
   TYPED_TEST(SpmmTest, name) { HalfTestFn(fn, this); }
 
-#define REGISTER_HALF_TESTCASE_HELPER(name, tname, fn, stype, dtype, mt, kt, \
-                                      nt, bs)                                \
-  const auto &tname = fn<SpmmConfig<half2, stype, dtype, mt, kt, nt, bs>>;   \
+#define REGISTER_HALF_TESTCASE_HELPER(name, tname, fn, stype, dtype, mt, kt,   \
+                                      nt, bs)                                  \
+  const auto &tname = fn<SpmmConfig<half2, stype, dtype, mt, kt, nt, bs>>;     \
   REGISTER_TESTCASE(name##_##stype##x##dtype##x##mt##x##kt##x##nt##x##bs, tname)
 
-#define REGISTER_HALF_TESTCASE(name, fn, stype, dtype, mt, kt, nt, bs)    \
-  REGISTER_HALF_TESTCASE_HELPER(name, ANONYMOUS_NAME(spmm_fn), fn, stype, \
+#define REGISTER_HALF_TESTCASE(name, fn, stype, dtype, mt, kt, nt, bs)         \
+  REGISTER_HALF_TESTCASE_HELPER(name, ANONYMOUS_NAME(spmm_fn), fn, stype,      \
                                 dtype, mt, kt, nt, bs)
 
 /* 1-d tiling with blocksize 64 */
@@ -319,4 +317,4 @@ REGISTER_HALF_TESTCASE(CudaSpmmEx, CudaSpmmEx, half8, half2, 4, 32, 8, 8);
 #undef CONCAT
 #undef CONCAT_
 
-}  // namespace sputnik
+} // namespace sputnik

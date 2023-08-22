@@ -88,13 +88,16 @@ class MyDGLGraph:
             and "canonical_etypes" in self.graph_data["legacy_metadata_from_dgl"]
         ):
             if (
-                len(self.graph_data["legacy_metadata_from_dgl"]["canonical_etypes"])
+                len(self.graph_data["legacy_metadata_from_dgl"]
+                    ["canonical_etypes"])
                 <= 1
             ):
                 print("WARNING: len(canonical_etypes) <= 1")
-                print(self.graph_data["legacy_metadata_from_dgl"]["canonical_etypes"])
+                print(
+                    self.graph_data["legacy_metadata_from_dgl"]["canonical_etypes"])
             if (
-                len(self.graph_data["legacy_metadata_from_dgl"]["canonical_etypes"])
+                len(self.graph_data["legacy_metadata_from_dgl"]
+                    ["canonical_etypes"])
                 != result
             ):
                 print(
@@ -614,7 +617,8 @@ class MyDGLGraph:
         @torch.no_grad()
         def _canonicalize_eids(old_to_new_eid_mapping, dict_prefix):
             dict_prefix["eids"] = torch.tensor(
-                list(map(old_to_new_eid_mapping.get, dict_prefix["eids"].tolist()))
+                list(map(old_to_new_eid_mapping.get,
+                     dict_prefix["eids"].tolist()))
             )
 
         if target_sequential_eids_format == self.sequential_eids_format:
@@ -666,9 +670,11 @@ class MyDGLGraph:
                     self.graph_data["separate"]["csr"]["transposed"],
                 )
         if "original" in self.graph_data:
-            _canonicalize_eids(old_to_new_eid_mapping, self.graph_data["original"])
+            _canonicalize_eids(old_to_new_eid_mapping,
+                               self.graph_data["original"])
         if "transposed" in self.graph_data:
-            _canonicalize_eids(old_to_new_eid_mapping, self.graph_data["transposed"])
+            _canonicalize_eids(old_to_new_eid_mapping,
+                               self.graph_data["transposed"])
         self.sequential_eids_format = target_sequential_eids_format
 
     @torch.no_grad()
@@ -685,7 +691,8 @@ class MyDGLGraph:
         if produce_inverse_idx:
             # canonicalizing all formats' eid by setting separate coo's as sequential by a[b.long()].long()
             # In this way, we don't need extra step to canonicalize the inverse idx
-            self.canonicalize_eids(target_sequential_eids_format="separate_coo")
+            self.canonicalize_eids(
+                target_sequential_eids_format="separate_coo")
 
         (
             result_node_indices_row,
@@ -741,7 +748,8 @@ class MyDGLGraph:
         if produce_inverse_idx:
             # canonicalizing all formats' eid by setting separate coo's as sequential by a[b.long()].long()
             # In this way, we don't need extra step to canonicalize the inverse idx
-            self.canonicalize_eids(target_sequential_eids_format="separate_coo")
+            self.canonicalize_eids(
+                target_sequential_eids_format="separate_coo")
 
         (
             result_node_idx,
@@ -777,7 +785,8 @@ class MyDGLGraph:
         self["legacy_metadata_from_dgl"]["ntypes"] = dglgraph.ntypes
         self["legacy_metadata_from_dgl"]["number_of_nodes"] = dglgraph.number_of_nodes()
         self["legacy_metadata_from_dgl"]["number_of_nodes_per_type"] = dict(
-            [(ntype, dglgraph.number_of_nodes(ntype)) for ntype in dglgraph.ntypes]
+            [(ntype, dglgraph.number_of_nodes(ntype))
+             for ntype in dglgraph.ntypes]
         )
         self["legacy_metadata_from_dgl"]["number_of_edges"] = dglgraph.number_of_edges()
         self["legacy_metadata_from_dgl"]["number_of_edges_per_type"] = dict(
@@ -790,7 +799,8 @@ class MyDGLGraph:
             zip(dglgraph.ntypes, range(len(dglgraph.ntypes)))
         )
         self["legacy_metadata_from_dgl"]["edge_dict"] = dict(
-            zip(dglgraph.canonical_etypes, range(len(dglgraph.canonical_etypes)))
+            zip(dglgraph.canonical_etypes, range(
+                len(dglgraph.canonical_etypes)))
         )
 
     def get_dgl_graph(self, transposed_flag: bool = False):
@@ -839,7 +849,7 @@ class MyDGLGraph:
                 ][
                     self.graph_data["separate"]["coo"][sub_dict_name]["rel_ptrs"][
                         etype_idx
-                    ] : self.graph_data["separate"]["coo"][sub_dict_name]["rel_ptrs"][
+                    ]: self.graph_data["separate"]["coo"][sub_dict_name]["rel_ptrs"][
                         etype_idx + 1
                     ]
                 ]
@@ -848,11 +858,12 @@ class MyDGLGraph:
                 ][
                     self.graph_data["separate"]["coo"][sub_dict_name]["rel_ptrs"][
                         etype_idx
-                    ] : self.graph_data["separate"]["coo"][sub_dict_name]["rel_ptrs"][
+                    ]: self.graph_data["separate"]["coo"][sub_dict_name]["rel_ptrs"][
                         etype_idx + 1
                     ]
                 ]
-                data_dict[curr_etype_canonical_name] = (col_indices, row_indices)
+                data_dict[curr_etype_canonical_name] = (
+                    col_indices, row_indices)
 
         return dgl.heterograph(data_dict)
 
@@ -876,4 +887,5 @@ class MyDGLGraph:
         elif "transposed" in self:
             return self["transposed"]["eids"].device
         else:
-            raise ValueError("Missing original or transposed data in graph_data")
+            raise ValueError(
+                "Missing original or transposed data in graph_data")

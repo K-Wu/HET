@@ -223,9 +223,9 @@ void full_graph_edge_softmax_only_accumu_stage_ops(
       mu_softmax_applied_unnormalized_attn_score, dummy_tensor);
 }
 
-}  // namespace IntegratedCSR
+} // namespace IntegratedCSR
 
-}  // namespace FwProp
+} // namespace FwProp
 namespace BckProp {
 namespace IntegratedCSR {
 
@@ -339,18 +339,18 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
   // by one
   int num_heads = grad_attn_score.size(grad_attn_score.ndimension() - 1);
   BackwardHGTAttnScoreData<Idx, DType, AttnScoreUseMuAppliedAttnScoreSwitch>
-      gdata_attn{
-          .num_heads = num_heads,
-          .message_src_xlen =
-              message.size(grad_mu.ndimension() - 1) * num_heads,
-          .eids = outcsr_eids.data_ptr<Idx>(),
-          .grad_attn_score = grad_attn_score.data_ptr<DType>(),
-          .message_src = message.data_ptr<DType>(),
-          .unnormalized_attn_score = unnormalized_attn_score.data_ptr<DType>(),
-          .out = out.data_ptr<DType>(),
-          .grad_out = gradout.data_ptr<DType>(),
-          .grad_mu = grad_mu.data_ptr<DType>(),
-          .mu = mu.data_ptr<DType>()};
+      gdata_attn{.num_heads = num_heads,
+                 .message_src_xlen =
+                     message.size(grad_mu.ndimension() - 1) * num_heads,
+                 .eids = outcsr_eids.data_ptr<Idx>(),
+                 .grad_attn_score = grad_attn_score.data_ptr<DType>(),
+                 .message_src = message.data_ptr<DType>(),
+                 .unnormalized_attn_score =
+                     unnormalized_attn_score.data_ptr<DType>(),
+                 .out = out.data_ptr<DType>(),
+                 .grad_out = gradout.data_ptr<DType>(),
+                 .grad_mu = grad_mu.data_ptr<DType>(),
+                 .mu = mu.data_ptr<DType>()};
 
   assert(gdata_attn.num_heads == message.size(message.ndimension() - 2) &&
          "expecting message.size[-2] to be num_heads but turned out not");
@@ -589,7 +589,7 @@ void full_graph_edge_softmax_ops(
 //       mu, grad_attn_score, grad_mu);
 // }
 
-}  // namespace IntegratedCSR
+} // namespace IntegratedCSR
 namespace SeparateCOO {
 
 template <typename Idx, typename DType>
@@ -644,11 +644,11 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
       etype_data, num_edges,
       sum_incoming_edges_product_softmax_score.data_ptr<DType>());
 }
-}  // namespace SeparateCOO
-}  // namespace BckProp
-}  // namespace HGT
-}  // namespace TorchExport
-}  // namespace HET
+} // namespace SeparateCOO
+} // namespace BckProp
+} // namespace HGT
+} // namespace TorchExport
+} // namespace HET
 
 using namespace HET::TorchExport;
 TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {

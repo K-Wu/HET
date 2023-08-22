@@ -10,7 +10,7 @@ namespace OpPrototyping {
 template </*int XPU, */ typename Idx, typename DType>
 void FusedGatKernelImpl(
     MyHeteroSeparateCSR<Idx, thrust::device_allocator<Idx>>
-        incsr,  // create incsr in the driver logic
+        incsr, // create incsr in the driver logic
     MySimpleNDArray<DType, thrust::device_allocator<DType>> &feat_src,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> &el,
     MySimpleNDArray<DType, thrust::device_allocator<DType>> &er,
@@ -176,5 +176,5 @@ void BackwardFusedGatKernelImpl(
       << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
       << " ms" << std::endl;
 }
-}  // namespace OpPrototyping
-}  // namespace HET
+} // namespace OpPrototyping
+} // namespace HET

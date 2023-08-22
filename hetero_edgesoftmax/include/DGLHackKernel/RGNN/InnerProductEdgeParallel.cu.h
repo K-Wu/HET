@@ -71,7 +71,7 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
                gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx];
 
-        } else {  // !RelationalFlag
+        } else { // !RelationalFlag
           // NB: feat_src_entry_id varies between edata_idx and src_vid
           // depending on compactasofnodeflag
           if constexpr (IsCompact(kind)) {
@@ -143,7 +143,7 @@ __global__ void HET_inner_product_bck_kernel_edge_parallel(
           // edge id, regardless of the type of the edge
           feat_src_offset = edata_idx * gdata.feat_src_xlen +
                             head_idx * hidden_xlen + feat_idx;
-        } else {  // CompactAsOfNodeFlag
+        } else { // CompactAsOfNodeFlag
           if constexpr (RelationalFlag) {
             // in this case, er_idx (sum's index) is related to (relation,
             // unique node index) el_idx is related to (relation, unique node
@@ -193,7 +193,7 @@ __global__ void HET_inner_product_bck_kernel_edge_parallel(
           gdata.grad_feat_src[feat_src_offset] = sfeatsrc;
         }
 
-      }  // while feat_idx
-    }    // while head_idx
-  }      // while src_vid
+      } // while feat_idx
+    }   // while head_idx
+  }     // while src_vid
 }

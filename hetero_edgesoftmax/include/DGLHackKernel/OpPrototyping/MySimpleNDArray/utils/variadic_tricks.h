@@ -1,7 +1,7 @@
 #pragma once
+#include "utils.cu.h"
 #include <stddef.h>
 #include <tuple>
-#include "utils.cu.h"
 
 // from https://stackoverflow.com/a/12742980
 // e.g.: return tuple_with_removed_refs{result};
@@ -10,16 +10,14 @@ using tuple_with_removed_refs =
     std::tuple<typename std::remove_reference<T>::type...>;
 
 // from https://stackoverflow.com/a/72027501
-template <class Tuple>
-struct decay_args_tuple;
-template <class... Args>
-struct decay_args_tuple<std::tuple<Args...>> {
+template <class Tuple> struct decay_args_tuple;
+template <class... Args> struct decay_args_tuple<std::tuple<Args...>> {
   using type = std::tuple<std::decay_t<Args>...>;
 };
 
 // from https://artificial-mind.net/blog/2020/10/31/constexpr-for
 template <size_t Start, size_t End, size_t Inc, class F>
-_HOST_DEVICE_METHOD_QUALIFIER constexpr void constexpr_for(F&& f) {
+_HOST_DEVICE_METHOD_QUALIFIER constexpr void constexpr_for(F &&f) {
   if constexpr (Start < End) {
     f(std::integral_constant<decltype(Start), Start>());
     constexpr_for<Start + Inc, End, Inc>(f);

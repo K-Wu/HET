@@ -44,8 +44,8 @@ int FusedGATProfiling_main(cusp::csr_matrix<int, int, cusp::host_memory> graph,
   MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_out =
       GenerateRandomNDArray<DType>(
           {incsr.num_rows, num_heads,
-           num_hidden});  // TODO: verify if the assumption that the shape is
-                          // the same as ret is correct
+           num_hidden}); // TODO: verify if the assumption that the shape is
+                         // the same as ret is correct
   MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_feat_src =
       GenerateRandomNDArray<DType>({incsr.num_rows, num_heads, num_hidden});
   MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_el =
@@ -82,8 +82,8 @@ int HGTBackPropGradientSMAFusionProfiling_main(
       transposed_csr_h);
 
   assert(csr_h.num_rels ==
-         4);  // memory footprint 50% reduction hack for grad_sm_first_stage
-              // only effective for ogbn-mag
+         4); // memory footprint 50% reduction hack for grad_sm_first_stage
+             // only effective for ogbn-mag
   MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_sm_first_stage =
       GenerateRandomNDArray<DType>(
           {csr_h.num_rows,
@@ -102,18 +102,18 @@ int HGTBackPropGradientSMAFusionProfiling_main(
 
   HET::OpPrototyping::HGTBackPropGradientSMAFusion<Idx, DType>(
       transposed_csr,
-      grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
-      grad_a,               // |E| * N_HEADS
-      grad_t_neighbour,     //|V| * N_HEADS * DIM_PER_HEAD
-      message,              //|E| * N_HEADS * DIM_PER_HEAD
-      sigmas);              //|E| * N_HEADS
+      grad_sm_first_stage, //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
+      grad_a,              // |E| * N_HEADS
+      grad_t_neighbour,    //|V| * N_HEADS * DIM_PER_HEAD
+      message,             //|E| * N_HEADS * DIM_PER_HEAD
+      sigmas);             //|E| * N_HEADS
   return 0;
 }
 
 int _HGTExperimental_main(
     MySegmentCSR<int, std::allocator<int>,
                  MyHeteroSeparateCSR<int, std::allocator<int>>> &graph,
-    int num_heads, int in_feat, int out_feat) {  // noexcept(false) {
+    int num_heads, int in_feat, int out_feat) { // noexcept(false) {
   assert(num_heads == 4);
   typedef int32_t Idx;
   typedef float DType;
@@ -189,8 +189,8 @@ int _RGCNLayer1Profiling_main(
 
   MySimpleNDArray<DType, thrust::device_allocator<DType>> hidden =
       GenerateRandomNDArray<DType>(
-          {csr_h.num_rows, in_feat});  // TODO: assuming hidden is x. need to
-                                       // verify if that is correct
+          {csr_h.num_rows, in_feat}); // TODO: assuming hidden is x. need to
+                                      // verify if that is correct
   MySimpleNDArray<DType, thrust::device_allocator<DType>> weight =
       GenerateRandomNDArray<DType>({csr_h.num_rels, in_feat, out_feat});
   // asuming num_bases == num_rels
@@ -202,8 +202,8 @@ int _RGCNLayer1Profiling_main(
   MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_out =
       GenerateRandomNDArray<DType>(
           {csr_h.num_rows,
-           out_feat});  // TODO: verify if the assumption that the shape is the
-                        // same as ret is correct
+           out_feat}); // TODO: verify if the assumption that the shape is the
+                       // same as ret is correct
   MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_hidden;
   MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_weight;
   MySimpleNDArray<DType, thrust::device_allocator<DType>> grad_hidden2;
@@ -245,5 +245,5 @@ int _RGCNLayer1Profiling_main(
   return 0;
 }
 
-}  // namespace OpPrototyping
-}  // namespace HET
+} // namespace OpPrototyping
+} // namespace HET

@@ -56,9 +56,9 @@ __device__ __forceinline__ void _HGTTriviallyEdgeParallelNodeMeanAggregation(
     Idx *row_indices_or_row_ptrs) {
   // each warp deals with one edge
   Idx edge_idx =
-      (blockIdx.x * blockDim.x + threadIdx.x) / warpSize;  // warpSize = 32
+      (blockIdx.x * blockDim.x + threadIdx.x) / warpSize; // warpSize = 32
   assert(inout_feat_dim % warpSize == 0 &&
-         "inout_feat_dim must be multiple of warpSize");  // 32
+         "inout_feat_dim must be multiple of warpSize"); // 32
   for (; edge_idx < num_edges; edge_idx += gridDim.x * blockDim.x / warpSize) {
     Idx col_idx = col_idxes[edge_idx];
     // TODO: this looks suspicious
@@ -206,8 +206,7 @@ struct HgtDstOutData {
 
 // TODO: use designated intializer, as explained in
 // https://en.cppreference.com/w/cpp/language/aggregate_initialization
-template <typename Idx, typename DType>
-struct HgtDstOutData<Idx, DType, 0> {
+template <typename Idx, typename DType> struct HgtDstOutData<Idx, DType, 0> {
   Idx num_heads{0};
   Idx message_out_dim{0};
   Idx *__restrict__ eids{nullptr};
@@ -217,8 +216,7 @@ struct HgtDstOutData<Idx, DType, 0> {
                                        nullptr};
 };
 
-template <typename Idx, typename DType>
-struct HgtDstOutData<Idx, DType, 1> {
+template <typename Idx, typename DType> struct HgtDstOutData<Idx, DType, 1> {
   Idx num_heads{0};
   Idx message_out_dim{0};
   Idx *__restrict__ eids{nullptr};
@@ -227,8 +225,7 @@ struct HgtDstOutData<Idx, DType, 1> {
   DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
 };
 
-template <typename Idx, typename DType>
-struct HgtDstOutData<Idx, DType, 2> {
+template <typename Idx, typename DType> struct HgtDstOutData<Idx, DType, 2> {
   Idx num_heads{0};
   Idx message_out_dim{0};
   Idx *__restrict__ eids{nullptr};
@@ -318,7 +315,7 @@ __global__ void HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
             s += (normalized_attn_score *
                   gdata.message[feat_src_entry_id * gdata.message_out_dim +
                                 head_idx * hidden_xlen + feat_idx]);
-          } else {  // !RelationalFlag
+          } else { // !RelationalFlag
             // NB: feat_src_entry_id varies between edata_idx and src_vid
             // depending on compactasofnodeflag
             if constexpr (IsCompact(kind)) {
@@ -622,8 +619,8 @@ __global__ void HET_HGTEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
       Idx src_id = *(column_indices + eidx);
       Idx feat_off_src = -1;
       Idx edata_idx = gdata.eids[eidx];
-      Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
-                      // !RelationalFlag, the default value is set as 0
+      Idx etype = 0; // NB: as mu needs to refer to etype even in case of
+                     // !RelationalFlag, the default value is set as 0
       DType mu;
       if constexpr (RelationalFlag) {
         if constexpr (ETypeRelPtrFlag) {
@@ -675,10 +672,9 @@ __global__ void HET_HGTEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
         // !CompactAsOfNodeFlag && RelationalFlag
         // TODO: fix this and align dst_vid_relational definition with
         // _fusedGatBackwardGradElErFeatSrcFused
-        atomicAdd(
-            &gdata
-                 .edgesoftmax_sum_per_node[Idx(dst_vid * num_heads) + feat_idx],
-            tmp);
+        atomicAdd(&gdata.edgesoftmax_sum_per_node[Idx(dst_vid * num_heads) +
+                                                  feat_idx],
+                  tmp);
       }
       if constexpr (OutputMuAppliedAttnScoreSwitch == 1 ||
                     OutputMuAppliedAttnScoreSwitch == 3) {
@@ -688,10 +684,9 @@ __global__ void HET_HGTEdgeSoftmaxAccumStageOnlyKernel_edgeparallel(
       sum += tmp;
       //}
       if constexpr (!RelationalFlag) {
-        atomicAdd(
-            &gdata
-                 .edgesoftmax_sum_per_node[Idx(dst_vid * num_heads) + feat_idx],
-            sum);
+        atomicAdd(&gdata.edgesoftmax_sum_per_node[Idx(dst_vid * num_heads) +
+                                                  feat_idx],
+                  sum);
       }
     }
   }

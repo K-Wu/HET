@@ -103,10 +103,7 @@ struct Result {
   Result(double runtime_ms = 0, double gflops = 0,
          cutlass::Status status = cutlass::Status::kSuccess,
          cudaError_t error = cudaSuccess)
-      : runtime_ms(runtime_ms),
-        gflops(gflops),
-        status(status),
-        error(error),
+      : runtime_ms(runtime_ms), gflops(gflops), status(status), error(error),
         passed(true) {}
 };
 
@@ -123,11 +120,8 @@ struct Options {
   int iterations;
 
   Options()
-      : help(false),
-        problem_size({248, 1024, 1024}),
-        index_size(240),
-        reference_check(true),
-        iterations(20) {}
+      : help(false), problem_size({248, 1024, 1024}), index_size(240),
+        reference_check(true), iterations(20) {}
 
   bool valid() { return true; }
 
@@ -185,12 +179,12 @@ struct Options {
 
 // The code section below describes datatype for input, output matrices and
 // computation between elements in input matrices.
-using ElementAccumulator = float;  // <- data type of accumulator
+using ElementAccumulator = float; // <- data type of accumulator
 using ElementComputeEpilogue =
-    ElementAccumulator;       // <- data type of epilogue operations
-using ElementInputA = float;  // <- data type of elements in input matrix A
-using ElementInputB = float;  // <- data type of elements in input matrix B
-using ElementOutput = float;  // <- data type of elements in output matrix D
+    ElementAccumulator;      // <- data type of epilogue operations
+using ElementInputA = float; // <- data type of elements in input matrix A
+using ElementInputB = float; // <- data type of elements in input matrix B
+using ElementOutput = float; // <- data type of elements in output matrix D
 
 // The code section below describes matrix layout of input and output matrices.
 // Column Major for Matrix A, B and C.
@@ -224,7 +218,7 @@ using EpilogueOutputOp =
 
 // This code section describes how threadblocks are scheduled on GPU
 using SwizzleThreadBlock =
-    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>;  // <- ??
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>; // <- ??
 
 // Number of pipelines you want to use
 // Ampere -> 4/5
@@ -258,39 +252,39 @@ int run(Options &options) {
 
   // Initialize tensors using CUTLASS helper functions
   cutlass::HostTensor<ElementInputA, LayoutInputA> tensor_a(
-      problem_size.mk());  // <- Create matrix A with dimensions M x K
+      problem_size.mk()); // <- Create matrix A with dimensions M x K
   cutlass::HostTensor<ElementInputB, LayoutInputB> tensor_b(
-      problem_size.kn());  // <- Create matrix B with dimensions K x N
+      problem_size.kn()); // <- Create matrix B with dimensions K x N
   cutlass::HostTensor<ElementOutput, LayoutOutput> tensor_c(
-      problem_size.mn());  // <- Create matrix C with dimensions M x N
+      problem_size.mn()); // <- Create matrix C with dimensions M x N
   cutlass::HostTensor<ElementOutput, LayoutOutput> tensor_d_scattered(
-      problem_size.mn());  // <- Create matrix D with dimensions M x N used to
-                           // store output from CUTLASS kernel
+      problem_size.mn()); // <- Create matrix D with dimensions M x N used to
+                          // store output from CUTLASS kernel
 
   // Fill input and output matrices on host using CUTLASS helper functions
   cutlass::reference::host::TensorFillRandomUniform(
       tensor_a.host_view(), 1, ElementInputA(7), ElementInputA(-8),
-      0);  // <- Fill matrix A on host with uniform-distribution random data
+      0); // <- Fill matrix A on host with uniform-distribution random data
 
   cutlass::reference::host::TensorFillRandomUniform(
       tensor_b.host_view(), 1, ElementInputA(7), ElementInputA(-8),
-      0);  // <- Fill matrix B on host with uniform-distribution random data
+      0); // <- Fill matrix B on host with uniform-distribution random data
 
   cutlass::reference::host::TensorFillRandomUniform(
       tensor_c.host_view(), 1, ElementOutput(7), ElementOutput(-8),
-      0);  // <- Fill matrix C on host with uniform-distribution random data
+      0); // <- Fill matrix C on host with uniform-distribution random data
 
   cutlass::reference::host::TensorFill(
-      tensor_d_scattered.host_view());  // <- fill matrix D on host with zeros
+      tensor_d_scattered.host_view()); // <- fill matrix D on host with zeros
 
   cutlass::HostTensor<int, LayoutOutput> tensor_indices(
       {options.index_size,
-       1});  // <- Create scatter indices with dimensions val_len x 1
+       1}); // <- Create scatter indices with dimensions val_len x 1
 
   // <- Fill tensor_b_indices on host with unique random integers
-  std::vector<int> to_fill(problem_size.n());  // vector with ints.
+  std::vector<int> to_fill(problem_size.n()); // vector with ints.
   std::iota(std::begin(to_fill), std::end(to_fill),
-            0);  // Fill with 0, 1, ...., problem_size.n()
+            0); // Fill with 0, 1, ...., problem_size.n()
   std::random_shuffle(to_fill.begin(), to_fill.end());
   memcpy(tensor_indices.host_data(), to_fill.data(),
          options.index_size * sizeof(int));
@@ -313,13 +307,13 @@ int run(Options &options) {
   // to launch instantiated CUTLASS kernel
   typename Gemm::Arguments arguments{
       cutlass::gemm::GemmUniversalMode::kGemm,
-      problem_size_real,       // <- problem size of matrix multiplication
-      split_k_slices,          // <- k-dimension split factor
-      {alpha, beta},           // <- alpha, beta
-      tensor_a.device_data(),  // <- reference to matrix A on device
-      tensor_b.device_data(),  // <- reference to matrix B on device
-      tensor_c.device_data(),  // <- reference to matrix C on device
-      tensor_d_scattered.device_data(),  // <- reference to matrix D on device
+      problem_size_real,      // <- problem size of matrix multiplication
+      split_k_slices,         // <- k-dimension split factor
+      {alpha, beta},          // <- alpha, beta
+      tensor_a.device_data(), // <- reference to matrix A on device
+      tensor_b.device_data(), // <- reference to matrix B on device
+      tensor_c.device_data(), // <- reference to matrix C on device
+      tensor_d_scattered.device_data(), // <- reference to matrix D on device
       tensor_a.layout().capacity(problem_size.mk()),
       tensor_b.layout().capacity(
           cutlass::make_Coord(options.index_size, problem_size.n())),
@@ -329,11 +323,11 @@ int run(Options &options) {
       tensor_b.layout().stride(),
       tensor_c.layout().stride(),
       tensor_d_scattered.layout().stride(),
-      nullptr,  // <- pointer to index vector to gather A on device
+      nullptr, // <- pointer to index vector to gather A on device
       tensor_indices
-          .device_data(),  // <- pointer to index vector to gather B on device
+          .device_data(), // <- pointer to index vector to gather B on device
       tensor_indices
-          .device_data()};  // <- pointer to index vector to scatter D on device
+          .device_data()}; // <- pointer to index vector to scatter D on device
 
   // Using the arguments, query for extra workspace required for matrix
   // multiplication computation
@@ -357,7 +351,7 @@ int run(Options &options) {
   cutlass::HostTensor<ElementOutput, LayoutOutput> tensor_d_ref(
       problem_size.mn());
   cutlass::reference::host::TensorFill(
-      tensor_d_ref.host_view());  // <- Fill matrix D on host with zeros
+      tensor_d_ref.host_view()); // <- Fill matrix D on host with zeros
 
   status = gemm_op();
   cudaDeviceSynchronize();

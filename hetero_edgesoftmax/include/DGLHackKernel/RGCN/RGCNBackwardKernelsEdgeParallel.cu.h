@@ -2,8 +2,7 @@
 
 #include <cuda_runtime.h>
 
-template <typename Idx, typename DType>
-struct BackwardRGCNData {
+template <typename Idx, typename DType> struct BackwardRGCNData {
   // feat_size size along feature dimension
   Idx feat_src_xlen{0};
   Idx *__restrict__ eids{nullptr};
@@ -44,9 +43,9 @@ __device__ __forceinline__ void _RGCNBackwardNodeMeanAggregation_edge_parallel(
         // in this case, feat_src_offset, er_idx and el_idx are related to
         // edge id, regardless of the type of the edge
         feat_src_offset = edata_idx * gdata.feat_src_xlen + feat_idx;
-      } else {  // CompactAsOfNodeFlag
+      } else { // CompactAsOfNodeFlag
         if constexpr (!RelationalFlag) {
-        } else {  // RelationalFlag
+        } else { // RelationalFlag
           // in this case, er_idx (sum's index) is related to (relation,
           // unique node index) el_idx is related to (relation, unique node
           // index) feat_src_offset is related to (relation, unique node
@@ -76,8 +75,8 @@ __device__ __forceinline__ void _RGCNBackwardNodeMeanAggregation_edge_parallel(
                 gdata.enorm[edata_idx] *
                     gdata.grad_out[dst_vid * gdata.feat_src_xlen + feat_idx]);
 
-    }  // while feat_idx
-  }    // while src_vid
+    } // while feat_idx
+  }   // while src_vid
 }
 
 template <typename Idx, typename DType, CompactAsOfNodeKind kind>

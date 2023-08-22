@@ -24,8 +24,7 @@ constexpr CompactAsOfNodeKind getRidDualList(CompactAsOfNodeKind kind_) {
 
 // TODO: an working example of template alias is at
 // https://godbolt.org/z/3YfEK6W3f
-template <typename Idx, CompactAsOfNodeKind kind>
-struct ETypeMapperData {};
+template <typename Idx, CompactAsOfNodeKind kind> struct ETypeMapperData {};
 template <typename Idx>
 struct ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> {
   Idx *__restrict__ unique_srcs_and_dests_rel_ptrs{nullptr};
@@ -46,19 +45,19 @@ struct ETypeMapperData<
   Idx *__restrict__ edata_idx_to_inverse_idx{nullptr};
 };
 
-__device__ __host__ __forceinline__ constexpr bool IsCompact(
-    CompactAsOfNodeKind kind) {
+__device__ __host__ __forceinline__ constexpr bool
+IsCompact(CompactAsOfNodeKind kind) {
   return kind != CompactAsOfNodeKind::Disabled;
 }
 
-__device__ __host__ __forceinline__ constexpr bool IsCompactWithDualList(
-    CompactAsOfNodeKind kind) {
+__device__ __host__ __forceinline__ constexpr bool
+IsCompactWithDualList(CompactAsOfNodeKind kind) {
   return kind == CompactAsOfNodeKind::EnabledWithDualList ||
          kind == CompactAsOfNodeKind::EnabledWithDualListWithDirectIndexing;
 }
 
-__device__ __host__ __forceinline__ constexpr bool IsBinarySearch(
-    CompactAsOfNodeKind kind) {
+__device__ __host__ __forceinline__ constexpr bool
+IsBinarySearch(CompactAsOfNodeKind kind) {
   return kind == CompactAsOfNodeKind::Enabled ||
          kind == CompactAsOfNodeKind::EnabledWithDualList;
 }
@@ -74,22 +73,19 @@ __device__ __host__ __forceinline__ constexpr bool IsBinarySearch(
 // vec_t<int>           vi;
 // vec_t<std::string>   vs;
 
-template <typename Idx, bool ETypeRelPtrFlag>
-struct ETypeData {
+template <typename Idx, bool ETypeRelPtrFlag> struct ETypeData {
   CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(
       (std::is_same<Idx, std::int32_t>::value ||
        !std::is_same<Idx, std::int32_t>::value),
       "the program should use partial specialization of this structure");
 };
 
-template <typename Idx>
-struct ETypeData<Idx, true> {
+template <typename Idx> struct ETypeData<Idx, true> {
   Idx *__restrict__ etypes{nullptr};
   int64_t num_relations{-1};
 };
 
-template <typename Idx>
-struct ETypeData<Idx, false> {
+template <typename Idx> struct ETypeData<Idx, false> {
   Idx *__restrict__ etypes{nullptr};
 };
 

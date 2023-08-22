@@ -45,9 +45,11 @@ def backward_rgnn_relational_matmul_no_scatter_gather_list(
     for i in range(grad_weight_.shape[0]):
         ctx = DummyCtx()
         ctx.save_for_backward(
-            inputs[i], torch.transpose(weights_transposed[i], 2, 3), ntype_offset_ptrs
+            inputs[i], torch.transpose(
+                weights_transposed[i], 2, 3), ntype_offset_ptrs
         )
-        curr_grad_input_, curr_grad_weight_, _ = sparse.SEGMENTMM.backward(ctx, gradout)
+        curr_grad_input_, curr_grad_weight_, _ = sparse.SEGMENTMM.backward(
+            ctx, gradout)
         grad_input_[i, :, :] = curr_grad_input_
         grad_weight_[i, :, :, :] = curr_grad_weight_
 
@@ -90,7 +92,8 @@ def backward_rgnn_relational_matmul(
     input_num_head_one_flag,
 ):
     grad_input_per_edge = torch.zeros(
-        (gradout.shape[0], inputs.shape[1], inputs.shape[2]), device=inputs.device
+        (gradout.shape[0], inputs.shape[1],
+         inputs.shape[2]), device=inputs.device
     )
     # reorder gradout according to the edge ids
     gradout = gradout[separate_coo_eids]
@@ -158,7 +161,8 @@ def rgnn_relational_matmul_compact_as_of_node(
     ret,  # (unique (node, rel) num, num_heads, feat_dim)
     input_num_head_one_flag,
 ):
-    node_feat = torch.index_select(node_feat, 0, unique_srcs_and_dests_node_idx)
+    node_feat = torch.index_select(
+        node_feat, 0, unique_srcs_and_dests_node_idx)
     rgnn_relational_matmul_no_scatter_gather_list(
         unique_srcs_and_dests_rel_ptr, weight, node_feat, ret
     )
@@ -182,7 +186,8 @@ def backward_rgnn_relational_matmul_compact_as_of_node(
         ),
         device=node_feat.device,
     )
-    node_feat = torch.index_select(node_feat, 0, unique_srcs_and_dests_node_idx)
+    node_feat = torch.index_select(
+        node_feat, 0, unique_srcs_and_dests_node_idx)
     backward_rgnn_relational_matmul_no_scatter_gather_list(
         unique_srcs_and_dests_rel_ptr,
         weight_transposed,

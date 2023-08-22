@@ -4,14 +4,13 @@
 
 // from https://stackoverflow.com/a/47992605
 // ex: auto curr_coord = get<i>(coord...);
-template <int I, class... Ts>
-decltype(auto) get(Ts&&... ts) {
+template <int I, class... Ts> decltype(auto) get(Ts &&...ts) {
   return std::get<I>(std::forward_as_tuple(ts...));
 }
 
 // from https://artificial-mind.net/blog/2020/10/31/constexpr-for
 template <int Start, int End, int Inc, class F>
-constexpr void constexpr_for(F&& f) {
+constexpr void constexpr_for(F &&f) {
   if constexpr (Start < End) {
     f(std::integral_constant<decltype(Start), Start>());
     constexpr_for<Start + Inc, End, Inc>(f);
@@ -89,14 +88,13 @@ constexpr TupleType convert_flat_index_to_tuple(size_t flat_index,
       flat_index, shape);
 }
 
-template <class... Ts>
-class Coord {
- public:
+template <class... Ts> class Coord {
+public:
   std::tuple<typename std::remove_reference<Ts>::type...> size;
 
-  Coord(Ts&&... ts) : size(ts...) {}
+  Coord(Ts &&...ts) : size(ts...) {}
   Coord(std::tuple<Ts...> size) : size(size) {}
-  constexpr size_t _get_flattened_index(Ts&&... coord) {
+  constexpr size_t _get_flattened_index(Ts &&...coord) {
     return get_flattened_index(std::forward_as_tuple(coord...), size);
   }
 
@@ -128,11 +126,9 @@ struct transpose_index_nd
   transpose_index_nd(Coord<Ts...> a, Coord<Ts...> b) : a(a), b(b) {}
 };
 
-template <class Tuple>
-struct decay_args_tuple;
+template <class Tuple> struct decay_args_tuple;
 
-template <class... Args>
-struct decay_args_tuple<std::tuple<Args...>> {
+template <class... Args> struct decay_args_tuple<std::tuple<Args...>> {
   using type = std::tuple<std::decay_t<Args>...>;
 };
 

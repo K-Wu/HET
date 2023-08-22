@@ -38,7 +38,7 @@ void _RelationalFusedGAT(
   GatFusedData<Idx, DType> gdata{
       .feat_src_xlen = SeastarComputeXLength<>(feat_src),
       .num_heads = SeastarComputeXLength<>(el),
-      .eids = nullptr,  // to be assigned later in if branches
+      .eids = nullptr, // to be assigned later in if branches
       .leaky_relu_slope = static_cast<float>(slope),
       .feat_src = feat_src.data_ptr<DType>(),
       .el = el.data_ptr<DType>(),
@@ -137,9 +137,9 @@ void _RelationalFusedGAT(
             edata_idx_to_inverse_idx_col.data_ptr<Idx>();
       }
     }
-    ETypeData<Idx, true> etype_data{
-        .etypes = separate_coo_rel_ptrs.data_ptr<Idx>(),
-        .num_relations = num_relations};
+    ETypeData<Idx, true> etype_data{.etypes =
+                                        separate_coo_rel_ptrs.data_ptr<Idx>(),
+                                    .num_relations = num_relations};
 
     HET_gatExpLeakyReluSumKernel_relational_separate_coo<Idx, DType,
                                                          CompactKind>
@@ -244,8 +244,8 @@ void RelationalFusedGAT(at::Tensor &separate_coo_eids,
   }
 }
 
-}  // namespace EdgeParallel
-}  // namespace SeparateCOO
+} // namespace EdgeParallel
+} // namespace SeparateCOO
 namespace IntegratedCSR {
 // TODO: pass in direct indexing
 void RelationalFusedGAT(at::Tensor &incsr_row_ptr,
@@ -275,8 +275,8 @@ void RelationalFusedGAT(at::Tensor &incsr_row_ptr,
         dummy_tensor, feat_src, el, er, sum, exp, ret, slope);
   }
 }
-}  // namespace IntegratedCSR
-}  // namespace FwProp
+} // namespace IntegratedCSR
+} // namespace FwProp
 namespace BckProp {
 template </*int XPU, */ typename Idx, typename DType, bool FLAG_KERNEL_FUSED,
           CompactAsOfNodeKind CompactKind,
@@ -301,7 +301,7 @@ void _RelationalFusedGAT(
   BackwardGatFusedData<Idx, DType> gdata{
       .feat_src_xlen = SeastarComputeXLength<>(feat_src),
       .num_heads = SeastarComputeXLength<>(el),
-      .eids = nullptr,  // to be assigned later in if branches
+      .eids = nullptr, // to be assigned later in if branches
       .leaky_relu_slope = static_cast<float>(slope),
       .feat_src = feat_src.data_ptr<DType>(),
       .el = el.data_ptr<DType>(),
@@ -397,9 +397,9 @@ void _RelationalFusedGAT(
             edata_idx_to_inverse_idx_col.data_ptr<Idx>();
       }
     }
-    ETypeData<Idx, true> etype_data{
-        .etypes = separate_coo_rel_ptrs.data_ptr<Idx>(),
-        .num_relations = num_relations};
+    ETypeData<Idx, true> etype_data{.etypes =
+                                        separate_coo_rel_ptrs.data_ptr<Idx>(),
+                                    .num_relations = num_relations};
     if constexpr (!FLAG_KERNEL_FUSED) {
       HET_fusedGatBackwardGradFeatSrc_relational_separate_coo<Idx, DType,
                                                               CompactKind>
@@ -458,7 +458,7 @@ void RelationalFusedGAT(at::Tensor &outcsr_row_ptr,
         grad_el, grad_er, slope);
   }
 }
-}  // namespace IntegratedCSR
+} // namespace IntegratedCSR
 
 namespace SeparateCOO {
 namespace EdgeParallel {
@@ -549,12 +549,12 @@ void RelationalFusedGAT(at::Tensor &separate_coo_eids,
     throw std::runtime_error("Invalid CompactAsOfNodeKind");
   }
 }
-}  // namespace EdgeParallel
-}  // namespace SeparateCOO
-}  // namespace BckProp
-}  // namespace RGAT
-}  // namespace TorchExport
-}  // namespace HET
+} // namespace EdgeParallel
+} // namespace SeparateCOO
+} // namespace BckProp
+} // namespace RGAT
+} // namespace TorchExport
+} // namespace HET
 
 using namespace HET::TorchExport;
 TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {

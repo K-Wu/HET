@@ -8,8 +8,8 @@
 
 // TODO: KWU: allow more dtype than int64_t
 std::vector<at::Tensor> convert_integrated_coo_to_separate_coo(
-    at::Tensor& integrated_row_indices, at::Tensor& integrated_col_indices,
-    at::Tensor& integrated_reltypes, at::Tensor& integrated_eids,
+    at::Tensor &integrated_row_indices, at::Tensor &integrated_col_indices,
+    at::Tensor &integrated_reltypes, at::Tensor &integrated_eids,
     int64_t num_rows, int64_t num_rels) {
   assert(integrated_row_indices.is_contiguous());
   assert(integrated_col_indices.is_contiguous());
@@ -77,8 +77,8 @@ std::vector<at::Tensor> convert_integrated_coo_to_separate_coo(
 }
 
 std::vector<at::Tensor> convert_integrated_coo_to_separate_csr(
-    at::Tensor& integrated_row_indices, at::Tensor& integrated_col_indices,
-    at::Tensor& integrated_reltypes, at::Tensor& integrated_eids,
+    at::Tensor &integrated_row_indices, at::Tensor &integrated_col_indices,
+    at::Tensor &integrated_reltypes, at::Tensor &integrated_eids,
     int64_t num_rows, int64_t num_rels) {
   assert(integrated_row_indices.is_contiguous());
   assert(integrated_col_indices.is_contiguous());
@@ -142,8 +142,8 @@ std::vector<at::Tensor> convert_integrated_coo_to_separate_csr(
 }
 
 std::vector<at::Tensor> convert_integrated_csr_to_separate_csr(
-    at::Tensor& integrated_row_ptrs, at::Tensor& integrated_col_indices,
-    at::Tensor& integrated_reltypes, at::Tensor& integrated_eids) {
+    at::Tensor &integrated_row_ptrs, at::Tensor &integrated_col_indices,
+    at::Tensor &integrated_reltypes, at::Tensor &integrated_eids) {
   assert(integrated_row_ptrs.is_contiguous());
   assert(integrated_col_indices.is_contiguous());
   assert(integrated_reltypes.is_contiguous());
@@ -214,8 +214,8 @@ std::vector<at::Tensor> convert_integrated_csr_to_separate_csr(
 }
 
 std::vector<at::Tensor> convert_integrated_csr_to_separate_coo(
-    at::Tensor& integrated_row_ptrs, at::Tensor& integrated_col_indices,
-    at::Tensor& integrated_reltypes, at::Tensor& integrated_eids) {
+    at::Tensor &integrated_row_ptrs, at::Tensor &integrated_col_indices,
+    at::Tensor &integrated_reltypes, at::Tensor &integrated_eids) {
   assert(integrated_row_ptrs.is_contiguous());
   assert(integrated_col_indices.is_contiguous());
   assert(integrated_reltypes.is_contiguous());
@@ -244,8 +244,8 @@ std::vector<at::Tensor> convert_integrated_csr_to_separate_coo(
       integrated_reltypes_thrust, integrated_eids_thrust);
 
   auto coo_separate =
-      ToSeparateCOO<int64_t>(csr);  // {separate_rel_ptr, separate_row_indices,
-                                    // separate_col_indices, separate_eids}
+      ToSeparateCOO<int64_t>(csr); // {separate_rel_ptr, separate_row_indices,
+                                   // separate_col_indices, separate_eids}
 
   at::Tensor separate_rel_ptrs =
       at::empty({csr.num_rels + 1}, integrated_reltypes.options());
@@ -280,10 +280,10 @@ std::vector<at::Tensor> convert_integrated_csr_to_separate_coo(
   return result;
 }
 
-std::vector<at::Tensor> transpose_csr(at::Tensor& csr_row_ptrs,
-                                      at::Tensor& csr_col_indices,
-                                      at::Tensor& csr_reltypes,
-                                      at::Tensor& csr_eids) {
+std::vector<at::Tensor> transpose_csr(at::Tensor &csr_row_ptrs,
+                                      at::Tensor &csr_col_indices,
+                                      at::Tensor &csr_reltypes,
+                                      at::Tensor &csr_eids) {
   // NB: graphiler, seastar by default uses int64_t
   assert(csr_row_ptrs.is_contiguous());
   assert(csr_col_indices.is_contiguous());
@@ -303,9 +303,9 @@ std::vector<at::Tensor> transpose_csr(at::Tensor& csr_row_ptrs,
   thrust::host_vector<int64_t> csr_reltypes_thrust(
       csr_reltypes.data_ptr<int64_t>(),
       csr_reltypes.data_ptr<int64_t>() + csr_reltypes.numel());
-  thrust::host_vector<int64_t> csr_eids_thrust(
-      csr_eids.data_ptr<int64_t>(),
-      csr_eids.data_ptr<int64_t>() + csr_eids.numel());
+  thrust::host_vector<int64_t> csr_eids_thrust(csr_eids.data_ptr<int64_t>(),
+                                               csr_eids.data_ptr<int64_t>() +
+                                                   csr_eids.numel());
 
   MyHeteroIntegratedCSR<int64_t, std::allocator<int64_t>> csr(
       csr_row_ptrs_thrust, csr_col_indices_thrust, csr_reltypes_thrust,

@@ -11,6 +11,8 @@ Difference compared to tkipf/relation-gcn
 * remove nodes that won't be touched
 """
 
+from torch import nn
+import torch as th
 import argparse
 import numpy as np
 import time
@@ -32,8 +34,6 @@ from ..RGNNUtils import *
 
 """Torch Module for Relational graph convolution layer"""
 # pylint: disable= no-member, arguments-differ, invalid-name
-import torch as th
-from torch import nn
 
 
 class HET_EglRelGraphConv(nn.Module):
@@ -65,7 +65,8 @@ class HET_EglRelGraphConv(nn.Module):
         self.num_blocks_on_node_backward = num_blocks_on_node_backward
         self.compact_as_of_node_flag = compact_as_of_node_flag
         if self.compact_as_of_node_flag:
-            raise NotImplementedError("compact_as_of_node_flag not implemented yet")
+            raise NotImplementedError(
+                "compact_as_of_node_flag not implemented yet")
         self.compact_direct_indexing_flag = compact_direct_indexing_flag
         self.in_feat = in_feat
         self.out_feat = out_feat
@@ -90,8 +91,10 @@ class HET_EglRelGraphConv(nn.Module):
             )
             if self.num_bases < self.num_rels:
                 # linear combination coefficients
-                self.w_comp = nn.Parameter(th.Tensor(self.num_rels, self.num_bases))
-            nn.init.xavier_uniform_(self.weight, gain=nn.init.calculate_gain("relu"))
+                self.w_comp = nn.Parameter(
+                    th.Tensor(self.num_rels, self.num_bases))
+            nn.init.xavier_uniform_(
+                self.weight, gain=nn.init.calculate_gain("relu"))
             if self.num_bases < self.num_rels:
                 nn.init.xavier_uniform_(
                     self.w_comp, gain=nn.init.calculate_gain("relu")
@@ -132,7 +135,8 @@ class HET_EglRelGraphConv(nn.Module):
         # TODO: pass num_heads if applicable to RGCN
         if self.num_bases < self.num_rels:
             # generate all weights from bases
-            weight = self.weight.view(self.num_bases, self.in_feat * self.out_feat)
+            weight = self.weight.view(
+                self.num_bases, self.in_feat * self.out_feat)
             print(
                 "weight size:", self.weight.size(), "w_comp size:", self.w_comp.size()
             )
@@ -162,7 +166,8 @@ class HET_EglRelGraphConv(nn.Module):
         else:
             assert self.sparse_format == "coo"
             if self.layer_type == 0:
-                raise NotImplementedError("Only support csr format for layer 0")
+                raise NotImplementedError(
+                    "Only support csr format for layer 0")
                 node_repr = B.rgcn_layer0_coo(g, weight, norm)
             else:
                 if self.hybrid_assign_flag:
@@ -224,8 +229,10 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
             )
             if self.num_bases < self.num_rels:
                 # linear combination coefficients
-                self.w_comp = nn.Parameter(th.Tensor(self.num_rels, self.num_bases))
-            nn.init.xavier_uniform_(self.weight, gain=nn.init.calculate_gain("relu"))
+                self.w_comp = nn.Parameter(
+                    th.Tensor(self.num_rels, self.num_bases))
+            nn.init.xavier_uniform_(
+                self.weight, gain=nn.init.calculate_gain("relu"))
             if self.num_bases < self.num_rels:
                 nn.init.xavier_uniform_(
                     self.w_comp, gain=nn.init.calculate_gain("relu")
@@ -266,7 +273,8 @@ class HET_EglRelGraphConv_EdgeParallel(nn.Module):
         # TODO: pass num_heads if applicable to RGCN
         if self.num_bases < self.num_rels:
             # generate all weights from bases
-            weight = self.weight.view(self.num_bases, self.in_feat * self.out_feat)
+            weight = self.weight.view(
+                self.num_bases, self.in_feat * self.out_feat)
             print(
                 "weight size:", self.weight.size(), "w_comp size:", self.w_comp.size()
             )
@@ -471,7 +479,7 @@ def RGCN_main_procedure(args, g, model, feats):
     # split dataset into train, validate, test
     if args.validation:
         val_idx = train_idx[: len(train_idx) // 5]
-        train_idx = train_idx[len(train_idx) // 5 :]
+        train_idx = train_idx[len(train_idx) // 5:]
     else:
         val_idx = train_idx
 
@@ -543,7 +551,8 @@ def RGCN_main_procedure(args, g, model, feats):
         if args.verbose:
             print(
                 "Epoch {:05d} | Train Forward Time(s) {:.4f} (our kernel {:.4f} cross entropy {:.4f}) | Backward Time(s) {:.4f}".format(
-                    epoch, forward_time[-1], (tb - t0), (t1 - ta), backward_time[-1]
+                    epoch, forward_time[-1], (tb -
+                                              t0), (t1 - ta), backward_time[-1]
                 )
             )
         train_acc = torch.sum(
@@ -559,7 +568,8 @@ def RGCN_main_procedure(args, g, model, feats):
                     train_acc, loss.item(), val_acc, val_loss.item()
                 )
             )
-    print("max memory allocated (MB) ", torch.cuda.max_memory_allocated() / 1024 / 1024)
+    print("max memory allocated (MB) ",
+          torch.cuda.max_memory_allocated() / 1024 / 1024)
     print(
         "intermediate memory allocated (MB) ",
         (torch.cuda.max_memory_allocated() - memory_offset) / 1024 / 1024,
@@ -572,34 +582,35 @@ def RGCN_main_procedure(args, g, model, feats):
         logits[test_idx].argmax(dim=1) == labels[test_idx]
     ).item() / len(test_idx)
     print(
-        "Test Accuracy: {:.4f} | Test loss: {:.4f}".format(test_acc, test_loss.item())
+        "Test Accuracy: {:.4f} | Test loss: {:.4f}".format(
+            test_acc, test_loss.item())
     )
     print()
 
-    if len(forward_time[len(forward_time) // 4 :]) == 0:
+    if len(forward_time[len(forward_time) // 4:]) == 0:
         print(
             "insufficient run to report mean time. skipping. (in the json it might show as nan)"
         )
     else:
         print(
             "Mean forward time: {:4f} ms".format(
-                np.mean(forward_time[len(forward_time) // 4 :]) * 1000
+                np.mean(forward_time[len(forward_time) // 4:]) * 1000
             )
         )
         print(
             "Mean backward time: {:4f} ms".format(
-                np.mean(backward_time[len(backward_time) // 4 :]) * 1000
+                np.mean(backward_time[len(backward_time) // 4:]) * 1000
             )
         )
         print(
             "Mean training time: {:4f} ms".format(
-                np.mean(training_time[len(training_time) // 4 :]) * 1000
+                np.mean(training_time[len(training_time) // 4:]) * 1000
             )
         )
 
     Used_memory = torch.cuda.max_memory_allocated(0) / (1024**3)
-    avg_run_time = np.mean(forward_time[len(forward_time) // 4 :]) + np.mean(
-        backward_time[len(backward_time) // 4 :]
+    avg_run_time = np.mean(forward_time[len(forward_time) // 4:]) + np.mean(
+        backward_time[len(backward_time) // 4:]
     )
     # output we need
     print("^^^{:6f}^^^{:6f}".format(Used_memory, avg_run_time))
@@ -611,9 +622,9 @@ def RGCN_main_procedure(args, g, model, feats):
         json.dump(
             {
                 "dataset": args.dataset,
-                "mean_forward_time": np.mean(forward_time[len(forward_time) // 4 :]),
-                "mean_backward_time": np.mean(backward_time[len(backward_time) // 4 :]),
-                "mean_training_time": np.mean(training_time[len(training_time) // 4 :]),
+                "mean_forward_time": np.mean(forward_time[len(forward_time) // 4:]),
+                "mean_backward_time": np.mean(backward_time[len(backward_time) // 4:]),
+                "mean_training_time": np.mean(training_time[len(training_time) // 4:]),
                 "forward_time": forward_time,
                 "backward_time": backward_time,
                 "training_time": training_time,

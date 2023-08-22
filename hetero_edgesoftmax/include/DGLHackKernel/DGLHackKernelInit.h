@@ -6,9 +6,9 @@
 #include "DGLHackKernel/OpPrototyping/ModelsProfiling.h"
 #include "OpPrototyping/MySimpleNDArray/MySimpleNDArray.h"
 
-cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(
-    bool sorted = false, bool sorted_by_src = false,
-    std::string data_path_prefix = "data/MyHybData/") {
+cusp::csr_matrix<int, int, cusp::host_memory>
+LoadFB15k237Data(bool sorted = false, bool sorted_by_src = false,
+                 std::string data_path_prefix = "data/MyHybData/") {
   typedef int Idx;
   std::vector<unsigned long> srcs_shape;
   std::vector<unsigned long> dsts_shape;
@@ -80,8 +80,9 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadFB15k237Data(
   return coo_matrix_h;
 }
 
-cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(
-    bool sorted = false, std::string data_path_prefix = "data/MyHybData/") {
+cusp::csr_matrix<int, int, cusp::host_memory>
+LoadOGBNWikiKG2Data(bool sorted = false,
+                    std::string data_path_prefix = "data/MyHybData/") {
   typedef int Idx;
   std::vector<unsigned long> srcs_shape;
   std::vector<unsigned long> dsts_shape;
@@ -96,9 +97,8 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(
   int num_edges = 16109182;
   // num_relationship: 535
   if (sorted) {
-    printf(
-        "WARNING: infidel loading ogbn-wikikg2. Check readme.md for "
-        "details.\n");
+    printf("WARNING: infidel loading ogbn-wikikg2. Check readme.md for "
+           "details.\n");
     npy::LoadArrayFromNumpy(
         (data_path_prefix + "ogbn-wikikg2.infidel_sorted.coo.srcs.npy").c_str(),
         srcs_shape, fortran_order, srcs_data);
@@ -130,8 +130,8 @@ cusp::csr_matrix<int, int, cusp::host_memory> LoadOGBNWikiKG2Data(
   return coo_matrix_h;
 }
 
-MyHeteroIntegratedCSR<int, std::allocator<int>> LoadOGBN_MAG(
-    std::string data_path_prefix = "data/ogbn_mag/") {
+MyHeteroIntegratedCSR<int, std::allocator<int>>
+LoadOGBN_MAG(std::string data_path_prefix = "data/ogbn_mag/") {
   std::vector<unsigned long> is_about_shape;
   std::vector<unsigned long> affliated_with_shape;
   std::vector<unsigned long> citing_shape;
@@ -229,8 +229,8 @@ LoadSegmentCSR_OGBN_MAG() {
   typedef int Idx;
 
   // problem definition
-  int num_nodes = 1939743;  // 1134649 authors + 59965 field of studies + 8740
-                            // institution + 736389 papers
+  int num_nodes = 1939743; // 1134649 authors + 59965 field of studies + 8740
+                           // institution + 736389 papers
   int num_cutoff_nodes = 400000;
   // maximal non-cut-off index  734649
   // edge type num  4

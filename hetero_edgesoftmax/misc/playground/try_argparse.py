@@ -3,7 +3,8 @@ import argparse
 
 
 def my_add_argument(parser):
-    parser.add_argument("--sort_by_src", action="store_true", help="sort by src")
+    parser.add_argument(
+        "--sort_by_src", action="store_true", help="sort by src")
     parser.add_argument(
         "--take_in_list_test",
         nargs="+",

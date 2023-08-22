@@ -5,10 +5,9 @@
 #include "utils.cu.h"
 
 template <bool scatter_col_flag, int OUT_DIM>
-__device__ __forceinline__ static float &GetCEle(float *C,
-                                                 int *col_scatter_list, int K,
-                                                 int idx_head, int row,
-                                                 int col) {
+__device__ __forceinline__ static float &
+GetCEle(float *C, int *col_scatter_list, int K, int idx_head, int row,
+        int col) {
   // We need to return an element reference so that we can store the result in
   // it.
   if constexpr (scatter_col_flag) {
@@ -22,9 +21,10 @@ __device__ __forceinline__ static float &GetCEle(float *C,
 template <bool gather_col_flag, int OUT_DIM,
           bool B_col_second_indirection_gather_flag,
           bool B_col_second_indirection_gather_binary_search_flag>
-__device__ __forceinline__ static float GetBEle(
-    float *B, int *col_gather_list, int *second_col_gather_list,
-    int second_col_gather_list_length, int K, int idx_head, int row, int col) {
+__device__ __forceinline__ static float
+GetBEle(float *B, int *col_gather_list, int *second_col_gather_list,
+        int second_col_gather_list_length, int K, int idx_head, int row,
+        int col) {
   if constexpr (gather_col_flag) {
     if constexpr (B_col_second_indirection_gather_flag) {
       if constexpr (B_col_second_indirection_gather_binary_search_flag) {
@@ -60,11 +60,12 @@ template <int TILE_SZ_A, int TILE_SZ_B, int OUT_DIM, int NUM_HEADS,
           bool B_col_second_indirection_gather_flag,
           bool B_col_second_indirection_gather_binary_search_flag>
 class mysgemm_functor {
- public:
-  __device__ __forceinline__ static void exec_function(
-      int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
-      int *B_col_second_gather_list, int B_col_second_gather_list_length,
-      int *C_col_scatter_list, int BcolBias) {
+public:
+  __device__ __forceinline__ static void
+  exec_function(int m, int n, int k, float *A, float *B, float *C,
+                int *B_col_gather_list, int *B_col_second_gather_list,
+                int B_col_second_gather_list_length, int *C_col_scatter_list,
+                int BcolBias) {
     assert(0 && "not implemented");
   }
 };
@@ -78,11 +79,12 @@ template <int TILE_SZ_A, int TILE_SZ_B, int OUT_DIM, bool B_col_gather_flag,
 class mysgemm_functor<TILE_SZ_A, TILE_SZ_B, OUT_DIM, 1, B_col_gather_flag,
                       C_col_scatter_flag, B_col_second_indirection_gather_flag,
                       B_col_second_indirection_gather_binary_search_flag> {
- public:
-  __device__ __forceinline__ static void exec_function(
-      int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
-      int *B_col_second_gather_list, int B_col_second_gather_list_length,
-      int *C_col_scatter_list, int BcolBias) {
+public:
+  __device__ __forceinline__ static void
+  exec_function(int m, int n, int k, float *A, float *B, float *C,
+                int *B_col_gather_list, int *B_col_second_gather_list,
+                int B_col_second_gather_list_length, int *C_col_scatter_list,
+                int BcolBias) {
     /********************************************************************
      *
      * Compute C = A x B
@@ -189,11 +191,12 @@ template <int OUT_DIM, int NUM_HEADS, bool B_col_gather_flag,
 class mysgemm_functor<512, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
                       C_col_scatter_flag, B_col_second_indirection_gather_flag,
                       B_col_second_indirection_gather_binary_search_flag> {
- public:
-  __device__ __forceinline__ static void exec_function(
-      int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
-      int *B_col_second_gather_list, int B_col_second_gather_list_length,
-      int *C_col_scatter_list, int BcolBias) {
+public:
+  __device__ __forceinline__ static void
+  exec_function(int m, int n, int k, float *A, float *B, float *C,
+                int *B_col_gather_list, int *B_col_second_gather_list,
+                int B_col_second_gather_list_length, int *C_col_scatter_list,
+                int BcolBias) {
     constexpr int TILE_SZ_A = 512;
     constexpr int TILE_SZ_B = 32;
     constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
@@ -258,7 +261,7 @@ class mysgemm_functor<512, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
     __shared__ float
         shmem_output[16 /*node idx*/][16 /*element idx in 4 heads*/]
                     [2 /*node idx 2nd part*/]
-                    [16 /*element idx in 4 heads 2nd part*/];  // 32KB
+                    [16 /*element idx in 4 heads 2nd part*/]; // 32KB
     for (int idx = 0; idx < 16; idx++) {
       shmem_output[idx][threadIdx.x / 32][threadIdx.x % 32 / 16]
                   [threadIdx.x % 16] = 0.0f;
@@ -555,11 +558,12 @@ template <int OUT_DIM, int NUM_HEADS, bool B_col_gather_flag,
 class mysgemm_functor<256, 8, OUT_DIM, NUM_HEADS, B_col_gather_flag,
                       C_col_scatter_flag, B_col_second_indirection_gather_flag,
                       B_col_second_indirection_gather_binary_search_flag> {
- public:
-  __device__ __forceinline__ static void exec_function(
-      int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
-      int *B_col_second_gather_list, int B_col_second_gather_list_length,
-      int *C_col_scatter_list, int BcolBias) {
+public:
+  __device__ __forceinline__ static void
+  exec_function(int m, int n, int k, float *A, float *B, float *C,
+                int *B_col_gather_list, int *B_col_second_gather_list,
+                int B_col_second_gather_list_length, int *C_col_scatter_list,
+                int BcolBias) {
     constexpr int TILE_SZ_A = 256;
     constexpr int TILE_SZ_B = 8;
     constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
@@ -794,11 +798,12 @@ template <int OUT_DIM, int NUM_HEADS, bool B_col_gather_flag,
 class mysgemm_functor<256, 32, OUT_DIM, NUM_HEADS, B_col_gather_flag,
                       C_col_scatter_flag, B_col_second_indirection_gather_flag,
                       B_col_second_indirection_gather_binary_search_flag> {
- public:
-  __device__ __forceinline__ static void exec_function(
-      int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
-      int *B_col_second_gather_list, int B_col_second_gather_list_length,
-      int *C_col_scatter_list, int BcolBias) {
+public:
+  __device__ __forceinline__ static void
+  exec_function(int m, int n, int k, float *A, float *B, float *C,
+                int *B_col_gather_list, int *B_col_second_gather_list,
+                int B_col_second_gather_list_length, int *C_col_scatter_list,
+                int BcolBias) {
     constexpr int TILE_SZ_A = 256;
     constexpr int TILE_SZ_B = 32;
     constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
@@ -1071,11 +1076,12 @@ template <int OUT_DIM, int NUM_HEADS, bool B_col_gather_flag,
 class mysgemm_functor<128, 16, OUT_DIM, NUM_HEADS, B_col_gather_flag,
                       C_col_scatter_flag, B_col_second_indirection_gather_flag,
                       B_col_second_indirection_gather_binary_search_flag> {
- public:
-  __device__ __forceinline__ static void exec_function(
-      int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
-      int *B_col_second_gather_list, int B_col_second_gather_list_length,
-      int *C_col_scatter_list, int BcolBias) {
+public:
+  __device__ __forceinline__ static void
+  exec_function(int m, int n, int k, float *A, float *B, float *C,
+                int *B_col_gather_list, int *B_col_second_gather_list,
+                int B_col_second_gather_list_length, int *C_col_scatter_list,
+                int BcolBias) {
     constexpr int TILE_SZ_A = 128;
     constexpr int TILE_SZ_B = 16;
     constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);
@@ -1258,11 +1264,12 @@ template <int OUT_DIM, int NUM_HEADS, bool B_col_gather_flag,
 class mysgemm_functor<128, 8, OUT_DIM, NUM_HEADS, B_col_gather_flag,
                       C_col_scatter_flag, B_col_second_indirection_gather_flag,
                       B_col_second_indirection_gather_binary_search_flag> {
- public:
-  __device__ __forceinline__ static void exec_function(
-      int m, int n, int k, float *A, float *B, float *C, int *B_col_gather_list,
-      int *B_col_second_gather_list, int B_col_second_gather_list_length,
-      int *C_col_scatter_list, int BcolBias) {
+public:
+  __device__ __forceinline__ static void
+  exec_function(int m, int n, int k, float *A, float *B, float *C,
+                int *B_col_gather_list, int *B_col_second_gather_list,
+                int B_col_second_gather_list_length, int *C_col_scatter_list,
+                int BcolBias) {
     constexpr int TILE_SZ_A = 128;
     constexpr int TILE_SZ_B = 8;
     constexpr int NODE_INPUT_DIM_PER_HEAD = (OUT_DIM / NUM_HEADS);

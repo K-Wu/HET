@@ -47,8 +47,10 @@ def graphiler_bench(
         print("{} elapsed time: {} ms/infer".format(tag, elapsed_time))
         # log.at[tag, "time"] = elapsed_time
         if memory:
-            max_mem_consumption = (max_memory_allocated() - memory_offset) / 1048576
-            print("intermediate data memory usage: {} MB".format(max_mem_consumption))
+            max_mem_consumption = (
+                max_memory_allocated() - memory_offset) / 1048576
+            print("intermediate data memory usage: {} MB".format(
+                max_mem_consumption))
             # log.at[tag, "mem"] = max_mem_consumption
     except (RuntimeError, DGLError):
         print("{} OOM".format(tag))
@@ -60,7 +62,8 @@ def graphiler_bench(
 
 
 def init_log(tags, metrics):
-    index = pd.MultiIndex.from_product([tags, metrics], names=["tag", "metric"])
+    index = pd.MultiIndex.from_product(
+        [tags, metrics], names=["tag", "metric"])
     return pd.Series(np.zeros((len(tags) * len(metrics),)), index=index)
 
 

@@ -5,49 +5,48 @@
 // }
 
 template <typename KeyType, typename ValueType>
-std::map<KeyType, ValueType> convert_torch_dict_to_map(
-    const torch::Dict<KeyType, ValueType>& dict) {
+std::map<KeyType, ValueType>
+convert_torch_dict_to_map(const torch::Dict<KeyType, ValueType> &dict) {
   std::map<KeyType, ValueType> result;
-  for (const auto& item : dict) {
+  for (const auto &item : dict) {
     result[item.key()] = item.value();
   }
   return result;
 }
 
 template <typename KeyType, typename ValueType>
-torch::Dict<KeyType, ValueType> convert_map_to_torch_dict(
-    const std::map<KeyType, ValueType>& map) {
+torch::Dict<KeyType, ValueType>
+convert_map_to_torch_dict(const std::map<KeyType, ValueType> &map) {
   torch::Dict<KeyType, ValueType> result;
-  for (const auto& item : map) {
+  for (const auto &item : map) {
     result.insert(item.first, item.second);
   }
   return result;
 }
 
 template <typename ContainerType>
-at::Tensor export_thrust_device_vector_to_torch_tensor(ContainerType& vec) {
+at::Tensor export_thrust_device_vector_to_torch_tensor(ContainerType &vec) {
   // static_assert(std::is_same<T, int>::value, "only support int for now");
-  printf(
-      "WARNING: Narrowing Cast from size_t to int64_t in "
-      "export_thrust_device_vector_to_torch_tensor!\n");
+  printf("WARNING: Narrowing Cast from size_t to int64_t in "
+         "export_thrust_device_vector_to_torch_tensor!\n");
   return torch::from_blob(
       vec.data().get(), {(signed long)vec.size()},
       at::TensorOptions(caffe2::TypeMeta::Make<int32_t>()).device(at::kCUDA));
 }
 
 template <typename T>
-thrust::device_vector<T> import_thrust_device_vector_from_torch_tensor(
-    const at::Tensor& tensor) {
+thrust::device_vector<T>
+import_thrust_device_vector_from_torch_tensor(const at::Tensor &tensor) {
   static_assert(std::is_same<T, int>::value, "only support int for now");
-  return thrust::device_vector<T>(
-      reinterpret_cast<T*>(tensor.data_ptr()),
-      reinterpret_cast<T*>(tensor.data_ptr()) + tensor.numel());
+  return thrust::device_vector<T>(reinterpret_cast<T *>(tensor.data_ptr()),
+                                  reinterpret_cast<T *>(tensor.data_ptr()) +
+                                      tensor.numel());
 }
 
 // internal utility function as the end of a torch API function, to convert the
 // input tensors to the corresponding C++ data structures
 std::vector<std::vector<at::Tensor>> _export_HGTLayerExecPreprocessedData(
-    HGTLayerExecPreprocessedData& preprocessed_data) {
+    HGTLayerExecPreprocessedData &preprocessed_data) {
   std::vector<std::vector<at::Tensor>> result;
   result.push_back({});
   for (size_t idx_relation = 0;
@@ -77,8 +76,8 @@ std::vector<std::vector<at::Tensor>> _export_HGTLayerExecPreprocessedData(
 
 // internal utility function as the beginning of a torch API function, to
 // convert the corresponding C++ data structures to a torch structure
-HGTLayerExecPreprocessedData _import_HGTLayerExecPreprocessedData(
-    const std::vector<at::Tensor>& tensors) {
+HGTLayerExecPreprocessedData
+_import_HGTLayerExecPreprocessedData(const std::vector<at::Tensor> &tensors) {
   std::vector<cusp::coo_matrix<int, int,
                                cusp::device_memory>::column_indices_array_type>
       coo_matrices_column_indices_unique;
@@ -107,14 +106,14 @@ HGTLayerExecPreprocessedData _import_HGTLayerExecPreprocessedData(
 
 // internal utility function as the end of a torch API function, to convert the
 // input tensors to the corresponding C++ data structures
-torch::Dict<std::string, int64_t> _export_HGTLayerHyperParams(
-    const HGTLayerHyperParams& hyper_params) {
+torch::Dict<std::string, int64_t>
+_export_HGTLayerHyperParams(const HGTLayerHyperParams &hyper_params) {
   return convert_map_to_torch_dict(hyper_params.GetMapRepr());
 }
 
 // internal utility function as the beginning of a torch API function, to
 // convert the corresponding C++ data structures to a torch structure
-HGTLayerHyperParams _import_HGTLayerHyperParams(
-    const torch::Dict<std::string, int64_t>& dict) {
+HGTLayerHyperParams
+_import_HGTLayerHyperParams(const torch::Dict<std::string, int64_t> &dict) {
   return HGTLayerHyperParams(convert_torch_dict_to_map(dict));
 }

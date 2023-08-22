@@ -32,8 +32,8 @@ void try_get_schedule_by_relations(int64_t num_relations, int64_t num_blocks) {
 #define GIT_COMMIT_HASH "?"
 #endif
 
-std::vector<std::vector<at::Tensor>> biops_tensor_info(
-    at::Tensor &one_tensor, at::Tensor &other_tensor) {
+std::vector<std::vector<at::Tensor>>
+biops_tensor_info(at::Tensor &one_tensor, at::Tensor &other_tensor) {
   std::cout << "one_tensor device: " << one_tensor.device() << std::endl;
   std::cout << "other_tensor device: " << other_tensor.device() << std::endl;
   std::cout << "one_tensor dtype: " << one_tensor.dtype() << std::endl;
@@ -78,8 +78,9 @@ at::Tensor tensor_info(const at::Tensor &one_tensor) {
   return one_tensor.clone();
 }
 
-torch::Dict<std::string, int64_t> test_argument_takein(
-    std::string str, bool flag, torch::Dict<std::string, int64_t> dictionary) {
+torch::Dict<std::string, int64_t>
+test_argument_takein(std::string str, bool flag,
+                     torch::Dict<std::string, int64_t> dictionary) {
   std::cout << "test_string_takein: " << str << std::endl;
   std::cout << "test_bool_takein: " << flag << std::endl;
   std::cout << "test_dict_takein: " << dictionary.at("key1") << std::endl;

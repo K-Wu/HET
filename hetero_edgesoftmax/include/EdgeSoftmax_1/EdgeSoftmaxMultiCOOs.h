@@ -199,8 +199,9 @@ std::vector<thrust::device_vector<float>> _doGPUEdgeSoftmaxMultiCOOsKernel(
 }
 
 template <typename matrix_type>
-std::vector<thrust::device_vector<float>> doGPUEdgeSoftmaxMultiCOOsKernel(
-    std::vector<matrix_type> coo_matrices, bool FlagInitWithRandomValue) {
+std::vector<thrust::device_vector<float>>
+doGPUEdgeSoftmaxMultiCOOsKernel(std::vector<matrix_type> coo_matrices,
+                                bool FlagInitWithRandomValue) {
   assert(0);
 }
 

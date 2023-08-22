@@ -100,7 +100,7 @@ def get_raw_column_idx_and_convertion(
     for column in columns:
         raw_column_idx[column] = header.index(column)
         assert (
-            column not in header[raw_column_idx[column] + 1 :]
+            column not in header[raw_column_idx[column] + 1:]
         ), "no raw metric should be associated with two different units in the same profiling file"
         if (column, units[raw_column_idx[column]]) in metric_unit_conversion:
             (
@@ -119,27 +119,35 @@ def extract_ncu_values_from_raws(
     # It is safe to duplicate entries because raw_metrics is a set
     raw_metrics: "set[str]" = {
         # Achieved work
-        "smsp__sass_thread_inst_executed_op_fadd_pred_on.sum.per_cycle_elapsed",  # value per cycle (1/3)
-        "smsp__sass_thread_inst_executed_op_fmul_pred_on.sum.per_cycle_elapsed",  # value per cycle (2/3)
-        "derived__smsp__sass_thread_inst_executed_op_ffma_pred_on_x2",  # Predicated-On FFMA Operations Per Cycle value per cycle (3/3)
+        # value per cycle (1/3)
+        "smsp__sass_thread_inst_executed_op_fadd_pred_on.sum.per_cycle_elapsed",
+        # value per cycle (2/3)
+        "smsp__sass_thread_inst_executed_op_fmul_pred_on.sum.per_cycle_elapsed",
+        # Predicated-On FFMA Operations Per Cycle value per cycle (3/3)
+        "derived__smsp__sass_thread_inst_executed_op_ffma_pred_on_x2",
         "smsp__cycles_elapsed.avg.per_second",  # "SM Frequency" cycle per second
         # L2 achieved traffic
-        "l1tex__m_xbar2l1tex_read_bytes.sum.per_second",  # L2 Cache bandwidth achieved value
+        # L2 Cache bandwidth achieved value
+        "l1tex__m_xbar2l1tex_read_bytes.sum.per_second",
         # L1 achieved traffic
-        "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second",  # L1 Cache Bandwidth (Global/Local) achieved traffic
+        # L1 Cache Bandwidth (Global/Local) achieved traffic
+        "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second",
         # DRAM achieved traffic
         "dram__bytes.sum.per_second",  # DRAM Bandwidth achieved value
         # Compute roofline
-        "derived__sm__sass_thread_inst_executed_op_ffma_pred_on_x2",  # Theoretical Predicated-On FFMA Operations value per cycle
+        # Theoretical Predicated-On FFMA Operations value per cycle
+        "derived__sm__sass_thread_inst_executed_op_ffma_pred_on_x2",
         "sm__cycles_elapsed.avg.per_second",  # "SM Frequency" cycle per second
         # DRAM roofline
         "dram__bytes.sum.peak_sustained",  # "Theoretical DRAM Bytes Accessible"
         "dram__cycles_elapsed.avg.per_second",  # DRAM frequency cycle per second
         # L1 roofline
-        "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained",  # Theoretical L1/TEX Cache Bytes Accessible
+        # Theoretical L1/TEX Cache Bytes Accessible
+        "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained",
         "l1tex__cycles_elapsed.avg.per_second",  # L1 cache frequency cycle per second
         # L2 roofline
-        "l1tex__m_xbar2l1tex_read_bytes.sum.peak_sustained",  # "Theoretical L2 Cache Bytes Accessible" value per cycle
+        # "Theoretical L2 Cache Bytes Accessible" value per cycle
+        "l1tex__m_xbar2l1tex_read_bytes.sum.peak_sustained",
         "lts__cycles_elapsed.avg.per_second",  # "L2 cache frequency" cycle per second
     },
     metric_unit_conversion: "dict[Tuple[str, str], Tuple[str, int]]" = {
@@ -168,9 +176,11 @@ def extract_ncu_values_from_raws(
     # for idx in NCU_DETAILS_COLUMN_IDX.values():
     #    print(f"header[{idx}] = {header[idx]}, units[{idx}] = {units[idx]}")
     results: list[list[str]] = [
-        ["ID", "Pretty Name", "Kernel Name"] + [key for key in NCU_DETAILS_COLUMN_IDX],
+        ["ID", "Pretty Name", "Kernel Name"] +
+        [key for key in NCU_DETAILS_COLUMN_IDX],
         ["", "", ""]
-        + [new_units[NCU_DETAILS_COLUMN_IDX[key]] for key in NCU_DETAILS_COLUMN_IDX],
+        + [new_units[NCU_DETAILS_COLUMN_IDX[key]]
+            for key in NCU_DETAILS_COLUMN_IDX],
     ]
     for row in nsys_details_csv[2:]:  # Skip header and units
         results.append(
@@ -383,7 +393,8 @@ def consolidate_ncu_details(metric_per_row: "list[list[str]]") -> "list[list[str
     """
     header: list[str] = metric_per_row[0]
     name_columns: list[str] = ["ID", "Pretty Name", "Kernel Name"]
-    name_columns_idx: dict[str, int] = {key: header.index(key) for key in name_columns}
+    name_columns_idx: dict[str, int] = {
+        key: header.index(key) for key in name_columns}
     metric_columns: list[str] = ["Metric Name", "Metric Unit", "Metric Value"]
     metric_columns_idx: dict[str, int] = {
         key: header.index(key) for key in metric_columns
@@ -421,10 +432,12 @@ def consolidate_ncu_details(metric_per_row: "list[list[str]]") -> "list[list[str
         )
 
     derive_kernel_categories(kernel_instances_metrics, metrics_and_units)
-    derive_kernel_forward_or_backward(kernel_instances_metrics, metrics_and_units)
+    derive_kernel_forward_or_backward(
+        kernel_instances_metrics, metrics_and_units)
 
     results: list[list[str]] = [
-        name_columns + [ele[0] for ele in sorted(metrics_and_units, reverse=True)],
+        name_columns + [ele[0]
+                        for ele in sorted(metrics_and_units, reverse=True)],
         [""] * len(name_columns)
         + [ele[1] for ele in sorted(metrics_and_units, reverse=True)],
     ]
@@ -434,7 +447,8 @@ def consolidate_ncu_details(metric_per_row: "list[list[str]]") -> "list[list[str
             if (metric, unit) not in kernel_instances_metrics[kernel_identifier]:
                 row.append("")
             else:
-                row.append(kernel_instances_metrics[kernel_identifier][(metric, unit)])
+                row.append(
+                    kernel_instances_metrics[kernel_identifier][(metric, unit)])
         results.append(row)
     assert "Metric Name" not in results[0]
     return results
@@ -457,7 +471,8 @@ def convert_kernel_instances_metrics_to_ncu_raw_csv(
             if (metric, unit) not in kernel_instances_metrics[kernel_identifier]:
                 row.append("")
             else:
-                row.append(kernel_instances_metrics[kernel_identifier][(metric, unit)])
+                row.append(
+                    kernel_instances_metrics[kernel_identifier][(metric, unit)])
         results.append(row)
     return results
 
@@ -540,7 +555,8 @@ def combine_ncu_raw_csvs(
     for raw_csv_ in raw_csv_list:
         header: list[str] = raw_csv_[0]
         units: list[str] = raw_csv_[1]
-        assert header[num_frozen_columns - 3] == "ID", f"header[0] = {header[0]} != ID"
+        assert header[num_frozen_columns -
+                      3] == "ID", f"header[0] = {header[0]} != ID"
         assert (
             header[num_frozen_columns - 2] == "Pretty Name"
         ), f"header[1] = {header[1]} != Pretty Name"
@@ -548,7 +564,8 @@ def combine_ncu_raw_csvs(
             header[num_frozen_columns - 1] == "Kernel Name"
         ), f"header[2] = {header[2]} != Kernel Name"
         for row in raw_csv_[2:]:
-            kernel_identifier: tuple[str, ...] = tuple(row[:num_frozen_columns])
+            kernel_identifier: tuple[str, ...] = tuple(
+                row[:num_frozen_columns])
             if kernel_identifier not in kernel_instances_metrics:
                 kernel_instances_metrics[kernel_identifier] = dict()
             # Metric columns start from num_frozen_columns
@@ -589,7 +606,8 @@ def combine_ncu_raw_csvs(
             if (metric, unit) not in kernel_instances_metrics[kernel_identifier]:
                 row.append("")
             else:
-                row.append(kernel_instances_metrics[kernel_identifier][(metric, unit)])
+                row.append(
+                    kernel_instances_metrics[kernel_identifier][(metric, unit)])
         results.append(row)
     return results
 
@@ -598,7 +616,8 @@ def unit_to_str(
     exponential: int, nominator: "list[str]", denominator: "list[str]"
 ) -> str:
     assert len(nominator) <= 1, f"nominator = {nominator} is not a single unit"
-    assert len(denominator) <= 1, f"denominator = {denominator} is not a single unit"
+    assert len(
+        denominator) <= 1, f"denominator = {denominator} is not a single unit"
     nominator_str = "" if len(nominator) == 0 else nominator[0]
     if len(denominator) == 0:
         return EXPONENTIAL_TO_UNITS[exponential] + nominator_str

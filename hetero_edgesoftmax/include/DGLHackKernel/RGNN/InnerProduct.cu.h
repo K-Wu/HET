@@ -4,8 +4,7 @@
 
 #include "kernel_enums.h"
 
-template <typename Idx, typename DType>
-struct InnerProductData {
+template <typename Idx, typename DType> struct InnerProductData {
   // feat_size size along feature dimension
   Idx feat_src_xlen{0};
   Idx num_heads{0};
@@ -16,8 +15,7 @@ struct InnerProductData {
   DType *__restrict__ edge_inner_product{nullptr};
 };
 
-template <typename Idx, typename DType>
-struct BackwardInnerProductData {
+template <typename Idx, typename DType> struct BackwardInnerProductData {
   // feat_size size along feature dimension
   Idx feat_src_xlen{0};
   Idx num_heads{0};
@@ -85,7 +83,7 @@ __global__ void HET_inner_product_fw_kernel(
                                 head_idx * hidden_xlen + feat_idx] *
                  gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                 head_idx * hidden_xlen + feat_idx];
-          } else {  // !RelationalFlag
+          } else { // !RelationalFlag
             // NB: feat_src_entry_id varies between edata_idx and src_vid
             // depending on compactasofnodeflag
             if constexpr (IsCompact(kind)) {
@@ -139,7 +137,7 @@ __global__ void HET_inner_product_bck_kernel(
             // edge id, regardless of the type of the edge
             feat_src_offset = edata_idx * gdata.feat_src_xlen +
                               head_idx * hidden_xlen + feat_idx;
-          } else {  // CompactAsOfNodeFlag
+          } else { // CompactAsOfNodeFlag
             if constexpr (RelationalFlag) {
               // in this case, er_idx (sum's index) is related to (relation,
               // unique node index) el_idx is related to (relation, unique node
@@ -179,11 +177,11 @@ __global__ void HET_inner_product_bck_kernel(
                 gdata.feat_dst[dst_vid * gdata.feat_src_xlen +
                                head_idx * hidden_xlen + feat_idx];
           }
-        }  // for Idx e
+        } // for Idx e
         if constexpr (IsCompact(kind) && !RelationalFlag) {
           gdata.grad_feat_src[feat_src_offset] = sfeatsrc;
         }
-      }  // while feat_idx
-    }    // while head_idx
-  }      // while src_vid
+      } // while feat_idx
+    }   // while head_idx
+  }     // while src_vid
 }

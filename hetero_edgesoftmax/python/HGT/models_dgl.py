@@ -53,7 +53,8 @@ class HGTLayerHetero(nn.Module):
             if use_norm:
                 self.norms.append(nn.LayerNorm(out_dim))
 
-        self.relation_pri = nn.Parameter(torch.ones(self.num_relations, self.num_heads))
+        self.relation_pri = nn.Parameter(
+            torch.ones(self.num_relations, self.num_heads))
         self.relation_att = nn.Parameter(
             torch.Tensor(self.num_relations, num_heads, self.d_k, self.d_k)
         )
@@ -97,7 +98,8 @@ class HGTLayerHetero(nn.Module):
 
                 sub_graph.apply_edges(fn.v_dot_u("q", "k", "t"))
                 attn_score = (
-                    sub_graph.edata.pop("t").sum(-1) * relation_pri / self.sqrt_dk
+                    sub_graph.edata.pop("t").sum(-1) *
+                    relation_pri / self.sqrt_dk
                 )
                 attn_score = edge_softmax(sub_graph, attn_score, norm_by="dst")
 
@@ -105,7 +107,8 @@ class HGTLayerHetero(nn.Module):
 
             G.multi_update_all(
                 {
-                    etype: (fn.u_mul_e("v_%d" % e_id, "t", "m"), fn.sum("m", "t"))
+                    etype: (fn.u_mul_e("v_%d" %
+                            e_id, "t", "m"), fn.sum("m", "t"))
                     for etype, e_id in edge_dict.items()
                 },
                 cross_reducer="mean",

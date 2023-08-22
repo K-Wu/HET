@@ -26,7 +26,7 @@ class _simplified_basic_MatMulKernel<
     InnerProductGatherListNodeInsteadOfEdge, NoEdgeNormFlag, AtomicUpdateFlag> {
   // TODO: investigate why there are zeros in grad_normalized_attn_score
   // FIXME:
- public:
+public:
   // vanilla tiled shmem gemm code from
   // http://www.shodor.org/media/content//petascale/materials/UPModules/matrixMultiplication/moduleDocument.pdf
   //@@ Example of grid and block configuration
@@ -105,7 +105,7 @@ class _simplified_basic_MatMulKernel<
     if constexpr (!HGT_INSTEAD_OF_RGCN_FLAG && !OuterProductFlag) {
       // assuming this case is RGCN and there is no multiple head
       assert((gridDim.z == 1));
-    }  // otherwise assuming HGT
+    } // otherwise assuming HGT
     // TODO: use int for blockIdx threadIdx related variables
     // NB: this scheme does not support num_heads > int_max
     int idx_head = blockIdx.z % num_heads;
@@ -128,15 +128,15 @@ class _simplified_basic_MatMulKernel<
         inner_product_term_scatter_list = separate_coo_eids;
       }
     }
-    int blockFeat = blockIdx.x;  // when OuterProductFlag==True, it is in [0,
-                                 // output_dim//num_heads)
+    int blockFeat = blockIdx.x; // when OuterProductFlag==True, it is in [0,
+                                // output_dim//num_heads)
 
     int blockRowLoopBeg, blockRowLoopEnd, blockRowLoopInc;
     if constexpr (OuterProductFlag) {
       blockRowLoopBeg =
-          blockIdx.y;  // [0, input_dim) // check my_shmem_sgemm_func.cu.h NB on
-                       // why -blockIdxAlongRowBeg bias is not applied here but
-                       // applied to the m loop
+          blockIdx.y; // [0, input_dim) // check my_shmem_sgemm_func.cu.h NB on
+                      // why -blockIdxAlongRowBeg bias is not applied here but
+                      // applied to the m loop
       blockRowLoopEnd = blockIdx.y + 1;
       blockRowLoopInc = 1;
     } else {
@@ -175,15 +175,15 @@ class _simplified_basic_MatMulKernel<
       float InnerProductTerm
           [DoInnerProductSwitch != MySGEMMInnerProductKind::Disabled
                ? (INNER_PROD_LOAD_SOURCE_INTO_SHMEM
-                      ? NUM_OUTPUT_PER_THREAD  // actually
-                                               // max2(inner_prod_source_reg_ele_num,1)
+                      ? NUM_OUTPUT_PER_THREAD // actually
+                                              // max2(inner_prod_source_reg_ele_num,1)
                       : NUM_OUTPUT_PER_THREAD)
-               : 1] = {};  // zero initialization
+               : 1] = {}; // zero initialization
       __shared__ float InnerProductTerm_shmem
           [(DoInnerProductSwitch != MySGEMMInnerProductKind::Disabled &&
             INNER_PROD_LOAD_SOURCE_INTO_SHMEM)
-               ? NUM_OUTPUT_PER_THREAD  // actually
-                                        // max2(inner_prod_source_shmem_ele_num,1)
+               ? NUM_OUTPUT_PER_THREAD // actually
+                                       // max2(inner_prod_source_shmem_ele_num,1)
                : 1]
           [(DoInnerProductSwitch != MySGEMMInnerProductKind::Disabled &&
             INNER_PROD_LOAD_SOURCE_INTO_SHMEM)
@@ -269,8 +269,8 @@ class _simplified_basic_MatMulKernel<
         if constexpr (DoInnerProductSwitch !=
                           MySGEMMInnerProductKind::Disabled &&
                       INNER_PROD_LOAD_SOURCE_INTO_SHMEM) {
-          if (m < inner_prod_source_shmem_ele_num) {  // the loop variable here
-                                                      // is actually m
+          if (m < inner_prod_source_shmem_ele_num) { // the loop variable here
+                                                     // is actually m
             static_assert(SHMEM_BLOCK_SIZE_Y >= NUM_OUTPUT_PER_THREAD, "");
             int thIdxRow = thIdxRow_initial_BC +
                            (inner_prod_source_reg_ele_num + m) *
@@ -330,7 +330,7 @@ class _simplified_basic_MatMulKernel<
                 (thIdxFeat_A_outer_product +
                          // k is the row dimension instead of the feature
                          // because of the transpose
-                         (m)*SHMEM_BLOCK_SIZE_K <  // + blockRowJobEntryBeg <
+                         (m)*SHMEM_BLOCK_SIZE_K < // + blockRowJobEntryBeg <
                      numARows &&
                  blockRow * SHMEM_BLOCK_SIZE_Y + thIdxRow_A_outer_product <
                      num_A_cols)
@@ -359,8 +359,8 @@ class _simplified_basic_MatMulKernel<
                         THREADING_BLOCK_SIZE_Y) %
                            SHMEM_BLOCK_SIZE_X);
             float value_to_load =
-                ((m)*SHMEM_BLOCK_SIZE_K + thIdxRow <  //+ blockRowJobEntryBeg <
-                     numARows &&  // TODO: idx_head < num_heads
+                ((m)*SHMEM_BLOCK_SIZE_K + thIdxRow < //+ blockRowJobEntryBeg <
+                     numARows && // TODO: idx_head < num_heads
                  blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols)
                     ? B[B_gather_list[(m)*SHMEM_BLOCK_SIZE_K + thIdxRow +
                                       blockRowJobEntryBeg] *
@@ -397,7 +397,7 @@ class _simplified_basic_MatMulKernel<
                                  idx_head]);
             As[thIdxRow][thIdxFeat] =
                 (thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y <
-                     numARows &&  // TODO: idx_head<num_heads
+                     numARows && // TODO: idx_head<num_heads
                  m * SHMEM_BLOCK_SIZE_K + thIdxFeat < num_A_cols)
                     ? A[A_gather_list[thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y +
                                       blockRowJobEntryBeg] *
@@ -434,7 +434,7 @@ class _simplified_basic_MatMulKernel<
             float value_to_load =
                 (m * SHMEM_BLOCK_SIZE_K + thIdxRow < num_A_cols &&
                  blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat <
-                     num_B_cols)  // TODO: idx_head < num_heads
+                     num_B_cols) // TODO: idx_head < num_heads
                     ? B[(m * SHMEM_BLOCK_SIZE_K + thIdxRow) * num_B_cols +
                         idx_head * num_B_cols * num_A_cols +
                         (blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat)]
@@ -521,11 +521,11 @@ class _simplified_basic_MatMulKernel<
                    blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat],
                 Cvalue[storeLoopIdx]);
           }
-        } else {  //  !OuterProductFlag
+        } else { //  !OuterProductFlag
 
           bool WriteCInRangeFlag =
               thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y <
-                  numARows &&  // TODO: add idx_head check
+                  numARows && // TODO: add idx_head check
               blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols;
           if (WriteCInRangeFlag) {
             if constexpr (DoInnerProductSwitch !=
@@ -837,7 +837,7 @@ __global__ void MY_SGEMM_LAUNCH_BOUNDS HET_HGTFusedAttnScoreFwProp(
                                  SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y,
                                  SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, true, false,
                                  MySGEMMInnerProductKind::Enabled, false, true,
-                                 false>::  // no need to use atomic update here
+                                 false>:: // no need to use atomic update here
       execute_function(
           applied_klinear_node_features,
           &attn_score_weight[idx_relation * num_heads * fw_output_dim_per_head *

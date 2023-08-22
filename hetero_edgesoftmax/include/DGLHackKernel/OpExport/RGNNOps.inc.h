@@ -27,8 +27,8 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
   const int64_t num_heads = weights.size(1);
   const int64_t num_input_dim = weights.size(2);
   const int64_t num_output_dim_per_head =
-      weights.size(3);  // weight shape (num_ntypes,
-                        // in_feat, out_feat)
+      weights.size(3); // weight shape (num_ntypes,
+                       // in_feat, out_feat)
   int64_t num_ntypes = ntype_offset_ptrs.numel() - 1;
   int64_t num_nodes = inputs.size(0);
 
@@ -38,9 +38,9 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
 
   int grid_dim_y = std::min(
       ceil_div<>(num_nodes, (int64_t)WORK_BLOCK_SIZE_Y),
-      (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
-                        // case the total number of blocks is slightly larger
-                        // due to relationship with very few workloads
+      (int64_t)32768); // using 32768 instead of 65535 to leave some space in
+                       // case the total number of blocks is slightly larger
+                       // due to relationship with very few workloads
   std::vector<int> num_blocks_assignment_for_same_ntype_vect,
       num_blocks_assignment_for_all_prev_ntype_vect;
 
@@ -107,8 +107,8 @@ void _RelationalMatMul(at::Tensor &separate_coo_relptrs,
   const int64_t num_heads = weights.size(1);
   const int64_t num_input_dim = weights.size(2);
   const int64_t num_output_per_head_dim =
-      weights.size(3);  // weight shape (num_relations, n_heads,
-                        // in_feat, out_feat // n_heads)
+      weights.size(3); // weight shape (num_relations, n_heads,
+                       // in_feat, out_feat // n_heads)
   int64_t num_edges;
 
   // TODO: KWU: add reg-tiled speicifc configurations by introducing tenary
@@ -130,9 +130,9 @@ void _RelationalMatMul(at::Tensor &separate_coo_relptrs,
   }
   int grid_dim_y = std::min(
       ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
-      (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
-                        // case the total number of blocks is slightly larger
-                        // due to relationship with very few workloads
+      (int64_t)32768); // using 32768 instead of 65535 to leave some space in
+                       // case the total number of blocks is slightly larger
+                       // due to relationship with very few workloads
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
       num_blocks_assignment_for_all_prev_relation_vect;
   if constexpr (IsCompact(kind)) {
@@ -293,7 +293,7 @@ void RelationalMatMul(torch::Dict<std::string, at::Tensor> args_tensor_dict,
     assert(0 && "Invalid CompactAsOfNodeKind");
   }
 }
-}  // namespace SeparateCOO
+} // namespace SeparateCOO
 
 // TODO: use enum instead of bool to indicate if it is CSR or COO
 
@@ -322,7 +322,7 @@ void _InnerProductVariousLeftAndNodeRight(
   InnerProductData<Idx, DType> gdata{
       .feat_src_xlen = SeastarComputeXLength<>(feat_src),
       .num_heads = SeastarComputeXLength<>(edge_inner_product),
-      .eids = nullptr,  // assign later in if branches
+      .eids = nullptr, // assign later in if branches
       .feat_src = feat_src.data_ptr<DType>(),
       .feat_dst = feat_dst.data_ptr<DType>(),
       .edge_inner_product = edge_inner_product.data_ptr<DType>()};
@@ -656,8 +656,8 @@ void InnerProductRightNode(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
     assert(0 && "Not implemented");
   }
 }
-}  // namespace SeparateCOO
-}  // namespace FwProp
+} // namespace SeparateCOO
+} // namespace FwProp
 
 namespace BckProp {
 
@@ -672,8 +672,8 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
   const int64_t num_heads = weights_transposed.size(1);
   const int64_t num_input_dim = weights_transposed.size(3);
   const int64_t num_output_dim_per_head =
-      weights_transposed.size(2);  // weight shape (num_ntypes,
-                                   // in_feat, out_feat)
+      weights_transposed.size(2); // weight shape (num_ntypes,
+                                  // in_feat, out_feat)
   int64_t num_ntypes = ntype_offset_ptrs.numel() - 1;
   int64_t num_nodes = node_feat_input.size(0);
 
@@ -683,9 +683,9 @@ void _RelationalMatmulNoScatterGatherList(at::Tensor &ntype_offset_ptrs,
 
   int grid_dim_y = std::min(
       ceil_div<>(num_nodes, (int64_t)WORK_BLOCK_SIZE_Y),
-      (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
-                        // case the total number of blocks is slightly larger
-                        // due to relationship with very few workloads
+      (int64_t)32768); // using 32768 instead of 65535 to leave some space in
+                       // case the total number of blocks is slightly larger
+                       // due to relationship with very few workloads
   std::vector<int> num_blocks_assignment_for_same_ntype_vect,
       num_blocks_assignment_for_all_prev_ntype_vect;
 
@@ -769,8 +769,8 @@ void _BackwardRelationalMatMul(
   const int64_t num_heads = weights_transposed.size(1);
   const int64_t num_input_dim = weights_transposed.size(3);
   const int64_t num_output_per_head_dim =
-      weights_transposed.size(2);  // weight shape (num_relations, n_heads,
-                                   // in_feat, out_feat // n_heads)
+      weights_transposed.size(2); // weight shape (num_relations, n_heads,
+                                  // in_feat, out_feat // n_heads)
   constexpr bool REG_TILING_FLAG = true;
 
   MY_SGEMM_GRID_CONFIG()
@@ -789,9 +789,9 @@ void _BackwardRelationalMatMul(
   }
   int grid_dim_y = std::min(
       ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE),
-      (int64_t)4096);  // using 32768 instead of 65535 to leave some space in
-                       // case the total number of blocks is slightly larger
-                       // due to relationship with very few workloads
+      (int64_t)4096); // using 32768 instead of 65535 to leave some space in
+                      // case the total number of blocks is slightly larger
+                      // due to relationship with very few workloads
   std::vector<int> num_blocks_assignment_for_same_relation_vect,
       num_blocks_assignment_for_all_prev_relation_vect;
   if constexpr (IsCompact(kind)) {
@@ -1008,7 +1008,7 @@ void RelationalMatMul(torch::Dict<std::string, at::Tensor> arg_tensor_dict,
     assert(0 && "invalid CompactAsOfNodeKind");
   }
 }
-}  // namespace SeparateCOO
+} // namespace SeparateCOO
 // NB: We may rely on HGTCompactAsOfNodesEdgeAttentionSecondStage in
 // [[hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTForwardKernels.cu.h]]
 // adapted from _RelationalFusedGATKernel in
@@ -1030,7 +1030,7 @@ void _InnerProductVariousLeftAndNodeRight(
   BackwardInnerProductData<Idx, DType> gdata{
       .feat_src_xlen = SeastarComputeXLength<>(feat_src),
       .num_heads = SeastarComputeXLength<>(grad_inner_product),
-      .eids = nullptr,  // assigned later in if branches
+      .eids = nullptr, // assigned later in if branches
       .feat_src = feat_src.data_ptr<DType>(),
       .feat_dst = feat_dst.data_ptr<DType>(),
       .grad_inner_product = grad_inner_product.data_ptr<DType>(),
@@ -1179,11 +1179,11 @@ void InnerProductRightNode(
     assert(0 && "Not implemented");
   }
 }
-}  // namespace SeparateCOO
-}  // namespace BckProp
-}  // namespace RGNN
-}  // namespace TorchExport
-}  // namespace HET
+} // namespace SeparateCOO
+} // namespace BckProp
+} // namespace RGNN
+} // namespace TorchExport
+} // namespace HET
 
 using namespace HET::TorchExport;
 TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {

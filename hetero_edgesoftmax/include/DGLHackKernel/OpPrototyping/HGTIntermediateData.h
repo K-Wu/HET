@@ -7,22 +7,22 @@ namespace OpPrototyping {
 // this structure also involves input and output data
 struct HGTLayerIntermediateData {
   MySimpleNDArray<float, thrust::device_allocator<float>>
-      KLinearOutput;  // [num_nodes, num_heads, klinear_out_dim]
+      KLinearOutput; // [num_nodes, num_heads, klinear_out_dim]
   MySimpleNDArray<float, thrust::device_allocator<float>>
-      QLinearOutput;  // [num_nodes, num_heads, qlinear_out_dim]
+      QLinearOutput; // [num_nodes, num_heads, qlinear_out_dim]
   MySimpleNDArray<float, thrust::device_allocator<float>>
-      VLinearOutput;  // [num_nodes, num_heads, vlinear_out_dim]
+      VLinearOutput; // [num_nodes, num_heads, vlinear_out_dim]
   MySimpleNDArray<float, thrust::device_allocator<float>>
-      ALinearOutput;  // [num_nodes, num_heads, alinear_out_dim]
+      ALinearOutput; // [num_nodes, num_heads, alinear_out_dim]
   MySimpleNDArray<float, thrust::device_allocator<float>>
-      ltsgemm_workspace;  // sweep or constant
+      ltsgemm_workspace; // sweep or constant
   MySimpleNDArray<float, thrust::device_allocator<float>>
-      NodeOutputFeatures;  // [num_nodes, num_heads, alinear_out_dim]
+      NodeOutputFeatures; // [num_nodes, num_heads, alinear_out_dim]
   MySimpleNDArray<float, thrust::device_allocator<float>>
-      NodeInputFeatures;  // [num_nodes, num_heads, input_dim]
+      NodeInputFeatures; // [num_nodes, num_heads, input_dim]
   MySimpleNDArray<float4, thrust::device_allocator<float4>>
-      EdgeAttention;  // [num_edges, num_heads]
-                      // TODO: now EdgeAttention only works for num_heads = 4
+      EdgeAttention; // [num_edges, num_heads]
+                     // TODO: now EdgeAttention only works for num_heads = 4
   size_t ltsgemm_workspaceSize;
   std::vector<thrust::device_vector<float>> intermediate_node_vect;
   HGTLayerIntermediateData(
@@ -39,10 +39,8 @@ struct HGTLayerIntermediateData {
       size_t ltsgemm_workspaceSize,
       std::vector<thrust::device_vector<float>> &intermediate_node_vect,
       MySimpleNDArray<float4, thrust::device_allocator<float4>> &EdgeAttention)
-      : KLinearOutput(KLinearOutput),
-        QLinearOutput(QLinearOutput),
-        VLinearOutput(VLinearOutput),
-        ALinearOutput(ALinearOutput),
+      : KLinearOutput(KLinearOutput), QLinearOutput(QLinearOutput),
+        VLinearOutput(VLinearOutput), ALinearOutput(ALinearOutput),
         ltsgemm_workspace(ltsgemm_workspace),
         NodeOutputFeatures(NodeOutputFeatures),
         NodeInputFeatures(NodeInputFeatures),
@@ -55,10 +53,8 @@ struct HGTLayerIntermediateData {
   }
 
   HGTLayerIntermediateData(HGTLayerIntermediateData &other)
-      : KLinearOutput(other.KLinearOutput),
-        QLinearOutput(other.QLinearOutput),
-        VLinearOutput(other.VLinearOutput),
-        ALinearOutput(other.ALinearOutput),
+      : KLinearOutput(other.KLinearOutput), QLinearOutput(other.QLinearOutput),
+        VLinearOutput(other.VLinearOutput), ALinearOutput(other.ALinearOutput),
         ltsgemm_workspace(other.ltsgemm_workspace),
         NodeOutputFeatures(other.NodeOutputFeatures),
         NodeInputFeatures(other.NodeInputFeatures),
@@ -98,7 +94,7 @@ struct HGTLayerIntermediateData {
     return intermediate_node_vect_d;
   }
 
- private:
+private:
   thrust::device_vector<float *> intermediate_node_vect_d;
 };
 
@@ -111,19 +107,19 @@ CreateHGTLayerInputIntermediateOutputData(
   MySimpleNDArray<float, thrust::device_allocator<float>> KLinearOutput(
       {hyper_params.num_nodes, hyper_params.num_heads,
        hyper_params
-           .klinear_out_dim});  // [num_nodes, num_heads, klinear_out_dim]
+           .klinear_out_dim}); // [num_nodes, num_heads, klinear_out_dim]
   MySimpleNDArray<float, thrust::device_allocator<float>> QLinearOutput(
       {hyper_params.num_nodes, hyper_params.num_heads,
        hyper_params
-           .qlinear_out_dim});  // [num_nodes, num_heads, qlinear_out_dim]
+           .qlinear_out_dim}); // [num_nodes, num_heads, qlinear_out_dim]
   MySimpleNDArray<float, thrust::device_allocator<float>> VLinearOutput(
       {hyper_params.num_nodes, hyper_params.num_heads,
        hyper_params
-           .vlinear_out_dim});  // [num_nodes, num_heads, vlinear_out_dim]
+           .vlinear_out_dim}); // [num_nodes, num_heads, vlinear_out_dim]
   MySimpleNDArray<float, thrust::device_allocator<float>> ALinearOutput(
       {hyper_params.num_nodes, hyper_params.num_heads,
        hyper_params
-           .alinear_out_dim});  // [num_nodes, num_heads, alinear_out_dim]
+           .alinear_out_dim}); // [num_nodes, num_heads, alinear_out_dim]
   MySimpleNDArray<float, thrust::device_allocator<float>> ltsgemm_workspace(
       {hyper_params.PERF_ltsgemm_workspaceSize});
   MySimpleNDArray<float, thrust::device_allocator<float>> NodeOutputFeatures(
@@ -150,8 +146,8 @@ CreateHGTLayerInputIntermediateOutputData(
   // and add that to HGTLayerIntermediateData preparing intermediate data:
   // intermediate_node_vect_d
   std::vector<thrust::device_vector<float>> intermediate_node_vect(
-      hyper_params.num_relations);  // need to persist (pointed by elements in
-                                    // intermediate_node_vect_d)
+      hyper_params.num_relations); // need to persist (pointed by elements in
+                                   // intermediate_node_vect_d)
   for (int idx_relation = 0; idx_relation < hyper_params.num_relations;
        idx_relation++) {
     intermediate_node_vect[idx_relation].resize(
@@ -168,5 +164,5 @@ CreateHGTLayerInputIntermediateOutputData(
       hyper_params.PERF_ltsgemm_workspaceSize, intermediate_node_vect,
       EdgeAttention);
 }
-}  // namespace OpPrototyping
-}  // namespace HET
+} // namespace OpPrototyping
+} // namespace HET

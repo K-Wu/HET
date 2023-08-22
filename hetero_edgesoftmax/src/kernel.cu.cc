@@ -1,7 +1,7 @@
-﻿#include "hetero_edgesoftmax.h"
-#include "EdgeAttention_4/EdgeAttention_4.h"
+﻿#include "EdgeAttention_4/EdgeAttention_4.h"
 #include "EdgeSoftmax_1/EdgeSoftmax_1.h"
 #include "EdgeSoftmax_4/EdgeSoftmax_4.h"
+#include "hetero_edgesoftmax.h"
 // TODO: update the relative path to dataset to reflect the changes from
 // makefile build system to cmake
 // TODO: update the msvc project file to reflect the changes due to switch from
@@ -14,11 +14,11 @@
 struct identity_firstfloat {
   // float4 argument_type;
   // float result_type;
-  __thrust_exec_check_disable__ __host__ __device__ const float &operator()(
-      const float4 &x) const {
+  __thrust_exec_check_disable__ __host__ __device__ const float &
+  operator()(const float4 &x) const {
     return x.x;
   }
-};  // end identity_firstfloat
+}; // end identity_firstfloat
 
 struct compare_firstfloat {
   __host__ __device__ bool operator()(float4 x, float y) const {

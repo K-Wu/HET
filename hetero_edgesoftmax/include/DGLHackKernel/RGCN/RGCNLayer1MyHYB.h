@@ -6,10 +6,10 @@
 template <typename Idx, typename DType, int ELL_logical_width,
           int ELL_physical_width>
 __global__ void HET_Seastar_RgcnLayer1MyHYBKernelImpl(
-    const Idx* ellcolidx_data, const Idx* ellreltype_data,
-    const Idx* elleids_data, const Idx* ranges, const Idx* src_ids,
-    const Idx* eids, const Idx* types, const DType* hidden, const DType* weight,
-    const DType* norm, DType* ret, Idx num_nodes, Idx feat_len_y,
+    const Idx *ellcolidx_data, const Idx *ellreltype_data,
+    const Idx *elleids_data, const Idx *ranges, const Idx *src_ids,
+    const Idx *eids, const Idx *types, const DType *hidden, const DType *weight,
+    const DType *norm, DType *ret, Idx num_nodes, Idx feat_len_y,
     Idx feat_len_x, Idx ntypes) {
   // ell portion
   if (blockIdx.x < num_nodes) {
@@ -23,7 +23,8 @@ __global__ void HET_Seastar_RgcnLayer1MyHYBKernelImpl(
     Idx cur_type_id = -1;
     for (; ell_beg < ell_end; ell_beg++) {
       Idx src_id = __ldg(ellcolidx_data + ell_beg);
-      if (src_id == MyHyb_NONEXISTENT_ELEMENT) break;
+      if (src_id == MyHyb_NONEXISTENT_ELEMENT)
+        break;
       Idx eid = __ldg(elleids_data + ell_beg);
       Idx type_id = __ldg(ellreltype_data + ell_beg);
       if (type_id != cur_type_id) {

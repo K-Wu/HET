@@ -7,7 +7,8 @@ __device__ __forceinline__ void _perRow_EdgeSoftmaxFirstStageCSCKernel(
     int nnz, int *__restrict__ matCols, int *__restrict__ matRows,
     float *__restrict__ edge_input_data, float mu) {
   //@@ insert spmv kernel for csr format
-  if (col_idx >= num_cols) return;
+  if (col_idx >= num_cols)
+    return;
   int col_start = matCols[col_idx];
   int col_end = matCols[col_idx + 1];
   // float col_sum = 1e-10f;
@@ -27,7 +28,8 @@ __device__ __forceinline__ void _perRow_EdgeSoftmaxSecondStageCSCKernel(
     int num_cols, int nnz, int *__restrict__ matCols, int *__restrict__ matRows,
     float *__restrict__ edge_input_data, float mu) {
   //@@ insert spmv kernel for csr format
-  if (col_idx >= num_cols) return;
+  if (col_idx >= num_cols)
+    return;
   int col_start = matCols[col_idx];
   int col_end = matCols[col_idx + 1];
 

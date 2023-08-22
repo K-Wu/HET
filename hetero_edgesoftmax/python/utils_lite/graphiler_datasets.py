@@ -46,7 +46,8 @@ def graphiler_load_data(name, to_homo: bool = True):  # feat_dim=GRAPHILER_DEFAU
         g = dataset[0]
     elif name == "ppi":
         g = dgl.batch(
-            [g for x in ["train", "test", "valid"] for g in dgl.data.PPIDataset(x)]
+            [g for x in ["train", "test", "valid"]
+                for g in dgl.data.PPIDataset(x)]
         )
     elif name == "cora":
         dataset = dgl.data.CoraGraphDataset()
@@ -130,7 +131,8 @@ def graphiler_load_data(name, to_homo: bool = True):  # feat_dim=GRAPHILER_DEFAU
                 (ntype_dict[src_type], etype_dict[etype], ntype_dict[dst_type])
             )
 
-        g_homo, ntype_count, _etype_count = dgl.to_homogeneous(g, return_count=True)
+        g_homo, ntype_count, _etype_count = dgl.to_homogeneous(
+            g, return_count=True)
         ntype_offsets = np.cumsum([0] + ntype_count).tolist()
         if to_homo:
             g = g_homo

@@ -106,5 +106,5 @@ void ALinearByNodeType(
                    (intermediate_data->ltsgemm_workspace).Ptr(),
                    intermediate_data->ltsgemm_workspaceSize);
 }
-}  // namespace OpPrototyping
-}  // namespace HET
+} // namespace OpPrototyping
+} // namespace HET

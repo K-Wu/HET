@@ -1,8 +1,8 @@
 #pragma once
-#include <tuple>
 #include "../../utils.cu.h"
 #include "../DGLHackUtils.h"
 #include "device_launch_parameters.h"
+#include <tuple>
 
 // requires C++ 17: auto [nblks, nthrs] = get_type1_schedule();
 std::tuple<dim3, dim3> get_type1_schedule(int64_t num_heads,

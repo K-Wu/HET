@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cuda_runtime.h>
 #include "utils.cu.h"
+#include <cuda_runtime.h>
 
 // In this experiment, the fused kernel 1) do fused intermediate vector and
 // attention calculation for the ELL portion, 2) output the intermediate vector
@@ -37,7 +37,7 @@ __device__ __forceinline__ static void func512_32_mysgemm_exec(
   __builtin_assume(m == OUT_DIM);
   assert(m == OUT_DIM);
   __builtin_assume(m == 256);
-  assert(m == 256);  // TODO: make the routine more general
+  assert(m == 256); // TODO: make the routine more general
   /********************************************************************
    *
    * Compute C = A x B
@@ -93,9 +93,9 @@ __device__ __forceinline__ static void func512_32_mysgemm_exec(
 #define A(idx_head, row, col) Adata[(idx_head * K) + (row) + (col)*OUT_DIM]
 //   #define B(idx_head, row, col) Bdata[(idx_head * K) + (row) +
 //   (node_indices[col]) * OUT_DIM]
-#define B(idx_head, row, col) \
+#define B(idx_head, row, col)                                                  \
   Bdata[(idx_head * K) + (row) + (node_indices_shmem[col - BcolBias]) * OUT_DIM]
-#define B_before_metadata_cache(idx_head, row, col) \
+#define B_before_metadata_cache(idx_head, row, col)                            \
   Bdata[(idx_head * K) + (row) + (node_indices[col]) * OUT_DIM]
 #define C(idx_head, row, col) Cdata[(idx_head * K) + (row) + (col)*OUT_DIM]
   // atomic ticket scheme disabled
@@ -399,7 +399,8 @@ __device__ __forceinline__ static void func512_32_mysgemm_exec(
     // >= TILE_SZ_B)
     //     break;
     // load dest node indices
-    if (BcolBias + second_stage_node_idx >= n) break;
+    if (BcolBias + second_stage_node_idx >= n)
+      break;
 
     // NB: cache this TILE_SZ_B-long array in advance
     // int curr_source_node_index = node_indices[BcolBias +
@@ -422,52 +423,52 @@ __device__ __forceinline__ static void func512_32_mysgemm_exec(
 
     float shmem_output_reg0 = shmem_easy_output
         [second_stage_node_idx]
-        [lane_idx];  // shmem_output[src_node_shmem_idx_1][lane_idx
-                     // / 16][src_node_shmem_idx_2][lane_idx %
-                     // 16];
+        [lane_idx]; // shmem_output[src_node_shmem_idx_1][lane_idx
+                    // / 16][src_node_shmem_idx_2][lane_idx %
+                    // 16];
     float shmem_output_reg1 =
         shmem_easy_output[second_stage_node_idx]
                          [lane_idx +
-                          64];  // shmem_output[src_node_shmem_idx_1][lane_idx /
-                                // 16 + 4][src_node_shmem_idx_2][lane_idx % 16];
+                          64]; // shmem_output[src_node_shmem_idx_1][lane_idx /
+                               // 16 + 4][src_node_shmem_idx_2][lane_idx % 16];
     float shmem_output_reg2 =
         shmem_easy_output[second_stage_node_idx]
                          [lane_idx +
-                          128];  // shmem_output[src_node_shmem_idx_1][lane_idx
-                                 // / 16 +
-                                 // 8][src_node_shmem_idx_2][lane_idx
-                                 // % 16];
+                          128]; // shmem_output[src_node_shmem_idx_1][lane_idx
+                                // / 16 +
+                                // 8][src_node_shmem_idx_2][lane_idx
+                                // % 16];
     float shmem_output_reg3 =
         shmem_easy_output[second_stage_node_idx]
                          [lane_idx +
-                          192];  // shmem_output[src_node_shmem_idx_1][lane_idx
-                                 // / 16 +
-                                 // 12][src_node_shmem_idx_2][lane_idx
-                                 // % 16];
+                          192]; // shmem_output[src_node_shmem_idx_1][lane_idx
+                                // / 16 +
+                                // 12][src_node_shmem_idx_2][lane_idx
+                                // % 16];
     float shmem_output_reg4 =
         shmem_easy_output[second_stage_node_idx]
                          [lane_idx +
-                          32];  // shmem_output[src_node_shmem_idx_1][lane_idx /
-                                // 16 + 2][src_node_shmem_idx_2][lane_idx % 16];
+                          32]; // shmem_output[src_node_shmem_idx_1][lane_idx /
+                               // 16 + 2][src_node_shmem_idx_2][lane_idx % 16];
     float shmem_output_reg5 =
         shmem_easy_output[second_stage_node_idx]
                          [lane_idx +
-                          96];  // shmem_output[src_node_shmem_idx_1][lane_idx /
-                                // 16 + 6][src_node_shmem_idx_2][lane_idx % 16];
+                          96]; // shmem_output[src_node_shmem_idx_1][lane_idx /
+                               // 16 + 6][src_node_shmem_idx_2][lane_idx % 16];
     float shmem_output_reg6 =
         shmem_easy_output[second_stage_node_idx]
                          [lane_idx +
-                          160];  // shmem_output[src_node_shmem_idx_1][lane_idx
-                                 // / 16 +
-                                 // 10][src_node_shmem_idx_2][lane_idx
-                                 // % 16];
+                          160]; // shmem_output[src_node_shmem_idx_1][lane_idx
+                                // / 16 +
+                                // 10][src_node_shmem_idx_2][lane_idx
+                                // % 16];
     float shmem_output_reg7 =
         shmem_easy_output[second_stage_node_idx]
                          [lane_idx +
-                          224];  // shmem_output[src_node_shmem_idx_1][lane_idx
-                                 // / 16 +
-                                 // 14][src_node_shmem_idx_2][lane_idx
-                                 // % 16];
+                          224]; // shmem_output[src_node_shmem_idx_1][lane_idx
+                                // / 16 +
+                                // 14][src_node_shmem_idx_2][lane_idx
+                                // % 16];
 
     // TODO: implement second stage thread num reduction
     // atomic ticket scheme disabled
@@ -671,8 +672,7 @@ __global__ void HET_HGTExperimentalEdgeAttentionFusedCOOKernel_512_32(
       starting_pos_dense_edges_per_src_node, eids, node_entry_idx);
 }
 
-template <typename T>
-__device__ __forceinline__ T my_min(T a, T b) {
+template <typename T> __device__ __forceinline__ T my_min(T a, T b) {
   return a < b ? a : b;
 }
 
@@ -742,12 +742,12 @@ __global__ void HET_HGTExperimentalEdgeAttentionResidueCSR(
     }
     if (threadIdx.x % 32 == 0) {
       atomicAdd(&(reinterpret_cast<float *>(attention)[curr_eid * 4 + idxHead]),
-                att_val);  // TODO: needs to clear to zero at the beginning
+                att_val); // TODO: needs to clear to zero at the beginning
     }
     // printf("Done blockIdx.x %d threadIdx.x %d, srcIdx %d, dest_node_idx %d,
     // curr_eid %d, att_val %f\n", blockIdx.x, threadIdx.x, srcIdx,
     // dest_node_idx, curr_eid, att_val);
-    flagSrcIdxChanged = false;  // we may reuse the intermediate data
+    flagSrcIdxChanged = false; // we may reuse the intermediate data
   }
 }
 

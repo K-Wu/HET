@@ -5,11 +5,11 @@
 template <typename Idx, typename DType>
 __global__ void HET_HGTBackwardFusedGradientSmFirstPartGradientAImpl(
     Idx *ranges, Idx *dst_ids, Idx *eids, Idx *types,
-    DType *grad_a,               // |E| * N_HEADS
-    DType *grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
-    DType *grad_t_neighbour,     //|V| * N_HEADS * DIM_PER_HEAD
-    DType *message,              //|E| * N_HEADS * DIM_PER_HEAD
-    DType *sigmas,               //|E| * N_HEADS
+    DType *grad_a,              // |E| * N_HEADS
+    DType *grad_sm_first_stage, //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
+    DType *grad_t_neighbour,    //|V| * N_HEADS * DIM_PER_HEAD
+    DType *message,             //|E| * N_HEADS * DIM_PER_HEAD
+    DType *sigmas,              //|E| * N_HEADS
     Idx num_nodes, Idx num_heads, Idx feat_dim_per_head, Idx n_rel_types) {
   assert(n_rel_types == 2);
   // delta a = delta t_neighbour^(l+1) * sigma^-1 * m^T
@@ -56,9 +56,9 @@ __global__ void HET_HGTBackwardFusedGradientSmFirstPartGradientAImpl(
         }
       }
       atomicAdd(
-          grad_sm_first_stage +  // grad_sm_first_stage is just grad_message_src
-                                 // in
-                                 // [[hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTBackwardKernels.cu.h]]
+          grad_sm_first_stage + // grad_sm_first_stage is just grad_message_src
+                                // in
+                                // [[hetero_edgesoftmax/include/DGLHackKernel/HGT/HGTBackwardKernels.cu.h]]
               blockIdx.x * n_rel_types * num_heads * feat_dim_per_head +
               0 * num_heads * feat_dim_per_head + tx,
           agg0);
@@ -73,10 +73,10 @@ __global__ void HET_HGTBackwardFusedGradientSmFirstPartGradientAImpl(
 template <typename Idx, typename DType>
 __global__ void HET_HGTBackwardGradientAImpl(
     Idx *ranges, Idx *dst_ids, Idx *eids, Idx *types,
-    DType *grad_a,            // |E| * N_HEADS
-    DType *grad_t_neighbour,  //|V| * N_HEADS * DIM_PER_HEAD
-    DType *message,           //|E| * N_HEADS * DIM_PER_HEAD
-    DType *sigmas,            //|E| * N_HEADS
+    DType *grad_a,           // |E| * N_HEADS
+    DType *grad_t_neighbour, //|V| * N_HEADS * DIM_PER_HEAD
+    DType *message,          //|E| * N_HEADS * DIM_PER_HEAD
+    DType *sigmas,           //|E| * N_HEADS
     Idx num_nodes, Idx num_heads, Idx feat_dim_per_head, Idx n_rel_types) {
   assert(n_rel_types == 2);
 
@@ -125,13 +125,13 @@ __global__ void HET_HGTBackwardGradientAImpl(
 template <typename Idx, typename DType>
 __global__ void HET_HGTBackwardGradientSmFirstPartImpl(
     Idx *ranges, Idx *dst_ids, Idx *eids, Idx *types,
-    DType *grad_sm_first_stage,  //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
-    DType *grad_t_neighbour,     //|V| * N_HEADS * DIM_PER_HEAD
-    DType *message,              //|E| * N_HEADS * DIM_PER_HEAD
-    DType *sigmas,               //|E| * N_HEADS
+    DType *grad_sm_first_stage, //|V| * N_REL_TYPES * N_HEADS * DIM_PER_HEAD
+    DType *grad_t_neighbour,    //|V| * N_HEADS * DIM_PER_HEAD
+    DType *message,             //|E| * N_HEADS * DIM_PER_HEAD
+    DType *sigmas,              //|E| * N_HEADS
     Idx num_nodes, Idx num_heads, Idx feat_dim_per_head, Idx n_rel_types) {
-  assert(n_rel_types == 2);  // some bit manipulation is used and thus the
-                             // kernel is intended for MAG only
+  assert(n_rel_types == 2); // some bit manipulation is used and thus the
+                            // kernel is intended for MAG only
 
   // delta Sm = \Sum_outgoing (m * delta t_neighbour^(l+1) * sigma)
   // We need to store one delta Sm for each relationship type

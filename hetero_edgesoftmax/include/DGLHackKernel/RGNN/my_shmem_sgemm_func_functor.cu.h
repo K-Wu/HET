@@ -18,9 +18,10 @@ enum class MySGEMMGatherKind {
 };
 
 template <MySGEMMGatherKind kind, typename Idx, typename IdxPtr>
-__device__ __forceinline__ float &GetRowMajorElementBasic(
-    float *matrix_data, IdxPtr gather_list, int num_heads,
-    Idx feat_dim_per_head, Idx row, Idx idx_head, Idx idx_feat) {
+__device__ __forceinline__ float &
+GetRowMajorElementBasic(float *matrix_data, IdxPtr gather_list, int num_heads,
+                        Idx feat_dim_per_head, Idx row, Idx idx_head,
+                        Idx idx_feat) {
   if constexpr (kind != MySGEMMGatherKind::Disabled) {
     return matrix_data[idx_head * feat_dim_per_head +
                        gather_list[row] * num_heads * feat_dim_per_head +
@@ -46,11 +47,11 @@ __device__ __forceinline__ float &GetRowMajorElementAdvancedBinarySearch(
 
 template <typename Idx, typename IdxPtr, MySGEMMGatherKind kind,
           CompactAsOfNodeKind compactKind>
-__device__ __forceinline__ float &GetRowMajorElement(
-    float *matrix_data, IdxPtr gather_scatter_list,
-    const ETypeMapperData<Idx, compactKind> etype_mapper_data, Idx idx_relation,
-    Idx idx_row, Idx idx_head, Idx idx_feat, int num_heads,
-    Idx feat_dim_per_head) {
+__device__ __forceinline__ float &
+GetRowMajorElement(float *matrix_data, IdxPtr gather_scatter_list,
+                   const ETypeMapperData<Idx, compactKind> etype_mapper_data,
+                   Idx idx_relation, Idx idx_row, Idx idx_head, Idx idx_feat,
+                   int num_heads, Idx feat_dim_per_head) {
   if constexpr (kind == MySGEMMGatherKind::TwoOrderBinarySearch ||
                 kind == MySGEMMGatherKind::TwoOrderDirectIndexing) {
     Idx idx_node = gather_scatter_list[idx_row];
@@ -105,7 +106,7 @@ class _basic_MatMulKernel<
     SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K,
     OuterProductFlag, AGatherKind, BGatherKind, CScatterKind, AtomicUpdateFlag,
     Idx, IdxPtr, numHeadKind, compactKind> {
- public:
+public:
   __device__ __forceinline__ static void execute_function(
       float *A, float *B, float *C, IdxPtr A_gather_list, IdxPtr B_gather_list,
       IdxPtr C_scatter_list, IdxPtr unique_srcs_and_dests_rel_ptr,

@@ -60,8 +60,7 @@ struct BackwardNormToUnNormalizedAttnScoreData {
 
 // NB: no mu flag is used to generalize this scheme to calculate delta q vector
 // = delta_attn_score * inner_product
-template <typename Idx, typename DType>
-struct BackwardToDeltaQData {
+template <typename Idx, typename DType> struct BackwardToDeltaQData {
   Idx num_heads{0};
   Idx k_vect_dim_per_head{0};
   Idx *__restrict__ eids{nullptr};
@@ -79,7 +78,7 @@ __global__ void HET_HGTQVectType2BackwardKernel(
     BackwardToDeltaQData<Idx, DType> gdata, const Idx *row_offsets,
     const Idx *column_indices, const ETypeData<Idx, ETypeRelPtrFlag> etype_data,
     int64_t num_rows, const ETypeMapperData<Idx, kind> etype_mapper_data) {
-  Idx num_heads = gdata.num_heads;  // originally e_xlen
+  Idx num_heads = gdata.num_heads; // originally e_xlen
   Idx hidden_xlen = gdata.k_vect_dim_per_head;
   for (Idx dst_vid = blockIdx.y; dst_vid < num_rows; dst_vid += gridDim.y) {
     Idx start_off = row_offsets[dst_vid];
@@ -93,8 +92,8 @@ __global__ void HET_HGTQVectType2BackwardKernel(
         for (Idx e = start_off; e < end_off; ++e) {
           Idx edata_idx = gdata.eids[e];
           Idx src_vid = column_indices[e];
-          Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
-                          // !RelationalFlag, the default value is set as 0
+          Idx etype = 0; // NB: as mu needs to refer to etype even in case of
+                         // !RelationalFlag, the default value is set as 0
           Idx k_inner_product_offset = -1;
           if constexpr (!IsCompact(kind)) {
             // in this case, k_inner_product_offset, er_idx and el_idx are
@@ -102,12 +101,12 @@ __global__ void HET_HGTQVectType2BackwardKernel(
             k_inner_product_offset =
                 edata_idx * (gdata.k_vect_dim_per_head * num_heads) +
                 head_idx * hidden_xlen + feat_idx;
-          } else {  // CompactAsOfNodeFlag
+          } else { // CompactAsOfNodeFlag
             if constexpr (RelationalFlag) {
               if constexpr (ETypeRelPtrFlag) {
                 etype = binary_search(etype_data.num_relations,
                                       etype_data.etypes, e);
-              } else {  // !ETypeRelPtrFlag
+              } else { // !ETypeRelPtrFlag
                 etype = etype_data.etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
@@ -138,7 +137,7 @@ __global__ void HET_HGTQVectType2BackwardKernel(
                            head_idx * hidden_xlen + feat_idx),
                       grad_unnormalized_attn_score *
                           gdata.k_inner_product[k_inner_product_offset]);
-          } else {  // CompactAsOfNodeFlag && !RelationalFlag
+          } else { // CompactAsOfNodeFlag && !RelationalFlag
             // exp scheme (both edata_idx and head_idx) could be used for
             // attn_score message_src's could be used for message_src
             s += grad_unnormalized_attn_score *
@@ -167,13 +166,13 @@ __global__ void HET_HGTQVectType2BackwardKernel(
 // iterate every edge
 // NB: Compact as of node is irrelevant here as the data are edge-wise
 // FIXME: do we need to add CompactAsOfFlag situation here?
-template <typename Idx, typename DType,  // CompactAsOfNodeKind kind,
+template <typename Idx, typename DType, // CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag>
 __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
     BackwardNormToUnNormalizedAttnScoreData<Idx, DType> gdata,
     const Idx *row_offsets, const Idx *column_indices,
     const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows) {
-  Idx num_heads = gdata.num_heads;  // originally e_xlen
+  Idx num_heads = gdata.num_heads; // originally e_xlen
   for (Idx src_vid = blockIdx.y * blockDim.y + threadIdx.y; src_vid < num_rows;
        src_vid += gridDim.y * blockDim.y) {
     Idx start_off = row_offsets[src_vid];
@@ -190,8 +189,8 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
           Idx edge_offset = gdata.eids[e] * num_heads + head_idx;
           Idx edata_idx = gdata.eids[e];
           Idx dst_vid = column_indices[e];
-          Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
-                          // !RelationalFlag, the default value is set as 0
+          Idx etype = 0; // NB: as mu needs to refer to etype even in case of
+                         // !RelationalFlag, the default value is set as 0
 
           if constexpr (RelationalFlag) {
             if constexpr (ETypeRelPtrFlag) {
@@ -249,7 +248,7 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
 
 // head -> blockIdx.x * blockDim.x + threadIdx.x;
 // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
-template <typename Idx, typename DType,  // CompactAsOfNodeKind kind,
+template <typename Idx, typename DType, // CompactAsOfNodeKind kind,
           bool RelationalFlag, bool ETypeRelPtrFlag, int IDX_STAGE>
 __global__ void
 HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO(
@@ -257,7 +256,7 @@ HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO(
     const Idx *row_indices, const Idx *column_indices,
     const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_edges,
     DType *sum_incoming_edges_product_softmax_score) {
-  Idx num_heads = gdata.num_heads;  // originally e_xlen
+  Idx num_heads = gdata.num_heads; // originally e_xlen
   constexpr bool EtypeRelPtrIndexSearch = true;
   Idx resume_from = 0;
 
@@ -269,8 +268,8 @@ HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO(
     Idx src_vid = row_indices[e];
     Idx dst_vid = column_indices[e];
     Idx edata_idx = gdata.eids[e];
-    Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
-                    // !RelationalFlag, the default value is set as 0
+    Idx etype = 0; // NB: as mu needs to refer to etype even in case of
+                   // !RelationalFlag, the default value is set as 0
 
     if constexpr (RelationalFlag) {
       if constexpr (ETypeRelPtrFlag) {
@@ -343,7 +342,7 @@ HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
     const Idx *row_offsets, const Idx *column_indices,
     const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows,
     const ETypeMapperData<Idx, kind> etype_mapper_data) {
-  Idx num_heads = gdata.num_heads;  // originally e_xlen
+  Idx num_heads = gdata.num_heads; // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
     Idx start_off = row_offsets[src_vid];
@@ -364,19 +363,19 @@ HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
           Idx edata_idx = gdata.eids[e];
           Idx dst_vid = column_indices[e];
           Idx dst_vid_relational = -1;
-          Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
-                          // !RelationalFlag, the default value is set as 0
+          Idx etype = 0; // NB: as mu needs to refer to etype even in case of
+                         // !RelationalFlag, the default value is set as 0
           if constexpr (!IsCompact(kind)) {
             // in this case, message_src_offset, er_idx and el_idx are related
             // to edge id, regardless of the type of the edge
             message_src_offset = edata_idx * gdata.message_src_xlen +
                                  head_idx * hidden_xlen + feat_idx;
-          } else {  // CompactAsOfNodeFlag
+          } else { // CompactAsOfNodeFlag
             if constexpr (RelationalFlag) {
               if constexpr (ETypeRelPtrFlag) {
                 etype = binary_search(etype_data.num_relations,
                                       etype_data.etypes, e);
-              } else {  // !ETypeRelPtrFlag
+              } else { // !ETypeRelPtrFlag
                 etype = etype_data.etypes[e];
               }
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
@@ -420,7 +419,7 @@ HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSumBackwardKernel(
                       normalized_attn_score *
                           gdata.grad_out[dst_vid * gdata.message_src_xlen +
                                          head_idx * hidden_xlen + feat_idx]);
-          } else {  // CompactAsOfNodeFlag && !RelationalFlag
+          } else { // CompactAsOfNodeFlag && !RelationalFlag
             // exp scheme (both edata_idx and head_idx) could be used for
             // attn_score message_src's could be used for message_src
             s += normalized_attn_score *
@@ -499,7 +498,7 @@ __global__ void HET_HGTEdgeSoftmaxAccumStageOnlyBackwardKernel(
     const Idx *row_offsets, const Idx *column_indices,
     const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows,
     const ETypeMapperData<Idx, kind> etype_mapper_data) {
-  Idx num_heads = gdata.num_heads;  // originally e_xlen
+  Idx num_heads = gdata.num_heads; // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
     Idx start_off = row_offsets[src_vid];
@@ -524,8 +523,8 @@ __global__ void HET_HGTEdgeSoftmaxAccumStageOnlyBackwardKernel(
           Idx edata_idx = gdata.eids[e];
           Idx dst_vid = column_indices[e];
           Idx edgesoftmax_sum_per_node_idx = -1;
-          Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
-                          // !RelationalFlag, the default value is set as 0
+          Idx etype = 0; // NB: as mu needs to refer to etype even in case of
+                         // !RelationalFlag, the default value is set as 0
           if constexpr (!IsCompact(kind)) {
             // in this case, message_src_offset
             // and message_src_idx are related to edge id, regardless of the
@@ -537,7 +536,7 @@ __global__ void HET_HGTEdgeSoftmaxAccumStageOnlyBackwardKernel(
             edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
             message_src_idx =
                 (edata_idx * num_heads + head_idx) * hidden_xlen + feat_idx;
-          } else {  // CompactAsOfNodeFlag
+          } else { // CompactAsOfNodeFlag
             if constexpr (!RelationalFlag) {
               edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
             } else {
@@ -632,7 +631,7 @@ __global__ void HET_HGTAttnAndMessageSrcFusedBckKernel(
     DType *grad_message_src, const Idx *row_offsets, const Idx *column_indices,
     const ETypeData<Idx, ETypeRelPtrFlag> etype_data, int64_t num_rows,
     const ETypeMapperData<Idx, kind> etype_mapper_data) {
-  Idx num_heads = gdata.num_heads;  // originally e_xlen
+  Idx num_heads = gdata.num_heads; // originally e_xlen
   Idx hidden_xlen = gdata.message_src_xlen / num_heads;
   for (Idx src_vid = blockIdx.y; src_vid < num_rows; src_vid += gridDim.y) {
     Idx start_off = row_offsets[src_vid];
@@ -659,8 +658,8 @@ __global__ void HET_HGTAttnAndMessageSrcFusedBckKernel(
           Idx dst_vid = column_indices[e];
           Idx edgesoftmax_sum_per_node_idx = -1;
           Idx dst_vid_relational = -1;
-          Idx etype = 0;  // NB: as mu needs to refer to etype even in case of
-                          // !RelationalFlag, the default value is set as 0
+          Idx etype = 0; // NB: as mu needs to refer to etype even in case of
+                         // !RelationalFlag, the default value is set as 0
           if constexpr (!IsCompact(kind)) {
             // in this case, message_src_offset
             // and message_src_idx are related to edge id, regardless of the
@@ -672,7 +671,7 @@ __global__ void HET_HGTAttnAndMessageSrcFusedBckKernel(
             edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
             message_src_idx =
                 (edata_idx * num_heads + head_idx) * hidden_xlen + feat_idx;
-          } else {  // CompactAsOfNodeFlag
+          } else { // CompactAsOfNodeFlag
             if constexpr (!RelationalFlag) {
               edgesoftmax_sum_per_node_idx = dst_vid * num_heads + head_idx;
             } else {

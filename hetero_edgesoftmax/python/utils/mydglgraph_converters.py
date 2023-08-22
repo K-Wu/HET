@@ -168,7 +168,8 @@ def RGNN_get_mydgl_graph(
         ).astype(np.int64)
         if th.is_tensor(edge_srcs):
             edge_referential_eids = th.tensor(edge_new_eids)
-            transposed_edge_referential_eids = th.tensor(transposed_edge_new_eids)
+            transposed_edge_referential_eids = th.tensor(
+                transposed_edge_new_eids)
 
     if sparse_format == "coo":
         g = create_mydgl_graph_coo_with_transpose(
@@ -465,10 +466,13 @@ def create_mydgl_graph_coo_from_hetero_dgl_graph(g):
     edge_etypes_list = []
     # edge_referential_eids_list = []
     for etype_idx, etype in enumerate(g.canonical_etypes):
-        last_etype_offsets = etype_offsets[etype_idx - 1] if etype_idx > 0 else 0
-        etype_offsets[etype_idx] = g.number_of_edges(etype=etype) + last_etype_offsets
+        last_etype_offsets = etype_offsets[etype_idx -
+                                           1] if etype_idx > 0 else 0
+        etype_offsets[etype_idx] = g.number_of_edges(
+            etype=etype) + last_etype_offsets
         print("getting view for etype", etype)
-        edge_srcs, edge_dsts = g.edges(etype=etype)  # both are int64 Torch.Tensor
+        # both are int64 Torch.Tensor
+        edge_srcs, edge_dsts = g.edges(etype=etype)
         print("got view for etype", etype)
         # NB: we here add offsets to edge_srcs and edge_dsts because indices restart from 0 in every new node type
         edge_srcs = edge_srcs + ntype_offsets[ntype_id_map[etype[0]]]
@@ -482,7 +486,8 @@ def create_mydgl_graph_coo_from_hetero_dgl_graph(g):
     total_edge_srcs = th.cat(edge_srcs_list)
     total_edge_dsts = th.cat(edge_dsts_list)
     total_edge_etypes = th.cat(edge_etypes_list)
-    total_edge_referential_eids = th.arange(g.number_of_edges(), dtype=th.int64)
+    total_edge_referential_eids = th.arange(
+        g.number_of_edges(), dtype=th.int64)
     mydgl_graph = create_mydgl_graph_coo_torch(
         total_edge_srcs, total_edge_dsts, total_edge_etypes, total_edge_referential_eids
     )

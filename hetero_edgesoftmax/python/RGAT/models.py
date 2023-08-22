@@ -106,9 +106,12 @@ class HET_RelationalAttLayer(nn.Module):
                 self.loop_weight, gain=nn.init.calculate_gain("relu")
             )
 
-        nn.init.xavier_uniform_(self.conv_weights, gain=nn.init.calculate_gain("relu"))
-        nn.init.xavier_uniform_(self.attn_l, gain=nn.init.calculate_gain("relu"))
-        nn.init.xavier_uniform_(self.attn_r, gain=nn.init.calculate_gain("relu"))
+        nn.init.xavier_uniform_(
+            self.conv_weights, gain=nn.init.calculate_gain("relu"))
+        nn.init.xavier_uniform_(
+            self.attn_l, gain=nn.init.calculate_gain("relu"))
+        nn.init.xavier_uniform_(
+            self.attn_r, gain=nn.init.calculate_gain("relu"))
 
     # pylint: disable=invalid-name
     def forward(self, g, inputs: th.Tensor, myblock: Union[None, list] = None):
@@ -130,7 +133,8 @@ class HET_RelationalAttLayer(nn.Module):
         if myblock is not None:
             raise NotImplementedError("Block is not supported by us yet")
             inputs_src = inputs
-            inputs_dst = {k: v[: g.number_of_dst_nodes(k)] for k, v in inputs.items()}
+            inputs_dst = {k: v[: g.number_of_dst_nodes(
+                k)] for k, v in inputs.items()}
         else:
             inputs_src = inputs_dst = inputs
 

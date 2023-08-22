@@ -21,17 +21,17 @@ void _FusedKernelImpl(at::Tensor &incsr_row_ptrs, at::Tensor &incsr_col_indices,
   // As GAT only has 1 type of relationship, we use a specialcase of separateCSR
   // where num releationship is asserted as 1
 
-  GatFusedData<Idx, DType> gdata{
-      .feat_src_xlen = SeastarComputeXLength(feat_src),
-      .num_heads = SeastarComputeXLength(el),
-      .eids = incsr_eids.data_ptr<Idx>(),
-      .leaky_relu_slope = static_cast<float>(slope),
-      .feat_src = feat_src.data_ptr<DType>(),
-      .el = el.data_ptr<DType>(),
-      .er = er.data_ptr<DType>(),
-      .sum = sum.data_ptr<DType>(),
-      .exp = exp.data_ptr<DType>(),
-      .ret = ret.data_ptr<DType>()};
+  GatFusedData<Idx, DType> gdata{.feat_src_xlen =
+                                     SeastarComputeXLength(feat_src),
+                                 .num_heads = SeastarComputeXLength(el),
+                                 .eids = incsr_eids.data_ptr<Idx>(),
+                                 .leaky_relu_slope = static_cast<float>(slope),
+                                 .feat_src = feat_src.data_ptr<DType>(),
+                                 .el = el.data_ptr<DType>(),
+                                 .er = er.data_ptr<DType>(),
+                                 .sum = sum.data_ptr<DType>(),
+                                 .exp = exp.data_ptr<DType>(),
+                                 .ret = ret.data_ptr<DType>()};
 
   // Configure kernel launch parameters.
   // NB: updated to Type 1 Schedule:
@@ -61,8 +61,8 @@ void _FusedKernelImpl(at::Tensor &incsr_row_ptrs, at::Tensor &incsr_col_indices,
                                       incsr_num_rows, {});
 }
 constexpr auto FusedKernelImpl = _FusedKernelImpl<int64_t, float>;
-}  // namespace IntegratedCSR
-}  // namespace FwProp
+} // namespace IntegratedCSR
+} // namespace FwProp
 namespace BckProp {
 namespace IntegratedCSR {
 template </*int XPU, */ typename Idx, typename DType, bool FLAG_KERNEL_FUSED>
@@ -120,11 +120,11 @@ void _FusedKernelImpl(at::Tensor &outcsr_row_ptrs,
 }
 
 constexpr auto FusedKernelImpl = _FusedKernelImpl<int64_t, float, true>;
-}  // namespace IntegratedCSR
-}  // namespace BckProp
-}  // namespace RGCN
-}  // namespace TorchExport
-}  // namespace HET
+} // namespace IntegratedCSR
+} // namespace BckProp
+} // namespace RGCN
+} // namespace TorchExport
+} // namespace HET
 
 using namespace HET::TorchExport;
 TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {

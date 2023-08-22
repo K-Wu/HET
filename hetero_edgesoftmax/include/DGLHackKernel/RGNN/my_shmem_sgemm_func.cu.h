@@ -23,7 +23,7 @@ class _basic_MatMulKernel<
     SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K,
     OuterProductFlag, AGatherKind, BGatherKind, CScatterKind, AtomicUpdateFlag,
     Idx, IdxPtr, numHeadKind, compactKind> {
- public:
+public:
   // vanilla tiled shmem gemm code from
   // http://www.shodor.org/media/content//petascale/materials/UPModules/matrixMultiplication/moduleDocument.pdf
   //@@ Example of grid and block configuration
@@ -32,15 +32,15 @@ class _basic_MatMulKernel<
   // dimBlock.y, num_heads * num_partitions_along_Acol_Brow );
   // MatMulKernel<<<dimGrid, dimBlock>>>(d_A, d_B, d_C);
   // C = A * B (all are row-major matrices)
-  __device__ __forceinline__ static void execute_function(
-      float *A, float *B, float *C, IdxPtr A_gather_list, IdxPtr B_gather_list,
-      IdxPtr C_scatter_list,
-      // TODO: remove etype_mapper_data as the two_order acccess
-      // scheme is never used.
-      const ETypeMapperData<Idx, compactKind> etype_mapper_data,
-      Idx idx_relation, Idx numARows, Idx blockIdxAlongRowBeg,
-      Idx strideNumBlocksAlongRow, Idx blockRowJobEntryBeg, Idx num_A_cols,
-      Idx num_B_cols, int num_heads) {
+  __device__ __forceinline__ static void
+  execute_function(float *A, float *B, float *C, IdxPtr A_gather_list,
+                   IdxPtr B_gather_list, IdxPtr C_scatter_list,
+                   // TODO: remove etype_mapper_data as the two_order acccess
+                   // scheme is never used.
+                   const ETypeMapperData<Idx, compactKind> etype_mapper_data,
+                   Idx idx_relation, Idx numARows, Idx blockIdxAlongRowBeg,
+                   Idx strideNumBlocksAlongRow, Idx blockRowJobEntryBeg,
+                   Idx num_A_cols, Idx num_B_cols, int num_heads) {
     // num_B_cols is output_dim//num_heads as forward propagation weight,
     // output_dim//num_heads as backward propagation weight, and in_feat_dim as
     // features or delta features. num_A_cols is input_dim as forward
@@ -113,17 +113,17 @@ class _basic_MatMulKernel<
       assert((gridDim.z == num_heads));
     }
 
-    int blockFeat = blockIdx.x;  // when OuterProductFlag==True, it is in [0,
-                                 // output_dim//num_heads)
+    int blockFeat = blockIdx.x; // when OuterProductFlag==True, it is in [0,
+                                // output_dim//num_heads)
 
     int blockRowLoopBeg, blockRowLoopEnd, blockRowLoopInc;
     if constexpr (OuterProductFlag) {
       blockRowLoopBeg =
-          blockIdx.y;  // [0, input_dim) // NB: When OuterProductFlag is true,
-                       // the delta_weight height/width is assigned to
-                       // theblockIdx.y-dimension, and blockIdxAssignment is
-                       // assigned to m loop instead. Therefore, the
-                       // blockIdxAlongRowBeg bias is applied to the m loop too.
+          blockIdx.y; // [0, input_dim) // NB: When OuterProductFlag is true,
+                      // the delta_weight height/width is assigned to
+                      // theblockIdx.y-dimension, and blockIdxAssignment is
+                      // assigned to m loop instead. Therefore, the
+                      // blockIdxAlongRowBeg bias is applied to the m loop too.
       blockRowLoopEnd = blockIdx.y + 1;
       blockRowLoopInc = 1;
     } else {
@@ -233,7 +233,7 @@ class _basic_MatMulKernel<
                 (thIdxFeat_A_outer_product +
                          // k is the row dimension instead of the feature
                          // because of the transpose
-                         (m)*SHMEM_BLOCK_SIZE_K <  //+ blockRowJobEntryBeg <
+                         (m)*SHMEM_BLOCK_SIZE_K < //+ blockRowJobEntryBeg <
                      numARows &&
                  blockRow * SHMEM_BLOCK_SIZE_Y + thIdxRow_A_outer_product <
                      num_A_cols)
@@ -258,7 +258,7 @@ class _basic_MatMulKernel<
                 SHMEM_BLOCK_SIZE_K % COARSEN_DIVISOR_FACTOR_LOAD_B == 0, "");
             int thIdxFeat = thIdxFeat_initial_BC;
             float value_to_load =
-                ((m)*SHMEM_BLOCK_SIZE_K + thIdxRow <  //+ blockRowJobEntryBeg <
+                ((m)*SHMEM_BLOCK_SIZE_K + thIdxRow < //+ blockRowJobEntryBeg <
                      numARows &&
                  blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols &&
                  idx_head < num_heads)
@@ -332,7 +332,7 @@ class _basic_MatMulKernel<
               } else {
                 Bs[thIdxRow][thIdxFeat] = value_to_load;
               }
-            } else {  // !BWeightInsteadOfFeatureFlag
+            } else { // !BWeightInsteadOfFeatureFlag
               float value_to_load =
                   (m * SHMEM_BLOCK_SIZE_K + thIdxRow < num_A_cols &&
                    blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat < num_B_cols &&
@@ -426,7 +426,7 @@ class _basic_MatMulKernel<
                    blockFeat * SHMEM_BLOCK_SIZE_X + thIdxFeat],
                 Cvalue[storeLoopIdx]);
           }
-        } else {  //  !OuterProductFlag
+        } else { //  !OuterProductFlag
 
           bool WriteCInRangeFlag =
               thIdxRow + blockRow * SHMEM_BLOCK_SIZE_Y < numARows &&
@@ -455,7 +455,7 @@ class _basic_MatMulKernel<
             if constexpr (AtomicUpdateFlag ||
                           !COARSEN_OUTPUT_INSTEAD_OF_RIGHT_INPUT) {
               atomicAdd(&ref_to_global_mem_elem, val_locally_accumulated);
-            } else {  // !AtomicUpdateFlag
+            } else { // !AtomicUpdateFlag
               ref_to_global_mem_elem = val_locally_accumulated;
             }
           }

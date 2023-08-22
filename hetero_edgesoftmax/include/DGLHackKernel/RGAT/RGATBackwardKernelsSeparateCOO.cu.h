@@ -52,10 +52,10 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
                             head_idx * hidden_xlen + feat_idx;
           er_idx = edata_idx * num_heads + head_idx;
           el_idx = edata_idx * num_heads + head_idx;
-        } else {  // CompactAsOfNodeFlag
+        } else { // CompactAsOfNodeFlag
           if constexpr (!RelationalFlag) {
             er_idx = dst_vid * num_heads + head_idx;
-          } else {  // RelationalFlag
+          } else { // RelationalFlag
             // in this case, er_idx (sum's index) is related to (relation,
             // unique node index) el_idx is related to (relation, unique node
             // index) feat_src_offset is related to (relation, unique node
@@ -109,9 +109,9 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
                       gdata.sum[dst_vid * num_heads + head_idx] *
                       gdata.grad_out[dst_vid * gdata.feat_src_xlen +
                                      head_idx * hidden_xlen + feat_idx]);
-      }  // while feat_idx
-    }    // while head_idx
-  }      // while src_vid
+      } // while feat_idx
+    }   // while head_idx
+  }     // while src_vid
 }
 
 template <typename Idx, typename DType, CompactAsOfNodeKind kind>
@@ -168,7 +168,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
           // edge id, regardless of the type of the edge
           feat_src_offset = edata_idx * gdata.feat_src_xlen +
                             head_idx * hidden_xlen + feat_idx;
-        } else {  // CompactAsOfNodeFlag
+        } else { // CompactAsOfNodeFlag
           if constexpr (RelationalFlag) {
             Idx etype = -1;
             if constexpr (ETypeRelPtrFlag) {
@@ -180,7 +180,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradFeatSrc_edge_parallel(
                 etype = binary_search(etype_data.num_relations,
                                       etype_data.etypes, e);
               }
-            } else {  // !ETypeRelPtrFlag
+            } else { // !ETypeRelPtrFlag
               etype = etype_data.etypes[e];
             }
             Idx src_vid_relational = find_relational_compact_as_of_node_index(
@@ -255,7 +255,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradElEr_edge_parallel(
                             head_idx * hidden_xlen + feat_idx;
           er_idx = edata_idx * num_heads + head_idx;
           el_idx = edata_idx * num_heads + head_idx;
-        } else {  // CompactAsOfNodeFlag
+        } else { // CompactAsOfNodeFlag
           if constexpr (!RelationalFlag) {
             er_idx = dst_vid * num_heads + head_idx;
           } else {

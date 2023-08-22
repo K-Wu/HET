@@ -28,14 +28,17 @@ from typing import Tuple
 def RGAT_parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="RGAT")
     add_generic_RGNN_args(parser, "RGAT.json", {})
-    parser.add_argument("--multiply_among_weights_first_flag", action="store_true")
-    parser.add_argument("--gat_edge_parallel_flag", action="store_true", default=True)
+    parser.add_argument(
+        "--multiply_among_weights_first_flag", action="store_true")
+    parser.add_argument("--gat_edge_parallel_flag",
+                        action="store_true", default=True)
     args = parser.parse_args()
     return args
 
 
 def RGAT_get_model(g, num_classes, args):
-    embed_layer = RelGraphEmbed(g, args.n_infeat, exclude=[])  # exclude=["paper"])
+    # exclude=["paper"])
+    embed_layer = RelGraphEmbed(g, args.n_infeat, exclude=[])
 
     model = RelationalGATEncoder(
         g,
@@ -52,7 +55,8 @@ def RGAT_get_model(g, num_classes, args):
         f"Number of embedding parameters: {sum(p.numel() for p in embed_layer.parameters())}"
     )
     print(model)
-    print(f"Number of model parameters: {sum(p.numel() for p in model.parameters())}")
+    print(
+        f"Number of model parameters: {sum(p.numel() for p in model.parameters())}")
 
     return embed_layer, model
 
@@ -60,7 +64,8 @@ def RGAT_get_model(g, num_classes, args):
 def RGAT_get_our_model(
     g: utils.MyDGLGraph, num_classes, args: argparse.Namespace
 ) -> Tuple[HET_RelGraphEmbed, HET_RelationalGATEncoder]:
-    embed_layer = HET_RelGraphEmbed(g, args.n_infeat, exclude=[])  # exclude=["paper"])
+    embed_layer = HET_RelGraphEmbed(
+        g, args.n_infeat, exclude=[])  # exclude=["paper"])
 
     model = HET_RelationalGATEncoder(
         g,
@@ -82,7 +87,8 @@ def RGAT_get_our_model(
         f"Number of embedding parameters: {sum(p.numel() for p in embed_layer.parameters())}"
     )
     print(model)
-    print(f"Number of model parameters: {sum(p.numel() for p in model.parameters())}")
+    print(
+        f"Number of model parameters: {sum(p.numel() for p in model.parameters())}")
 
     return embed_layer, model
 
@@ -132,7 +138,8 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
             print(
                 "WARNING: assuming node classification in RGAT_main_procedure(dgl_model_flag == False)"
             )
-            labels = th.randint(0, args.num_classes, [g.num_nodes(t) for t in g.ntypes])
+            labels = th.randint(0, args.num_classes, [
+                                g.num_nodes(t) for t in g.ntypes])
         else:
             print(
                 "WARNING: assuming node classification in RGAT_main_procedure(dgl_model_flag == False)"

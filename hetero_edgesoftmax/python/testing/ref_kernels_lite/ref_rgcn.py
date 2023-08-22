@@ -37,16 +37,20 @@ def backward_rgcn_layer1_separate_coo(
 ):
     grad_feat_per_edge = gradout[separate_coo_col_idx]
     grad_feat_per_edge = grad_feat_per_edge * norm.unsqueeze(1)
-    grad_weight[:] = torch.matmul(x[separate_coo_row_idx].t(), grad_feat_per_edge)
+    grad_weight[:] = torch.matmul(
+        x[separate_coo_row_idx].t(), grad_feat_per_edge)
     weight_transposed.unsqueeze(1)
     ref_rgnn.rgnn_relational_matmul_no_scatter_gather_list(
         separate_coo_rel_ptr, weight_transposed, grad_feat_per_edge, grad_feat_per_edge
     )
 
-    feat_per_edge_for_grad_norm = torch.index_select(x, 0, separate_coo_row_idx)
-    grad_norm[:] = torch.sum(feat_per_edge_for_grad_norm * grad_feat_per_edge, dim=1)
+    feat_per_edge_for_grad_norm = torch.index_select(
+        x, 0, separate_coo_row_idx)
+    grad_norm[:] = torch.sum(
+        feat_per_edge_for_grad_norm * grad_feat_per_edge, dim=1)
 
-    grad_x[:] = torch.index_add(grad_x, 0, separate_coo_row_idx, grad_feat_per_edge)
+    grad_x[:] = torch.index_add(
+        grad_x, 0, separate_coo_row_idx, grad_feat_per_edge)
 
 
 def rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(

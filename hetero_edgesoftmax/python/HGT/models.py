@@ -90,7 +90,8 @@ class HET_HGTLayerHetero(nn.Module):
             if use_norm:
                 self.norms.append(nn.LayerNorm(out_dim))
 
-        self.relation_pri = nn.Parameter(torch.ones(self.num_relations, self.num_heads))
+        self.relation_pri = nn.Parameter(
+            torch.ones(self.num_relations, self.num_heads))
         self.relation_att = nn.Parameter(
             torch.Tensor(self.num_relations, num_heads, self.d_k, self.d_k)
         )
@@ -131,7 +132,8 @@ class HET_HGTLayerHetero(nn.Module):
             ).view(-1, self.num_heads, self.in_dim, self.d_k)
             k_relation_att_q_product = torch.bmm(
                 k_relation_att_q_product.view(-1, self.in_dim, self.d_k),
-                q_per_canonical_etype.view(-1, self.in_dim, self.d_k).transpose(1, 2),
+                q_per_canonical_etype.view(-1, self.in_dim,
+                                           self.d_k).transpose(1, 2),
             ).view(-1, self.num_heads, self.in_dim, self.in_dim)
             relation_msg_v_product = torch.bmm(
                 self.relation_msg.view(-1, self.d_k, self.d_k),
@@ -191,7 +193,8 @@ class HET_HGTLayerHetero(nn.Module):
                     G,
                     attn_weight_dst_product_compact,
                     k,
-                    compact_as_of_node_kind,  # CompactAsOfNodeKind::EnabledWithDirectIndexing(2) or CompactAsOfNodeKind::Enabled (1)
+                    # CompactAsOfNodeKind::EnabledWithDirectIndexing(2) or CompactAsOfNodeKind::Enabled (1)
+                    compact_as_of_node_kind,
                     left_mapper_suffix="_col",
                 )  # NB: use single side instead without need to modify kernel
 

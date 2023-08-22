@@ -323,5 +323,5 @@ void RgcnLayer1MyHYBImpl(
       << " ms" << std::endl;
 }
 
-}  // namespace OpPrototyping
-}  // namespace HET
+} // namespace OpPrototyping
+} // namespace HET

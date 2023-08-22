@@ -10,10 +10,11 @@
 // TODO: add load balance kernels
 
 template <typename Idx, typename DType>
-__device__ __forceinline__ void Seastar_RgcnLayer0KernelNodePerBlock(
-    Idx* ranges, Idx* src_ids, Idx* eids, Idx* types, DType* weight,
-    DType* norm, DType* ret, Idx num_nodes, Idx feat_len, Idx ntypes,
-    int node_idx) {
+__device__ __forceinline__ void
+Seastar_RgcnLayer0KernelNodePerBlock(Idx *ranges, Idx *src_ids, Idx *eids,
+                                     Idx *types, DType *weight, DType *norm,
+                                     DType *ret, Idx num_nodes, Idx feat_len,
+                                     Idx ntypes, int node_idx) {
   Idx beg = __ldg(ranges + node_idx);
   Idx end = __ldg(ranges + node_idx + 1);
   Idx tx = threadIdx.x;
@@ -33,10 +34,11 @@ __device__ __forceinline__ void Seastar_RgcnLayer0KernelNodePerBlock(
 }
 
 template <typename Idx, typename DType>
-__device__ __forceinline__ void Seastar_RgcnLayer0KernelNodePerWarp(
-    Idx* ranges, Idx* src_ids, Idx* eids, Idx* types, DType* weight,
-    DType* norm, DType* ret, Idx num_nodes, Idx feat_len, Idx ntypes,
-    int node_idx) {
+__device__ __forceinline__ void
+Seastar_RgcnLayer0KernelNodePerWarp(Idx *ranges, Idx *src_ids, Idx *eids,
+                                    Idx *types, DType *weight, DType *norm,
+                                    DType *ret, Idx num_nodes, Idx feat_len,
+                                    Idx ntypes, int node_idx) {
   Idx beg = __ldg(ranges + node_idx);
   Idx end = __ldg(ranges + node_idx + 1);
   Idx tx = threadIdx.x % 32;
@@ -57,10 +59,10 @@ __device__ __forceinline__ void Seastar_RgcnLayer0KernelNodePerWarp(
 
 // from seastar dgl-hack src/kernel/cuda/binary_reduce_impl.cu
 template <typename Idx, typename DType>
-__global__ void HET_Seastar_RgcnLayer0KernelImpl(Idx* ranges, Idx* src_ids,
-                                                 Idx* eids, Idx* types,
-                                                 DType* weight, DType* norm,
-                                                 DType* ret, Idx num_nodes,
+__global__ void HET_Seastar_RgcnLayer0KernelImpl(Idx *ranges, Idx *src_ids,
+                                                 Idx *eids, Idx *types,
+                                                 DType *weight, DType *norm,
+                                                 DType *ret, Idx num_nodes,
                                                  Idx feat_len, Idx ntypes) {
   if (blockIdx.x < num_nodes) {
     Seastar_RgcnLayer0KernelNodePerBlock<Idx, DType>(
@@ -73,8 +75,8 @@ __global__ void HET_Seastar_RgcnLayer0KernelImpl(Idx* ranges, Idx* src_ids,
 // [[hetero_edgesoftmax/include/DGLHackKernel/OpExport/RGCNOps.inc.h]]
 template <typename Idx, typename DType>
 __global__ void HET_Seastar_RgcnLayer0KernelHybridAssignImpl(
-    Idx* ranges, Idx* src_ids, Idx* eids, Idx* types, DType* weight,
-    DType* norm, DType* ret, Idx num_nodes, Idx feat_len, Idx ntypes,
+    Idx *ranges, Idx *src_ids, Idx *eids, Idx *types, DType *weight,
+    DType *norm, DType *ret, Idx num_nodes, Idx feat_len, Idx ntypes,
     int num_blocks_on_blocks_per_node) {
   if (blockIdx.x < num_blocks_on_blocks_per_node) {
     Seastar_RgcnLayer0KernelNodePerBlock<Idx, DType>(
@@ -94,8 +96,8 @@ __global__ void HET_Seastar_RgcnLayer0KernelHybridAssignImpl(
 
 template <typename Idx, typename DType>
 __device__ __forceinline__ void Seastar_RgcnLayer1KernelNodePerWarp(
-    const Idx* ranges, const Idx* src_ids, const Idx* eids, const Idx* types,
-    const DType* hidden, const DType* weight, const DType* norm, DType* ret,
+    const Idx *ranges, const Idx *src_ids, const Idx *eids, const Idx *types,
+    const DType *hidden, const DType *weight, const DType *norm, DType *ret,
     Idx num_nodes, Idx feat_len_y, Idx feat_len_x, Idx ntypes, int node_idx) {
   Idx beg = __ldg(ranges + node_idx);
   Idx end = __ldg(ranges + node_idx + 1);
@@ -126,8 +128,8 @@ __device__ __forceinline__ void Seastar_RgcnLayer1KernelNodePerWarp(
 
 template <typename Idx, typename DType>
 __device__ __forceinline__ void Seastar_RgcnLayer1KernelNodePerBlock(
-    const Idx* ranges, const Idx* src_ids, const Idx* eids, const Idx* types,
-    const DType* hidden, const DType* weight, const DType* norm, DType* ret,
+    const Idx *ranges, const Idx *src_ids, const Idx *eids, const Idx *types,
+    const DType *hidden, const DType *weight, const DType *norm, DType *ret,
     Idx num_nodes, Idx feat_len_y, Idx feat_len_x, Idx ntypes, int node_idx) {
   Idx beg = __ldg(ranges + node_idx);
   Idx end = __ldg(ranges + node_idx + 1);
@@ -157,8 +159,8 @@ __device__ __forceinline__ void Seastar_RgcnLayer1KernelNodePerBlock(
 // bgs:
 template <typename Idx, typename DType>
 __global__ void HET_Seastar_RgcnLayer1KernelImpl(
-    const Idx* ranges, const Idx* src_ids, const Idx* eids, const Idx* types,
-    const DType* hidden, const DType* weight, const DType* norm, DType* ret,
+    const Idx *ranges, const Idx *src_ids, const Idx *eids, const Idx *types,
+    const DType *hidden, const DType *weight, const DType *norm, DType *ret,
     Idx num_nodes, Idx feat_len_y, Idx feat_len_x, Idx ntypes) {
   if (blockIdx.x < num_nodes) {
     Seastar_RgcnLayer1KernelNodePerBlock(
@@ -169,8 +171,8 @@ __global__ void HET_Seastar_RgcnLayer1KernelImpl(
 
 template <typename Idx, typename DType>
 __global__ void HET_Seastar_RgcnLayer1KernelHybridAssignImpl(
-    const Idx* ranges, const Idx* src_ids, const Idx* eids, const Idx* types,
-    const DType* hidden, const DType* weight, const DType* norm, DType* ret,
+    const Idx *ranges, const Idx *src_ids, const Idx *eids, const Idx *types,
+    const DType *hidden, const DType *weight, const DType *norm, DType *ret,
     Idx num_nodes, Idx feat_len_y, Idx feat_len_x, Idx ntypes,
     int num_blocks_on_blocks_per_node) {
   // TODO
@@ -192,8 +194,8 @@ __global__ void HET_Seastar_RgcnLayer1KernelHybridAssignImpl(
 
 template <typename Idx, typename DType>
 __device__ __forceinline__ void Seastar_RgcnLayer1COOKernelEdgePerWarp(
-    const Idx* dst_ids, const Idx* src_ids, const Idx* eids, const Idx* types,
-    const DType* hidden, const DType* weight, const DType* norm, DType* ret,
+    const Idx *dst_ids, const Idx *src_ids, const Idx *eids, const Idx *types,
+    const DType *hidden, const DType *weight, const DType *norm, DType *ret,
     Idx num_nodes, Idx feat_len_y, Idx feat_len_x, Idx ntypes, int edge_idx) {
   Idx dst_id = __ldg(dst_ids + edge_idx);
   Idx src_id = __ldg(src_ids + edge_idx);
@@ -227,8 +229,8 @@ __device__ __forceinline__ void Seastar_RgcnLayer1COOKernelEdgePerWarp(
 // of the transposed graph. This is the same as the CSR kernel.
 template <typename Idx, typename DType>
 __global__ void HET_Seastar_RgcnLayer1COOKernelImpl(
-    const Idx* dst_ids, const Idx* src_ids, const Idx* eids, const Idx* types,
-    const DType* hidden, const DType* weight, const DType* norm, DType* ret,
+    const Idx *dst_ids, const Idx *src_ids, const Idx *eids, const Idx *types,
+    const DType *hidden, const DType *weight, const DType *norm, DType *ret,
     Idx num_edges, Idx feat_len_y, Idx feat_len_x, Idx ntypes) {
   Idx warp_idx = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
   Idx warp_num = (blockDim.x * gridDim.x) / 32;

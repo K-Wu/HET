@@ -60,7 +60,8 @@ def extract_from_ncu_file(
     if extract_mem_flag:
         func_and_metric_csvs.append(
             consolidate_ncu_details(
-                extract_ncu_values_from_details(load_ncu_report(file_path, "details"))
+                extract_ncu_values_from_details(
+                    load_ncu_report(file_path, "details"))
             )
         )
     if extract_roofline_flag:
@@ -152,7 +153,8 @@ def check_metric_units_all_identical_from_ncu_folder(path) -> bool:
         if len(metric_units[metric]) != 1:
             if len(metric_units[metric]) == 2 and "%" in metric_units[metric]:
                 continue
-            print(f"Metric {metric} has different units: {metric_units[metric]}")
+            print(
+                f"Metric {metric} has different units: {metric_units[metric]}")
             return False
     return True
 
@@ -164,7 +166,8 @@ if __name__ == "__main__":
     # Create worksheet
     worksheet_title = f"[{get_pretty_hostname()}]{path_name.split('/')[-1]}"[:100]
     try:
-        worksheet = create_worksheet(SPREADSHEET_URL, worksheet_title, retry=True)
+        worksheet = create_worksheet(
+            SPREADSHEET_URL, worksheet_title, retry=True)
     except Exception as e:
         print("Failed to create worksheet:", e)
         print(traceback.format_exc())

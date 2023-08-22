@@ -8,8 +8,7 @@
 namespace HET {
 namespace OpPrototyping {
 // random vectorizer generator code from https://gist.github.com/ashwin/7245048
-template <typename DType>
-struct GenRand {
+template <typename DType> struct GenRand {
   __device__ DType operator()(int idx) {
     thrust::default_random_engine randEng;
     thrust::uniform_real_distribution<DType> uniDist;
@@ -18,8 +17,7 @@ struct GenRand {
   }
 };
 
-template <>
-struct GenRand<float4> {
+template <> struct GenRand<float4> {
   __device__ float4 operator()(int idx) {
     thrust::default_random_engine randEng;
     thrust::uniform_real_distribution<float> uniDist;
@@ -34,9 +32,8 @@ struct GenRand<float4> {
 // should be taken care of by thrust::detail::vector_base NB: pass-by-value
 // arguments are deeply copied， so we should pass by reference
 // TODO: switch all MySimpleNDArray argument passage to pass-by-reference
-template <typename DType, typename Alloc>
-class MySimpleNDArray {
- public:
+template <typename DType, typename Alloc> class MySimpleNDArray {
+public:
   thrust::detail::vector_base<DType, Alloc> data;
   std::vector<int64_t> shape;
   MySimpleNDArray(std::vector<int64_t> shape) : shape(shape) {
@@ -105,8 +102,8 @@ class MySimpleNDArray {
 };
 
 template <typename DType, typename Alloc, typename FileDType>
-MySimpleNDArray<DType, Alloc> LoadMySimpleNDArrayFromNumpy(
-    const std::string &filename) {
+MySimpleNDArray<DType, Alloc>
+LoadMySimpleNDArrayFromNumpy(const std::string &filename) {
   std::vector<unsigned long> shape;
   bool fortran_order = false;
   std::vector<FileDType> data;
@@ -124,11 +121,11 @@ MySimpleNDArray<DType, Alloc> LoadMySimpleNDArrayFromNumpy(
 }
 
 template <typename DType>
-MySimpleNDArray<DType, thrust::device_allocator<DType>> GenerateRandomNDArray(
-    std::vector<int64_t> shape) {
+MySimpleNDArray<DType, thrust::device_allocator<DType>>
+GenerateRandomNDArray(std::vector<int64_t> shape) {
   MySimpleNDArray<DType, thrust::device_allocator<DType>> result(shape);
   result.FillInRandomData();
   return result;
 }
-}  // namespace OpPrototyping
-}  // namespace HET
+} // namespace OpPrototyping
+} // namespace HET

@@ -10,8 +10,8 @@
 #include <cusp/coo_matrix.h>
 #include <cusp/csr_matrix.h>
 
-#include <npy.hpp>
 #include "OpPrototyping/MySimpleNDArray/MySimpleNDArray.h"
+#include <npy.hpp>
 
 #include "../MyHyb/MyHyb.h"
 #include "../hetero_edgesoftmax.h"

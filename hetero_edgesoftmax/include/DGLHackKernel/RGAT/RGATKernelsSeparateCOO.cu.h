@@ -7,8 +7,8 @@
 
 // TODO: put cuda kernels in HET::KernelImpl
 namespace HET {
-namespace KernelImpl {}  // namespace KernelImpl
-}  // namespace HET
+namespace KernelImpl {} // namespace KernelImpl
+} // namespace HET
 
 // edge-centric schedule cf. HET_gatSumProdZipDivKernel in
 // [[hetero_edgesoftmax/include/DGLHackKernel/GAT/FusedGAT.cu.h]]
@@ -78,7 +78,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
                         gdata.sum[dst_vid * num_heads + head_idx] *
                         gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                        head_idx * hidden_xlen + feat_idx]);
-        } else {  // !RelationalFlag
+        } else { // !RelationalFlag
           feat_src_entry_id = edata_idx;
           s += gdata.exp[edata_idx * num_heads + head_idx] /
                gdata.sum[dst_vid * num_heads + head_idx] *

@@ -188,7 +188,8 @@ def ask_subdirectory_or_file(root, prefix) -> str:
     if len(user_input) == 0:
         result = candidate
     else:
-        if user_input.startswith("///"):  # user input is a relative path to het root
+        # user input is a relative path to het root
+        if user_input.startswith("///"):
             assert user_input[3:].startswith(RESULTS_RELATIVE_DIR)
             user_input = os.path.relpath(user_input[3:], RESULTS_RELATIVE_DIR)
         result = os.path.join(root, user_input)
@@ -279,11 +280,14 @@ def extract_het_results_from_folder(path) -> "list[list[Union[float, str, int]]]
                 lines = f.readlines()
                 for line in lines:
                     if line.startswith("Mean forward time"):
-                        avg_forward_time = float(line.split(":")[1].strip().split()[0])
+                        avg_forward_time = float(
+                            line.split(":")[1].strip().split()[0])
                     elif line.startswith("Mean backward time"):
-                        avg_backward_time = float(line.split(":")[1].strip().split()[0])
+                        avg_backward_time = float(
+                            line.split(":")[1].strip().split()[0])
                     elif line.startswith("Mean training time"):
-                        avg_training_time = float(line.split(":")[1].strip().split()[0])
+                        avg_training_time = float(
+                            line.split(":")[1].strip().split()[0])
                     if line.lower().find("error") != -1:
                         status.append(line.strip())
             if len(status) == 0:
@@ -308,7 +312,8 @@ def extract_het_results_from_folder(path) -> "list[list[Union[float, str, int]]]
 
 def open_worksheet(target_sheet_url: str, target_gid: str):
     if target_gid != "0":
-        raise NotImplementedError("To avoid data loss, only gid=0 is supported for now")
+        raise NotImplementedError(
+            "To avoid data loss, only gid=0 is supported for now")
     gc = gspread.service_account()
     sh = gc.open_by_url(target_sheet_url)
     sheet_data = sh.fetch_sheet_metadata()
@@ -333,7 +338,8 @@ def create_worksheet(target_sheet_url: str, title: str, retry=False) -> Workshee
         while True:
             if (title + title_suffix)[:100] in [ws.title for ws in sh.worksheets()]:
                 # ask user to specify a suffix
-                title_suffix = input("title already exists, please specify a suffix:")
+                title_suffix = input(
+                    "title already exists, please specify a suffix:")
             else:
                 break
 
@@ -382,7 +388,8 @@ def update_gspread(entries, ws: Worksheet, cell_range=None) -> None:
         num_rows = len(entries)
         num_cols = max([len(row) for row in entries])
         cell_range = get_cell_range_from_A1(num_rows, num_cols)
-    ws.format(cell_range, {"numberFormat": {"type": "NUMBER", "pattern": "0.0000"}})
+    ws.format(cell_range, {"numberFormat": {
+              "type": "NUMBER", "pattern": "0.0000"}})
     ws.update(cell_range, try_best_to_numeric(entries))
     # ws.update_title("[GID0]TestTitle")
 
@@ -418,7 +425,8 @@ def upload_folder(
                 names_and_info,
                 worksheet,
                 cell_range=get_cell_range_from_A1(
-                    count_rows(names_and_info), count_cols(names_and_info), 0, 0
+                    count_rows(names_and_info), count_cols(
+                        names_and_info), 0, 0
                 ),
             )
             update_gspread(

@@ -49,7 +49,8 @@ class RgnnRelationalMatmul(th.autograd.Function):
             inputs,
         ) = ctx.saved_tensors
         input_num_head_one_flag = ctx.input_num_head_one_flag
-        grad_weight = th.zeros_like(weights, memory_format=th.contiguous_format)
+        grad_weight = th.zeros_like(
+            weights, memory_format=th.contiguous_format)
         grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
         # FIXME: seems there is a deadlock here
         K.backward_rgnn_relational_matmul(
@@ -97,7 +98,8 @@ class RgnnRelationalMatmulNoScatterGatherList(th.autograd.Function):
             inputs,
             node_feat_output,
         ) = ctx.saved_tensors
-        grad_weight = th.zeros_like(weights, memory_format=th.contiguous_format)
+        grad_weight = th.zeros_like(
+            weights, memory_format=th.contiguous_format)
         grad_input = th.zeros_like(inputs, memory_format=th.contiguous_format)
         # FIXME: seems there is a deadlock here
         K.backward_rgnn_relational_matmul_no_scatter_gather_list(
@@ -160,7 +162,8 @@ class RgnnRelationalMatmulCompactAsOfNode(th.autograd.Function):
         ) = ctx.saved_tensors
         input_num_head_one_flag = ctx.input_num_head_one_flag
         grad_weight = th.zeros_like(weight, memory_format=th.contiguous_format)
-        grad_node_feat = th.zeros_like(node_feat, memory_format=th.contiguous_format)
+        grad_node_feat = th.zeros_like(
+            node_feat, memory_format=th.contiguous_format)
         # FIXME: illegal reading A data when BGS compactAsOfNode is true perhaps bug in schedule_by_relation
         # FIXME: seems there is a bug in gradout when bgs compactAsOfNode is true perhaps the scheming scheme to grad_feat_src is faulty
         # print(unique_srcs_and_dests_rel_ptrs)
@@ -519,7 +522,8 @@ def rgnn_inner_product_right_node(
         # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
         # print([separate_coo_original_dict["rel_ptrs"][-1], right_node_vectors.size(1)])
         ret = th.zeros(
-            (separate_coo_original_dict["rel_ptrs"][-1], right_node_vectors.size(1)),
+            (separate_coo_original_dict["rel_ptrs"]
+             [-1], right_node_vectors.size(1)),
             dtype=right_node_vectors.dtype,
             device=right_node_vectors.device,
             requires_grad=True,
@@ -547,7 +551,8 @@ def rgnn_inner_product_right_node(
         separate_coo_original_dict = graph.get_separate_coo_original()
         # assuming shape of right_node_vectors is [num_nodes, num_heads, num_features]
         ret = th.zeros(
-            [separate_coo_original_dict["rel_ptrs"][-1], right_node_vectors.size(1)],
+            [separate_coo_original_dict["rel_ptrs"]
+                [-1], right_node_vectors.size(1)],
             dtype=right_node_vectors.dtype,
             device=right_node_vectors.device,
             requires_grad=True,

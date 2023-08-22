@@ -9,7 +9,7 @@ from typing import Tuple, Union
 def find_scope_end(lines: list[str], scope_beg: int) -> int:
     """Find the end of a scope, given the beginning of the scope"""
     scopes_in_between = 0
-    for idx_line, line in enumerate(lines[scope_beg + 1 :]):
+    for idx_line, line in enumerate(lines[scope_beg + 1:]):
         if line.find("{") != -1:
             # beginning of another scope
             scopes_in_between += 1
@@ -72,7 +72,8 @@ def loads_op(lines: list[str]) -> list[Union[operators.FusedOpBase, operators.Op
             if curr_scope.find("GEMMOp") != -1:
                 results.append(operators.GEMMFusedOp.from_ops(curr_scope_ops))
             elif curr_scope.find("TraversalOp") != -1:
-                results.append(operators.TraversalFusedOp.from_ops(curr_scope_ops))
+                results.append(
+                    operators.TraversalFusedOp.from_ops(curr_scope_ops))
             else:
                 raise ValueError("unrecognized fused op type!")
             scopes.pop(0)
@@ -102,7 +103,8 @@ def loads_op(lines: list[str]) -> list[Union[operators.FusedOpBase, operators.Op
                 # curr_op_data["keyword_value_pairs"].append((keyword, value))
                 curr_op_data[keyword] = value
             operator_cls = operators.func_name_to_op[func_name]
-            curr_op: operators.OpBase = operator_cls.from_keyval_pairs(curr_op_data)
+            curr_op: operators.OpBase = operator_cls.from_keyval_pairs(
+                curr_op_data)
             if curr_scope is None:
                 results.append(curr_op)
             else:
@@ -131,8 +133,8 @@ def program_loads(
     lines: list[str],
 ) -> Tuple[VariableTable, list[Union[operators.OpBase, operators.FusedOpBase]]]:
     scopes: list[Tuple[int, int, str]] = find_first_level_scopes(lines)
-    var_table = VariableTable.loads(lines[scopes[0][0] : scopes[0][1] + 1])
-    ops = loads_op(lines[scopes[1][0] :])
+    var_table = VariableTable.loads(lines[scopes[0][0]: scopes[0][1] + 1])
+    ops = loads_op(lines[scopes[1][0]:])
     return var_table, ops
 
 
@@ -144,11 +146,12 @@ if __name__ == "__main__":
         scopes: list[Tuple[int, int, str]] = find_first_level_scopes(lines)
         for scope_beg, scope_end, scope_tag in scopes:
             if scope_tag.find("DAG") != -1:
-                ops = loads_op(lines[scope_beg : scope_end + 1])
+                ops = loads_op(lines[scope_beg: scope_end + 1])
                 import yaml
 
                 # use .out suffix to avoid git diff
                 yaml.dump(ops, open("hgt.inter-op-ssa.yaml.out", "w"))
-                yaml.load(open("hgt.inter-op-ssa.yaml.out", "r"), Loader=yaml.Loader)
+                yaml.load(open("hgt.inter-op-ssa.yaml.out", "r"),
+                          Loader=yaml.Loader)
     if ops is None:
         print("DAG not found")

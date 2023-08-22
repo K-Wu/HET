@@ -145,12 +145,15 @@ class FusedOpBase(metaclass=abc.ABCMeta):
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
-_SplitOp = make_dataclass("SplitOp", [("results", list[DataVar]), ("input", DataVar)])
+_SplitOp = make_dataclass(
+    "SplitOp", [("results", list[DataVar]), ("input", DataVar)])
 _NodeDenseOp = make_dataclass(
-    "NodeDenseOp", [("result", DataVar), ("input", DataVar), ("weight", WeightVar)]
+    "NodeDenseOp", [("result", DataVar), ("input", DataVar),
+                    ("weight", WeightVar)]
 )
 _EdgeDenseOp = make_dataclass(
-    "EdgeDenseOp", [("result", DataVar), ("input", DataVar), ("weight", WeightVar)]
+    "EdgeDenseOp", [("result", DataVar), ("input", DataVar),
+                    ("weight", WeightVar)]
 )
 _EdgeScalarVectorMulOp = make_dataclass(
     "EdgeScalarVectorMulOp",
@@ -239,7 +242,8 @@ class SplitOp(_SplitOp, OpBase, metaclass=FinalOpMeta):
         self.input = replace_if_matched(self.input, old, new)
 
     def inplace_replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> None:
-        self.results = [replace_if_matched(ele, old, new) for ele in self.results]
+        self.results = [replace_if_matched(
+            ele, old, new) for ele in self.results]
 
     def replace_all_operands_with(self: ..., old: VarBase, new: VarBase) -> ...:
         return self.__class__(
@@ -249,7 +253,8 @@ class SplitOp(_SplitOp, OpBase, metaclass=FinalOpMeta):
 
     def replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> ...:
         return self.__class__(
-            results=[replace_if_matched(ele, old, new) for ele in self.results],
+            results=[replace_if_matched(ele, old, new)
+                     for ele in self.results],
             input=self.input,
         )
 

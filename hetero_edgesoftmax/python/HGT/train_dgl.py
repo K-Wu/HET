@@ -51,7 +51,8 @@ def HGT_get_model(g: dgl.DGLGraph, num_classes, hypermeters):
         f"Number of embedding parameters: {sum(p.numel() for p in embed_layer.parameters())}"
     )
     print(model)
-    print(f"Number of model parameters: {sum(p.numel() for p in model.parameters())}")
+    print(
+        f"Number of model parameters: {sum(p.numel() for p in model.parameters())}")
     # NB: when transfering model to GPU, notice that DGLGraph g also needs to be transfered to GPU
     return embed_layer, model
 
@@ -91,7 +92,8 @@ def HGT_get_our_model(
         f"Number of embedding parameters: {sum(p.numel() for p in embed_layer.parameters())}"
     )
     print(model)
-    print(f"Number of model parameters: {sum(p.numel() for p in model.parameters())}")
+    print(
+        f"Number of model parameters: {sum(p.numel() for p in model.parameters())}")
     return embed_layer, model
 
 

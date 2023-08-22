@@ -13,7 +13,7 @@ std::shared_ptr<MyStruct> test() {
   return ptr_to_abc;
 }
 
-MyStruct* test2() {
+MyStruct *test2() {
   MyStruct abc({1, 4, 5, 8, 15});
   return &abc;
 }

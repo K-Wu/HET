@@ -43,7 +43,8 @@ class RelGraphEmbed(nn.Module):
         for ntype in g.ntypes:
             if ntype in exclude:
                 continue
-            embed = nn.Parameter(th.Tensor(g.number_of_nodes(ntype), self.embed_size))
+            embed = nn.Parameter(
+                th.Tensor(g.number_of_nodes(ntype), self.embed_size))
             self.embeds[ntype] = embed
 
         self.reset_parameters()
@@ -76,7 +77,8 @@ class HET_RelGraphEmbed(nn.Module):
 
         # create learnable embeddings for all nodes, except those with a node-type in the "exclude" list
 
-        self.embeds = nn.Parameter(th.Tensor(g.get_num_nodes(), self.embed_size))
+        self.embeds = nn.Parameter(
+            th.Tensor(g.get_num_nodes(), self.embed_size))
 
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.embeds)
@@ -97,7 +99,8 @@ def extract_embed(node_embed, input_nodes):
 def HET_RGNN_train_with_sampler(
     g, model, node_embed, optimizer, train_loader, labels, device, args
 ):
-    raise NotImplementedError("HET_RGNN_train_with_sampler not implemented yet")
+    raise NotImplementedError(
+        "HET_RGNN_train_with_sampler not implemented yet")
 
 
 def HET_RGNN_train_full_graph(
@@ -186,30 +189,34 @@ def HET_RGNN_train_full_graph(
         print(
             f"Backward prop time: {backward_prop_start.elapsed_time(backward_prop_end)} ms"
         )
-        print(f"Total time: {forward_prop_start.elapsed_time(backward_prop_end)} ms")
+        print(
+            f"Total time: {forward_prop_start.elapsed_time(backward_prop_end)} ms")
         if epoch >= 3:
-            forward_time.append(forward_prop_start.elapsed_time(forward_prop_end))
-            backward_time.append(backward_prop_start.elapsed_time(backward_prop_end))
-            training_time.append(forward_prop_start.elapsed_time(backward_prop_end))
+            forward_time.append(
+                forward_prop_start.elapsed_time(forward_prop_end))
+            backward_time.append(
+                backward_prop_start.elapsed_time(backward_prop_end))
+            training_time.append(
+                forward_prop_start.elapsed_time(backward_prop_end))
 
-    if len(forward_time[len(forward_time) // 4 :]) == 0:
+    if len(forward_time[len(forward_time) // 4:]) == 0:
         print(
             "insufficient run to report mean time. skipping. (in the json it might show as nan)"
         )
     else:
         print(
             "Mean forward time: {:4f} ms".format(
-                np.mean(forward_time[len(forward_time) // 4 :])
+                np.mean(forward_time[len(forward_time) // 4:])
             )
         )
         print(
             "Mean backward time: {:4f} ms".format(
-                np.mean(backward_time[len(backward_time) // 4 :])
+                np.mean(backward_time[len(backward_time) // 4:])
             )
         )
         print(
             "Mean training time: {:4f} ms".format(
-                np.mean(training_time[len(training_time) // 4 :])
+                np.mean(training_time[len(training_time) // 4:])
             )
         )
     print(
@@ -230,9 +237,9 @@ def HET_RGNN_train_full_graph(
         json.dump(
             {
                 "dataset": args.dataset,
-                "mean_forward_time": np.mean(forward_time[len(forward_time) // 4 :]),
-                "mean_backward_time": np.mean(backward_time[len(backward_time) // 4 :]),
-                "mean_training_time": np.mean(training_time[len(training_time) // 4 :]),
+                "mean_forward_time": np.mean(forward_time[len(forward_time) // 4:]),
+                "mean_backward_time": np.mean(backward_time[len(backward_time) // 4:]),
+                "mean_training_time": np.mean(training_time[len(training_time) // 4:]),
                 "forward_time": forward_time,
                 "backward_time": backward_time,
                 "training_time": training_time,
@@ -387,7 +394,8 @@ def add_generic_RGNN_args(parser, default_logfilename, filtered_args={}):
     parser.add_argument("--logfilename", type=str, default=default_logfilename)
     # DGL
     if not "dataset" in filtered_args:
-        parser.add_argument("-d", "--dataset", type=str, default="mag", help="dataset")
+        parser.add_argument("-d", "--dataset", type=str,
+                            default="mag", help="dataset")
     if not "n_infeat" in filtered_args:
         parser.add_argument(
             "--n_infeat",
@@ -400,7 +408,8 @@ def add_generic_RGNN_args(parser, default_logfilename, filtered_args={}):
             "--sparse_format", type=str, default="csr", help="sparse format to use"
         )
     if not "sort_by_src" in filtered_args:
-        parser.add_argument("--sort_by_src", action="store_true", help="sort by src")
+        parser.add_argument(
+            "--sort_by_src", action="store_true", help="sort by src")
     if not "sort_by_etype" in filtered_args:
         parser.add_argument(
             "--sort_by_etype", action="store_true", help="sort by etype"
@@ -426,9 +435,11 @@ def add_generic_RGNN_args(parser, default_logfilename, filtered_args={}):
             "--compact_direct_indexing_flag", action="store_true", default=False
         )
     if not "lr" in filtered_args:
-        parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
+        parser.add_argument("--lr", type=float,
+                            default=0.01, help="learning rate")
     if not "num_heads" in filtered_args:
-        parser.add_argument("--num_heads", type=int, default=1, help="number of heads")
+        parser.add_argument("--num_heads", type=int,
+                            default=1, help="number of heads")
     if not "n_epochs" in filtered_args:
         parser.add_argument(
             "-e", "--n_epochs", type=int, default=10, help="number of training epochs"

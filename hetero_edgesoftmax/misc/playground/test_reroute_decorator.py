@@ -1,4 +1,7 @@
 # code from https://stackoverflow.com/questions/58597680/how-can-a-python-decorator-change-calls-in-decorated-function
+from test_args_dummy import try_intercept2
+import test_args_dummy
+import argparse
 from types import FunctionType
 from functools import wraps
 
@@ -24,11 +27,6 @@ def reroute_decorator(**kwargs):
     return actual_decorator
 
 
-import argparse
-import test_args_dummy
-from test_args_dummy import try_intercept2
-
-
 @reroute_decorator(argparse=test_args_dummy, debug=True)
 def try_intercept():
     parser = argparse.ArgumentParser()
@@ -45,5 +43,6 @@ if __name__ == "__main__":
     else:
         print("parser is not None")
     try_intercept()
-    reroute_decorator(A=test_args_dummy, debug=True)(test_args_dummy.try_intercept2)()
+    reroute_decorator(A=test_args_dummy, debug=True)(
+        test_args_dummy.try_intercept2)()
     reroute_decorator(A=test_args_dummy, debug=True)(try_intercept2)()

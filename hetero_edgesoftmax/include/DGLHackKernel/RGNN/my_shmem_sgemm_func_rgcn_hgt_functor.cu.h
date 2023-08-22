@@ -20,7 +20,7 @@ template <bool RIGHT_REG_TILED_FLAG, bool DOUBLE_BUFFER_FLAG,
           bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag,
           bool AtomicUpdateFlag>
 class _simplified_basic_MatMulKernel {
- public:
+public:
   __device__ __forceinline__ static void execute_function(
       float *A, float *B, float *C, float *edge_norm, float *inner_product,
       float *input_node_feat_for_inner_product, IdxPtr separate_coo_row_idx,
@@ -45,7 +45,7 @@ class _simplified_basic_MatMulKernel<
     SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr,
     HGT_INSTEAD_OF_RGCN_FLAG, OuterProductFlag, DoInnerProductSwitch,
     InnerProductGatherListNodeInsteadOfEdge, NoEdgeNormFlag, AtomicUpdateFlag> {
- public:
+public:
   // vanilla tiled shmem gemm code from
   // http://www.shodor.org/media/content//petascale/materials/UPModules/matrixMultiplication/moduleDocument.pdf
   //@@ Example of grid and block configuration

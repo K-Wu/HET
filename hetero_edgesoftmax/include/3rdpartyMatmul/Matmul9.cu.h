@@ -49,10 +49,10 @@ __global__ __launch_bounds__(256, 2) void sgemm_128x128x8(int m, int n, int k,
                                                           const float *b,
                                                           float *c) {
   __shared__ __align__(
-      16 * 1024) char smem[24 * 1024];  // 16KB shared memory for buffer
+      16 * 1024) char smem[24 * 1024]; // 16KB shared memory for buffer
   float *ashare = reinterpret_cast<float *>(smem);
   float *bshare =
-      reinterpret_cast<float *>(smem + 16 * 1024);  // 8k shared mem for B
+      reinterpret_cast<float *>(smem + 16 * 1024); // 8k shared mem for B
   float sum[8][8] = {0};
   float panelA[8] = {0}, panelB[8] = {0};
 
@@ -63,7 +63,7 @@ __global__ __launch_bounds__(256, 2) void sgemm_128x128x8(int m, int n, int k,
     // part1: gmem to smem
     // load gmem to smem for ashare
     int to_a = (threadIdx.x % 8) * SMEM_LDA +
-               (threadIdx.x / 8) * 4;  // 连续的地址不能给同一个 thread 用
+               (threadIdx.x / 8) * 4; // 连续的地址不能给同一个 thread 用
 #pragma unroll
     for (int i = 0; i < 4; ++i) {
       ashare[to_a + i] = a[from_a + i * k];
@@ -74,8 +74,8 @@ __global__ __launch_bounds__(256, 2) void sgemm_128x128x8(int m, int n, int k,
 #pragma unroll
     for (int i = 0; i < 4; ++i) {
       bshare[to_b + i * 32] =
-          b[from_b + i * 32];  // 32 thread 合并访问。 thread i 访问  [i, i+32,
-                               // i+64, i+96]
+          b[from_b + i * 32]; // 32 thread 合并访问。 thread i 访问  [i, i+32,
+                              // i+64, i+96]
     }
 
     __syncthreads();

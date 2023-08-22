@@ -8,7 +8,8 @@ _perRow_EdgeSoftmax_4FirstStageConcatenatedCSRKernel(
     int *__restrict__ relation, float *__restrict__ edge_input_data,
     float *__restrict__ mus) {
   //@@ insert spmv kernel for csr format
-  if (row_idx >= num_rows) return;
+  if (row_idx >= num_rows)
+    return;
   int row_start = matRows[row_idx];
   int row_end = matRows[row_idx + 1];
   // float row_sum = 1e-10f;
@@ -27,7 +28,8 @@ _perRow_EdgeSoftmax_4SecondStageConcatenatedCSRKernel(
     int *__restrict__ relation, float *__restrict__ edge_input_data,
     float *__restrict__ mus) {
   //@@ insert spmv kernel for csr format
-  if (row_idx >= num_rows) return;
+  if (row_idx >= num_rows)
+    return;
   int row_start = matRows[row_idx];
   int row_end = matRows[row_idx + 1];
 

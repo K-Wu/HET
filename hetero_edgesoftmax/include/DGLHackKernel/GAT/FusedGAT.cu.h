@@ -4,8 +4,7 @@
 #include "kernel_enums.h"
 
 // FIXME: check if RGAT needs different a vector for different etypes
-template <typename Idx, typename DType>
-struct GatFusedData {
+template <typename Idx, typename DType> struct GatFusedData {
   // feat_size size along feature dimension
   Idx feat_src_xlen{0};
   Idx num_heads{0};
@@ -80,7 +79,7 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
                   gdata.sum[dst_vid * num_heads + head_idx] *
                   gdata.feat_src[feat_src_entry_id * gdata.feat_src_xlen +
                                  head_idx * hidden_xlen + feat_idx]);
-          } else {  // !RelationalFlag
+          } else { // !RelationalFlag
             // NB: feat_src_entry_id varies between edata_idx and src_vid
             // depending on compactasofnodeflag
             if constexpr (IsCompact(kind)) {
@@ -133,10 +132,10 @@ __device__ __forceinline__ void _gatExpLeakyReluSumKernel(
 
     for (Idx feat_idx = tx;
          feat_idx <
-         num_heads;  // NB: e_xlen is set as num_head.
-                     // NB: this is calculating attention and sum of attention
-                     // thus no need for the gdata.feat_src_xlen, i.e.,
-                     // num_feat_per_head, for-loop level
+         num_heads; // NB: e_xlen is set as num_head.
+                    // NB: this is calculating attention and sum of attention
+                    // thus no need for the gdata.feat_src_xlen, i.e.,
+                    // num_feat_per_head, for-loop level
          feat_idx += blockDim.x * gridDim.x) {
       // 1. Load destination vertex into shared memory
       Idx feat_off_dst = -1;

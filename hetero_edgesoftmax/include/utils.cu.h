@@ -18,31 +18,32 @@
 #define _HOST_DEVICE_METHOD_QUALIFIER __host__ __device__
 
 // cublas API error checking
-#define CUBLAS_CHECK(err)                                                  \
-  do {                                                                     \
-    cublasStatus_t err_ = (err);                                           \
-    if (err_ != CUBLAS_STATUS_SUCCESS) {                                   \
-      std::printf("cublas error %d at %s:%d\n", err_, __FILE__, __LINE__); \
-      throw std::runtime_error("cublas error");                            \
-    }                                                                      \
+#define CUBLAS_CHECK(err)                                                      \
+  do {                                                                         \
+    cublasStatus_t err_ = (err);                                               \
+    if (err_ != CUBLAS_STATUS_SUCCESS) {                                       \
+      std::printf("cublas error %d at %s:%d\n", err_, __FILE__, __LINE__);     \
+      throw std::runtime_error("cublas error");                                \
+    }                                                                          \
   } while (0)
 
-#define cuda_err_chk(ans) \
+#define cuda_err_chk(ans)                                                      \
   { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line,
                       bool abort = false) {
   if (code != cudaSuccess) {
     fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code), file,
             line);
-    if (abort) exit(1);
+    if (abort)
+      exit(1);
   }
 }
 
-#define PRINT_ERROR                                                    \
-  do {                                                                 \
-    fprintf(stderr, "Error at line %d, file %s (%d) [%s]\n", __LINE__, \
-            __FILE__, errno, strerror(errno));                         \
-    exit(1);                                                           \
+#define PRINT_ERROR                                                            \
+  do {                                                                         \
+    fprintf(stderr, "Error at line %d, file %s (%d) [%s]\n", __LINE__,         \
+            __FILE__, errno, strerror(errno));                                 \
+    exit(1);                                                                   \
   } while (0)
 
 static std::chrono::time_point<std::chrono::high_resolution_clock> now() {
@@ -142,28 +143,28 @@ __device__ __host__ __forceinline__ constexpr Idx max2(const Idx a,
 // time Use the following: static_assert(dependent_false<T>::value); See
 // https://stackoverflow.com/a/53945555/5555077
 // example https://godbolt.org/z/3cGdneEKM
-#define CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(FLAG, reason)                   \
-  static_assert(std::is_same<std::true_type,                               \
-                             std::integral_constant<bool, FLAG>>::value && \
+#define CONSTEXPR_FALSE_CLAUSE_UNREACHABLE(FLAG, reason)                       \
+  static_assert(std::is_same<std::true_type,                                   \
+                             std::integral_constant<bool, FLAG>>::value &&     \
                 reason)
 
-#define CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(FLAG, reason)                    \
-  static_assert(std::is_same<std::false_type,                              \
-                             std::integral_constant<bool, FLAG>>::value && \
+#define CONSTEXPR_TRUE_CLAUSE_UNREACHABLE(FLAG, reason)                        \
+  static_assert(std::is_same<std::false_type,                                  \
+                             std::integral_constant<bool, FLAG>>::value &&     \
                 reason)
 
-#define CONSTEXPR_FALSE_CLAUSE_STATIC_ASSERT(FLAG, asserted_true_expression,  \
-                                             reason)                          \
-  static_assert(                                                              \
-      std::is_same<std::true_type,                                            \
-                   std::integral_constant<bool, FLAG>>::value /*unreachable*/ \
+#define CONSTEXPR_FALSE_CLAUSE_STATIC_ASSERT(FLAG, asserted_true_expression,   \
+                                             reason)                           \
+  static_assert(                                                               \
+      std::is_same<std::true_type,                                             \
+                   std::integral_constant<bool, FLAG>>::value /*unreachable*/  \
       || (/*or true*/ asserted_true_expression && reason))
 
-#define CONSTEXPR_TRUE_CLAUSE_STATIC_ASSERT(FLAG, asserted_true_expression,   \
-                                            reason)                           \
-  static_assert(                                                              \
-      std::is_same<std::false_type,                                           \
-                   std::integral_constant<bool, FLAG>>::value /*unreachable*/ \
+#define CONSTEXPR_TRUE_CLAUSE_STATIC_ASSERT(FLAG, asserted_true_expression,    \
+                                            reason)                            \
+  static_assert(                                                               \
+      std::is_same<std::false_type,                                            \
+                   std::integral_constant<bool, FLAG>>::value /*unreachable*/  \
       || (/*or true*/ asserted_true_expression && reason))
 
 // can be used for both threadIdx and blockIdx

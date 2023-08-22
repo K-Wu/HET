@@ -77,7 +77,7 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
       int64_t *><<<nblks, nthrs, 0, stream>>>(
       node_feat_input.data_ptr<float>(), weights.data_ptr<float>(),
       node_feat_output.data_ptr<float>(),
-      edge_norm.data_ptr<float>(),  // relation_pri.data_ptr<float>(),
+      edge_norm.data_ptr<float>(), // relation_pri.data_ptr<float>(),
       separate_coo_row_indices.data_ptr<int64_t>(),
       separate_coo_col_indices.data_ptr<int64_t>(),
       separate_coo_eids.data_ptr<int64_t>(),
@@ -156,10 +156,10 @@ void full_graph_hetero_attention_ops(
           dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
       num_relations, num_input_dim, num_output_dim, num_heads);
 }
-}  // namespace EdgeParallel
-}  // namespace SeparateCOO
+} // namespace EdgeParallel
+} // namespace SeparateCOO
 
-}  // namespace FwProp
+} // namespace FwProp
 namespace BckProp {
 namespace SeparateCOO {
 namespace EdgeParallel {
@@ -368,13 +368,13 @@ void FullGraphFusedMessageCalcAndMeanAggregation(
       num_relations, num_input_dim, num_output_dim, num_heads);
 }
 
-}  // namespace EdgeParallel
-}  // namespace SeparateCOO
-}  // namespace BckProp
+} // namespace EdgeParallel
+} // namespace SeparateCOO
+} // namespace BckProp
 
-}  // namespace HGT
-}  // namespace TorchExport
-}  // namespace HET
+} // namespace HGT
+} // namespace TorchExport
+} // namespace HET
 
 using namespace HET::TorchExport;
 TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {

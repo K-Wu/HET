@@ -61,7 +61,7 @@ __global__ void HET_gather_compact_to_non_compact_edge_parallel(
                 FullCartesianFlag, "should be non-reachable not implemented");
           }
 
-        } else {  // !RelationalFlag
+        } else { // !RelationalFlag
           // NB: feat_src_entry_id varies between edata_idx and src_vid
           // depending on compactasofnodeflag
           if constexpr (IsCompact(kind)) {

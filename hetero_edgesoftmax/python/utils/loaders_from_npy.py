@@ -7,8 +7,10 @@ from .coo_sorters import sort_coo_by_src_outgoing_edges, sort_coo_by_etype
 def generic_load_data(dataset_path_and_name_prefix):
     # load the data
     # example of dataset_path_and_name_prefix: in load_fb15k237 and load_wikikg2, it should be os.path.join(dataset_path_prefix,(transposed_prefix+dataset_name+".coo"+sorted_suffix))
-    edge_srcs = np.load(dataset_path_and_name_prefix + ".srcs.npy", allow_pickle=True)
-    edge_dsts = np.load(dataset_path_and_name_prefix + ".dsts.npy", allow_pickle=True)
+    edge_srcs = np.load(dataset_path_and_name_prefix +
+                        ".srcs.npy", allow_pickle=True)
+    edge_dsts = np.load(dataset_path_and_name_prefix +
+                        ".dsts.npy", allow_pickle=True)
     edge_etypes = np.load(
         dataset_path_and_name_prefix + ".etypes.npy", allow_pickle=True
     )
@@ -71,7 +73,8 @@ def fetch_ogbnmag_raw_data():
         ("author", "affiliated_with", "institution")
     ][0]
     edge_dsts = (
-        graph[0]["edge_index_dict"][("author", "affiliated_with", "institution")][1]
+        graph[0]["edge_index_dict"][(
+            "author", "affiliated_with", "institution")][1]
         + graph[0]["num_nodes_dict"]["author"]
         + graph[0]["num_nodes_dict"]["paper"]
     )
@@ -95,11 +98,13 @@ def fetch_ogbnmag_raw_data():
     edge_types3 = [2] * len(edge_srcs3)
 
     edge_srcs4 = (
-        graph[0]["edge_index_dict"][("paper", "has_topic", "field_of_study")][0]
+        graph[0]["edge_index_dict"][(
+            "paper", "has_topic", "field_of_study")][0]
         + graph[0]["num_nodes_dict"]["author"]
     )
     edge_dsts4 = (
-        graph[0]["edge_index_dict"][("paper", "has_topic", "field_of_study")][1]
+        graph[0]["edge_index_dict"][(
+            "paper", "has_topic", "field_of_study")][1]
         + graph[0]["num_nodes_dict"]["author"]
         + graph[0]["num_nodes_dict"]["paper"]
         + graph[0]["num_nodes_dict"]["institution"]
@@ -110,7 +115,8 @@ def fetch_ogbnmag_raw_data():
         np.concatenate([edge_dsts, edge_dsts2, edge_dsts3, edge_dsts4]),
         np.concatenate([edge_types, edge_types2, edge_types3, edge_types4]),
         np.arange(
-            len(edge_srcs) + len(edge_srcs2) + len(edge_srcs3) + len(edge_srcs4),
+            len(edge_srcs) + len(edge_srcs2) +
+            len(edge_srcs3) + len(edge_srcs4),
             dtype=np.int64,
         ),
     )
@@ -120,7 +126,8 @@ def load_fb15k237(
     dataset_path_prefix, sorted_flag, sorted_by_srcs, transposed, infidel_sort_flag=True
 ):
     if sorted_by_srcs and (not sorted_flag):
-        raise ValueError("sorted_by_srcs is only valid when sorted_flag is True")
+        raise ValueError(
+            "sorted_by_srcs is only valid when sorted_flag is True")
     transposed_prefix = "transposed." if transposed else ""
     if infidel_sort_flag:
         print("Warning: you are loading infidel sort data, see readme.md for details")
@@ -151,7 +158,8 @@ def load_wikikg2(
     infidel_sort_flag=False,
 ):
     if sorted_by_srcs and (not sorted_flag):
-        raise ValueError("sorted_by_srcs is only valid when sorted_flag is True")
+        raise ValueError(
+            "sorted_by_srcs is only valid when sorted_flag is True")
     transposed_prefix = "transposed." if transposed else ""
     if infidel_sort_flag:
         print("Warning: you are loading infidel sort data, see readme.md for details")
@@ -219,7 +227,8 @@ def get_ogbnmag(
     sorted_flag, sorted_by_srcs, transposed, infidel_sort_flag: bool = False
 ):
     if sorted_by_srcs and (not sorted_flag):
-        raise ValueError("sorted_by_srcs is only valid when sorted_flag is True")
+        raise ValueError(
+            "sorted_by_srcs is only valid when sorted_flag is True")
     if infidel_sort_flag:
         print("Warning: you are loading infidel sort data, see readme.md for details")
 

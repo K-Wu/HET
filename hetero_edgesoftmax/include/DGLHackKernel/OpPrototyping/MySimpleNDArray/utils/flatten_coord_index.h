@@ -4,15 +4,15 @@
 // Working compilation example: https://godbolt.org/z/h66hP77qM backup:
 // https://gist.github.com/K-Wu/7db30d4cf93a1fff76fa2631f95c476b
 
+#include "variadic_tricks.h"
 #include <assert.h>
 #include <stddef.h>
 #include <tuple>
-#include "variadic_tricks.h"
 
 // from https://artificial-mind.net/blog/2020/10/31/constexpr-for
 template <size_t Start, size_t End, class TupleType, class TupleTypeMayInclRef>
-_HOST_DEVICE_METHOD_QUALIFIER constexpr size_t get_flattened_index(
-    TupleTypeMayInclRef coord, TupleType shape) {
+_HOST_DEVICE_METHOD_QUALIFIER constexpr size_t
+get_flattened_index(TupleTypeMayInclRef coord, TupleType shape) {
   size_t sum = 0;
   constexpr_for<Start, End, 1>(
       [&sum, &coord, &shape] _HOST_DEVICE_METHOD_QUALIFIER(auto i) {
@@ -39,8 +39,8 @@ _HOST_DEVICE_METHOD_QUALIFIER constexpr size_t get_tuple_prod(TupleType shape) {
 }
 
 template <size_t Start, size_t End, class TupleType>
-_HOST_DEVICE_METHOD_QUALIFIER constexpr TupleType convert_flat_index_to_tuple(
-    size_t flat_index, TupleType shape) {
+_HOST_DEVICE_METHOD_QUALIFIER constexpr TupleType
+convert_flat_index_to_tuple(size_t flat_index, TupleType shape) {
   TupleType coord;
   constexpr_for<Start, End, 1>(
       [&flat_index, &coord, &shape] _HOST_DEVICE_METHOD_QUALIFIER(auto i) {
@@ -57,23 +57,22 @@ _HOST_DEVICE_METHOD_QUALIFIER constexpr TupleType convert_flat_index_to_tuple(
 }
 
 template <class TupleType, class TupleTypeMayInclRef>
-_HOST_DEVICE_METHOD_QUALIFIER constexpr size_t get_flattened_index(
-    TupleTypeMayInclRef coord, TupleType shape) {
+_HOST_DEVICE_METHOD_QUALIFIER constexpr size_t
+get_flattened_index(TupleTypeMayInclRef coord, TupleType shape) {
   return get_flattened_index<0, std::tuple_size<TupleType>{}>(coord, shape);
 }
 
 template <class TupleType>
-_HOST_DEVICE_METHOD_QUALIFIER constexpr TupleType convert_flat_index_to_tuple(
-    size_t flat_index, TupleType shape) {
+_HOST_DEVICE_METHOD_QUALIFIER constexpr TupleType
+convert_flat_index_to_tuple(size_t flat_index, TupleType shape) {
   return convert_flat_index_to_tuple<0, std::tuple_size<TupleType>{}>(
       flat_index, shape);
 }
 
-template <class... Ts>
-class Coord {
- public:
+template <class... Ts> class Coord {
+public:
   std::tuple<typename std::remove_reference<Ts>::type...>
-      shape;  // make sure this variable is materialized locally
+      shape; // make sure this variable is materialized locally
 
   _HOST_DEVICE_METHOD_QUALIFIER
   Coord(Ts... ts) : shape(ts...) {}
@@ -82,7 +81,7 @@ class Coord {
   // NB: underscore to deliberately distinct name from get_flattened_index
   // function to resolve compilation error
   _HOST_DEVICE_METHOD_QUALIFIER
-  constexpr size_t _get_flattened_index(Ts&&... coord) {
+  constexpr size_t _get_flattened_index(Ts &&...coord) {
     return get_flattened_index(std::forward_as_tuple(coord...), shape);
   }
 

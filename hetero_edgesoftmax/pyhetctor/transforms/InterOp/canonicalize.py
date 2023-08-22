@@ -31,7 +31,8 @@ def split_for_loop_node(for_node):
     for node in for_node.body:
         if not isinstance(node, ast.For):
             new_node = ast.For(
-                target=for_node.target, iter=for_node.iter, body=[node], orelse=[]
+                target=for_node.target, iter=for_node.iter, body=[
+                    node], orelse=[]
             )
             results.append(new_node)
         else:

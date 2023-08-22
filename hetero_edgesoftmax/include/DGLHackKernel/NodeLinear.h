@@ -110,11 +110,16 @@ void LtSgemm(cublasLtHandle_t ltHandle, cublasOperation_t transa,
       Cdesc, &heuristicResult.algo, workspace, workspaceSize, 0));
 
   // descriptors are no longer needed as all GPU work was already enqueued
-  if (preference) CUBLAS_CHECK(cublasLtMatmulPreferenceDestroy(preference));
-  if (Cdesc) CUBLAS_CHECK(cublasLtMatrixLayoutDestroy(Cdesc));
-  if (Bdesc) CUBLAS_CHECK(cublasLtMatrixLayoutDestroy(Bdesc));
-  if (Adesc) CUBLAS_CHECK(cublasLtMatrixLayoutDestroy(Adesc));
-  if (operationDesc) CUBLAS_CHECK(cublasLtMatmulDescDestroy(operationDesc));
+  if (preference)
+    CUBLAS_CHECK(cublasLtMatmulPreferenceDestroy(preference));
+  if (Cdesc)
+    CUBLAS_CHECK(cublasLtMatrixLayoutDestroy(Cdesc));
+  if (Bdesc)
+    CUBLAS_CHECK(cublasLtMatrixLayoutDestroy(Bdesc));
+  if (Adesc)
+    CUBLAS_CHECK(cublasLtMatrixLayoutDestroy(Adesc));
+  if (operationDesc)
+    CUBLAS_CHECK(cublasLtMatmulDescDestroy(operationDesc));
 }
 
 void ExampleMultiheadLinearViaLtSgemm() {
@@ -153,9 +158,12 @@ void ExampleMultiheadLinearViaLtSgemm() {
   cuda_err_chk(cudaMalloc(&workspace, workspaceSize));
 
   // data generation
-  for (int i = 0; i < m * k * num_heads; i++) Ahost[i] = __float2half_rn(i);
-  for (int i = 0; i < n * k * num_heads; i++) Bhost[i] = __float2half_rn(i);
-  for (int i = 0; i < m * num_heads; i++) biasHost[i] = __float2half_rn(i + 1);
+  for (int i = 0; i < m * k * num_heads; i++)
+    Ahost[i] = __float2half_rn(i);
+  for (int i = 0; i < n * k * num_heads; i++)
+    Bhost[i] = __float2half_rn(i);
+  for (int i = 0; i < m * num_heads; i++)
+    biasHost[i] = __float2half_rn(i + 1);
 
   // copy data to device
   cuda_err_chk(cudaMemcpy(Adev, Ahost.data(), Ahost.size() * sizeof(Ahost[0]),

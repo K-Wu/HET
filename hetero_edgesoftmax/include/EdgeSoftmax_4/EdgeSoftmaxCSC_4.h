@@ -9,7 +9,8 @@ _perRow_EdgeSoftmax_4FirstStageConcatenatedCSCKernel(
     int *__restrict__ relation, float *__restrict__ edge_input_data,
     float *__restrict__ mus) {
   //@@ insert spmv kernel for csc format
-  if (col_idx >= num_cols) return;
+  if (col_idx >= num_cols)
+    return;
   int col_start = matCols[col_idx];
   int col_end = matCols[col_idx + 1];
   // float row_sum = 1e-10f;
@@ -31,7 +32,8 @@ _perRow_EdgeSoftmax_4SecondStageConcatenatedCSCKernel(
     int *__restrict__ relation, float *__restrict__ edge_input_data,
     float *__restrict__ mus) {
   //@@ insert spmv kernel for csc format
-  if (col_idx >= num_cols) return;
+  if (col_idx >= num_cols)
+    return;
   int col_start = matCols[col_idx];
   int col_end = matCols[col_idx + 1];
 

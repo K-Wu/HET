@@ -116,7 +116,7 @@ int main() {
       cited_csr_h,      citing_csr_h, writing_csr_h};
 
   int64_t total_num_nnzs = 0;
-  for (auto& csr_matrix : csr_matrices) {
+  for (auto &csr_matrix : csr_matrices) {
     total_num_nnzs += csr_matrix.values.size();
   }
   thrust::host_vector<int> eids(total_num_nnzs);

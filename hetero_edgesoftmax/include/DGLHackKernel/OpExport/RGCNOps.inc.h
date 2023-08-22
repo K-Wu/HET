@@ -136,7 +136,7 @@ void Layer1(at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
           dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
       num_relations, num_input_dim, num_output_dim);
 }
-}  // namespace SeparateCOO
+} // namespace SeparateCOO
 
 namespace IntegratedCSR {
 template </*int XPU, */ typename Idx, typename DType, bool HybridAssignmentFlag>
@@ -243,7 +243,7 @@ void Layer1HybridAssignment(at::Tensor &csr_rowptr, at::Tensor &csr_col_indices,
                                csr_reltypes, hidden, weight, norm, ret, true,
                                num_blocks_on_blocks_per_node);
 }
-}  // namespace IntegratedCSR
+} // namespace IntegratedCSR
 
 namespace IntegratedCOO {
 template </*int XPU, */ typename Idx, typename DType>
@@ -270,7 +270,7 @@ void _Layer(at::Tensor &coo_row_indices, at::Tensor &coo_col_indices,
     int nthrs = feat_len_x < 256 ? 256 : feat_len_x;
     assert(nthrs % 32 == 0);
     int nblks =
-        ceil_div<>(num_edges, (int64_t)nthrs / 32);  // 32 is the warp size
+        ceil_div<>(num_edges, (int64_t)nthrs / 32); // 32 is the warp size
     HET_Seastar_RgcnLayer1COOKernelImpl<Idx, DType>
         <<<nblks, nthrs, 0, stream>>>(row_indices_data, ids_data, eids_data,
                                       typeids_data, hidden_data, weight_data,
@@ -296,8 +296,8 @@ void Layer1(at::Tensor &coo_row_indices, at::Tensor &coo_col_indices,
   _Layer<int64_t, float>(coo_row_indices, coo_col_indices, coo_eids,
                          coo_reltypes, hidden, weight, norm, ret, true);
 }
-}  // namespace IntegratedCOO
-}  // namespace FwProp
+} // namespace IntegratedCOO
+} // namespace FwProp
 namespace BckProp {
 namespace SeparateCOO {
 template <typename Idx, typename DType>
@@ -446,8 +446,8 @@ void Layer1(at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
   const dim3 nblks_outer_product(
       ceil_div<>(num_fw_output_dim, (long)WORK_BLOCK_SIZE_OUTPROD_X),
       ceil_div<>(num_fw_input_dim, (long)WORK_BLOCK_SIZE_OUTPROD_Y),
-      1 * grid_dim_y_outprod);  // In NoScatterGather scenario, there is no such
-                                // thing as multi-headed
+      1 * grid_dim_y_outprod); // In NoScatterGather scenario, there is no such
+                               // thing as multi-headed
   const dim3 nthrs_outer_product(THREADING_BLOCK_SIZE_OUTPROD_X,
                                  THREADING_BLOCK_SIZE_OUTPROD_Y);
   HET_RGCNMatmulNoScatterGatherListDeltaWeightBckProp<
@@ -465,7 +465,7 @@ void Layer1(at::Tensor &separate_coo_relptrs, at::Tensor &separate_coo_eids,
           dev_num_blocks_assignment_for_all_prev_relation_vect_outprod.data()),
       num_relations, num_fw_output_dim, num_fw_input_dim);
 }
-}  // namespace SeparateCOO
+} // namespace SeparateCOO
 
 namespace IntegratedCSR {
 // the referential implementation from seastar
@@ -498,8 +498,8 @@ void _Layer(
     Idx ntypes = weight.size(0);
     Idx feat_len_y = weight.size(1);
     Idx feat_len_x = weight.size(2);
-    int nthrs = feat_len_x < 256 ? 256 : feat_len_x;  // feat_len_y *
-                                                      // feat_len_x;
+    int nthrs = feat_len_x < 256 ? 256 : feat_len_x; // feat_len_y *
+                                                     // feat_len_x;
     if constexpr (HybridAssignmentFlag) {
       HET_Seastar_RgcnLayer1BackwardKernelHybridAssignImpl<<<nblks, nthrs, 0,
                                                              stream>>>(
@@ -594,7 +594,7 @@ void Layer1HybridAssignment(
       num_blocks_on_blocks_per_node);
 }
 
-}  // namespace IntegratedCSR
+} // namespace IntegratedCSR
 
 namespace IntegratedCOO {
 // the referential implementation from seastar
@@ -626,7 +626,7 @@ void _LayerBackward(
     int nthrs = feat_len_x < 256 ? 256 : feat_len_x;
     assert(nthrs % 32 == 0);
     int nblks =
-        ceil_div<>(num_edges, (int64_t)nthrs / 32);  // 32 is the warp size
+        ceil_div<>(num_edges, (int64_t)nthrs / 32); // 32 is the warp size
     HET_Seastar_RgcnLayer1BackwardCOOKernelImpl<<<nblks, nthrs, 0, stream>>>(
         row_indices_data, ids_data, eids_data, typeids_data, hidden_data,
         weight_data, norm_data, grad_out_data, grad_hidden_data,
@@ -657,11 +657,11 @@ void Layer1Backward(
       transposed_coo_eids, transposed_coo_reltypes, hidden, weight, norm,
       grad_out, grad_hidden, grad_weight, /*ret_dummy*/ dummy_tensor, true);
 }
-}  // namespace IntegratedCOO
-}  // namespace BckProp
-}  // namespace RGCN
-}  // namespace TorchExport
-}  // namespace HET
+} // namespace IntegratedCOO
+} // namespace BckProp
+} // namespace RGCN
+} // namespace TorchExport
+} // namespace HET
 
 using namespace HET::TorchExport;
 TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {

@@ -6,8 +6,8 @@
 std::tuple<thrust::device_vector<int>, thrust::device_vector<int>,
            thrust::device_vector<int>>
 get_schedule_by_relation_kernel_launch_per_block_metadata(
-    std::vector<int>& num_blocks_along_dimx_for_same_relation_vect,
-    std::vector<int>& num_blocks_along_dimx_for_all_prev_relation_vect,
+    std::vector<int> &num_blocks_along_dimx_for_same_relation_vect,
+    std::vector<int> &num_blocks_along_dimx_for_all_prev_relation_vect,
     int num_blocks_along_dimx, int num_node_per_block_per_iteration) {
   thrust::device_vector<int>
       num_blocks_along_dimx_for_same_relation_per_block_vect;
@@ -122,13 +122,12 @@ get_schedule_by_relation_kernel_launch_metadata(
     }
     if (num_blocks_along_dimx_for_all_prev_relation_vect.back() !=
         num_blocks_along_dimx) {
-      printf(
-          "WARNING: we have corrected the number of blocks from %d to %d in "
-          "order to make sure each relation (%d) get at least 1 blocks in "
-          "get_schedule_by_relation_kernel_launch_metadata()",
-          num_blocks_along_dimx,
-          num_blocks_along_dimx_for_all_prev_relation_vect.back(),
-          num_relations);
+      printf("WARNING: we have corrected the number of blocks from %d to %d in "
+             "order to make sure each relation (%d) get at least 1 blocks in "
+             "get_schedule_by_relation_kernel_launch_metadata()",
+             num_blocks_along_dimx,
+             num_blocks_along_dimx_for_all_prev_relation_vect.back(),
+             num_relations);
     }
   }
 

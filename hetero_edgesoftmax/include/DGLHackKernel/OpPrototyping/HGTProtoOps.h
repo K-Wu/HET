@@ -35,20 +35,16 @@ struct HGTLayerWeights {
           &relation_attention_matrices,
       MySimpleNDArray<float, thrust::device_allocator<float>>
           &relation_message_matrices)
-      : KLinearWeights(KLinearWeights),
-        KLinearBias(KLinearBias),
-        QLinearWeights(QLinearWeights),
-        QLinearBias(QLinearBias),
-        VLinearWeights(VLinearWeights),
-        VLinearBias(VLinearBias),
-        ALinearWeights(ALinearWeights),
-        ALinearBias(ALinearBias),
+      : KLinearWeights(KLinearWeights), KLinearBias(KLinearBias),
+        QLinearWeights(QLinearWeights), QLinearBias(QLinearBias),
+        VLinearWeights(VLinearWeights), VLinearBias(VLinearBias),
+        ALinearWeights(ALinearWeights), ALinearBias(ALinearBias),
         relation_attention_matrices(relation_attention_matrices),
         relation_message_matrices(relation_message_matrices) {}
 };
 
-std::shared_ptr<HGTLayerWeights> InitializeHGTLayerWeights(
-    HGTLayerHyperParams hyper_params) {
+std::shared_ptr<HGTLayerWeights>
+InitializeHGTLayerWeights(HGTLayerHyperParams hyper_params) {
   // TODO: implement move constructor for either HGTLayerWeights or
   // MySimpleNDArray to reduce memory footprint during initialization.
   MySimpleNDArray<float, thrust::device_allocator<float>> KLinearWeights =
@@ -174,7 +170,7 @@ void CompressedEdgeMessageConcatenatedCOOKernel(
         num_blocks_for_all_prev_relation_vect] =
       get_schedule_by_relation_kernel_launch_metadata<true, false,
                                                       std::nullptr_t>(
-          RTX_3090_GRIDSIZE,  // num_blocks
+          RTX_3090_GRIDSIZE, // num_blocks
           hyper_params.num_relations, -1, nullptr, nullptr);
 
   // grid and thread configuration of the first stage
@@ -556,5 +552,5 @@ void HGTForwardImpl(
             << " ms" << std::endl;
 }
 
-}  // namespace OpPrototyping
-}  // namespace HET
+} // namespace OpPrototyping
+} // namespace HET

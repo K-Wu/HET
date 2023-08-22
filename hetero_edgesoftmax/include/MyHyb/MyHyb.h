@@ -44,8 +44,8 @@ thrust::host_vector<IdxType> TransposeCSR(
   std::map<IdxType, std::vector<std::pair<IdxType, IdxType>>> col_row_map;
 
   for (int64_t i = 0; i < row_ptrs.size() - 1;
-       i++) {  // TODO: possible loss of precision here as loop variable is
-               // int64_t but the indices in matrix is IdxType
+       i++) { // TODO: possible loss of precision here as loop variable is
+              // int64_t but the indices in matrix is IdxType
     for (int64_t j = row_ptrs[i]; j < row_ptrs[i + 1]; j++) {
       assert(col_indices[j] < row_ptrs.size() - 1);
       col_row_map[col_indices[j]].push_back(std::make_pair(i, permutation[j]));
@@ -54,7 +54,7 @@ thrust::host_vector<IdxType> TransposeCSR(
 
   new_row_ptrs[0] = 0;
   for (int64_t idxNode = 0; idxNode < row_ptrs.size() - 1;
-       idxNode++) {  // assert num_rows == num_cols
+       idxNode++) { // assert num_rows == num_cols
     new_row_ptrs[idxNode + 1] =
         new_row_ptrs[idxNode] + col_row_map[idxNode].size();
     for (int64_t idxEdgeForCurrNode = 0;
@@ -86,13 +86,11 @@ bool IsHostVector(const thrust::detail::vector_base<IdxType, Alloc> &vec) {
 }
 
 // TODO: implement unique src/dst index API for HGT model
-template <typename IdxType, typename Alloc>
-class MyHeteroIntegratedCSR;
+template <typename IdxType, typename Alloc> class MyHeteroIntegratedCSR;
 
 // TODO: implement unique src/dst index API for HGT model
-template <typename IdxType, typename Alloc>
-class MyHeteroSeparateCSR {
- public:
+template <typename IdxType, typename Alloc> class MyHeteroSeparateCSR {
+public:
   int64_t num_rows;
   int64_t num_cols;
   int64_t num_rels;
@@ -214,18 +212,18 @@ class MyHeteroSeparateCSR {
           eids_curr_relation.begin(), permutation.begin());
       thrust::copy(permute_iter, permute_iter + eids.size(),
                    new_eids_curr_relation.begin());
-      thrust::copy(
-          new_eids_curr_relation.begin(), new_eids_curr_relation.end(),
-          eids.begin() + this->row_ptrs[idx_relation * this->num_rows]);
-      thrust::copy(
-          row_ptrs_curr_relation.begin(),
-          row_ptrs_curr_relation.begin() + row_ptrs_curr_relation.size(),
-          this->row_ptrs.begin() + idx_relation * this->num_rows);
-      thrust::copy(
-          col_indices_curr_relation.begin(),
-          col_indices_curr_relation.begin() + col_indices_curr_relation.size(),
-          this->col_indices.begin() +
-              this->row_ptrs[idx_relation * this->num_rows]);
+      thrust::copy(new_eids_curr_relation.begin(), new_eids_curr_relation.end(),
+                   eids.begin() +
+                       this->row_ptrs[idx_relation * this->num_rows]);
+      thrust::copy(row_ptrs_curr_relation.begin(),
+                   row_ptrs_curr_relation.begin() +
+                       row_ptrs_curr_relation.size(),
+                   this->row_ptrs.begin() + idx_relation * this->num_rows);
+      thrust::copy(col_indices_curr_relation.begin(),
+                   col_indices_curr_relation.begin() +
+                       col_indices_curr_relation.size(),
+                   this->col_indices.begin() +
+                       this->row_ptrs[idx_relation * this->num_rows]);
       //}
     }
   }
@@ -253,10 +251,10 @@ class MyHeteroSeparateCSR {
     for (int64_t IdxRelation = 0; IdxRelation < num_rels; IdxRelation++) {
       thrust::detail::vector_base<thrust::pair<IdxType, IdxType>, Alloc>
           adjacent_rowptr_differences(num_rows + 1);
-      thrust::adjacent_difference(
-          row_ptrs.begin() + IdxRelation * num_rows,
-          row_ptrs.begin() + (IdxRelation + 1) * num_rows + 1,
-          adjacent_rowptr_differences.begin());
+      thrust::adjacent_difference(row_ptrs.begin() + IdxRelation * num_rows,
+                                  row_ptrs.begin() +
+                                      (IdxRelation + 1) * num_rows + 1,
+                                  adjacent_rowptr_differences.begin());
 
       // From https://stackoverflow.com/a/29848688/5555077
       // find out the row indices where row_ptr[idx+1]- row_ptr[idx] is non-zero
@@ -295,9 +293,8 @@ class MyHeteroSeparateCSR {
   }
 };
 
-template <typename IdxType, typename Alloc>
-class MyHeteroIntegratedCSR {
- public:
+template <typename IdxType, typename Alloc> class MyHeteroIntegratedCSR {
+public:
   MyHeteroIntegratedCSR() = default;
 
   int64_t num_rows;
@@ -478,7 +475,7 @@ class MyHeteroIntegratedCSR {
 
 template <typename IdxType, typename Alloc, typename CSRType>
 class MySegmentCSR {
- public:
+public:
   int64_t NonCutoffMaxNodeIndex;
   int64_t num_rows;
   int64_t num_cols;
@@ -608,8 +605,7 @@ class MySegmentCSR {
   }
 };
 
-template <typename Idx>
-Idx my_ceil_div(const Idx a, const Idx b) {
+template <typename Idx> Idx my_ceil_div(const Idx a, const Idx b) {
   return (a + b - 1) / b;
 }
 
@@ -662,15 +658,14 @@ MySegmentCSRPadDenseEdges(
 }
 
 // TODO: implement AOS for eids, rel_types and col_indices
-template <typename IdxType, typename Alloc, typename CSRType>
-class MyHyb {
+template <typename IdxType, typename Alloc, typename CSRType> class MyHyb {
   //[0,HybIndexMax] has both ELL and CSR format
   //(HybIndexMax, num_rows) has only CSR format
- public:
+public:
   int64_t HybIndexMax;
   int64_t ELL_logical_width;
-  int64_t ELL_physical_width;  // logical width and actual width is similar to
-                               // lda in BLAS routines.
+  int64_t ELL_physical_width; // logical width and actual width is similar to
+                              // lda in BLAS routines.
   int64_t num_rows;
   int64_t num_cols;
   int64_t num_rels;
@@ -1465,34 +1460,34 @@ void SeparateCSRToHyb_GPU(
 }
 
 template <typename InputAlloc, typename ReturnAlloc, typename IdxType>
-MyHeteroIntegratedCSR<IdxType, ReturnAlloc> ToIntegratedCSR(
-    const MyHeteroSeparateCSR<IdxType, InputAlloc> &csr) {
+MyHeteroIntegratedCSR<IdxType, ReturnAlloc>
+ToIntegratedCSR(const MyHeteroSeparateCSR<IdxType, InputAlloc> &csr) {
   // get cpu and gpu implementation.
   if (csr.IsDataOnCPU()) {
     auto ret_value = ToIntegratedCSR_CPU<IdxType>(csr);
-    return ret_value;  // implicit type conversion here to match return
-                       // ReturnAlloc type.
+    return ret_value; // implicit type conversion here to match return
+                      // ReturnAlloc type.
   } else {
     assert(csr.IsDataOnGPU());
     auto ret_value = ToIntegratedCSR_GPU<IdxType>(csr);
-    return ret_value;  // implicit type conversion here to match return
-                       // ReturnAlloc type.
+    return ret_value; // implicit type conversion here to match return
+                      // ReturnAlloc type.
   }
 }
 
 template <typename InputAlloc, typename ReturnAlloc, typename IdxType>
-MyHeteroSeparateCSR<IdxType, ReturnAlloc> ToSeparateCSR(
-    const MyHeteroIntegratedCSR<IdxType, InputAlloc> &csr) {
+MyHeteroSeparateCSR<IdxType, ReturnAlloc>
+ToSeparateCSR(const MyHeteroIntegratedCSR<IdxType, InputAlloc> &csr) {
   // get cpu and gpu implementation.
   if (csr.IsDataOnCPU()) {
     auto ret_value = ToSeparateCSR_CPU<IdxType>(csr);
-    return ret_value;  // implicit type conversion here to match return
-                       // ReturnAlloc type.
+    return ret_value; // implicit type conversion here to match return
+                      // ReturnAlloc type.
   } else {
     assert(csr.IsDataOnGPU());
     auto ret_value = ToSeparateCSR_GPU<IdxType>(csr);
-    return ret_value;  // implicit type conversion here to match return
-                       // ReturnAlloc type.
+    return ret_value; // implicit type conversion here to match return
+                      // ReturnAlloc type.
   }
 }
 
