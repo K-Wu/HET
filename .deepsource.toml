@@ -11,3 +11,12 @@ name = "python"
 
 [[analyzers]]
 name = "cxx"
+
+[[transformers]]
+name = "black"
+
+[[transformers]]
+name = "autopep8"
+
+[[transformers]]
+name = "clang-format"
