@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from types import FunctionType
 import inspect
 from functools import wraps
 import traceback
@@ -45,7 +46,6 @@ def warn_default_arguments(f):
 
 
 # code from https://stackoverflow.com/questions/58597680/how-can-a-python-decorator-change-calls-in-decorated-function
-from types import FunctionType
 
 
 # usage example:
@@ -85,7 +85,8 @@ def reroute_namespace(**kwargs):
 def assert_signature_equal_to(**kwargs):
     def actual_decorator(func):
         other_func = kwargs["other_func"]
-        assert inspect.getfullargspec(func) == inspect.getfullargspec(other_func)
+        assert inspect.getfullargspec(
+            func) == inspect.getfullargspec(other_func)
         return func
 
     return actual_decorator

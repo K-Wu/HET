@@ -86,7 +86,8 @@ class RelationalFusedGatCSR(th.autograd.Function):
         slope = ctx.slope
         grad_el = th.zeros_like(el, memory_format=th.contiguous_format)
         grad_er = th.zeros_like(er, memory_format=th.contiguous_format)
-        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
+        grad_feat_src = th.zeros_like(
+            feat_src, memory_format=th.contiguous_format)
 
         K.backward_relational_fused_gat_csr(
             outcsr_row_ptr,
@@ -193,8 +194,10 @@ class RgatRelationalFusedGATCompactAsOfNodeCSR(th.autograd.Function):
             ret,
         ) = ctx.saved_tensors
         slope = ctx.slope
-        grad_el_compact = th.zeros_like(el_compact, memory_format=th.contiguous_format)
-        grad_er_compact = th.zeros_like(er_compact, memory_format=th.contiguous_format)
+        grad_el_compact = th.zeros_like(
+            el_compact, memory_format=th.contiguous_format)
+        grad_er_compact = th.zeros_like(
+            er_compact, memory_format=th.contiguous_format)
         grad_feat_compact = th.zeros_like(
             feat_compact, memory_format=th.contiguous_format
         )
@@ -287,7 +290,8 @@ class RelationalFusedGatSeparateCOO(th.autograd.Function):
         slope = ctx.slope
         grad_el = th.zeros_like(el, memory_format=th.contiguous_format)
         grad_er = th.zeros_like(er, memory_format=th.contiguous_format)
-        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
+        grad_feat_src = th.zeros_like(
+            feat_src, memory_format=th.contiguous_format)
 
         K.backward_relational_fused_gat_separate_coo(
             separate_coo_eids,
@@ -396,7 +400,8 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeList(
         slope = ctx.slope
         grad_el = th.zeros_like(el, memory_format=th.contiguous_format)
         grad_er = th.zeros_like(er, memory_format=th.contiguous_format)
-        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
+        grad_feat_src = th.zeros_like(
+            feat_src, memory_format=th.contiguous_format)
 
         K.backward_relational_fused_gat_separate_coo(
             separate_coo_eids,
@@ -502,7 +507,8 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOODualUniqueNodeListDirectIndexi
         slope = ctx.slope
         grad_el = th.zeros_like(el, memory_format=th.contiguous_format)
         grad_er = th.zeros_like(er, memory_format=th.contiguous_format)
-        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
+        grad_feat_src = th.zeros_like(
+            feat_src, memory_format=th.contiguous_format)
 
         K.backward_relational_fused_gat_separate_coo(
             separate_coo_eids,
@@ -604,7 +610,8 @@ class RelationalFusedGatCompactAsOfNodeSeparateCOO(th.autograd.Function):
         slope = ctx.slope
         grad_el = th.zeros_like(el, memory_format=th.contiguous_format)
         grad_er = th.zeros_like(er, memory_format=th.contiguous_format)
-        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
+        grad_feat_src = th.zeros_like(
+            feat_src, memory_format=th.contiguous_format)
 
         K.backward_relational_fused_gat_compact_as_of_node_separate_coo(
             separate_coo_eids,
@@ -675,7 +682,8 @@ def relational_fused_gat_compact_as_of_node(
     separate_unique_node_indices = g.get_separate_unique_node_indices()
     incsr_dict = g.get_in_csr()
     outcsr_dict = g.get_out_csr()
-    exp = el_compact.new_empty([g.get_num_edges()] + list(el_compact.size()[1:]))
+    exp = el_compact.new_empty(
+        [g.get_num_edges()] + list(el_compact.size()[1:]))
     s = el_compact.new_empty([g.get_num_nodes()] + list(el_compact.size()[1:]))
     ret = th.empty(
         [g.get_num_nodes()] + list(feat_compact.size()[1:]),
@@ -741,7 +749,8 @@ def relational_fused_gat_compact_as_of_node_separate_coo_dual_unique_node_list(
         g.get_separate_unique_node_indices_single_sided()
     )
 
-    exp = el_compact.new_empty([g.get_num_edges()] + list(el_compact.size()[1:]))
+    exp = el_compact.new_empty(
+        [g.get_num_edges()] + list(el_compact.size()[1:]))
     s = el_compact.new_empty([g.get_num_nodes()] + list(el_compact.size()[1:]))
 
     ret = th.empty(
@@ -775,7 +784,8 @@ def relational_fused_gat_compact_as_of_node_separate_coo(
     separate_coo_dict = g.get_separate_coo_original()
     separate_unique_node_indices = g.get_separate_unique_node_indices()
 
-    exp = el_compact.new_empty([g.get_num_edges()] + list(el_compact.size()[1:]))
+    exp = el_compact.new_empty(
+        [g.get_num_edges()] + list(el_compact.size()[1:]))
     s = el_compact.new_empty([g.get_num_nodes()] + list(el_compact.size()[1:]))
 
     ret = th.empty(
@@ -811,7 +821,8 @@ def relational_fused_gat_compact_as_of_node_separate_coo_single_sided(
 ):
     separate_coo_dict = g.get_separate_coo_original()
 
-    exp = el_compact.new_empty([g.get_num_edges()] + list(el_compact.size()[1:]))
+    exp = el_compact.new_empty(
+        [g.get_num_edges()] + list(el_compact.size()[1:]))
     s = el_compact.new_empty([g.get_num_nodes()] + list(el_compact.size()[1:]))
 
     ret = th.empty(

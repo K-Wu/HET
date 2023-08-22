@@ -130,13 +130,15 @@ class VariableTable:
         scopes = program_serializer.find_first_level_scopes(lines)
         for scope_beg, scope_end, scope_tag in scopes:
             if scope_tag == "InitialVariablesAndWeights":
-                for line in lines[scope_beg + 1 : scope_end]:
+                for line in lines[scope_beg + 1: scope_end]:
                     line_var_strs = line.replace(")", "))").split(")")
-                    line_var_strs = [var_str.strip() for var_str in line_var_strs]
+                    line_var_strs = [var_str.strip()
+                                     for var_str in line_var_strs]
                     line_var_strs = [
                         var_str[1:] for var_str in line_var_strs if var_str[0] == ","
                     ]
-                    line_var_strs = {var_str.strip() for var_str in line_var_strs}
+                    line_var_strs = {var_str.strip()
+                                     for var_str in line_var_strs}
                     line_vars: set[VarBase] = {
                         parse_var_class(var_str).from_string(var_str)
                         for var_str in line_var_strs
@@ -146,7 +148,7 @@ class VariableTable:
             elif scope_tag == "VariableNumbersAndShapes":
                 # load shape info, each line stores a variable's shape and all its numbered values, i.e.,
                 #  shape: var_key <- var_name2 <- var_name3 <- ...
-                for line in lines[scope_beg + 1 : scope_end]:
+                for line in lines[scope_beg + 1: scope_end]:
                     line = line.strip()
                     if len(line) == 0:
                         continue
@@ -457,7 +459,8 @@ def calc_op_to_seq(operations: list[Union[OpBase, FusedOpBase]]) -> dict[OpBase,
 
 class Program:
     operations: list[Union[OpBase, FusedOpBase]]
-    op_to_seq: dict[OpBase, int]  # fused op is broken down into basic ops in this dict
+    # fused op is broken down into basic ops in this dict
+    op_to_seq: dict[OpBase, int]
     var_table: VariableTable
 
     def __init__(

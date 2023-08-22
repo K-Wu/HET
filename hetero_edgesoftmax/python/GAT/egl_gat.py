@@ -14,6 +14,7 @@ from .. import backend as B
 
 # from seastar import CtxManager
 
+
 # pylint: enable=W0235
 class EglGATConv(nn.Module):
     def __init__(
@@ -38,7 +39,8 @@ class EglGATConv(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.leaky_relu = nn.LeakyReLU(negative_slope)
         self.negative_slope = negative_slope
-        self.res_fc = nn.Linear(self._in_feats, num_heads * out_feats, bias=False)
+        self.res_fc = nn.Linear(
+            self._in_feats, num_heads * out_feats, bias=False)
         self.reset_parameters()
         self.activation = activation
         # self.cm = CtxManager(dgl.backend.run_egl)
@@ -55,7 +57,8 @@ class EglGATConv(nn.Module):
     def forward(self, graph, feat):
         # graph = graph.local_var()
         h_dst = h_src = self.feat_drop(feat)
-        feat_src = feat_dst = self.fc(h_src).view(-1, self._num_heads, self._out_feats)
+        feat_src = feat_dst = self.fc(
+            h_src).view(-1, self._num_heads, self._out_feats)
         el = (feat_src * self.attn_l).sum(dim=-1).unsqueeze(-1)
         er = (feat_dst * self.attn_r).sum(dim=-1).unsqueeze(-1)
         # Vertex-centric implementation.
@@ -75,7 +78,8 @@ class EglGATConv(nn.Module):
         )  # TODO: replace with my own fused_gat
         # residual
         if self.res_fc is not None:
-            resval = self.res_fc(h_dst).view(h_dst.shape[0], -1, self._out_feats)
+            resval = self.res_fc(h_dst).view(
+                h_dst.shape[0], -1, self._out_feats)
             rst = rst + resval
         # activation
         if self.activation:

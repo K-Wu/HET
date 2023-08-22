@@ -19,7 +19,8 @@ def coo2csr(
     edge_referential_eids = edge_referential_eids[sorted_indices]
 
     # compress rows
-    row_offsets = curr_namespace.zeros(edge_srcs.max() + 2, dtype=curr_namespace.int64)
+    row_offsets = curr_namespace.zeros(
+        edge_srcs.max() + 2, dtype=curr_namespace.int64)
     row_offsets[1:] = curr_namespace.bincount(edge_srcs)
     row_offsets = curr_namespace.cumsum(
         row_offsets, 0

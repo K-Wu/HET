@@ -8,7 +8,7 @@ def _convert_csr_to_coo(
 ):
     row_idxes = torch.zeros(original_col_idxes.size(0), dtype=torch.long)
     for i in range(original_row_ptrs.size(0) - 1):
-        row_idxes[original_row_ptrs[i] : original_row_ptrs[i + 1]] = i
+        row_idxes[original_row_ptrs[i]: original_row_ptrs[i + 1]] = i
     return row_idxes
 
 
@@ -18,7 +18,6 @@ def convert_csr_to_coo(
     original_eids: torch.Tensor,
     original_reltypes: torch.Tensor,
 ):
-
     row_idxes = _convert_csr_to_coo(original_row_ptrs, original_col_idxes)
     return row_idxes, original_col_idxes, original_eids, original_reltypes
 

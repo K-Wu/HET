@@ -118,7 +118,8 @@ class RelationalAttLayer(nn.Module):
 
         if g.is_block:
             inputs_src = inputs
-            inputs_dst = {k: v[: g.number_of_dst_nodes(k)] for k, v in inputs.items()}
+            inputs_dst = {k: v[: g.number_of_dst_nodes(
+                k)] for k, v in inputs.items()}
         else:
             inputs_src = inputs_dst = inputs
 
@@ -148,7 +149,8 @@ class RelationalAttLayer(nn.Module):
                     )
                     # TODO the above might fail if the device is a different GPU
                 else:
-                    hs[k] = hs[k].view(hs[k].shape[0], hs[k].shape[1] * hs[k].shape[2])
+                    hs[k] = hs[k].view(
+                        hs[k].shape[0], hs[k].shape[1] * hs[k].shape[2])
 
         return {ntype: _apply(ntype, h) for ntype, h in hs.items()}
 

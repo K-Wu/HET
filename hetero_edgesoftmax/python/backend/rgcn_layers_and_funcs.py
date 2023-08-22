@@ -604,7 +604,8 @@ class RGCNNodeMeanAggregationCompactAsOfNodeSeparateCOO(th.autograd.Function):
             enorm,
             ret,
         ) = ctx.saved_tensors
-        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
+        grad_feat_src = th.zeros_like(
+            feat_src, memory_format=th.contiguous_format)
 
         K.backward_rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(
             separate_coo_eids,
@@ -678,7 +679,8 @@ class RGCNNodeMeanAggregationCompactAsOfNodeDirectIndexingSeparateCOO(
             enorm,
             ret,
         ) = ctx.saved_tensors
-        grad_feat_src = th.zeros_like(feat_src, memory_format=th.contiguous_format)
+        grad_feat_src = th.zeros_like(
+            feat_src, memory_format=th.contiguous_format)
 
         K.backward_rgcn_node_mean_aggregation_compact_as_of_node_separate_coo(
             separate_coo_eids,

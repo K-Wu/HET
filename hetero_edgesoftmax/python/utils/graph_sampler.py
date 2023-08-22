@@ -34,8 +34,10 @@ def extract_adj_arrays_from_dgl_subgraph(
             if etype_ptr_instead_of_id_flag:
                 subgraph_coos_etype_element_num.append(0)
             continue
-        curr_subgraph_row_indices_before_index_remap = block.edges(etype=etype)[0]
-        curr_subgraph_col_indices_before_index_remap = block.edges(etype=etype)[1]
+        curr_subgraph_row_indices_before_index_remap = block.edges(etype=etype)[
+            0]
+        curr_subgraph_col_indices_before_index_remap = block.edges(etype=etype)[
+            1]
 
         if transpose_flag:
             (
@@ -58,7 +60,8 @@ def extract_adj_arrays_from_dgl_subgraph(
         )
 
         if sparse_format == "coo":
-            subgraph_coos_row_indices_or_pointers.append(curr_subgraph_row_indices)
+            subgraph_coos_row_indices_or_pointers.append(
+                curr_subgraph_row_indices)
         elif sparse_format == "csr":
             (
                 curr_subgraph_row_ptrs,
@@ -72,7 +75,8 @@ def extract_adj_arrays_from_dgl_subgraph(
                 curr_subgraph_eids,
                 torch_flag=True,
             )
-            subgraph_coos_row_indices_or_pointers.append(curr_subgraph_row_ptrs)
+            subgraph_coos_row_indices_or_pointers.append(
+                curr_subgraph_row_ptrs)
         else:
             raise ValueError("sparse_format must be either coo or csr")
 
@@ -94,7 +98,8 @@ def extract_adj_arrays_from_dgl_subgraph(
             torch.concat(subgraph_coos_col_indices).to(
                 device=parent_mydgl_graph.get_device()
             ),
-            torch.concat(subgraph_coos_eids).to(device=parent_mydgl_graph.get_device()),
+            torch.concat(subgraph_coos_eids).to(
+                device=parent_mydgl_graph.get_device()),
             subgraph_rel_ptr.to(device=parent_mydgl_graph.get_device()),
         )
     else:
@@ -105,7 +110,8 @@ def extract_adj_arrays_from_dgl_subgraph(
             torch.concat(subgraph_coos_col_indices).to(
                 device=parent_mydgl_graph.get_device()
             ),
-            torch.concat(subgraph_coos_eids).to(device=parent_mydgl_graph.get_device()),
+            torch.concat(subgraph_coos_eids).to(
+                device=parent_mydgl_graph.get_device()),
             torch.concat(subgraph_coos_etypes).to(
                 device=parent_mydgl_graph.get_device()
             ),

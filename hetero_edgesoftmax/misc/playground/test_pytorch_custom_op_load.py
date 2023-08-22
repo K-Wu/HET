@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import torch
 
-torch.ops.load_library("../build/hetero_edgesoftmax/libtorch_hetero_edgesoftmax.so")
+torch.ops.load_library(
+    "../build/hetero_edgesoftmax/libtorch_hetero_edgesoftmax.so")
 
 
 def test_pass_argument(*args):

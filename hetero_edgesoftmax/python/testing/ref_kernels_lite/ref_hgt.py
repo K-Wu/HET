@@ -119,7 +119,8 @@ def hgt_full_graph_edge_softmax_ops_separate_coo(
     # expand rel_ptrs to (num_edges)
     separate_coo_reltypes = torch.zeros_like(separate_coo_eids)
     for i in range(len(separate_coo_relptrs) - 1):
-        separate_coo_reltypes[separate_coo_relptrs[i] : separate_coo_relptrs[i + 1]] = i
+        separate_coo_reltypes[separate_coo_relptrs[i]
+            : separate_coo_relptrs[i + 1]] = i
 
     _hgt_full_graph_edge_softmax_ops_integrated_coo(
         separate_coo_row_indices,
@@ -159,7 +160,8 @@ def hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo(
         False,
     )
     feat_per_edge = feat_per_edge * normalized_attn_score[:, :, None]
-    new_h[:] = torch.index_add(new_h, 0, separate_coo_col_indices, feat_per_edge)
+    new_h[:] = torch.index_add(
+        new_h, 0, separate_coo_col_indices, feat_per_edge)
 
 
 def backward_hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo(
@@ -168,7 +170,8 @@ def backward_hgt_full_graph_fused_message_calc_and_mean_aggregation_separate_coo
     separate_coo_row_indices,
     separate_coo_col_indices,
     inputs,  # (num_nodes, num_heads, num_hidden)
-    message_generation_weights_transposed,  # (num_heads, num_hidden, num_hidden)
+    # (num_heads, num_hidden, num_hidden)
+    message_generation_weights_transposed,
     normalized_attn_score,  # (num_edges, num_heads)
     new_h,  # (num_nodes, num_heads, num_hidden)
     grad_input,  # (num_nodes, num_heads, num_hidden)
@@ -236,8 +239,10 @@ def backward_hgt_full_graph_enorm_to_unnormalized_attn_score_csr(
         Si_deltaSi_product_sum, 0, incsr_row_idx, Si_deltaSi_product
     )
     grad_unnormalized_attn_score[incsr_eids] = (
-        -Si_deltaSi_product_sum[incsr_row_idx] * grad_normalized_attn_score[incsr_eids]
-        + grad_normalized_attn_score[incsr_eids] * normalized_attn_score[incsr_eids]
+        -Si_deltaSi_product_sum[incsr_row_idx] *
+        grad_normalized_attn_score[incsr_eids]
+        + grad_normalized_attn_score[incsr_eids] *
+        normalized_attn_score[incsr_eids]
     ) * mu[incsr_reltypes]
 
     grad_mu[:] = torch.index_add(
@@ -247,7 +252,8 @@ def backward_hgt_full_graph_enorm_to_unnormalized_attn_score_csr(
         (
             -Si_deltaSi_product_sum[incsr_row_idx]
             * grad_normalized_attn_score[incsr_eids]
-            + grad_normalized_attn_score[incsr_eids] * normalized_attn_score[incsr_eids]
+            + grad_normalized_attn_score[incsr_eids] *
+            normalized_attn_score[incsr_eids]
         )
         * unnormalized_attn_score[incsr_eids],
     )
@@ -303,7 +309,8 @@ def hgt_full_graph_message_mean_aggregation_csr(
 
     # new_h += message_per_edge * normalized_attn_score / edgesoftmax_sum_per_node
     new_h[:] = torch.index_add(
-        new_h, 0, incsr_row_idx, message_per_edge * normalized_attn_score[:, :, None]
+        new_h, 0, incsr_row_idx, message_per_edge *
+        normalized_attn_score[:, :, None]
     )
 
 

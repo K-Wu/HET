@@ -19,7 +19,7 @@ def generate_separate_unique_node_indices_single_sided_for_each_etype(
     result_rel_ptrs_row = [0]
     for idx_relation in range(num_rels):
         node_indices_for_curr_relation_col = torch.unique(
-            col_indices[rel_ptrs[idx_relation] : rel_ptrs[idx_relation + 1]],
+            col_indices[rel_ptrs[idx_relation]: rel_ptrs[idx_relation + 1]],
             return_inverse=get_inverse_idx,
         )
 
@@ -37,7 +37,7 @@ def generate_separate_unique_node_indices_single_sided_for_each_etype(
             node_indices_for_curr_relation_col_inverse_indices = None
 
         node_indices_for_curr_relation_row = torch.unique(
-            row_indices[rel_ptrs[idx_relation] : rel_ptrs[idx_relation + 1]],
+            row_indices[rel_ptrs[idx_relation]: rel_ptrs[idx_relation + 1]],
             return_inverse=get_inverse_idx,
         )
         if get_inverse_idx:
@@ -55,12 +55,14 @@ def generate_separate_unique_node_indices_single_sided_for_each_etype(
 
         result_node_indices_col.append(node_indices_for_curr_relation_col)
         result_rel_ptrs_col.append(
-            (result_rel_ptrs_col[-1] + node_indices_for_curr_relation_col.shape[0])
+            (result_rel_ptrs_col[-1] +
+             node_indices_for_curr_relation_col.shape[0])
         )
 
         result_node_indices_row.append(node_indices_for_curr_relation_row)
         result_rel_ptrs_row.append(
-            (result_rel_ptrs_row[-1] + node_indices_for_curr_relation_row.shape[0])
+            (result_rel_ptrs_row[-1] +
+             node_indices_for_curr_relation_row.shape[0])
         )
         result_node_indices_row_inverse_indices.append(
             node_indices_for_curr_relation_row_inverse_indices
@@ -107,8 +109,10 @@ def generate_separate_unique_node_indices_for_each_etype(
         node_indices_for_curr_relation = torch.unique(
             torch.concat(
                 [
-                    row_indices[rel_ptrs[idx_relation] : rel_ptrs[idx_relation + 1]],
-                    col_indices[rel_ptrs[idx_relation] : rel_ptrs[idx_relation + 1]],
+                    row_indices[rel_ptrs[idx_relation]
+                        : rel_ptrs[idx_relation + 1]],
+                    col_indices[rel_ptrs[idx_relation]
+                        : rel_ptrs[idx_relation + 1]],
                 ]
             ),
             return_inverse=get_inverse_idx,
@@ -120,7 +124,8 @@ def generate_separate_unique_node_indices_for_each_etype(
                 node_indices_for_curr_relation_inverse_indices,
             ) = node_indices_for_curr_relation
             result_node_indices_inverse_indices.append(
-                node_indices_for_curr_relation_inverse_indices + result_rel_ptrs[-1]
+                node_indices_for_curr_relation_inverse_indices +
+                result_rel_ptrs[-1]
             )
         else:
             # node_indices_for_curr_relation is a tensor, do nothing

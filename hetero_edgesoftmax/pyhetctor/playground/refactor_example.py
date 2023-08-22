@@ -22,7 +22,8 @@ class DummyRule(Rule):
         # IMPORTANT: Ensure that the next statement is not
         # an assert already.
         next_statement = common.next_statement_of(node, context=self.context)
-        assert next_statement is None or not isinstance(next_statement, ast.Assert)
+        assert next_statement is None or not isinstance(
+            next_statement, ast.Assert)
 
         # assert $result != -1
         sanity_check = ast.Assert(

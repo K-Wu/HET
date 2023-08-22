@@ -97,7 +97,8 @@ def GAT_train(args, single_layer_flag: bool):
     print("# of nodes : {}".format(num_nodes))
     print("# of features : {}".format(args.num_feats))
     features = torch.randn(num_nodes, args.num_feats, requires_grad=True)
-    labels = torch.from_numpy(np.random.randint(0, args.num_classes, num_nodes))
+    labels = torch.from_numpy(
+        np.random.randint(0, args.num_classes, num_nodes))
     train_idx = torch.randint(0, num_nodes, (args.train_size,))
 
     print(
@@ -200,7 +201,8 @@ def GAT_train(args, single_layer_flag: bool):
         # log for each step
         print(
             "Epoch {:05d} | Time(s) {:.4f} | train_acc {:.6f} | Used_Memory {:.6f} mb".format(
-                epoch, run_time_this_epoch, train_acc, (now_mem * 1.0 / (1024**2))
+                epoch, run_time_this_epoch, train_acc, (
+                    now_mem * 1.0 / (1024**2))
             )
         )
         """
@@ -239,7 +241,8 @@ def GAT_get_parser(single_layer_flag: bool):
     parser.add_argument(
         "--num_heads", type=int, default=8, help="number of hidden attention heads"
     )
-    parser.add_argument("--num_feats", type=int, default=128, help="input feature dim")
+    parser.add_argument("--num_feats", type=int,
+                        default=128, help="input feature dim")
 
     if not single_layer_flag:
         parser.add_argument(
@@ -263,8 +266,10 @@ def GAT_get_parser(single_layer_flag: bool):
     parser.add_argument(
         "--attn_drop", type=float, default=0.6, help="attention dropout"
     )
-    parser.add_argument("--lr", type=float, default=0.005, help="learning rate")
-    parser.add_argument("--weight_decay", type=float, default=5e-4, help="weight decay")
+    parser.add_argument("--lr", type=float, default=0.005,
+                        help="learning rate")
+    parser.add_argument("--weight_decay", type=float,
+                        default=5e-4, help="weight decay")
     parser.add_argument(
         "--negative_slope",
         type=float,
@@ -289,8 +294,10 @@ def GAT_get_parser(single_layer_flag: bool):
     parser.add_argument(
         "--sparse_format", type=str, default="csr", help="sparse format to use"
     )
-    parser.add_argument("--sort_by_src", action="store_true", help="sort by src")
-    parser.add_argument("--sort_by_etype", action="store_true", help="sort by etype")
+    parser.add_argument(
+        "--sort_by_src", action="store_true", help="sort by src")
+    parser.add_argument("--sort_by_etype",
+                        action="store_true", help="sort by etype")
     parser.add_argument(
         "--no_reindex_eid",
         action="store_true",

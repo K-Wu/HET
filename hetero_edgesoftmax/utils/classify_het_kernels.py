@@ -63,7 +63,8 @@ def get_fw_bw_host_func_names() -> Tuple[set[str], set[str]]:
         for line in table.split("\n"):
             line_components = line.split("\t")
             if len(line_components) < 3:
-                print(f"WARNING: ctags table line {line} has less than 3 components")
+                print(
+                    f"WARNING: ctags table line {line} has less than 3 components")
                 continue
             func_name = line_components[0]
             namespace = line_components[-1]

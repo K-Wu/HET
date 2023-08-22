@@ -14,7 +14,8 @@ device = utils_lite.graphiler_setup_device(device="cuda:0")
 def profile(dataset, feat_dim, repeat=1000):
     print("benchmarking on: " + dataset)
     g, _, _2 = utils_lite.graphiler_load_data(dataset, feat_dim)
-    g_hetero, _, _2 = utils_lite.graphiler_load_data(dataset, feat_dim, to_homo=False)
+    g_hetero, _, _2 = utils_lite.graphiler_load_data(
+        dataset, feat_dim, to_homo=False)
     # features = features.to(device)
 
     @utils_lite.empty_cache

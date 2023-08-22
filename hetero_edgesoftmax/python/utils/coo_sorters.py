@@ -64,7 +64,8 @@ def get_node_index_remap_dict_according_to_number_of_edges(
     srcs_frequency = np_or_th.bincount(srcs.flatten())
     if srcs_frequency.shape[0] < number_of_nodes:
         srcs_frequency = array_concatenate_func(
-            [srcs_frequency, np_or_th.zeros(number_of_nodes - srcs_frequency.shape[0])]
+            [srcs_frequency, np_or_th.zeros(
+                number_of_nodes - srcs_frequency.shape[0])]
         )
 
     sorted_src_list = []
@@ -73,7 +74,8 @@ def get_node_index_remap_dict_according_to_number_of_edges(
         start = ntype_offsets[ntype]
         end = ntype_offsets[ntype + 1]
         sorted_src_list += (
-            array_flip_func(np_or_th.argsort(srcs_frequency[start:end])) + start
+            array_flip_func(np_or_th.argsort(
+                srcs_frequency[start:end])) + start
         ).tolist()
         pass
     # TODO: check if there is data loss in this np.argsort invocation, i.e., implicit conversion from int64 to int32
@@ -119,7 +121,8 @@ def sort_coo_by_etype(
     else:
         np_or_th = np
     array_creation_func = get_array_creation_func(torch_flag)
-    etypes_priority = remap_etype_according_to_number_of_edges(etypes, torch_flag)
+    etypes_priority = remap_etype_according_to_number_of_edges(
+        etypes, torch_flag)
     # now sort the (src, dst) pair according to their etype
     sorted_src_dst_etype = sorted(
         zip(srcs, dsts, etypes, eids, etypes_priority), key=lambda x: x[4]
@@ -127,9 +130,11 @@ def sort_coo_by_etype(
     sorted_srcs = array_creation_func([x[0] for x in sorted_src_dst_etype])
     sorted_dsts = array_creation_func([x[1] for x in sorted_src_dst_etype])
     if infidel_flag:
-        sorted_etypes = array_creation_func([x[2] for x in sorted_src_dst_etype])
+        sorted_etypes = array_creation_func(
+            [x[2] for x in sorted_src_dst_etype])
     else:
-        sorted_etypes = array_creation_func([x[4] for x in sorted_src_dst_etype])
+        sorted_etypes = array_creation_func(
+            [x[4] for x in sorted_src_dst_etype])
     sorted_eids = array_creation_func([x[3] for x in sorted_src_dst_etype])
     return sorted_srcs, sorted_dsts, sorted_etypes, sorted_eids
 
@@ -170,7 +175,8 @@ def sort_coo_by_src_outgoing_edges(
     if not infidel_flag:
         dsts = _
     # now sort the (src, dst) pair according to their src idx
-    sorted_src_dst_srcs = sorted(zip(srcs, dsts, etypes, eids), key=lambda x: x[0])
+    sorted_src_dst_srcs = sorted(
+        zip(srcs, dsts, etypes, eids), key=lambda x: x[0])
     sorted_srcs = array_creation_func([x[0] for x in sorted_src_dst_srcs])
     sorted_dsts = array_creation_func([x[1] for x in sorted_src_dst_srcs])
     sorted_etypes = array_creation_func([x[2] for x in sorted_src_dst_srcs])
