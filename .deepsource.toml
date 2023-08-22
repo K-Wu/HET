@@ -17,6 +17,3 @@ name = "black"
 
 [[transformers]]
 name = "autopep8"
-
-[[transformers]]
-name = "clang-format"
