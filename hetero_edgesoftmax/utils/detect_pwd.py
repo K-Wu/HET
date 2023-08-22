@@ -19,7 +19,7 @@ def run_once(f):
 
 @lru_cache(maxsize=None)
 @run_once
-def git_exists() -> None:
+def assert_git_exists() -> None:
     """Check if git is installed and available in the path."""
     try:
         subprocess.check_output(["git", "--version"])
@@ -29,7 +29,7 @@ def git_exists() -> None:
 
 def get_git_root_path() -> str:
     """Get the root path of the git repository."""
-    git_exists()
+    assert_git_exists()
     return os.path.normpath(
         subprocess.check_output(["git", "rev-parse", "--show-toplevel"])
         .decode("utf-8")
