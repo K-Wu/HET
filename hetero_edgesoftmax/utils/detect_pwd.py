@@ -23,7 +23,7 @@ def assert_git_exists() -> None:
     """Check if git is installed and available in the path."""
     try:
         subprocess.check_output(["git", "--version"])
-    except OSError:
+    except Exception:  # any error means git is not installed
         raise OSError("Git is not installed. Please install git and try again.")
 
 
