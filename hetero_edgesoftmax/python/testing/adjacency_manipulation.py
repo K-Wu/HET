@@ -18,7 +18,6 @@ def convert_csr_to_coo(
     original_eids: torch.Tensor,
     original_reltypes: torch.Tensor,
 ):
-
     row_idxes = _convert_csr_to_coo(original_row_ptrs, original_col_idxes)
     return row_idxes, original_col_idxes, original_eids, original_reltypes
 

@@ -14,6 +14,7 @@ from .. import backend as B
 
 # from seastar import CtxManager
 
+
 # pylint: enable=W0235
 class EglGATConv(nn.Module):
     def __init__(
