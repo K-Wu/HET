@@ -4,6 +4,7 @@ from ogb.nodeproppred import DglNodePropPredDataset
 import torch as th
 import dgl
 
+
 # This is the data preparation logic from the original RGAT script. Keeping this function for compatibility.
 def _legacy_RGAT_prepare_mag_data(args: argparse.Namespace):
     dataset = DglNodePropPredDataset(name="ogbn-mag")

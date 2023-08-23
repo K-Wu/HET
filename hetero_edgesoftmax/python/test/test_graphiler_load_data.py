@@ -19,6 +19,7 @@ DGL_DATASETS = [
 # "arxiv"1, "proteins"1
 # TODO: "pubmed" may trigger error: Edge type "ontology#name" is ambiguous. Please use canonical edge type in the form of (srctype, etype, dsttype)
 
+
 # Datasets where node index in (src, dest) are starting from zero for each unique node/canoncial type: "aifb". "mutag"
 # Datasets that keep absolute node index: None if ignoring graph with only one edge type/ node type
 def test_load_dataset(name, dataset_originally_homo_flag):
