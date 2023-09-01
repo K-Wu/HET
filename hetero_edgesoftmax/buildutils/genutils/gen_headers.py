@@ -11,10 +11,11 @@ def print_debug_info_func():
     #include <torch/extension.h>
     #include <torch/library.h>
     #include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
+    #include "gitsha.h"
 
 
     void build_debug_info() {
-    std::cout << "GIT_COMMIT_HASH: " << GIT_COMMIT_HASH << std::endl;
+    std::cout << "GIT_COMMIT_HASH: " << git_version << std::endl;
     std::cout << "built for CUDA ARCHS " << CUDA_ARCHS << std::endl;
     #if CUDA_ARCHS == 86
     std::cout << "Using macros optimized for CUDA_ARCHS: 86" << std::endl;

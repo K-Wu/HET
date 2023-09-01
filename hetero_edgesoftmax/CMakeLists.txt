@@ -5,9 +5,47 @@ add_subdirectory(include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 # include_directories("${PROJECT_SOURCE_DIR}")
 
+# Get git status from https://stackoverflow.com/a/63924044/5555077 Get the
+# current working branch execute_process only runs during cmake configure time;
+# what we want is to run it during cmake build time by add_custom_target
+execute_process(
+  COMMAND git rev-parse --abbrev-ref HEAD
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE GIT_BRANCH
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+# Get the latest commit hash
+execute_process(
+  COMMAND git rev-parse HEAD
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE GIT_COMMIT_HASH OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+execute_process(
+  COMMAND git diff HEAD
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE GIT_DIRTY_MESSAGE OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+if(NOT GIT_DIRTY_MESSAGE STREQUAL "")
+  set(GIT_DIRTY_MESSAGE "-dirty")
+endif()
+
+# From
+# https://stackoverflow.com/questions/73069159/use-git-hash-in-building-with-cmake-from-c-source
+add_custom_command(
+  OUTPUT ${CMAKE_BINARY_DIR}/generated/include/generated/gitsha.h
+  COMMAND mkdir -p ${CMAKE_BINARY_DIR}/generated/include/generated
+  COMMAND
+    echo -n
+    "#pragma once\\nconst char* git_version = \"${GIT_BRANCH}/${GIT_COMMIT_HASH}${GIT_DIRTY_MESSAGE}\";"
+    > ${CMAKE_BINARY_DIR}/generated/include/gitsha.h
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "Generating gitsha.h"
+  VERBATIM)
+
 add_custom_target(
   home ALL
   DEPENDS ${CMAKE_BINARY_DIR}/generated/include/generated/DebugInfo.inc.h
+          ${CMAKE_BINARY_DIR}/generated/include/generated/gitsha.h
           ${CMAKE_BINARY_DIR}/generated/include/CMakeLists.txt
           ${CMAKE_BINARY_DIR}/generated/src/exported_op.cu.cc)
 
@@ -22,7 +60,7 @@ add_custom_command(
     --gen_debug_info >
     ${CMAKE_BINARY_DIR}/generated/include/generated/DebugInfo.inc.h
   # DEPENDS ${PROJECT_SOURCE_DIR}/buildutils/genutils/gen_headers.py
-  COMMENT "Generating header files"
+  COMMENT "Generating DebugInfo.inc.h"
   VERBATIM)
 # copy include/CMakeLists.txt to build/generated/include/CMakeLists.txt
 add_custom_command(
@@ -243,11 +281,9 @@ if(BUILD_TORCH_API)
                               PROPERTIES LANGUAGE CUDA)
   add_library(torch_hetero_edgesoftmax SHARED
               ${TORCH_HETEROEDGESOFTMAX_EXPORT_CU_CC_SRCS})
-  target_compile_definitions(
-    torch_hetero_edgesoftmax
-    PRIVATE
-      "-DGIT_COMMIT_HASH=\"${GIT_BRANCH}/${GIT_COMMIT_HASH}${GIT_DIRTY_MESSAGE}\""
-  )
+  # target_compile_definitions( torch_hetero_edgesoftmax PRIVATE
+  # "-DGIT_COMMIT_HASH=\"${GIT_BRANCH}/${GIT_COMMIT_HASH}${GIT_DIRTY_MESSAGE}\""
+  # )
   target_compile_features(torch_hetero_edgesoftmax PRIVATE cxx_std_14)
   target_link_libraries(torch_hetero_edgesoftmax ${HETEROEDGESOFTMAX_LIBS}
                         ${TORCH_LIBRARIES} Python::Python)
