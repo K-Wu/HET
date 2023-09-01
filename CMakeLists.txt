@@ -8,7 +8,6 @@ cmake_policy(SET CMP0104 OLD)
 #
 # Build options.
 #
-# option(BUILD_TEST "Build test suite" OFF)
 option(BUILD_TEST "build sputnik test suite" ON)
 option(BUILD_BENCHMARK "build sputnik benchmark suite" ON)
 option(BUILD_GENERATED "build sputnik-based generated op code" ON)
@@ -42,7 +41,7 @@ else()
   set(CUDA_ARCHS ${CUDA_ARCH_LIST})
 endif()
 
-# pass in CUDA_ARCHS as a C++ macro
+# Pass in CUDA_ARCHS as a C++ macro
 add_definitions(-DCUDA_ARCHS=${CUDA_ARCHS})
 
 #
@@ -75,12 +74,6 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 if(RES_USAGE)
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -res-usage")
 endif()
-
-# if(BUILD_TEST) set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSPUTNIK_BUILD_TEST")
-# set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DSPUTNIK_BUILD_TEST") endif()
-
-# if(NOT DEFINED CMAKE_CUDA_STANDARD) set(CMAKE_CUDA_STANDARD 17)
-# set(CMAKE_CUDA_STANDARD_REQUIRED ON) endif()
 
 #
 # Project build.
