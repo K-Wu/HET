@@ -60,7 +60,7 @@ at::Tensor tensor_info(const at::Tensor &one_tensor) {
   std::cout << "one_tensor is_floating_point: "
             << one_tensor.is_floating_point() << std::endl;
   std::cout << "one_tensor is_integral: "
-            << at::isIntegralType(one_tensor.scalar_type()) << std::endl;
+            << at::isIntegralType(one_tensor.scalar_type(), true) << std::endl;
   std::cout << "one_tensor is_signed: " << one_tensor.is_signed() << std::endl;
   std::cout << "one_tensor is_complex: " << one_tensor.is_complex()
             << std::endl;
