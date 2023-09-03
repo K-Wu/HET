@@ -25,3 +25,6 @@
 [submodule "hetero_edgesoftmax/utils/sass_analyzer"]
 	path = hetero_edgesoftmax/utils/sass_analyzer
 	url = git@github.com:K-Wu/sass_analyzer.git
+[submodule "hetero_edgesoftmax/utils/nsight_utils"]
+	path = hetero_edgesoftmax/utils/nsight_utils
+	url = https://github.com/K-Wu/HET_nsight_utils.git

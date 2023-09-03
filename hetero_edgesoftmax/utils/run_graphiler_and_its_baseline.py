@@ -1,13 +1,13 @@
 import subprocess
 from .detect_pwd import (
     GRAPHILER_CONDA_ENV_NAME,
-    HET_CONDA_ENV_NAME,
     create_new_results_dir,
     get_het_root_path,
     is_pwd_het_dev_root,
 )
 
 DATASETS = ["aifb", "mutag", "bgs", "am", "mag", "wikikg2", "fb15k", "biokg"]
+HET_CONDA_ENV_NAME = "dev_dgl_torch_new"
 
 
 def run_grapiler(results_dir: str):
@@ -51,4 +51,4 @@ if __name__ == "__main__":
     current_results_dir = create_new_results_dir("graphiler_")
     run_grapiler(current_results_dir)
     run_baselines(current_results_dir)
-    run_seastar_RGCN(current_results_dir)
+    # run_seastar_RGCN(current_results_dir)

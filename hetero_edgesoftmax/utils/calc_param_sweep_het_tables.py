@@ -1,24 +1,26 @@
 from .upload_benchmark_results import (
-    is_pwd_het_dev_root,
-    ask_subdirectory,
-    extract_graphiler_and_its_baselines_results_from_folder,
     extract_het_results_from_folder,
+    SPREADSHEET_URL,
+)
+from .nsight_utils.upload_benchmark_results import (
+    ask_subdirectory,
     update_gspread,
     create_worksheet,
     get_cell_range_from_A1,
-    SPREADSHEET_URL,
     count_cols,
     count_rows,
     get_pretty_hostname,
 )
-import socket
+from .detect_pwd import RESULTS_RELATIVE_DIR, is_pwd_het_dev_root
 import traceback
 from .calc_tables import BenchAllRecords, calc_best_HET_and_show_all, calc_opt_matrix
 
 if __name__ == "__main__":
     assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
     # Load data from the results folder
-    het_results_dir = ask_subdirectory("misc/artifacts", "benchmark_all_")
+    het_results_dir = ask_subdirectory(
+        "misc/artifacts", "benchmark_all_", RESULTS_RELATIVE_DIR
+    )
     print("Obtaining results from", het_results_dir)
     het_names_and_info = extract_het_results_from_folder(het_results_dir)
     (

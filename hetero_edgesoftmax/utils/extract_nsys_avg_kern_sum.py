@@ -1,5 +1,8 @@
 from typing import Tuple
-from .load_nsight_report import load_nsys_report, prettify_name_from_func_signature
+from .load_nsight_report import load_nsys_report
+from .nsight_utils.load_nsight_report import (
+    prettify_name_from_func_signature,
+)
 from .classify_het_kernels import classify_het_kernel
 
 # TODO: we assume n_warmups == 5, and n_epochs == 10, but we may in future get these parameters from arguments from the trace file

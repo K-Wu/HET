@@ -2,22 +2,24 @@
 This file contains table-making logic, mostly reproducing our tables in the Jan 2023 submission.
 """
 from typing import Union, Callable
+from .detect_pwd import is_pwd_het_dev_root
 from .upload_benchmark_results import (
-    ConfigCanonicalizer,
-    is_pwd_het_dev_root,
-    ask_subdirectory,
     extract_graphiler_and_its_baselines_results_from_folder,
     extract_het_results_from_folder,
+    SPREADSHEET_URL,
+)
+from .nsight_utils.upload_benchmark_results import (
+    ConfigCanonicalizer,
+    ask_subdirectory,
     update_gspread,
     create_worksheet,
     get_cell_range_from_A1,
-    SPREADSHEET_URL,
     count_cols,
     count_rows,
     get_pretty_hostname,
 )
+from .detect_pwd import RESULTS_RELATIVE_DIR
 import numpy as np
-import socket
 import traceback
 
 
@@ -622,12 +624,16 @@ if __name__ == "__main__":
 
     assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
     # Load data from the results folder
-    graphiler_results_dir = ask_subdirectory("misc/artifacts", "graphiler_")
+    graphiler_results_dir = ask_subdirectory(
+        "misc/artifacts", "graphiler_", RESULTS_RELATIVE_DIR
+    )
     print("Obtaining results from", graphiler_results_dir)
     graphiler_names_and_info = extract_graphiler_and_its_baselines_results_from_folder(
         graphiler_results_dir
     )
-    het_results_dir = ask_subdirectory("misc/artifacts", "benchmark_all_")
+    het_results_dir = ask_subdirectory(
+        "misc/artifacts", "benchmark_all_", RESULTS_RELATIVE_DIR
+    )
     print("Obtaining results from", het_results_dir)
     het_names_and_info = extract_het_results_from_folder(het_results_dir)
     all_baseline_records = BenchAllRecords.load_baseline_results_from_uploader(
