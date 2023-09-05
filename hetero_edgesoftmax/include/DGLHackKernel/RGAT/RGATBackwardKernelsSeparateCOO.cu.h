@@ -67,7 +67,7 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
                                       etype_data.etypes, e, resume_from);
                 resume_from = etype;
               } else {
-                etype = binary_search(etype_data.num_relations,
+                etype = interpolation_search(etype_data.num_relations,
                                       etype_data.etypes, e);
               }
 

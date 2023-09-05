@@ -110,6 +110,29 @@ __device__ __forceinline__ Idx binary_search(Idx num_elements, const IdxPtr arr,
 }
 
 template <typename Idx, typename IdxPtr>
+__device__ __forceinline__ Idx interpolation_search(Idx num_elements, const IdxPtr arr,
+                                             Idx target) {
+  Idx lo = 0, hi = num_elements;
+  // find element in arr[i] where i in [lo, hi)
+  // This below check covers all cases , so need to check
+  // for mid=lo-(hi-lo)/2
+  while (hi - lo > 1 && target >= arr[lo] && target <= arr[hi] ) {
+    Idx pos = lo + (((target - arr[lo]) * (hi - lo)) / (arr[hi] - arr[lo]));
+    if(arr [pos] == target){
+      return pos;
+    }
+    if(arr[pos] > target){
+      hi = pos - 1;
+    }
+    else{
+      // If the target element is greater than the element at the calculated position, search the right half of the list
+      lo = pos + 1;
+    }
+  }
+  return -1;
+}
+
+template <typename Idx, typename IdxPtr>
 __device__ __forceinline__ Idx linear_search(Idx num_elements, const IdxPtr arr,
                                              Idx target, Idx resume_from) {
   for (Idx lo = resume_from; lo < num_elements; lo += 1) {
