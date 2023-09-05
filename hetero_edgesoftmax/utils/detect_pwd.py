@@ -1,4 +1,4 @@
-from .nsight_utils.detect_pwd import get_git_root_path, get_env_name_from_setup
+from .nsight_utils import get_git_root_path, get_env_name_from_setup
 import os
 import subprocess
 import datetime
@@ -24,7 +24,10 @@ def is_het_root_path(path: str) -> bool:
             return True
         elif "## What's in a name?" in res:
             raise ValueError(
-                "Fatal! Detected sub-header, What's in a name, in README.md but not found #HET. Is the top-level project renamed? Please update it in the detect_pwd.py, or avoid using the subheading in a non-top-level project."
+                "Fatal! Detected sub-header, What's in a name, in README.md"
+                " but not found #HET. Is the top-level project renamed? Please"
+                " update it in the detect_pwd.py, or avoid using the"
+                " subheading in a non-top-level project."
             )
         return False
     except OSError:
@@ -53,7 +56,9 @@ def is_conda_activated() -> bool:
 
 def get_conda_current_environment() -> str:
     # Check if CONDA_SHLVL is set
-    assert is_conda_activated(), "Fatal! CONDA_SHLVL is not set. Is conda activated?"
+    assert (
+        is_conda_activated()
+    ), "Fatal! CONDA_SHLVL is not set. Is conda activated?"
     return os.environ["CONDA_DEFAULT_ENV"]
 
 

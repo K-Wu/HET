@@ -8,7 +8,7 @@ from .upload_benchmark_results import (
     extract_het_results_from_folder,
     SPREADSHEET_URL,
 )
-from .nsight_utils.upload_benchmark_results import (
+from .nsight_utils import (
     ConfigCanonicalizer,
     ask_subdirectory,
     update_gspread,
@@ -61,7 +61,9 @@ class BenchAllRecords:
         result: set[str] = set()
         for mode in ["inference", "training"]:
             for dataset in self.all_records[mode]:
-                result = result.union(set(self.all_records[mode][dataset].keys()))
+                result = result.union(
+                    set(self.all_records[mode][dataset].keys())
+                )
         return result
 
     def get_all_config(
@@ -72,14 +74,19 @@ class BenchAllRecords:
             for dataset in self.all_records[mode]:
                 for model in self.all_records[mode][dataset]:
                     # skip if model is not in the filter
-                    if models_filter is not None and model not in models_filter:
+                    if (
+                        models_filter is not None
+                        and model not in models_filter
+                    ):
                         continue
                     result = result.union(
                         set(self.all_records[mode][dataset][model].keys())
                     )
         return result
 
-    def get_record(self, mode: str, dataset: str, model: str, config: str) -> str:
+    def get_record(
+        self, mode: str, dataset: str, model: str, config: str
+    ) -> str:
         assert mode in ["inference", "training"]
         if (
             mode not in self.all_records
@@ -133,7 +140,9 @@ class BenchAllRecords:
                 row[5],
             )
             system = cls.get_base_system(cfg)
-            time_records["64.64.1"].store_record(mode, dataset, model, system, time)
+            time_records["64.64.1"].store_record(
+                mode, dataset, model, system, time
+            )
         return time_records
 
     @classmethod
@@ -160,13 +169,21 @@ class BenchAllRecords:
             training_time = row[-2]
             status = row[-1]
             configs = list(map(str, row[2:-4]))
-            configs_dimensions = ConfigCanonicalizer.get_dimensions(configs, cfg_fmt)
-            configs_rest: str = ConfigCanonicalizer.get_configs_other_than_dimensions(
+            configs_dimensions = ConfigCanonicalizer.get_dimensions(
                 configs, cfg_fmt
             )
+            configs_rest: str = (
+                ConfigCanonicalizer.get_configs_other_than_dimensions(
+                    configs, cfg_fmt
+                )
+            )
             if configs_dimensions not in time_records:
-                time_records[configs_dimensions] = cls.get_HETAllRecords(cfg_fmt)
-                status_records[configs_dimensions] = cls.get_HETAllRecords(cfg_fmt)
+                time_records[configs_dimensions] = cls.get_HETAllRecords(
+                    cfg_fmt
+                )
+                status_records[configs_dimensions] = cls.get_HETAllRecords(
+                    cfg_fmt
+                )
             time_records[configs_dimensions].store_record(
                 "inference",
                 dataset,
@@ -215,7 +232,8 @@ class BenchAllRecords:
             if candidate in cfg:
                 return candidate
         raise ValueError(
-            f"Cannot find baseline system in {cfg}. Either this is a HET benchmark, or the config is not in the expected format."
+            f"Cannot find baseline system in {cfg}. Either this is a HET"
+            " benchmark, or the config is not in the expected format."
         )
 
 
@@ -262,9 +280,11 @@ def _calc_best(
                         )
                         != "OK"
                     ):
-                        tmp_records[mode][model][config][dataset] = status_records[
-                            dimensions_cfg
-                        ].get_record(mode, dataset, model, config)
+                        tmp_records[mode][model][config][
+                            dataset
+                        ] = status_records[dimensions_cfg].get_record(
+                            mode, dataset, model, config
+                        )
                     tmp_records[mode][model][config][dataset] = time
                     if is_float(time) and float(time) < best_time:
                         best_time = float(time)
@@ -296,7 +316,11 @@ def _calc_best(
             results.append(["system"] + datasets_)
             # put $BEST at the end
             for config in sorted(
-                list(set(tmp_records[mode][model]).difference({"$BEST", "$BESTCONFIG"}))
+                list(
+                    set(tmp_records[mode][model]).difference(
+                        {"$BEST", "$BESTCONFIG"}
+                    )
+                )
             ) + ["$BEST"]:
                 row = [config]
                 for dataset in datasets_:
@@ -438,7 +462,15 @@ def _calc_worst_mean_best(
     result_csv: "list[list[str]]" = [
         ["Model"] + ["Training"] * 6 + ["Inference"] * 6,
         ["Model"]
-        + ["#degradation", "worst", "mean", "best", "HET #oom", "Baseline #oom"] * 2,
+        + [
+            "#degradation",
+            "worst",
+            "mean",
+            "best",
+            "HET #oom",
+            "Baseline #oom",
+        ]
+        * 2,
     ]
     # All model order in tables are reverse alphabetic order
     for model in sorted(HET_time_records.get_all_model(), reverse=True):
@@ -455,7 +487,9 @@ def _calc_worst_mean_best(
                 best_baseline = baseline_time_records.get_record(
                     mode, dataset, model, "$BEST"
                 )
-                best_HET = HET_time_records.get_record(mode, dataset, model, HET_cfg)
+                best_HET = HET_time_records.get_record(
+                    mode, dataset, model, HET_cfg
+                )
                 if not is_float(best_baseline):
                     num_oom_baseline += 1
                 if not is_float(best_HET):
@@ -464,7 +498,9 @@ def _calc_worst_mean_best(
                     speed_ups.append(float(best_baseline) / float(best_HET))
                     if speed_ups[-1] < 1.0:
                         num_degradation += 1
-            worst: float = min(speed_ups) if len(speed_ups) > 0 else float("inf")
+            worst: float = (
+                min(speed_ups) if len(speed_ups) > 0 else float("inf")
+            )
             best: float = max(speed_ups) if len(speed_ups) > 0 else 0.0
             geomean = (
                 float(np.array(speed_ups).prod() ** (1.0 / len(speed_ups)))
@@ -570,7 +606,9 @@ def _calc_opt_matrix(
                     for config in HET_time_records.get_all_config().difference(
                         {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
                     ):
-                        curr = HET_time_records.get_record(mode, dataset, model, config)
+                        curr = HET_time_records.get_record(
+                            mode, dataset, model, config
+                        )
                         if is_float(curr):
                             if is_float(unoptimized):
                                 unoptimized = max(unoptimized, curr)
@@ -589,7 +627,9 @@ def _calc_opt_matrix(
                         {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
                     )
                 ):
-                    curr = HET_time_records.get_record(mode, dataset, model, config)
+                    curr = HET_time_records.get_record(
+                        mode, dataset, model, config
+                    )
                     if not is_float(curr):
                         row.append("OOM")
                     else:
@@ -628,8 +668,10 @@ if __name__ == "__main__":
         "misc/artifacts", "graphiler_", RESULTS_RELATIVE_DIR
     )
     print("Obtaining results from", graphiler_results_dir)
-    graphiler_names_and_info = extract_graphiler_and_its_baselines_results_from_folder(
-        graphiler_results_dir
+    graphiler_names_and_info = (
+        extract_graphiler_and_its_baselines_results_from_folder(
+            graphiler_results_dir
+        )
     )
     het_results_dir = ask_subdirectory(
         "misc/artifacts", "benchmark_all_", RESULTS_RELATIVE_DIR
@@ -686,7 +728,10 @@ if __name__ == "__main__":
             tab_best_baseline,
             worksheet,
             cell_range=get_cell_range_from_A1(
-                count_rows(tab_best_baseline), count_cols(tab_best_baseline), 0, 0
+                count_rows(tab_best_baseline),
+                count_cols(tab_best_baseline),
+                0,
+                0,
             ),
         )
         update_gspread(

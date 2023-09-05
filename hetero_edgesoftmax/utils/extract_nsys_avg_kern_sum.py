@@ -1,6 +1,6 @@
 from typing import Tuple
 from .load_nsight_report import load_nsys_report
-from .nsight_utils.load_nsight_report import (
+from .nsight_utils import (
     prettify_name_from_func_signature,
 )
 from .classify_het_kernels import classify_het_kernel
@@ -34,7 +34,9 @@ CommEvent_ {
 """
 
 
-def get_avg_kern_sum(filepath: str, n_warmups=5, n_epochs=10) -> "list[list[str]]":
+def get_avg_kern_sum(
+    filepath: str, n_warmups=5, n_epochs=10
+) -> "list[list[str]]":
     kern_traces: list[list[str]] = load_nsys_report(filepath, "cuda_gpu_trace")
     header = kern_traces[0]
     kernel_name_idx = header.index("Name")

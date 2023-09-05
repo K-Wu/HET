@@ -1,11 +1,11 @@
 from .upload_benchmark_results import SPREADSHEET_URL
-from .nsight_utils.upload_benchmark_results import (
+from .nsight_utils import (
     ask_subdirectory_or_file,
     update_gspread,
     create_worksheet,
     get_pretty_hostname,
 )
-from .nsight_utils.upload_cache_and_roofline import (
+from .nsight_utils import (
     extract_from_ncu_folder,
     extract_from_ncu_file,
 )
@@ -21,9 +21,13 @@ if __name__ == "__main__":
     )
 
     # Create worksheet
-    worksheet_title = f"[{get_pretty_hostname()}]{path_name.split('/')[-1]}"[:100]
+    worksheet_title = f"[{get_pretty_hostname()}]{path_name.split('/')[-1]}"[
+        :100
+    ]
     try:
-        worksheet = create_worksheet(SPREADSHEET_URL, worksheet_title, retry=True)
+        worksheet = create_worksheet(
+            SPREADSHEET_URL, worksheet_title, retry=True
+        )
     except Exception as e:
         print("Failed to create worksheet:", e)
         print(traceback.format_exc())
@@ -31,9 +35,13 @@ if __name__ == "__main__":
 
     # Extract results
     if os.path.isdir(path_name):
-        csv_rows = extract_from_ncu_folder(path_name, True, True, classify_het_kernel)
+        csv_rows = extract_from_ncu_folder(
+            path_name, True, True, classify_het_kernel
+        )
     else:
-        csv_rows = extract_from_ncu_file(path_name, True, True, classify_het_kernel)
+        csv_rows = extract_from_ncu_file(
+            path_name, True, True, classify_het_kernel
+        )
 
     # Upload
     try:

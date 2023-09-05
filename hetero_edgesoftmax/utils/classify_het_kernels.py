@@ -1,5 +1,5 @@
 from .detect_pwd import get_het_root_path
-from .nsight_utils.classify_het_kernels import (
+from .nsight_utils import (
     is_ctags_installed,
     classify_fw_bw_kernel,
     get_functions_from_ctags_table,
@@ -33,7 +33,10 @@ def get_fw_bw_host_func_names(het_root_path: str) -> Tuple[set[str], set[str]]:
         for line in table.split("\n"):
             line_components = line.split("\t")
             if len(line_components) < 3:
-                print(f"WARNING: ctags table line {line} has less than 3 components")
+                print(
+                    f"WARNING: ctags table line {line} has less than 3"
+                    " components"
+                )
                 continue
             func_name = line_components[0]
             namespace = line_components[-1]
@@ -47,7 +50,8 @@ def get_fw_bw_host_func_names(het_root_path: str) -> Tuple[set[str], set[str]]:
                 bw_kernels.add(func_name)
             else:
                 print(
-                    f"Warning: {func_name} is neither a forward nor a backward kernel"
+                    f"Warning: {func_name} is neither a forward nor a backward"
+                    " kernel"
                 )
 
     return fw_kernels, bw_kernels
@@ -87,7 +91,10 @@ def test_classify_fw_bw_kernel():
         elif classify_fw_bw_kernel(func_pretty_name) == "BckProp":
             continue
         else:
-            print(f"{func_pretty_name} is neither a forward nor a backward kernel")
+            print(
+                f"{func_pretty_name} is neither a forward nor a backward"
+                " kernel"
+            )
             assert 0
 
 

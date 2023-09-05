@@ -1,4 +1,4 @@
-from .nsight_utils.load_nsight_report import (
+from .nsight_utils import (
     load_nsys_report as general_load_nsys_report,
     consolidate_ncu_details as general_consolidate_ncu_details,
 )
@@ -17,7 +17,7 @@ def consolidate_ncu_details(
 
 if __name__ == "__main__":
     from .detect_pwd import is_pwd_het_dev_root
-    from .nsight_utils.load_nsight_report import (
+    from .nsight_utils import (
         extract_ncu_values_from_details,
         load_ncu_report,
         reorder_columns_in_raw_csv,

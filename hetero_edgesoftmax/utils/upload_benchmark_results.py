@@ -1,4 +1,4 @@
-from .nsight_utils.upload_benchmark_results import (
+from .nsight_utils import (
     update_gspread,
     create_worksheet,
     get_cell_range_from_A1,
@@ -95,7 +95,9 @@ def extract_graphiler_and_its_baselines_results_from_folder(
     return result
 
 
-def extract_het_results_from_folder(path) -> "list[list[Union[float, str, int]]]":
+def extract_het_results_from_folder(
+    path,
+) -> "list[list[Union[float, str, int]]]":
     all_names_and_info = []
     for filename in os.listdir(path):
         if filename.endswith(".result.log"):
@@ -108,11 +110,17 @@ def extract_het_results_from_folder(path) -> "list[list[Union[float, str, int]]]
                 lines = f.readlines()
                 for line in lines:
                     if line.startswith("Mean forward time"):
-                        avg_forward_time = float(line.split(":")[1].strip().split()[0])
+                        avg_forward_time = float(
+                            line.split(":")[1].strip().split()[0]
+                        )
                     elif line.startswith("Mean backward time"):
-                        avg_backward_time = float(line.split(":")[1].strip().split()[0])
+                        avg_backward_time = float(
+                            line.split(":")[1].strip().split()[0]
+                        )
                     elif line.startswith("Mean training time"):
-                        avg_training_time = float(line.split(":")[1].strip().split()[0])
+                        avg_training_time = float(
+                            line.split(":")[1].strip().split()[0]
+                        )
                     if line.lower().find("error") != -1:
                         status.append(line.strip())
             if len(status) == 0:
@@ -136,18 +144,25 @@ def extract_het_results_from_folder(path) -> "list[list[Union[float, str, int]]]
 
 
 def upload_folder(
-    root: str, prefix: str, is_graphiler_flag: bool, test_repeat_x_y: bool = False
+    root: str,
+    prefix: str,
+    is_graphiler_flag: bool,
+    test_repeat_x_y: bool = False,
 ):
     dir_to_upload = find_latest_subdirectory(root, prefix)
     print("Uploading results from", dir_to_upload)
     if is_graphiler_flag:
-        names_and_info = extract_graphiler_and_its_baselines_results_from_folder(
-            dir_to_upload
+        names_and_info = (
+            extract_graphiler_and_its_baselines_results_from_folder(
+                dir_to_upload
+            )
         )
     else:
         names_and_info = extract_het_results_from_folder(dir_to_upload)
     print(names_and_info)
-    worksheet_title = f"[{get_pretty_hostname()}]{dir_to_upload.split('/')[-1]}"
+    worksheet_title = (
+        f"[{get_pretty_hostname()}]{dir_to_upload.split('/')[-1]}"
+    )
     try:
         worksheet = create_worksheet(SPREADSHEET_URL, worksheet_title)
         if not test_repeat_x_y:
@@ -161,7 +176,10 @@ def upload_folder(
                 names_and_info,
                 worksheet,
                 cell_range=get_cell_range_from_A1(
-                    count_rows(names_and_info), count_cols(names_and_info), 0, 0
+                    count_rows(names_and_info),
+                    count_cols(names_and_info),
+                    0,
+                    0,
                 ),
             )
             update_gspread(

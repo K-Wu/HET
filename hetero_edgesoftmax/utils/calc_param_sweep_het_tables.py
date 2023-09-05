@@ -2,7 +2,7 @@ from .upload_benchmark_results import (
     extract_het_results_from_folder,
     SPREADSHEET_URL,
 )
-from .nsight_utils.upload_benchmark_results import (
+from .nsight_utils import (
     ask_subdirectory,
     update_gspread,
     create_worksheet,
@@ -13,7 +13,11 @@ from .nsight_utils.upload_benchmark_results import (
 )
 from .detect_pwd import RESULTS_RELATIVE_DIR, is_pwd_het_dev_root
 import traceback
-from .calc_tables import BenchAllRecords, calc_best_HET_and_show_all, calc_opt_matrix
+from .calc_tables import (
+    BenchAllRecords,
+    calc_best_HET_and_show_all,
+    calc_opt_matrix,
+)
 
 if __name__ == "__main__":
     assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
@@ -37,9 +41,7 @@ if __name__ == "__main__":
     tab_opt_matrix = calc_opt_matrix(all_het_time_records, 64, 64, 1)
 
     # upload it
-    worksheet_title = (
-        f"[{get_pretty_hostname()}]tables.sweep.{het_results_dir.split('/')[-1]}"
-    )
+    worksheet_title = f"[{get_pretty_hostname()}]tables.sweep.{het_results_dir.split('/')[-1]}"
     try:
         worksheet = create_worksheet(SPREADSHEET_URL, worksheet_title)
 
