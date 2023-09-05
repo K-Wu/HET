@@ -5,7 +5,7 @@ from .nsight_utils import (
     count_cols,
     count_rows,
     get_pretty_hostname,
-    find_latest_subdirectory,
+    find_latest_subdirectory_or_file,
     NameCanonicalizer,
 )
 import os
@@ -149,7 +149,7 @@ def upload_folder(
     is_graphiler_flag: bool,
     test_repeat_x_y: bool = False,
 ):
-    dir_to_upload = find_latest_subdirectory(root, prefix)
+    dir_to_upload = find_latest_subdirectory_or_file(root, prefix)
     print("Uploading results from", dir_to_upload)
     if is_graphiler_flag:
         names_and_info = (
