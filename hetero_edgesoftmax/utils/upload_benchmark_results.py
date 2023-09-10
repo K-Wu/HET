@@ -98,6 +98,13 @@ def extract_graphiler_and_its_baselines_results_from_folder(
 def extract_het_results_from_folder(
     path,
 ) -> "list[list[Union[float, str, int]]]":
+    """
+    Find and extract the following patterns.
+    "Mean forward time: {:4f} ms"
+    "Mean backward time: {:4f} ms"
+    "Mean training time: {:4f} ms"
+    OUTPUT_DIR="misc/artifacts/benchmark_all_`date +%Y%m%d%H%M`"
+    """
     all_names_and_info = []
     for filename in os.listdir(path):
         if filename.endswith(".result.log"):
