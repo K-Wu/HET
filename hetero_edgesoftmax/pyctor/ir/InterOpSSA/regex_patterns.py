@@ -9,9 +9,7 @@ def strip_group_names(pattern: str) -> str:
 
 # Non-weight variable pattern: (EDGEWISE, "varname") or (NODEWISE, "varname")
 # or (DSTNODE, "varname") or (SRCNODE, "varname")
-non_weight_pattern = (
-    r"\((?P<type>EDGEWISE|NODEWISE|DSTNODE|SRCNODE),\"(?P<var_name>[A-z0-9_]*)\"\)"
-)
+non_weight_pattern = r"\((?P<type>EDGEWISE|NODEWISE|DSTNODE|SRCNODE),\"(?P<var_name>[A-z0-9_]*)\"\)"
 
 # Weight pattern: (WeightName_0123, SLICETYPE)
 # NB: to conform with this simple parser, weight without slicing is denoted as
@@ -19,7 +17,8 @@ non_weight_pattern = (
 weight_pattern = r"\((?P<weight_name>[A-z0-9_]*),(?P<type_slice>[A-Z]*)\)"
 
 keyword_value_pair_pattern = (
-    r"(?P<keyword>[a-z0-9_]*)=(?P<value>{weight_pattern}|{non_weight_pattern})".format(
+    r"(?P<keyword>[a-z0-9_]*)=(?P<value>{weight_pattern}|{non_weight_pattern})"
+    .format(
         weight_pattern=strip_group_names(weight_pattern),
         non_weight_pattern=strip_group_names(non_weight_pattern),
     )

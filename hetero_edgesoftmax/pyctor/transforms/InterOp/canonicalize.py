@@ -31,7 +31,10 @@ def split_for_loop_node(for_node):
     for node in for_node.body:
         if not isinstance(node, ast.For):
             new_node = ast.For(
-                target=for_node.target, iter=for_node.iter, body=[node], orelse=[]
+                target=for_node.target,
+                iter=for_node.iter,
+                body=[node],
+                orelse=[],
             )
             results.append(new_node)
         else:
@@ -52,7 +55,11 @@ def assert_for_loop_variables_canonicalized(for_node):
     if for_node.iter.func.attr in ["nodes", "dst_nodes", "src_nodes"]:
         assert for_node.target.id == "n"
         return
-    elif for_node.iter.func.attr == ["edges", "incoming_edges", "outgoing_edges"]:
+    elif for_node.iter.func.attr == [
+        "edges",
+        "incoming_edges",
+        "outgoing_edges",
+    ]:
         assert for_node.target.id == "e"
         return
     else:

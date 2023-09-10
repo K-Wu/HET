@@ -3,7 +3,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 if __name__ == "__main__":
     env = Environment(
-        loader=FileSystemLoader(searchpath="./pyhetctor/tests/"),
+        loader=FileSystemLoader(searchpath="./pyctor/tests/"),
         autoescape=select_autoescape(),
     )
     template = env.get_template("test.jinja")

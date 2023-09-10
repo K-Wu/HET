@@ -15,7 +15,9 @@ print(ast.dump(expr_l_ast))
 def is_call_edges(call):
     if isinstance(call, ast.Call):
         f_func = call.func
-        if isinstance(f_func, ast.Attribute) and isinstance(f_func.value, ast.Name):
+        if isinstance(f_func, ast.Attribute) and isinstance(
+            f_func.value, ast.Name
+        ):
             f_object = f_func.value.id
             f_method = f_func.attr
             if f_object == "g" and f_method == "Edges":
@@ -100,7 +102,8 @@ for var, nodes in global_vars.items():
             ),
             body=[
                 ast.Assign(
-                    targets=[ast.Name(id="n_var")], value=ast.Constant(value=0.0)
+                    targets=[ast.Name(id="n_var")],
+                    value=ast.Constant(value=0.0),
                 ),
                 ast.For(
                     target=ast.Name(id="e"),

@@ -2,7 +2,7 @@
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 env = Environment(
-    loader=FileSystemLoader(searchpath="./pyhetctor/ir/OpSpecSSA/templates/"),
+    loader=FileSystemLoader(searchpath="./pyctor/ir/OpSpecSSA/templates/"),
     autoescape=select_autoescape(),
 )
 

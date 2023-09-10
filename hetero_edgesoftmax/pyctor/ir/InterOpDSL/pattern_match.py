@@ -60,11 +60,17 @@ def match_loop_nest_and_result(
         curr_node = curr_node.body[0]
 
     # Step 2: match the result
-    assert isinstance(curr_node, ast.Assign) or isinstance(curr_node, ast.AugAssign)
-    assign_type = "assign" if isinstance(curr_node, ast.Assign) else "augAssign"
+    assert isinstance(curr_node, ast.Assign) or isinstance(
+        curr_node, ast.AugAssign
+    )
+    assign_type = (
+        "assign" if isinstance(curr_node, ast.Assign) else "augAssign"
+    )
     output_symbol = match_sole_return_value(var_table, loop_type, curr_node)
     if output_symbol is None:
-        output_symbol = match_dual_return_values(var_table, loop_type, curr_node)
+        output_symbol = match_dual_return_values(
+            var_table, loop_type, curr_node
+        )
         if output_symbol is None or (None in output_symbol):
             raise ValueError("cannot recognize the output symbol")
         # match splitOp
@@ -104,13 +110,19 @@ def match_right_hand_side_expr(
             )
         ]
     elif assign_type == "assign":
-        ops = match_copy_and_negation(var_table, output_symbol, loop_type, rhs_node)
+        ops = match_copy_and_negation(
+            var_table, output_symbol, loop_type, rhs_node
+        )
         if ops:
             return ops
-        ops = match_dense_func_call(var_table, output_symbol, loop_type, rhs_node)
+        ops = match_dense_func_call(
+            var_table, output_symbol, loop_type, rhs_node
+        )
         if ops:
             return ops
-        ops = match_outer_product(var_table, output_symbol, loop_type, rhs_node)
+        ops = match_outer_product(
+            var_table, output_symbol, loop_type, rhs_node
+        )
         if ops:
             return ops
         # match_unary_functions_and_throw_unmatched_func_calls should occur after all remaining functions because it will catch any unmatched function calls
@@ -161,7 +173,11 @@ def match_binary_op_and_throw_unmatched(
         return (
             ops0
             + ops1
-            + [UnrealizedAddOp(result=target, left=input_symbol0, right=input_symbol1)]
+            + [
+                UnrealizedAddOp(
+                    result=target, left=input_symbol0, right=input_symbol1
+                )
+            ]
         )
     elif rhs_node.op == ast.Div:
         # We only support ScalarDivide for now so it will be lowered to ScalarDivide.
@@ -175,7 +191,11 @@ def match_binary_op_and_throw_unmatched(
         return (
             ops0
             + ops1
-            + [ScalarDivideOp(result=target, left=input_symbol0, right=input_symbol1)]
+            + [
+                ScalarDivideOp(
+                    result=target, left=input_symbol0, right=input_symbol1
+                )
+            ]
         )
 
     elif rhs_node.op == ast.Mult:
@@ -192,7 +212,9 @@ def match_binary_op_and_throw_unmatched(
                 input_symbol, ops0 = match_data_input(
                     target, var_table, loop_type, rhs_node.left
                 )
-                weight_symbol, ops1 = match_weight_var(var_table, rhs_node.right)
+                weight_symbol, ops1 = match_weight_var(
+                    var_table, rhs_node.right
+                )
                 assert input_symbol is not None and weight_symbol is not None
                 if rhs_node.left.value.id == "n":
                     assert (
@@ -204,7 +226,9 @@ def match_binary_op_and_throw_unmatched(
                         + ops1
                         + [
                             NodeDenseOp(
-                                input=input_symbol, weight=weight_symbol, result=target
+                                input=input_symbol,
+                                weight=weight_symbol,
+                                result=target,
                             )
                         ]
                     )
@@ -218,7 +242,9 @@ def match_binary_op_and_throw_unmatched(
                         + ops1
                         + [
                             EdgeDenseOp(
-                                input=input_symbol, weight=weight_symbol, result=target
+                                input=input_symbol,
+                                weight=weight_symbol,
+                                result=target,
                             )
                         ]
                     )
@@ -229,7 +255,9 @@ def match_binary_op_and_throw_unmatched(
                 input_symbol, ops0 = match_data_input(
                     target, var_table, loop_type, rhs_node.right
                 )
-                weight_symbol, ops1 = match_weight_var(var_table, rhs_node.left)
+                weight_symbol, ops1 = match_weight_var(
+                    var_table, rhs_node.left
+                )
                 assert input_symbol is not None and weight_symbol is not None
                 if rhs_node.right.value.id == "n":
                     assert (
@@ -241,7 +269,9 @@ def match_binary_op_and_throw_unmatched(
                         + ops1
                         + [
                             NodeDenseOp(
-                                input=input_symbol, weight=weight_symbol, result=target
+                                input=input_symbol,
+                                weight=weight_symbol,
+                                result=target,
                             )
                         ]
                     )
@@ -255,7 +285,9 @@ def match_binary_op_and_throw_unmatched(
                         + ops1
                         + [
                             EdgeDenseOp(
-                                input=input_symbol, weight=weight_symbol, result=target
+                                input=input_symbol,
+                                weight=weight_symbol,
+                                result=target,
                             )
                         ]
                     )
@@ -319,7 +351,9 @@ def match_weight_var(
         elif node.slice.attr == "etype":
             slice_type = "EDGETYPE"
         return (
-            WeightVar.from_dict({"name": node.value.id, "slice_type": slice_type}),
+            WeightVar.from_dict(
+                {"name": node.value.id, "slice_type": slice_type}
+            ),
             [],
         )
     elif isinstance(node, ast.Name):
@@ -366,7 +400,9 @@ def _match_edge_output(
         if node.value.id == "e":
             assert isinstance(node.slice, ast.Constant)
             print("(EDGEWISE) output_key: ", node.value.id, node.slice.value)
-            return DataVar.from_dict({"name": node.slice.value, "type": "EDGEWISE"})
+            return DataVar.from_dict(
+                {"name": node.slice.value, "type": "EDGEWISE"}
+            )
     # No match chain in output
     return None
 
@@ -432,7 +468,9 @@ def match_vertex_input(
     loop_type: list[tuple[str, str, str]],
     node,
 ) -> Tuple[Union[DataVar, None], list[OpBase]]:
-    input_symbol, ops = match_data_input(output_symbol, var_table, loop_type, node)
+    input_symbol, ops = match_data_input(
+        output_symbol, var_table, loop_type, node
+    )
     # assert vertex output
     if input_symbol is not None:
         assert input_symbol.type in ["NODEWISE", "DSTNODE"]
@@ -445,7 +483,9 @@ def match_edge_input(
     loop_type: list[tuple[str, str, str]],
     node,
 ) -> Tuple[Union[DataVar, None], list[OpBase]]:
-    input_symbol, ops = match_data_input(output_symbol, var_table, loop_type, node)
+    input_symbol, ops = match_data_input(
+        output_symbol, var_table, loop_type, node
+    )
     # assert edge output
     if input_symbol is not None:
         assert input_symbol.type == "EDGEWISE"
@@ -464,8 +504,16 @@ def _match_vertex_output(
         assert isinstance(node.value, ast.Name)
         if node.value.id == "n":
             assert isinstance(node.slice, ast.Constant)
-            print("(", var_type, ") output_key: ", node.value.id, node.slice.value)
-            return DataVar.from_dict({"name": node.slice.value, "type": var_type})
+            print(
+                "(",
+                var_type,
+                ") output_key: ",
+                node.value.id,
+                node.slice.value,
+            )
+            return DataVar.from_dict(
+                {"name": node.slice.value, "type": var_type}
+            )
     # No match chain in output
     return None
 
@@ -540,7 +588,9 @@ def match_outer_product(
             + ops1
             + [
                 EdgeOuterProductOp(
-                    left=input_symbol0, right=input_symbol1, output=output_symbol
+                    left=input_symbol0,
+                    right=input_symbol1,
+                    output=output_symbol,
                 )
             ]
         )
@@ -550,7 +600,9 @@ def match_outer_product(
             + ops1
             + [
                 NodeOuterProductOp(
-                    left=input_symbol0, right=input_symbol1, output=output_symbol
+                    left=input_symbol0,
+                    right=input_symbol1,
+                    output=output_symbol,
                 )
             ]
         )
@@ -580,7 +632,9 @@ def match_dense_func_call(
                 assert isinstance(rhs_node.args[0], ast.Attribute)
                 assert isinstance(rhs_node.args[0].value, ast.Name)
                 # NB: op matched. All mismatch will be an error
-                weight_symbol, ops1 = match_weight_var(var_table, rhs_node.args[1])
+                weight_symbol, ops1 = match_weight_var(
+                    var_table, rhs_node.args[1]
+                )
                 if rhs_node.args[0].value.id == "n":
                     assert (
                         determine_loop_type(loop_type) == "NODEWISE"
@@ -589,7 +643,9 @@ def match_dense_func_call(
                     input_symbol, ops0 = match_vertex_input(
                         output_symbol, var_table, loop_type, rhs_node.args[0]
                     )
-                    assert input_symbol is not None and weight_symbol is not None
+                    assert (
+                        input_symbol is not None and weight_symbol is not None
+                    )
                     return (
                         ops0
                         + ops1
@@ -606,7 +662,9 @@ def match_dense_func_call(
                     input_symbol, ops0 = match_edge_input(
                         output_symbol, var_table, loop_type, rhs_node.args[0]
                     )
-                    assert input_symbol is not None and weight_symbol is not None
+                    assert (
+                        input_symbol is not None and weight_symbol is not None
+                    )
                     return (
                         ops0
                         + ops1
@@ -622,7 +680,9 @@ def match_dense_func_call(
                 assert isinstance(rhs_node.args[1], ast.Attribute)
                 assert isinstance(rhs_node.args[1].value, ast.Name)
                 # NB: op matched. All mismatch will be an error
-                weight_symbol, ops1 = match_weight_var(var_table, rhs_node.args[0])
+                weight_symbol, ops1 = match_weight_var(
+                    var_table, rhs_node.args[0]
+                )
                 if rhs_node.args[1].value.id == "n":
                     assert (
                         determine_loop_type(loop_type) == "NODEWISE"
@@ -631,7 +691,9 @@ def match_dense_func_call(
                     input_symbol, ops0 = match_vertex_input(
                         output_symbol, var_table, loop_type, rhs_node.args[1]
                     )
-                    assert input_symbol is not None and weight_symbol is not None
+                    assert (
+                        input_symbol is not None and weight_symbol is not None
+                    )
                     return (
                         ops0
                         + ops1
@@ -648,7 +710,9 @@ def match_dense_func_call(
                     input_symbol, ops0 = match_edge_input(
                         output_symbol, var_table, loop_type, rhs_node.args[1]
                     )
-                    assert input_symbol is not None and weight_symbol is not None
+                    assert (
+                        input_symbol is not None and weight_symbol is not None
+                    )
                     return (
                         ops0
                         + ops1
@@ -700,21 +764,35 @@ def match_unary_functions_and_throw_unmatched_func_calls(
                 )
                 if input_symbol is None:
                     raise ValueError("transpose input not found")
-                return ops + [TransposeOp(result=output_symbol, input=input_symbol)]
+                return ops + [
+                    TransposeOp(result=output_symbol, input=input_symbol)
+                ]
             elif rhs_node.func.id == "concatenate":
                 assert isinstance(rhs_node.args[0], ast.List)
                 assert isinstance(rhs_node.args[0].elts[0], ast.Attribute)
                 assert isinstance(rhs_node.args[0].elts[0].value, ast.Name)
-                print(rhs_node.args[0].elts[0].value.id, rhs_node.args[0].elts[0].attr)
+                print(
+                    rhs_node.args[0].elts[0].value.id,
+                    rhs_node.args[0].elts[0].attr,
+                )
                 assert isinstance(rhs_node.args[0].elts[1], ast.Attribute)
                 assert isinstance(rhs_node.args[0].elts[1].value, ast.Name)
-                print(rhs_node.args[0].elts[1].value.id, rhs_node.args[0].elts[1].attr)
+                print(
+                    rhs_node.args[0].elts[1].value.id,
+                    rhs_node.args[0].elts[1].attr,
+                )
                 # Match-chain handled in the following match functions
                 input_symbol0, ops0 = match_data_input(
-                    output_symbol, var_table, loop_type, rhs_node.args[0].elts[0]
+                    output_symbol,
+                    var_table,
+                    loop_type,
+                    rhs_node.args[0].elts[0],
                 )
                 input_symbol1, ops1 = match_data_input(
-                    output_symbol, var_table, loop_type, rhs_node.args[0].elts[0]
+                    output_symbol,
+                    var_table,
+                    loop_type,
+                    rhs_node.args[0].elts[0],
                 )
                 if input_symbol0 is None or input_symbol1 is None:
                     raise ValueError("concatenate input not found")
@@ -723,11 +801,14 @@ def match_unary_functions_and_throw_unmatched_func_calls(
                     + ops1
                     + [
                         ConcatenateOp(
-                            result=output_symbol, input=[input_symbol0, input_symbol1]
+                            result=output_symbol,
+                            input=[input_symbol0, input_symbol1],
                         )
                     ]
                 )
-            return _match_nonlinear(var_table, output_symbol, loop_type, rhs_node)
+            return _match_nonlinear(
+                var_table, output_symbol, loop_type, rhs_node
+            )
     return None
 
 

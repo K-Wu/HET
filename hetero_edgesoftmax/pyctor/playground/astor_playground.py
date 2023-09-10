@@ -20,7 +20,9 @@ expr_ast0 = ast.parse(expr0)
 for node in ast.walk(expr_ast0):
     if isinstance(node, ast.For):
         node.body = [
-            ast.For(target=node.target, iter=node.iter, body=node.body, orelse=[])
+            ast.For(
+                target=node.target, iter=node.iter, body=node.body, orelse=[]
+            )
         ]
         node.iter = ast.Name(id="range(1)")
         node.target = ast.Name(id="_")
@@ -51,7 +53,9 @@ for node in ast.walk(expr_ast0):
             new_for = ast.For(
                 target=ast.Name(id="e"),
                 iter=ast.Call(
-                    func=ast.Attribute(value=ast.Name(id="n"), attr="out_edges"),
+                    func=ast.Attribute(
+                        value=ast.Name(id="n"), attr="out_edges"
+                    ),
                     args=[],
                     keywords=[],
                 ),

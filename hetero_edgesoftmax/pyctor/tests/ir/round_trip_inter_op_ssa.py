@@ -5,12 +5,12 @@ use round trip to test the serialize/deserialize of inter-op SSA work as intende
 from ...ir.InterOpSSA import programs
 
 filenames = [
-    "pyhetctor/examples/inter-op-ssa/hgt.inter-op-ssa",
-    "pyhetctor/examples/inter-op-ssa/rgcn.inter-op-ssa",
-    "pyhetctor/examples/inter-op-ssa/rgat.inter-op-ssa",
-    "pyhetctor/examples/inter-op-ssa/hgt.bck.inter-op-ssa",
-    "pyhetctor/examples/inter-op-ssa/rgcn.bck.inter-op-ssa",
-    "pyhetctor/examples/inter-op-ssa/rgat.bck.inter-op-ssa",
+    "pyctor/examples/inter-op-ssa/hgt.inter-op-ssa",
+    "pyctor/examples/inter-op-ssa/rgcn.inter-op-ssa",
+    "pyctor/examples/inter-op-ssa/rgat.inter-op-ssa",
+    "pyctor/examples/inter-op-ssa/hgt.bck.inter-op-ssa",
+    "pyctor/examples/inter-op-ssa/rgcn.bck.inter-op-ssa",
+    "pyctor/examples/inter-op-ssa/rgat.bck.inter-op-ssa",
 ]
 
 

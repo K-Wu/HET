@@ -20,7 +20,11 @@ def strip_white_spaces(line: str) -> str:
 
 DefUseEntry = NamedTuple(
     "DefUseEntry",
-    [("name", str), ("def_op", Union[OpBase, None]), ("use_ops", list[OpBase])],
+    [
+        ("name", str),
+        ("def_op", Union[OpBase, None]),
+        ("use_ops", list[OpBase]),
+    ],
 )
 
 
@@ -45,7 +49,8 @@ class VariableTable:
 
     vars_shape: dict[VarBase, Shape]
     dsl_vars: Annotated[
-        set[VarBase], "variables defined during the lowering from Inter Op DSL to SSA"
+        set[VarBase],
+        "variables defined during the lowering from Inter Op DSL to SSA",
     ]
     numbered_val_to_key: Annotated[
         dict[VarBase, VarBase],
@@ -132,11 +137,17 @@ class VariableTable:
             if scope_tag == "InitialVariablesAndWeights":
                 for line in lines[scope_beg + 1 : scope_end]:
                     line_var_strs = line.replace(")", "))").split(")")
-                    line_var_strs = [var_str.strip() for var_str in line_var_strs]
                     line_var_strs = [
-                        var_str[1:] for var_str in line_var_strs if var_str[0] == ","
+                        var_str.strip() for var_str in line_var_strs
                     ]
-                    line_var_strs = {var_str.strip() for var_str in line_var_strs}
+                    line_var_strs = [
+                        var_str[1:]
+                        for var_str in line_var_strs
+                        if var_str[0] == ","
+                    ]
+                    line_var_strs = {
+                        var_str.strip() for var_str in line_var_strs
+                    }
                     line_vars: set[VarBase] = {
                         parse_var_class(var_str).from_string(var_str)
                         for var_str in line_var_strs
@@ -206,7 +217,8 @@ class VariableTable:
         result = self.get_shape_info(var)
         if result is None:
             raise ValueError(
-                f"Variable {var.get_name()} not found in the table. please run infer_shapes() first"
+                f"Variable {var.get_name()} not found in the table. please run"
+                " infer_shapes() first"
             )
         return result
 
@@ -215,8 +227,8 @@ class VariableTable:
         key = self.get_var_key(var)
         if key in self.vars_shape and self.vars_shape[key] != new_shape_info:
             raise ValueError(
-                f"Variable {var.get_name()} already has a shape {self.vars_shape[key]}, "
-                f"cannot set to {new_shape_info}"
+                f"Variable {var.get_name()} already has a shape"
+                f" {self.vars_shape[key]}, cannot set to {new_shape_info}"
             )
         self.vars_shape[key] = new_shape_info
 
@@ -242,9 +254,9 @@ class VariableTable:
                 r"(?<={suffix})\d+".format(suffix=suffix), new_temp_var["name"]
             )
 
-            if new_temp_var["name"].rfind("_" + suffix) > new_temp_var["name"].find(
-                "_delta"
-            ):
+            if new_temp_var["name"].rfind("_" + suffix) > new_temp_var[
+                "name"
+            ].find("_delta"):
                 assert len(tmp_values) == 2
             else:
                 assert len(tmp_values) == 1
@@ -439,7 +451,9 @@ class VariableTable:
         raise NotImplementedError
 
 
-def calc_op_to_seq(operations: list[Union[OpBase, FusedOpBase]]) -> dict[OpBase, int]:
+def calc_op_to_seq(
+    operations: list[Union[OpBase, FusedOpBase]]
+) -> dict[OpBase, int]:
     """calculate the operation to sequence id mapping. Fused op will be broken
     down into basic ops and each will be assigned a unique id"""
     op_to_seq: dict[OpBase, int] = dict()
@@ -457,11 +471,15 @@ def calc_op_to_seq(operations: list[Union[OpBase, FusedOpBase]]) -> dict[OpBase,
 
 class Program:
     operations: list[Union[OpBase, FusedOpBase]]
-    op_to_seq: dict[OpBase, int]  # fused op is broken down into basic ops in this dict
+    op_to_seq: dict[
+        OpBase, int
+    ]  # fused op is broken down into basic ops in this dict
     var_table: VariableTable
 
     def __init__(
-        self, var_table: VariableTable, operations: list[Union[OpBase, FusedOpBase]]
+        self,
+        var_table: VariableTable,
+        operations: list[Union[OpBase, FusedOpBase]],
     ):
         self.var_table = var_table
         self.operations = operations
@@ -478,7 +496,8 @@ class Program:
         """
         if var not in self.var_table.numbered_val_to_key:
             raise ValueError(
-                f"Variable {var} is not found in this program. Make sure the analysis is run before calling get_defining_op!"
+                f"Variable {var} is not found in this program. Make sure the"
+                " analysis is run before calling get_defining_op!"
             )
         if isinstance(self.var_table.def_use_table[var], list):
             for entry in self.var_table.def_use_table[var]:

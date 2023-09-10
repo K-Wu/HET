@@ -10,7 +10,13 @@ from ..softmax import edge_softmax
 
 class RGATConv(nn.Module):
     def __init__(
-        self, in_size, head_size, num_heads, num_etypes, dropout=0.2, use_norm=False
+        self,
+        in_size,
+        head_size,
+        num_heads,
+        num_etypes,
+        dropout=0.2,
+        use_norm=False,
     ):
         super().__init__()
         self.in_size = in_size
