@@ -62,8 +62,8 @@ def get_conda_current_environment() -> str:
     return os.environ["CONDA_DEFAULT_ENV"]
 
 
-RESULTS_RELATIVE_DIR = os.path.join("hrt", "misc", "artifacts")
-RESULTS_DIR = os.path.join(get_het_root_path(), RESULTS_RELATIVE_DIR)
+RESULTS_DIR = os.path.join("hrt", "misc", "artifacts")
+RESULTS_DIR = os.path.join(get_het_root_path(), RESULTS_DIR)
 
 
 def create_new_results_dir(prefix: str) -> str:

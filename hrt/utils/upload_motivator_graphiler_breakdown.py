@@ -1,5 +1,5 @@
 if __name__ == "__main__":
-    from .detect_pwd import is_pwd_het_dev_root, RESULTS_RELATIVE_DIR
+    from .detect_pwd import is_pwd_het_dev_root, RESULTS_DIR
     from .nsight_utils import ask_subdirectory_or_file
     from .nsight_utils import upload_nsys_report
     from .upload_benchmark_results import SPREADSHEET_URL
@@ -9,7 +9,7 @@ if __name__ == "__main__":
     path_name = ask_subdirectory_or_file(
         "misc/artifacts",
         "motivator_graphiler_breakdown_",
-        RESULTS_RELATIVE_DIR,
+        RESULTS_DIR,
     )
     upload_nsys_report(
         path_name,

@@ -10,14 +10,14 @@ from .nsight_utils import (
     extract_from_ncu_file,
 )
 from .classify_het_kernels import classify_het_kernel
-from .detect_pwd import is_pwd_het_dev_root, RESULTS_RELATIVE_DIR
+from .detect_pwd import is_pwd_het_dev_root, RESULTS_DIR
 import traceback
 import os
 
 if __name__ == "__main__":
     assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
     path_name = ask_subdirectory_or_file(
-        "misc/artifacts", "ncu_breakdown_", RESULTS_RELATIVE_DIR
+        "misc/artifacts", "ncu_breakdown_", RESULTS_DIR
     )
 
     # Create worksheet

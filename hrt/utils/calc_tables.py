@@ -18,7 +18,7 @@ from .nsight_utils import (
     count_rows,
     get_pretty_hostname,
 )
-from .detect_pwd import RESULTS_RELATIVE_DIR
+from .detect_pwd import RESULTS_DIR
 import numpy as np
 import traceback
 
@@ -665,7 +665,7 @@ if __name__ == "__main__":
     assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
     # Load data from the results folder
     graphiler_results_dir = ask_subdirectory(
-        "misc/artifacts", "graphiler_", RESULTS_RELATIVE_DIR
+        "misc/artifacts", "graphiler_", RESULTS_DIR
     )
     print("Obtaining results from", graphiler_results_dir)
     graphiler_names_and_info = (
@@ -674,7 +674,7 @@ if __name__ == "__main__":
         )
     )
     het_results_dir = ask_subdirectory(
-        "misc/artifacts", "benchmark_all_", RESULTS_RELATIVE_DIR
+        "misc/artifacts", "benchmark_all_", RESULTS_DIR
     )
     print("Obtaining results from", het_results_dir)
     het_names_and_info = extract_het_results_from_folder(het_results_dir)
