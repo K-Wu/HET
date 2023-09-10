@@ -4,8 +4,6 @@ from .nsight_utils import (
     update_gspread,
     create_worksheet,
     get_pretty_hostname,
-)
-from .nsight_utils import (
     extract_from_ncu_folder,
     extract_from_ncu_file,
 )

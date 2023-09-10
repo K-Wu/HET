@@ -1,7 +1,6 @@
 if __name__ == "__main__":
     from .detect_pwd import is_pwd_het_dev_root, RESULTS_DIR
-    from .nsight_utils import ask_subdirectory_or_file
-    from .nsight_utils import upload_nsys_report
+    from .nsight_utils import ask_subdirectory_or_file, upload_nsys_report
     from .upload_benchmark_results import SPREADSHEET_URL
     from .classify_het_kernels import classify_het_kernel
 
