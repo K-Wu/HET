@@ -1,7 +1,7 @@
 from .nsight_utils import get_git_root_path, get_env_name_from_setup
+from .nsight_utils import create_new_results_dir as _create_new_results_dir
 import os
 import subprocess
-import datetime
 
 
 def get_het_root_path() -> str:
@@ -67,10 +67,7 @@ RESULTS_ABSOLUTE_DIR = os.path.join(get_het_root_path(), RESULTS_DIR)
 
 
 def create_new_results_dir(prefix: str) -> str:
-    curr_time = datetime.datetime.now().strftime("%Y%m%d%H%M")
-    new_dir = os.path.join(RESULTS_DIR, prefix + curr_time)
-    os.makedirs(new_dir)
-    return new_dir
+    return _create_new_results_dir(prefix, RESULTS_DIR)
 
 
 if __name__ == "__main__":
