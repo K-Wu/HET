@@ -27,3 +27,4 @@ data/ogbn_mag
 **/misc/artifacts/**.txt
 *.pkl
 !**/ogbn_mag_0.1/**.npy
+/**/artifacts
