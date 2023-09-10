@@ -40,7 +40,7 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode(
   // HET_gatSumProdZipDivKernel_relational_separate_coo in
   // [[hrt/python/backend/rgcn_layers_and_funcs.py]] NB: updated
   // to Type 2 Schedule:
-  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
@@ -324,7 +324,7 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode(
   int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
 
   // NB: updated to Type 2 Schedule:
-  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x

@@ -334,7 +334,7 @@ void _InnerProductVariousLeftAndNodeRight(
     // Configure kernel launch parameters.
 
     // NB: updated to Type 2 Schedule:
-    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
@@ -382,7 +382,7 @@ void _InnerProductVariousLeftAndNodeRight(
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
 
     // NB: Type 2 Schedule:
-    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
     // edge -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
@@ -463,7 +463,7 @@ void _GatherCompactToNonCompact(
     // Configure kernel launch parameters.
 
     // NB: updated to Type 2 Schedule (modified):
-    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // 1 (rather than num_head) -> threadIdx.y
     // node -> blockIdx.y
     // total_feat_idx (rather than feat_idx per head) -> blockIdx.x * blockDim.x
@@ -508,7 +508,7 @@ void _GatherCompactToNonCompact(
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
 
     // NB: Type 2 Schedule:
-    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // 1 (rather than idx_head) -> threadIdx.y
     // edge -> blockIdx.y
     // total_feat_idx (rather than feat_idx per head) -> blockIdx.x * blockDim.x
@@ -1042,7 +1042,7 @@ void _InnerProductVariousLeftAndNodeRight(
     // Integrated CSR
     gdata.eids = outcsr_eids.data_ptr<Idx>();
     // NB: updated to Type 2 Schedule:
-    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
@@ -1081,7 +1081,7 @@ void _InnerProductVariousLeftAndNodeRight(
     int64_t num_edges = separate_coo_row_indices.numel();
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
     // NB: updated to Type 2 Schedule:
-    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x

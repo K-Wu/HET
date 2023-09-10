@@ -38,7 +38,7 @@ def is_pwd_het_dev_root() -> bool:
     # return if pwd is get_het_root_path()/hrt
     return (
         is_het_root_path(os.path.dirname(os.getcwd()))
-        and os.path.basename(os.getcwd()) == "hetero_edgesoftmax"
+        and os.path.basename(os.getcwd()) == "HET"
     )
 
 
@@ -74,17 +74,17 @@ def create_new_results_dir(prefix: str) -> str:
 
 
 if __name__ == "__main__":
-    # hetero_edgesoftmax/third_party/sputnik$ python ../../hrt/utils/check_git_root.py
-    # git root path: /home/kwu/hetero_edgesoftmax/third_party/sputnik
+    # HET/third_party/sputnik$ python ../../hrt/utils/check_git_root.py
+    # git root path: /home/kwu/HET/third_party/sputnik
     # is het root path: False
-    # het root path: /home/kwu/hetero_edgesoftmax
+    # het root path: /home/kwu/HET
     # graphiler conda env name: graphiler
     # het conda env name: graphiler
 
-    # hetero_edgesoftmax/hrt$ python utils/check_git_root.py
-    # git root path: /home/kwu/hetero_edgesoftmax
+    # HET/hrt$ python utils/check_git_root.py
+    # git root path: /home/kwu/HET
     # is het root path: True
-    # het root path: /home/kwu/hetero_edgesoftmax
+    # het root path: /home/kwu/HET
     # graphiler conda env name: graphiler
     # het conda env name: graphiler
     print("git root path:", get_git_root_path())

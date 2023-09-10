@@ -35,7 +35,7 @@ void _FusedKernelImpl(at::Tensor &incsr_row_ptrs, at::Tensor &incsr_col_indices,
 
   // Configure kernel launch parameters.
   // NB: updated to Type 1 Schedule:
-  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
+  // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
   // head -> blockIdx.x * blockDim.x + threadIdx.x;
   // node -> blockIdx.y * blockDim.y + threadIdx.y;
   int64_t incsr_num_rows = incsr_row_ptrs.numel() - 1;
@@ -48,7 +48,7 @@ void _FusedKernelImpl(at::Tensor &incsr_row_ptrs, at::Tensor &incsr_col_indices,
                                     incsr_num_rows, {});
 
   // NB: updated to Type 2 Schedule:
-  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
@@ -92,7 +92,7 @@ void _FusedKernelImpl(at::Tensor &outcsr_row_ptrs,
       .grad_er = grad_er.data_ptr<DType>()};
 
   // NB: updated to Type 2 Schedule:
-  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
   // head -> threadIdx.y
   // edge|node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x

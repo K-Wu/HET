@@ -14,7 +14,7 @@ CommEvent_ {
   GlobalPid: 341157691260928
   NumOfCpus: 0
   Command: "python"
-  WorkDir: "/home/kunww/hetero_edgesoftmax/hrt"
+  WorkDir: "/home/kunww/HET/hrt"
   Args: "-m"
   Args: "python.HGT.train"
   Args: "-d"

@@ -64,7 +64,7 @@ void _full_graph_edge_softmax_ops(
   // HET::TorchExport::RGCN::FwProp::IntegratedCSR::_FusedKernelImpl
 
   // Type 1 Schedule:
-  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
+  // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
   // head -> blockIdx.x * blockDim.x + threadIdx.x;
   // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
   int64_t incsr_or_sep_coo_num_rows_or_edges =
@@ -157,7 +157,7 @@ void _full_graph_message_mean_aggregation(
 
   // Configure kernel launch parameters.
   // NB: updated to Type 2 Schedule:
-  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
@@ -307,7 +307,7 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
 
   // preparing kernel launch configuration
   // NB: Type 1 Schedule:
-  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
+  // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
   // head -> blockIdx.x * blockDim.x + threadIdx.x;
   // node -> blockIdx.y * blockDim.y + threadIdx.y;
   auto [nblks, nthrs] =
@@ -386,7 +386,7 @@ void _full_graph_message_mean_aggregation_and_edge_softmax(
   // preparing kernel launch configuration
 
   // NB: updated to Type 2 Schedule:
-  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
@@ -455,7 +455,7 @@ void _full_graph_message_mean_aggregation(
 
   // kernel parameter configurations
   // NB: updated to Type 2 Schedule:
-  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
@@ -526,7 +526,7 @@ void _full_graph_edge_softmax_ops(
 
   // preparing kernel launch configuration
   // NB: updated to Type 2 Schedule:
-  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+  // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
   // head -> threadIdx.y
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
@@ -625,7 +625,7 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
 
   // preparing kernel launch configuration
   // NB: Type 1 Schedule:
-  // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
+  // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
   // head -> blockIdx.x * blockDim.x + threadIdx.x;
   // edge -> blockIdx.y * blockDim.y + threadIdx.y;
   auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, num_edges);

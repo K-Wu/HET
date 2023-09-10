@@ -61,7 +61,7 @@ void _RelationalFusedGAT(
     // than 32
 
     // NB: updated to Type 1 Schedule:
-    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
+    // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
     // head -> blockIdx.x * blockDim.x + threadIdx.x;
     // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
     int64_t incsr_num_rows = incsr_row_ptr.numel() - 1;
@@ -87,7 +87,7 @@ void _RelationalFusedGAT(
                                       etype_mapper_data);
 
     // NB: updated to Type 2 Schedule:
-    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
@@ -108,7 +108,7 @@ void _RelationalFusedGAT(
     // TODO: we can safely reshape (nthrs_x, nthrs_y) to assign more y dimension
     // to edges as usually n_head is smaller than 32
     // NB: updated to Type 1 Schedule:
-    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
+    // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-069c3c2c5a9041df2c9a0b01c9f28044c4d519d86c5ed2f859d0d74282967062L232-R233
     // head -> blockIdx.x * blockDim.x + threadIdx.x;
     // edge|node -> blockIdx.y * blockDim.y + threadIdx.y;
     auto [nblks, nthrs] = get_type1_schedule(gdata.num_heads, num_edges);
@@ -149,7 +149,7 @@ void _RelationalFusedGAT(
             etype_mapper_data, etype_mapper_data_col);
 
     // NB: updated to Type 2 Schedule:
-    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
@@ -324,7 +324,7 @@ void _RelationalFusedGAT(
     // Integrated CSR
     gdata.eids = outcsr_eids.data_ptr<Idx>();
     // NB: updated to follow Type 2 Schedule:
-    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
@@ -367,7 +367,7 @@ void _RelationalFusedGAT(
     int64_t num_relations = separate_coo_rel_ptrs.numel() - 1;
 
     // NB: updated to Type 2 Schedule:
-    // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
+    // https://github.com/K-Wu/HET/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
     // edge -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
