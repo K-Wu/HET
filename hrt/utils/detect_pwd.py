@@ -67,7 +67,7 @@ RESULTS_ABSOLUTE_DIR = os.path.join(get_het_root_path(), RESULTS_DIR)
 
 
 def create_new_results_dir(prefix: str) -> str:
-    return _create_new_results_dir(prefix, RESULTS_DIR)
+    return _create_new_results_dir(prefix, RESULTS_ABSOLUTE_DIR)
 
 
 if __name__ == "__main__":
