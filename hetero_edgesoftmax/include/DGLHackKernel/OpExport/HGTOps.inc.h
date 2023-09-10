@@ -274,6 +274,9 @@ void HGTBackPropGradientSMAFusionExperimental(
           sigmas_data, num_nodes, num_heads, feat_dim_per_head, n_rel_types);
 }
 
+// TODO: compare the performance of this function with the SeparateCOO version
+// A separate COO implementation is at
+// HET::TorchExport::HGT::BckProp::SeparateCOO::full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore
 // adapted from the BckProp::_full_graph_edge_softmax_ops, the wrapper function
 // of HET_HGTEdgeSoftmaxAccumStageOnlyBackwardKernel
 template <typename Idx, typename DType>
@@ -314,7 +317,6 @@ void full_graph_EdgeSoftmax_eNorm_to_UnNormalizedAttnScore(
       .etypes = incsr_reltypes.data_ptr<Idx>(),
       //.num_relations = num_relations,
   };
-  // TODO: expose a separate coo version
   HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel<Idx, DType, true,
                                                             false>
       <<<nblks, nthrs, 0, stream>>>(gdata, incsr_row_ptr.data_ptr<Idx>(),

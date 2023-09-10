@@ -40,6 +40,8 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
     Idx end_off = row_offsets[src_vid + 1];
     for (Idx head_idx = threadIdx.y; head_idx < num_heads;
          head_idx += blockDim.y) {
+      // TODO: switch the loop order of feat_idx and e
+      // TODO: think about ways to reduce atomic operations
       for (Idx feat_idx = blockIdx.x * blockDim.x + threadIdx.x;
            feat_idx < hidden_xlen; feat_idx += blockDim.x * gridDim.x) {
         DType s = 0.;
@@ -106,7 +108,9 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
 
           atomicAdd(gdata.grad_er + er_idx, tmp2);
           if constexpr (!IsCompact(kind) || RelationalFlag) {
+            // TODO: no need to use atomicAdd for grad_el
             atomicAdd(gdata.grad_el + el_idx, tmp2);
+            // TODO: use csr to remove atomicAdd for grad_feat_src
             atomicAdd(gdata.grad_feat_src + feat_src_offset,
                       gdata.exp[edata_idx * num_heads + head_idx] /
                           gdata.sum[dst_vid * num_heads + head_idx] *
@@ -122,6 +126,7 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
         }  // for Idx e
         if constexpr (IsCompact(kind) && !RelationalFlag) {
           gdata.grad_feat_src[feat_src_offset] = sfeatsrc;
+          // TODO: no need to use atomicAdd for grad_el
           atomicAdd(gdata.grad_el + el_idx, s);
         }
       }  // while feat_idx

@@ -234,7 +234,7 @@ __global__ void HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernel(
 
             gdata.grad_unnormalized_attn_score[edge_offset] =
                 delta_a_for_curr_edge;
-
+            // TODO: remove atomicAdd by a different matrix format
             atomicAdd(gdata.grad_mu + etype * num_heads + head_idx,
                       delta_mu_for_curr_edge);
           }
@@ -297,6 +297,7 @@ HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO(
         mu = gdata.mu[head_idx];
       }
       if constexpr (IDX_STAGE == 0) {
+        // TODO: check if it should be dst_vid
         atomicAdd(
             &sum_incoming_edges_product_softmax_score[src_vid * num_heads +
                                                       head_idx],
@@ -319,7 +320,7 @@ HET_EdgeSoftmaxENormToUnNormalizedAttnScoreBackwardKernelSeparateCOO(
         DType delta_mu_for_curr_edge =
             (-curr_sum_incoming_edges_product_softmax_score +
              gdata.grad_normalized_attn_score[edge_offset]) *
-            normalized_attn_score;
+            normalized_attn_score;  // TODO:  add unnormalized_attn_score here
 
         gdata.grad_unnormalized_attn_score[edge_offset] = delta_a_for_curr_edge;
         // TODO:

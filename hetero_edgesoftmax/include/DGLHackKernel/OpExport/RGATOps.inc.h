@@ -369,7 +369,7 @@ void _RelationalFusedGAT(
     // NB: updated to Type 2 Schedule:
     // https://github.com/K-Wu/hetero_edgesoftmax/commit/7db47f278d81d10df7af43dabca048c41c5e6382#diff-a90053897bc12f11e78835acb7eb0539b67430a2cd7da43d586dab113fdeafefL373-R385
     // head -> threadIdx.y
-    // node -> blockIdx.y
+    // edge -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
     auto [nblks, nthrs] =
         get_type2_schedule(gdata.num_heads, gdata.feat_src_xlen, num_edges);
