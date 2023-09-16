@@ -47,6 +47,5 @@ DAG{
 (V_transposed, NODETYPE) = Transpose(input=(V, NODETYPE));
 (NODEWISE, "feature_delta_term3") = NodeInnerProduct(left=(NODEWISE, "hs"), right=(V_transposed, NODETYPE));
 (NODEWISE, "feature_delta_tmp1") = VectorAdd(left=(NODEWISE, "feature_delta_term1"), right=(NODEWISE, "feature_delta_term2"));
-(NODEWISE, "feature_delta_tmp2") = VectorAdd(left=(NODEWISE, "feature_delta_tmp1"), right=(NODEWISE, "feature_delta_term3"));
-
+(NODEWISE, "feature_delta") = VectorAdd(left=(NODEWISE, "feature_delta_tmp1"), right=(NODEWISE, "feature_delta_term3"));
 }
