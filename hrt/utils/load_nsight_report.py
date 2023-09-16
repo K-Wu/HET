@@ -29,14 +29,14 @@ if __name__ == "__main__":
 
     print(
         load_nsys_report(
-            "utils/test/graphiler_hgt_fb15k.nsys-rep",
+            "utils/test/nsight_utils/graphiler_hgt_fb15k.nsys-rep",
             "cuda_gpu_trace",
         )
     )
 
     print(
         load_nsys_report(
-            "utils/test/graphiler_hgt_fb15k.nsys-rep",
+            "utils/test/nsight_utils/graphiler_hgt_fb15k.nsys-rep",
             "cuda_gpu_trace,nvtx_sum,osrt_sum,cuda_api_sum,cuda_gpu_kern_sum,cuda_gpu_mem_size_sum,cuda_gpu_mem_time_sum",
         )
     )
@@ -45,7 +45,7 @@ if __name__ == "__main__":
         consolidate_ncu_details(
             extract_ncu_values_from_details(
                 load_ncu_report(
-                    "utils/test/HGT.aifb...64.64.1.ncu-rep",
+                    "utils/test/nsight_utils/HGT.aifb...64.64.1.ncu-rep",
                     "details",
                 )
             )
@@ -56,7 +56,7 @@ if __name__ == "__main__":
         reorder_columns_in_raw_csv(
             extract_ncu_values_from_raws(
                 load_ncu_report(
-                    "utils/test/HGT.aifb...64.64.1.ncu-rep",
+                    "utils/test/nsight_utils/HGT.aifb...64.64.1.ncu-rep",
                     "raw",
                 )
             ),
@@ -69,7 +69,7 @@ if __name__ == "__main__":
         calculate_roofline_for_ncu_raw_csvs(
             extract_ncu_values_from_raws(
                 load_ncu_report(
-                    "utils/test/HGT.aifb...64.64.1.ncu-rep",
+                    "utils/test/nsight_utils/HGT.aifb...64.64.1.ncu-rep",
                     "raw",
                 )
             )

@@ -80,7 +80,7 @@ GEMM_kernels: "set[str]" = get_GEMM_kernel_names(get_het_root_path())
 def test_classify_fw_bw_kernel():
     kernel_names = set()
     with open(
-        f"{get_het_root_path()}/hrt/utils/test/kernel_names_trace.test_log"
+        f"{get_het_root_path()}/hrt/utils/nsight_utils/test/kernel_names_trace.test_log"
     ) as f:
         for line in f:
             kernel_names.add(line.strip())
