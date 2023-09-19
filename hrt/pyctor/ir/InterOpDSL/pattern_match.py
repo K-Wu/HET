@@ -5,10 +5,10 @@ from ..InterOpSSA.operators import *
 from ..InterOpSSA.variables import VarBase
 from ..InterOpSSA.variables import *
 from ..InterOpSSA.programs import VariableTable
-from typing import Union, Tuple
+from typing import Union
 
 
-def determine_loop_type(loop_type: list[Tuple[str, str, str]]) -> str:
+def determine_loop_type(loop_type: list[tuple[str, str, str]]) -> str:
     """
     this function determines the loop type
     """
@@ -42,7 +42,7 @@ def match_loop_nest_and_result(
     # Step 1: find the statement node inside loop nest and determine the loop-nest type
     assert isinstance(loop_root_node, ast.For)
     curr_node = loop_root_node
-    loop_type: list[Tuple[str, str, str]] = []
+    loop_type: list[tuple[str, str, str]] = []
     # To retrive type, execute type = [item[2] for item in loop_type]
     # types in examples involve ["nodes"], ["dst_nodes"], ["dst_nodes", "incoming_edges"], ["edges"]
     while isinstance(curr_node, ast.For):
@@ -339,7 +339,7 @@ def is_weight_var(node) -> bool:
 
 def match_weight_var(
     var_table: VariableTable, node
-) -> Tuple[Union[WeightVar, None], list[OpBase]]:
+) -> tuple[Union[WeightVar, None], list[OpBase]]:
     if isinstance(node, ast.Subscript):
         # sliced weights, e.g., V[n.ntype]
         assert isinstance(node.value, ast.Name)
@@ -442,7 +442,7 @@ def match_data_input(
     var_table: VariableTable,
     loop_type: list[tuple[str, str, str]],
     node,
-) -> Tuple[Union[DataVar, None], list[OpBase]]:
+) -> tuple[Union[DataVar, None], list[OpBase]]:
     input_symbol = match_unchained_vertex_input(var_table, loop_type, node)
     if input_symbol is None:
         input_symbol = match_unchained_edge_input(var_table, loop_type, node)
@@ -467,7 +467,7 @@ def match_vertex_input(
     var_table: VariableTable,
     loop_type: list[tuple[str, str, str]],
     node,
-) -> Tuple[Union[DataVar, None], list[OpBase]]:
+) -> tuple[Union[DataVar, None], list[OpBase]]:
     input_symbol, ops = match_data_input(
         output_symbol, var_table, loop_type, node
     )
@@ -482,7 +482,7 @@ def match_edge_input(
     var_table: VariableTable,
     loop_type: list[tuple[str, str, str]],
     node,
-) -> Tuple[Union[DataVar, None], list[OpBase]]:
+) -> tuple[Union[DataVar, None], list[OpBase]]:
     input_symbol, ops = match_data_input(
         output_symbol, var_table, loop_type, node
     )

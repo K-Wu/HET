@@ -3,7 +3,7 @@ from . import regex_patterns
 import re
 from .programs import strip_white_spaces, VariableTable
 from . import operators
-from typing import Tuple, Union
+from typing import Union
 
 
 def find_scope_end(lines: list[str], scope_beg: int) -> int:
@@ -22,7 +22,7 @@ def find_scope_end(lines: list[str], scope_beg: int) -> int:
     raise ValueError("Scope not closed")
 
 
-def find_first_level_scopes(lines: list[str]) -> list[Tuple[int, int, str]]:
+def find_first_level_scopes(lines: list[str]) -> list[tuple[int, int, str]]:
     """Find the first level scopes, and return a dict mapping the scope name to
     the scope beginning and end"""
     scope_beg_end_tags = list()
@@ -50,7 +50,7 @@ def loads_op(
     # 3. if matched, extract the substring in the match group "keyword_fields",
     # and apply match_all using keyword_value_pair_pattern
     results = []
-    scopes: list[Tuple[int, int, str]] = find_first_level_scopes(lines)
+    scopes: list[tuple[int, int, str]] = find_first_level_scopes(lines)
     assert strip_white_spaces(lines[0].strip()) == "DAG{"
     assert strip_white_spaces(lines[-1].strip()) == "}"
     curr_scope: Union[None, str] = None
@@ -116,7 +116,7 @@ def loads_op(
     return results
 
 
-# def loads_shape_table(lines: list[str]) -> Tuple[VariableTable, int]:
+# def loads_shape_table(lines: list[str]) -> tuple[VariableTable, int]:
 #     """Find the scope with ShapeTable tag, and pass the lines in between to
 #     VariableTable.loads"""
 #     shapetable_scope_beg = -1
@@ -135,10 +135,10 @@ def loads_op(
 
 def program_loads(
     lines: list[str],
-) -> Tuple[
+) -> tuple[
     VariableTable, list[Union[operators.OpBase, operators.FusedOpBase]]
 ]:
-    scopes: list[Tuple[int, int, str]] = find_first_level_scopes(lines)
+    scopes: list[tuple[int, int, str]] = find_first_level_scopes(lines)
     var_table = VariableTable.loads(lines[scopes[0][0] : scopes[0][1] + 1])
     ops = loads_op(lines[scopes[1][0] :])
     return var_table, ops
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     ops = None
     with open("pyctor/examples/inter-op-ssa/hgt.inter-op-ssa") as fd:
         lines = fd.readlines()
-        scopes: list[Tuple[int, int, str]] = find_first_level_scopes(lines)
+        scopes: list[tuple[int, int, str]] = find_first_level_scopes(lines)
         for scope_beg, scope_end, scope_tag in scopes:
             if scope_tag.find("DAG") != -1:
                 ops = loads_op(lines[scope_beg : scope_end + 1])

@@ -38,7 +38,7 @@ def is_pwd_het_dev_root() -> bool:
     # return if pwd is get_het_root_path()/hrt
     return (
         is_het_root_path(os.path.dirname(os.getcwd()))
-        and os.path.basename(os.getcwd()) == "HET"
+        and os.path.basename(os.getcwd()) == "hrt"
     )
 
 

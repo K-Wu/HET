@@ -4,11 +4,10 @@ from .nsight_utils import (
     classify_fw_bw_kernel,
     get_functions_from_ctags_table,
 )
-from typing import Tuple
 import os
 
 
-def get_fw_bw_host_func_names(het_root_path: str) -> Tuple[set[str], set[str]]:
+def get_fw_bw_host_func_names(het_root_path: str) -> tuple[set[str], set[str]]:
     # the kernel is a forward kernel if its namespace involve "FwProp"
     # the kernel is a backward kernel if its namespace involve "BckProp"
     assert is_ctags_installed(), "ctags is not installed"

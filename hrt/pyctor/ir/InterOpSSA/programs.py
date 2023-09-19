@@ -8,7 +8,7 @@ from .variables import (
     Shape,
 )
 from .operators import OpBase, FusedOpBase, func_name_to_op
-from typing import Union, NamedTuple, Annotated, Tuple, Type, Generator
+from typing import Union, NamedTuple, Annotated, Type, Generator
 from . import program_serializer
 import re
 
@@ -348,7 +348,7 @@ class VariableTable:
     @classmethod
     def _do_value_number_on_program(
         cls, ops: list[OpBase]
-    ) -> Tuple["VariableTable", list[OpBase]]:
+    ) -> tuple["VariableTable", list[OpBase]]:
         """
         This method does value numbering on all the operations in a program.
         numbered_key_vals and numbered_val_to_key will be updated accordingly.

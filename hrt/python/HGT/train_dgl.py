@@ -7,7 +7,6 @@ import dgl
 import torch as th
 from .models import *
 from .models_dgl import *
-from typing import Tuple
 
 
 def HGT_parse_args() -> argparse.Namespace:
@@ -69,7 +68,7 @@ def HGT_get_our_model(
     canonical_etype_indices_tuples,
     num_classes,
     args: argparse.Namespace,
-) -> Tuple[HET_RelGraphEmbed, HET_HGT_DGLHetero]:
+) -> tuple[HET_RelGraphEmbed, HET_HGT_DGLHetero]:
     embed_layer = HET_RelGraphEmbed(g, args.n_infeat, exclude=[])
     model = HET_HGT_DGLHetero(
         g,

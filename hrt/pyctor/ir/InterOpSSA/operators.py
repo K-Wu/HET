@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from .variables import VarBase, DataVar, WeightVar, parse_var_class, Shape
-from typing import Union, Type, TypeVar  # , NamedTuple
+from typing import Union, Type, TypeVar  # , Namedtuple
 import abc
 from recordclass import make_dataclass, dataobject
 
@@ -93,7 +93,7 @@ class OpBase(metaclass=abc.ABCMeta):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError
 
 
@@ -155,7 +155,7 @@ class FusedOpBase(metaclass=abc.ABCMeta):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -284,7 +284,7 @@ class SplitOp(_SplitOp, OpBase, metaclass=FinalOpMeta):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -369,7 +369,7 @@ class NodeDenseOp(_NodeDenseOp, OpBase, metaclass=FinalOpMeta):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -454,7 +454,7 @@ class EdgeDenseOp(_EdgeDenseOp, OpBase, metaclass=FinalOpMeta):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -533,7 +533,7 @@ class EdgeScalarVectorMulOp(
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -598,7 +598,7 @@ class UnaryOp(_UnaryOp, OpBase, metaclass=FinalOpMeta):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError
 
 
@@ -675,7 +675,7 @@ class BinaryOp(_BinaryOp, OpBase, metaclass=FinalOpMeta):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError
 
 
@@ -697,7 +697,7 @@ class NodeSumAccumulationOp(UnaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -716,7 +716,7 @@ class TanhOp(UnaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -735,7 +735,7 @@ class InverseTanhOp(UnaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -754,7 +754,7 @@ class CopyOp(UnaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -773,7 +773,7 @@ class NegativeOp(UnaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -792,7 +792,7 @@ class EdgeTypeSumAccumulationOp(UnaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -811,7 +811,7 @@ class ExponentialOp(UnaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -830,7 +830,7 @@ class InverseExponentialOp(UnaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -849,7 +849,7 @@ class LeakyReluOp(UnaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -868,7 +868,7 @@ class InverseLeakyReluOp(UnaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -887,7 +887,7 @@ class SumAccumulationOp(UnaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -906,7 +906,7 @@ class TransposeOp(UnaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -928,7 +928,7 @@ class ConcatenateOp(BinaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -947,7 +947,7 @@ class VectorAddOp(BinaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -966,7 +966,7 @@ class EdgeInnerProductOp(BinaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -985,7 +985,7 @@ class ScalarDivideOp(BinaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -1004,7 +1004,7 @@ class ScalarMultiplyOp(BinaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -1023,7 +1023,7 @@ class ScalarAddOp(BinaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -1042,7 +1042,7 @@ class EdgeOuterProductOp(BinaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -1061,7 +1061,7 @@ class MatrixAddOp(BinaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -1080,7 +1080,7 @@ class NodeOuterProductOp(BinaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -1103,7 +1103,7 @@ class UnrealizedMulOp(BinaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
@@ -1126,7 +1126,7 @@ class UnrealizedAddOp(BinaryOp):
         self,
         curr_opr_shape_info: list[Shape],
         curr_res_shape_info: list[Shape],
-    ) -> Tuple[list[Shape], list[Shape]]:
+    ) -> tuple[list[Shape], list[Shape]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 

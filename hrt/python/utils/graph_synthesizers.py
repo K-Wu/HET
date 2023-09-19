@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 import networkx as nx
-from typing import Tuple
 
 
 def generate_synthetic_graph(
     n_nodes: int, prob_edge: float, seed=None, rng_distribution="gnp"
-) -> Tuple[Tuple[int], Tuple[int]]:
+) -> tuple[tuple[int], tuple[int]]:
     # NB: we may alternatively use gnm_random_graph(n: int, m: int, seed: int = None, directed: bool = False) -> Graph
     # Other candidates are newman_watts_strogatz_graph(n, k, p, seed=None)
     # watts_strogatz_graph(n, k, p, seed=None)
