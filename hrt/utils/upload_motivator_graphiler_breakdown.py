@@ -17,3 +17,5 @@ if __name__ == "__main__":
         classify_het_kernel,
         "model.dataset.bg.breakdown",
     )
+    # TODO: collect traces with metric enabled and upload the sheet with SM utilization
+    # TODO: extract kernel timestamp and CUDA runtime timestamp to calculate the portion
