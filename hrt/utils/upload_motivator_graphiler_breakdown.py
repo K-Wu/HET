@@ -1,6 +1,6 @@
 if __name__ == "__main__":
     from .detect_pwd import is_pwd_het_dev_root, RESULTS_DIR
-    from .nsight_utils import ask_subdirectory_or_file, upload_nsys_report
+    from .nsight_utils import ask_subdirectory_or_file, upload_nsys_reports
     from .upload_benchmark_results import SPREADSHEET_URL
     from .classify_het_kernels import classify_het_kernel
 
@@ -10,7 +10,7 @@ if __name__ == "__main__":
         "motivator_graphiler_breakdown_",
         RESULTS_DIR,
     )
-    upload_nsys_report(
+    upload_nsys_reports(
         path_name,
         "cuda_kern_exec_sum",
         SPREADSHEET_URL,
