@@ -2,7 +2,50 @@
 from typing import Type, Union, NamedTuple
 import abc
 
-Shape = NamedTuple("Shape", [("type", str)])
+# TODO: Store dimension assignment to enhance extensibility
+_Shape = NamedTuple("Shape", [("type", str)])
+SHAPE_TYPES = {"scalar": 0, "vector": 1, "matrix": 2}
+
+
+class Shape(_Shape):
+    @classmethod
+    def from_string(cls, s: str) -> "Shape":
+        keyval_str = s.split(",")
+        assert len(keyval_str) == 1
+        keyval_str = [ele.strip() for ele in keyval_str]
+        # removing parantheses
+        return cls(type=keyval_str[0])
+
+    @classmethod
+    def get_scalar_shape(cls) -> "Shape":
+        # (idx_entry, idx_head)
+        return cls(type="scalar")
+
+    @classmethod
+    def get_vector_shape(cls) -> "Shape":
+        # (idx_entry, idx_head, idx_element)
+        return cls(type="vector")
+
+    @classmethod
+    def get_matrix_shape(cls) -> "Shape":
+        # (idx_entry, idx_head, idx_row, idx_column)
+        return cls(type="matrix")
+
+    @classmethod
+    def from_dict(cls, d: dict["str", "str"]) -> "Shape":
+        return cls(type=d["type"])
+
+    def validate(self) -> None:
+        assert self.type in SHAPE_TYPES
+
+    def to_dict(self) -> dict["str", "str"]:
+        return {"type": self.type}
+
+    def get_type(self) -> str:
+        return self.type
+
+    def to_string(self) -> str:
+        return f"({self.type})"
 
 
 class VarBase(metaclass=abc.ABCMeta):
@@ -48,7 +91,8 @@ class VarBase(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
 
-# TODO: do we need "shape" and "dtype"?
+# Shape is stored separately from VarBase because it needs further inference and may be extended to support different dimension assignment in future
+# TODO: In future, we may store separately the dtype like we do for shape to support type different from float32
 _WeightVar = NamedTuple("WeightVar", [("name", str), ("slice_type", str)])
 _DataVar = NamedTuple("DataVar", [("type", str), ("name", str)])
 

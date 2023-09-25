@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 from .variables import VarBase, DataVar, WeightVar, parse_var_class, Shape
 from typing import Union, Type, TypeVar  # , Namedtuple
 import abc
-from recordclass import make_dataclass, dataobject
+from recordclass import dataobject
 
 
 T = TypeVar("T")
@@ -91,9 +92,9 @@ class OpBase(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
         raise NotImplementedError
 
 
@@ -153,39 +154,44 @@ class FusedOpBase(metaclass=abc.ABCMeta):
 
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
         raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
-_SplitOp = make_dataclass(
-    "SplitOp", [("results", list[DataVar]), ("input", DataVar)]
-)
-_NodeDenseOp = make_dataclass(
-    "NodeDenseOp",
-    [("result", DataVar), ("input", DataVar), ("weight", WeightVar)],
-)
-_EdgeDenseOp = make_dataclass(
-    "EdgeDenseOp",
-    [("result", DataVar), ("input", DataVar), ("weight", WeightVar)],
-)
-_EdgeScalarVectorMulOp = make_dataclass(
-    "EdgeScalarVectorMulOp",
-    [("result", DataVar), ("scalar", DataVar), ("vector", DataVar)],
-)
-_UnaryOp = make_dataclass(
-    "_UnaryOp",
-    [("result", VarBase), ("input", VarBase)],
-)
-_BinaryOp = make_dataclass(
-    "_BinaryOp",
-    [
-        ("result", VarBase),
-        ("left", VarBase),
-        ("right", VarBase),
-    ],
-)
+class _SplitOp(dataobject):
+    results: list[DataVar]
+    input: DataVar
+
+
+class _NodeDenseOp(dataobject):
+    result: DataVar
+    input: DataVar
+    weight: WeightVar
+
+
+class _EdgeDenseOp(dataobject):
+    result: DataVar
+    input: DataVar
+    weight: WeightVar
+
+
+class _EdgeScalarVectorMulOp(dataobject):
+    result: DataVar
+    scalar: DataVar
+    vector: DataVar
+
+
+class _UnaryOp(dataobject):
+    result: VarBase
+    input: VarBase
+
+
+class _BinaryOp(dataobject):
+    result: VarBase
+    left: VarBase
+    right: VarBase
 
 
 def replace_if_matched(var: VarBase, old: VarBase, new: VarBase) -> ...:
@@ -200,8 +206,8 @@ def replace_if_matched(var: VarBase, old: VarBase, new: VarBase) -> ...:
 # fields
 #
 class SplitOp(_SplitOp, OpBase, metaclass=FinalOpMeta):
-    input: DataVar
-    results: list[DataVar]
+    # input: DataVar
+    # results: list[DataVar]
 
     def validate(self) -> None:
         for ele in self.get_results():
@@ -251,6 +257,14 @@ class SplitOp(_SplitOp, OpBase, metaclass=FinalOpMeta):
         # Unpack and pack again to avoid type error
         return [*self.results]
 
+    def infer_shape(
+        self,
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        # All shapes
+        raise NotImplementedError
+
     def inplace_replace_all_operands_with(
         self: ..., old: VarBase, new: VarBase
     ) -> None:
@@ -279,19 +293,11 @@ class SplitOp(_SplitOp, OpBase, metaclass=FinalOpMeta):
             input=self.input,
         )
 
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
-
 
 class NodeDenseOp(_NodeDenseOp, OpBase, metaclass=FinalOpMeta):
-    result: DataVar
-    input: DataVar
-    weight: WeightVar
+    # result: DataVar
+    # input: DataVar
+    # weight: WeightVar
 
     def validate(self) -> None:
         # Delta of weight is not possible to be the output: it needs outer-product
@@ -364,19 +370,20 @@ class NodeDenseOp(_NodeDenseOp, OpBase, metaclass=FinalOpMeta):
             weight=self.weight,
         )
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        return [Shape.get_vector_shape(), Shape.get_matrix_shape()], [
+            Shape.get_vector_shape()
+        ]
 
 
 class EdgeDenseOp(_EdgeDenseOp, OpBase, metaclass=FinalOpMeta):
-    result: DataVar
-    input: DataVar
-    weight: WeightVar
+    # result: DataVar
+    # input: DataVar
+    # weight: WeightVar
 
     def validate(self) -> None:
         # Delta of weight is not possible to be the output: it needs outer-product
@@ -449,21 +456,22 @@ class EdgeDenseOp(_EdgeDenseOp, OpBase, metaclass=FinalOpMeta):
             weight=self.weight,
         )
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        return [Shape.get_vector_shape(), Shape.get_matrix_shape()], [
+            Shape.get_vector_shape()
+        ]
 
 
 class EdgeScalarVectorMulOp(
     _EdgeScalarVectorMulOp, OpBase, metaclass=FinalOpMeta
 ):
-    result: DataVar
-    scalar: DataVar
-    vector: DataVar
+    # result: DataVar
+    # scalar: DataVar
+    # vector: DataVar
 
     def validate(self) -> None:
         assert isinstance(self.result, DataVar)
@@ -498,6 +506,15 @@ class EdgeScalarVectorMulOp(
     def get_operands(self) -> list[VarBase]:
         return [self.scalar, self.vector]
 
+    def infer_shape(
+        self,
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        return [Shape.get_scalar_shape(), Shape.get_vector_shape()], [
+            Shape.get_vector_shape()
+        ]
+
     def get_results(self) -> list[VarBase]:
         return [self.result]
 
@@ -528,18 +545,10 @@ class EdgeScalarVectorMulOp(
             vector=self.vector,
         )
 
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
-
 
 class UnaryOp(_UnaryOp, OpBase, metaclass=FinalOpMeta):
-    result: VarBase
-    input: VarBase
+    # result: VarBase
+    # input: VarBase
 
     def validate(self) -> None:
         assert isinstance(self.result, (DataVar, WeightVar))
@@ -596,16 +605,23 @@ class UnaryOp(_UnaryOp, OpBase, metaclass=FinalOpMeta):
 
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        # The input and the output should be the same shape
+        curr_shape: str | None = None
+        for ele in curr_opr_shape_info + curr_res_shape_info:
+            if ele is not None:
+                curr_shape = ele.type
+                break
+        assert curr_shape is not None
+        return [Shape(curr_shape)], [Shape(curr_shape)]
 
 
 class BinaryOp(_BinaryOp, OpBase, metaclass=FinalOpMeta):
-    result: VarBase
-    left: VarBase
-    right: VarBase
+    # result: VarBase
+    # left: VarBase
+    # right: VarBase
 
     def validate(self) -> None:
         assert isinstance(self.result, (DataVar, WeightVar))
@@ -673,9 +689,9 @@ class BinaryOp(_BinaryOp, OpBase, metaclass=FinalOpMeta):
 
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
         raise NotImplementedError
 
 
@@ -692,14 +708,6 @@ class NodeSumAccumulationOp(UnaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
-
 
 class TanhOp(UnaryOp):
     def lower(self):
@@ -710,14 +718,6 @@ class TanhOp(UnaryOp):
 
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
-
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
 class InverseTanhOp(UnaryOp):
@@ -730,14 +730,6 @@ class InverseTanhOp(UnaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
-
 
 class CopyOp(UnaryOp):
     def lower(self):
@@ -748,14 +740,6 @@ class CopyOp(UnaryOp):
 
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
-
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
 class NegativeOp(UnaryOp):
@@ -768,14 +752,6 @@ class NegativeOp(UnaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
-
 
 class EdgeTypeSumAccumulationOp(UnaryOp):
     def lower(self):
@@ -786,14 +762,6 @@ class EdgeTypeSumAccumulationOp(UnaryOp):
 
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
-
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
 class ExponentialOp(UnaryOp):
@@ -806,14 +774,6 @@ class ExponentialOp(UnaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
-
 
 class InverseExponentialOp(UnaryOp):
     def lower(self):
@@ -824,14 +784,6 @@ class InverseExponentialOp(UnaryOp):
 
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
-
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
 class LeakyReluOp(UnaryOp):
@@ -844,14 +796,6 @@ class LeakyReluOp(UnaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
-
 
 class InverseLeakyReluOp(UnaryOp):
     def lower(self):
@@ -862,14 +806,6 @@ class InverseLeakyReluOp(UnaryOp):
 
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
-
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
 
 
 class SumAccumulationOp(UnaryOp):
@@ -882,14 +818,6 @@ class SumAccumulationOp(UnaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
-    def infer_shape(
-        self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
-
 
 class TransposeOp(UnaryOp):
     def lower(self):
@@ -901,13 +829,12 @@ class TransposeOp(UnaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        return [Shape.get_matrix_shape()], [Shape.get_matrix_shape()]
 
 
 #
@@ -923,13 +850,21 @@ class ConcatenateOp(BinaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        # The three shape should be the same
+        curr_shape: str | None = None
+        for ele in curr_opr_shape_info + curr_res_shape_info:
+            if ele is not None:
+                curr_shape = ele.type
+                break
+        assert curr_shape is not None
+        return [Shape(curr_shape)] * len(curr_opr_shape_info), [
+            Shape(curr_shape)
+        ]
 
 
 class VectorAddOp(BinaryOp):
@@ -942,13 +877,14 @@ class VectorAddOp(BinaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        return [Shape.get_vector_shape(), Shape.get_vector_shape()], [
+            Shape.get_vector_shape()
+        ]
 
 
 class EdgeInnerProductOp(BinaryOp):
@@ -961,13 +897,14 @@ class EdgeInnerProductOp(BinaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        return [Shape.get_vector_shape(), Shape.get_vector_shape()], [
+            Shape.get_scalar_shape()
+        ]
 
 
 class ScalarDivideOp(BinaryOp):
@@ -980,13 +917,14 @@ class ScalarDivideOp(BinaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        return [Shape.get_scalar_shape(), Shape.get_scalar_shape()], [
+            Shape.get_scalar_shape()
+        ]
 
 
 class ScalarMultiplyOp(BinaryOp):
@@ -999,13 +937,14 @@ class ScalarMultiplyOp(BinaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        return [Shape.get_scalar_shape(), Shape.get_scalar_shape()], [
+            Shape.get_scalar_shape()
+        ]
 
 
 class ScalarAddOp(BinaryOp):
@@ -1018,13 +957,14 @@ class ScalarAddOp(BinaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        return [Shape.get_scalar_shape(), Shape.get_scalar_shape()], [
+            Shape.get_scalar_shape()
+        ]
 
 
 class EdgeOuterProductOp(BinaryOp):
@@ -1032,18 +972,20 @@ class EdgeOuterProductOp(BinaryOp):
         raise NotImplementedError
 
     def fusable_with(self, other: "OpBase") -> bool:
+        # TODO: this is fusable with EdgeTypeSumAccumulationOp
         raise NotImplementedError
 
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        return [Shape.get_vector_shape(), Shape.get_vector_shape()], [
+            Shape.get_matrix_shape()
+        ]
 
 
 class MatrixAddOp(BinaryOp):
@@ -1056,13 +998,14 @@ class MatrixAddOp(BinaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        return [Shape.get_matrix_shape(), Shape.get_matrix_shape()], [
+            Shape.get_matrix_shape()
+        ]
 
 
 class NodeOuterProductOp(BinaryOp):
@@ -1075,16 +1018,29 @@ class NodeOuterProductOp(BinaryOp):
     def differentiate(self) -> list["OpBase"]:
         raise NotImplementedError
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        return [Shape.get_vector_shape(), Shape.get_vector_shape()], [
+            Shape.get_matrix_shape()
+        ]
 
 
-class UnrealizedMulOp(BinaryOp):
+class UnrealizedBinaryOp(BinaryOp, metaclass=abc.ABCMeta):
+    """An abstract class from which UnrealizedAddOp and UnrealizedMulOp are inherited, so that we may use isinstance/issubclass to check whether an op is unrealized."""
+
+    @abc.abstractmethod
+    def realize(
+        self,
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> BinaryOp:
+        raise NotImplementedError
+
+
+class UnrealizedMulOp(UnrealizedBinaryOp):
     """Op that should be concretized to EdgeInnerProduct, ScalarMultiply, EdgeScalarVectorMul.
     We temporarily lower InterOpDSL to unrealized operators. After shape inference, we can tell what operators they really are.
     """
@@ -1098,16 +1054,81 @@ class UnrealizedMulOp(BinaryOp):
     def lower(self):
         raise ValueError("UnrealizedMul should not be lowered")
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        num_scalar = 0
+        num_vector = 0
+        for ele in curr_opr_shape_info + curr_res_shape_info:
+            if ele is not None:
+                if ele.type == "scalar":
+                    num_scalar += 1
+                elif ele.type == "vector":
+                    num_vector += 1
+                else:
+                    raise ValueError(
+                        (
+                            "unexpected shape during"
+                            " UnrealizedMulOp.infer_shape()"
+                        ),
+                        ele.type,
+                    )
+        if num_scalar >= 2:
+            return [Shape.get_scalar_shape()] * 2, [Shape.get_scalar_shape()]
+        elif num_vector == 2:
+            if (
+                curr_res_shape_info[0] is not None
+                and curr_res_shape_info[0].type == "vector"
+            ):
+                # EdgeScalarVectorMul
+                return [Shape.get_scalar_shape(), Shape.get_vector_shape()], [
+                    Shape.get_vector_shape()
+                ]
+            else:
+                # EdgeInnerProduct
+                return [Shape.get_vector_shape(), Shape.get_vector_shape()], [
+                    Shape.get_scalar_shape()
+                ]
+        print("Warning: insufficient information to infer shape of mul op")
+        return curr_opr_shape_info, curr_res_shape_info
+
+    def realize(
+        self,
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> BinaryOp | EdgeScalarVectorMulOp:
+        """Realize the unrealized mul op to a concrete one. In current cases, it should be one among EdgeInnerProductOp, ScalarMultiplyOp, EdgeScalarVectorMulOp."""
+        num_scalar = 0
+        num_vector = 0
+
+        # Determine the operator type by checking the number of scalar/vector in lhs and rhs
+        for shape in curr_opr_shape_info:
+            assert shape is not None
+            if shape.type == "scalar":
+                num_scalar += 1
+            elif shape.type == "vector":
+                num_vector += 1
+            raise ValueError(
+                "unexpected shape during UnrealizedMulOp.realize()", shape.type
+            )
+        if num_vector == 2:
+            return EdgeInnerProductOp.from_keyval_pairs(self.to_keyval_pairs())
+        elif num_vector == 1 and num_scalar == 1:
+            return EdgeScalarVectorMulOp.from_keyval_pairs(
+                self.to_keyval_pairs()
+            )
+        elif num_scalar == 2:
+            return ScalarMultiplyOp.from_keyval_pairs(self.to_keyval_pairs())
+        raise ValueError(
+            "unexpected shape during UnrealizedMulOp.realize()",
+            num_scalar,
+            num_vector,
+        )
 
 
-class UnrealizedAddOp(BinaryOp):
+class UnrealizedAddOp(UnrealizedBinaryOp):
     """Op that should be concretized to ScalarAdd, MatrixAdd, VectorAdd.
     We temporarily lower InterOpDSL to unrealized operators. After shape inference, we can tell what operators they really are.
     """
@@ -1121,22 +1142,52 @@ class UnrealizedAddOp(BinaryOp):
     def lower(self):
         raise ValueError("UnrealizedAdd should not be lowered")
 
-    # TODO: implement this
     def infer_shape(
         self,
-        curr_opr_shape_info: list[Shape],
-        curr_res_shape_info: list[Shape],
-    ) -> tuple[list[Shape], list[Shape]]:
-        raise NotImplementedError("Fused ops are not supposed to use this API")
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        # The three shape should be the same
+        curr_shape: str | None = None
+        for ele in curr_opr_shape_info + curr_res_shape_info:
+            if ele is not None:
+                curr_shape = ele.type
+                break
+        assert curr_shape is not None
+        return [Shape(curr_shape), Shape(curr_shape)], [Shape(curr_shape)]
+
+    def realize(
+        self,
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> BinaryOp:
+        """Realize the unrealized add op to a concrete one. In current cases, it should be one among ScalarAddOp, VectorAddOp, MatrixAddOp."""
+        # Determine the operator type by checking the shape of lhs and rhs
+        result_shape: None | str = None
+        for shape in curr_opr_shape_info:
+            assert shape is not None
+            if result_shape is None:
+                result_shape = shape.type
+            else:
+                assert result_shape == shape.type
+        if result_shape == "scalar":
+            return ScalarAddOp.from_keyval_pairs(self.to_keyval_pairs())
+        elif result_shape == "vector":
+            return VectorAddOp.from_keyval_pairs(self.to_keyval_pairs())
+        elif result_shape == "matrix":
+            return MatrixAddOp.from_keyval_pairs(self.to_keyval_pairs())
+        raise ValueError(
+            "unexpected shape during UnrealizedAddOp.realize()", result_shape
+        )
 
 
 func_name_to_op: dict[str, Type[OpBase]] = {
     "Split": SplitOp,  # (results) input
     "NodeDense": NodeDenseOp,  # input, weight
     "EdgeDense": EdgeDenseOp,  # input, weight
-    "EdgeScalarVectorMul": EdgeDenseOp,  # scalar, vector
+    "EdgeScalarVectorMul": EdgeScalarVectorMulOp,  # scalar, vector
     # Unary Ops. keyword: input
-    "NodeSumAccumulation": NodeDenseOp,
+    "NodeSumAccumulation": NodeSumAccumulationOp,
     "Tanh": TanhOp,
     "InverseTanh": InverseTanhOp,
     "Copy": CopyOp,
@@ -1207,6 +1258,11 @@ if __name__ == "__main__":
             "input": '(NODEWISE,"c")',
         }
     )
+    c = UnrealizedAddOp()
+    print(issubclass(UnrealizedAddOp, BinaryOp))
+    print(issubclass(UnrealizedAddOp, UnrealizedBinaryOp))
     print(b.results[0].to_string())
     print(b.to_keyval_pairs())
+    print(b.to_keyval_pairs.__name__)
+    print(isinstance(b, _SplitOp))
     print(TraversalFusedOp.from_ops([b, b]).to_string())

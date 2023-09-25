@@ -27,17 +27,16 @@ def warn_default_arguments(f):
                 )
             )
             INDENT = 4 * " "
-            callstack = "------->|" + "\n".join(
-                [
-                    "\n".join(
-                        [
-                            "------->|" + INDENT + line.strip()
-                            for line in entry.split("\n")
-                        ]
-                    )
-                    for entry in traceback.format_stack()
-                ][:-1]
-            )
+
+            callstack_multilines: list[list[str]] = [
+                line.strip().split("\n") for line in traceback.format_stack()
+            ][:-1]
+            callstack_lines: list[str] = [
+                INDENT + line
+                for multiline in callstack_multilines
+                for line in multiline
+            ]
+            callstack: str = "------->|" + "\n------->|".join(callstack_lines)
             print("------->|{}() called:".format(f.__name__))
             print(callstack)
         return f(*a, **kw)

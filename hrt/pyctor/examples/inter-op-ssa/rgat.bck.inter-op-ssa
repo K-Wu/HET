@@ -27,8 +27,12 @@ DAG{
 // TODO: note that EDGETYPE weight delta may need careful handling during code generation: they use increment operators in the frontend and here we explicitly express that via a new operator EdgeTypeSumAccumulation.
 (EDGEWISE, "attn_vec_delta_term") = EdgeScalarVectorMul(scalar = (EDGEWISE, "raw_attn_tmp1_delta"), vector = (EDGEWISE, "zizj"));
 (attn_vec_delta, EDGETYPE) = EdgeTypeSumAccumulation(input = (EDGEWISE, "attn_vec_delta_term"));
-(EDGEWISE, "zizj_delta") = EdgeInnerProduct(left = (DSTNODE, "output"), right = (attn_vec_delta, EDGETYPE));
-(EDGEWISE, "zi_delta"), (EDGEWISE, "zj_delta") = Split(input = (EDGEWISE, "zizj_delta"));
+// TODO: support naming of split results
+// TODO: support dimension calculation of the split and concatenated results
+(DSTNODE, "output_split_1_in_2"), (DSTNODE, "output_split_2_in_2") = Split(input = (DSTNODE, "output"));
+(attn_vec_delta_split_1_in_2, EDGETYPE), (attn_vec_delta_split_2_in_2, EDGETYPE) = Split(input = (attn_vec_delta, EDGETYPE));
+(EDGEWISE, "zi_delta") = EdgeInnerProduct(left = (DSTNODE, "output_split_1_in_2"), right = (attn_vec_delta_split_1_in_2, EDGETYPE));
+(EDGEWISE, "zj_delta") = EdgeInnerProduct(left = (DSTNODE, "output_split_2_in_2"), right = (attn_vec_delta_split_2_in_2, EDGETYPE));
 (W_transposed, EDGETYPE) = Transpose(input = (W, EDGETYPE));
 (SRCNODE, "feature_delta") = EdgeDense(input = (EDGEWISE, "zi_delta"), weight = (W_transposed, EDGETYPE));
 (DSTNODE, "feature_delta") = EdgeDense(input = (EDGEWISE, "zh_delta"), weight = (W_transposed, EDGETYPE));

@@ -50,21 +50,24 @@ def loads_op(
     # 3. if matched, extract the substring in the match group "keyword_fields",
     # and apply match_all using keyword_value_pair_pattern
     results = []
-    scopes: list[tuple[int, int, str]] = find_first_level_scopes(lines)
     assert strip_white_spaces(lines[0].strip()) == "DAG{"
     assert strip_white_spaces(lines[-1].strip()) == "}"
+    # Use[1:-1] to avoid adding the outmost DAG{} to the result
+    lines = lines[1:-1]
+    scopes: list[tuple[int, int, str]] = find_first_level_scopes(lines)
     curr_scope: Union[None, str] = None
     curr_scope_ops: list[operators.OpBase] = []
     for idx_line, line in enumerate(lines):
+        # Strip comments
         if line.find("//") != -1:
             line = line[: line.find("//")]
         line = line.strip()
         line = strip_white_spaces(line)
-        # skip empty or comment lines
+        # Skip empty or comment lines
         if len(line) == 0:
             continue
 
-        # handle scope tags
+        # Handle scope tags
         if len(scopes) > 0 and idx_line == scopes[0][0]:
             curr_scope = scopes[0][2]
             continue
@@ -78,6 +81,7 @@ def loads_op(
                     operators.TraversalFusedOp.from_ops(curr_scope_ops)
                 )
             else:
+                print(curr_scope)
                 raise ValueError("unrecognized fused op type!")
             scopes.pop(0)
             curr_scope = None
@@ -133,17 +137,6 @@ def loads_op(
 #     )
 
 
-def program_loads(
-    lines: list[str],
-) -> tuple[
-    VariableTable, list[Union[operators.OpBase, operators.FusedOpBase]]
-]:
-    scopes: list[tuple[int, int, str]] = find_first_level_scopes(lines)
-    var_table = VariableTable.loads(lines[scopes[0][0] : scopes[0][1] + 1])
-    ops = loads_op(lines[scopes[1][0] :])
-    return var_table, ops
-
-
 # a simple test
 if __name__ == "__main__":
     ops = None
@@ -160,5 +153,9 @@ if __name__ == "__main__":
                 yaml.load(
                     open("hgt.inter-op-ssa.yaml.out", "r"), Loader=yaml.Loader
                 )
+
+                import jsonpickle
+
+                jsonpickle.loads(jsonpickle.dumps(ops))
     if ops is None:
         print("DAG not found")

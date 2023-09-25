@@ -7,10 +7,81 @@ from .variables import (
     parse_var_class,
     Shape,
 )
-from .operators import OpBase, FusedOpBase, func_name_to_op
-from typing import Union, NamedTuple, Annotated, Type, Generator
-from . import program_serializer
+from .operators import OpBase, FusedOpBase, UnrealizedBinaryOp
+from typing import (
+    Union,
+    NamedTuple,
+    Annotated,
+    Generator,
+    Callable,
+    Generic,
+    TypeVar,
+)
+import traceback
 import re
+from functools import wraps
+from recordclass import dataobject
+
+
+class CallRecord(dataobject):
+    callstack: list[str]
+    funcname: str
+    msg: str
+
+
+# From hrt/misc/playground/try_print_call_site.py and https://stackoverflow.com/questions/60219591/using-a-paramaterized-decorator-for-recording-methods-in-a-class
+def log_pass_calls(description: str):
+    """Decorate class functions that do analysis or transform pass and record the call site in the called_function list of the class instance"""
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            msg = ("STARTED | FUNCTION: {} | ARGS: {} | KWARGS: {} ").format(
+                func.__name__, args, kwargs
+            )
+            # print(msg)
+
+            args[0].passes_call_records.append(
+                CallRecord(
+                    callstack=traceback.format_stack(),
+                    funcname=func.__name__,
+                    msg=msg,
+                )
+            )  # i.e., self.called_function
+
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+T = TypeVar("T")
+
+
+class MySet(set[T], Generic[T]):
+    """
+    Set that records analysis passes and transform passes.
+    Example:
+    ```
+    class Program:
+        analysis_passes: MySet[Callable]
+        transform_passes: MySet[Callable]
+
+        @transform_passes.register
+        def do_something(self):
+            ...
+
+        @analysis_passes.register
+        def check_something(self):
+            ...
+    ```
+    From https://stackoverflow.com/questions/50372342/class-with-a-registry-of-methods-based-on-decorators
+    """
+
+    def register(self, method):
+        self.add(method)
+        return method
 
 
 def strip_white_spaces(line: str) -> str:
@@ -44,6 +115,11 @@ class VariableTable:
     var_name2, var_name3 are the different value number of the same variable,
     and only stores their name with (slice_)type omitted
     """
+
+    passes_call_records: list[
+        CallRecord
+    ]  # Stores the logging by @log_pass_calls
+    passes: MySet[Callable] = MySet()  # Stores analysis and transform passes
 
     vars_input: set[VarBase]
 
@@ -123,7 +199,8 @@ class VariableTable:
         initiate the variable table by loading the shape info in the text
         :param lines begin with "ShapeTable{", and end with "}". To read a file,
         specify this parameter as fd.readlines()
-        For now, we assume nothing else left in the first and the last line
+        For now, we assume nothing else left in the first and the last line.
+        Adapted from loads_op from hrt/pyctor/ir/InterOpSSA/program_serializer.py
         """
         var_table = cls()
 
@@ -132,6 +209,9 @@ class VariableTable:
         lines = lines[1:-1]
 
         # load initial variables and weights
+
+        from . import program_serializer
+
         scopes = program_serializer.find_first_level_scopes(lines)
         for scope_beg, scope_end, scope_tag in scopes:
             if scope_tag == "InitialVariablesAndWeights":
@@ -381,6 +461,8 @@ class VariableTable:
             new_ops.append(new_op)
         return var_table, new_ops
 
+    @passes.register
+    @log_pass_calls("do_value_number_on_program")
     def do_value_number_on_program(self, ops: list[OpBase]) -> list[OpBase]:
         new_var_table, new_ops = self._do_value_number_on_program(ops)
         self.numbered_key_vals = new_var_table.numbered_key_vals
@@ -388,11 +470,15 @@ class VariableTable:
         self.vars_input = new_var_table.vars_input
         return new_ops
 
+    @passes.register
+    @log_pass_calls("do_data_input_and_weight_var_analysis")
     def do_data_input_and_weight_var_analysis(self, ops: list[OpBase]) -> None:
         new_var_table, _ = self._do_value_number_on_program(ops)
         self.vars_input = new_var_table.vars_input
         return
 
+    @passes.register
+    @log_pass_calls("do_def_use_chain_analysis")
     def do_def_use_chain_analysis(
         self, ops: list[OpBase], after_value_numbering: bool
     ) -> None:
@@ -470,6 +556,11 @@ def calc_op_to_seq(
 
 
 class Program:
+    passes_call_records: list[
+        CallRecord
+    ]  # Stores the logging by @log_pass_calls
+    passes: MySet[Callable] = MySet()  # Stores analysis and transform passes
+
     operations: list[Union[OpBase, FusedOpBase]]
     op_to_seq: dict[
         OpBase, int
@@ -557,10 +648,18 @@ class Program:
 
     @classmethod
     def loads(cls, lines: list[str]) -> "Program":
-        var_table, ops = program_serializer.program_loads(lines)
+        from . import program_serializer
+
+        scopes: list[
+            tuple[int, int, str]
+        ] = program_serializer.find_first_level_scopes(lines)
+        var_table = VariableTable.loads(lines[scopes[0][0] : scopes[0][1] + 1])
+        ops = program_serializer.loads_op(lines[scopes[1][0] :])
 
         return cls(var_table, ops)
 
+    @passes.register
+    @log_pass_calls("differentiate")
     def differentiate(self) -> "Program":
         """
         differentiate the program, and return the differentiated program
@@ -574,7 +673,7 @@ class Program:
         diff_var_table = self.var_table.differentiate(diff_ops)
         return Program(diff_var_table, diff_ops)
 
-    def basic_op_gen(self) -> Generator[OpBase, None, None]:
+    def yield_basic_ops(self) -> Generator[OpBase, None, None]:
         for op in self.operations:
             if isinstance(op, FusedOpBase):
                 for sub_op in op.ops:
@@ -582,13 +681,71 @@ class Program:
             else:
                 yield op
 
+    @passes.register
+    @log_pass_calls("realize_ops")
+    def realize_ops(self):
+        """Realize Unrealized.* ops after shape has been inferred"""
+
+        op_replacement: dict[OpBase, OpBase] = dict()
+        for op in self.yield_basic_ops():
+            if isinstance(op, UnrealizedBinaryOp):
+                curr_opr_shape_info = [
+                    self.var_table.get_shape_info(opr)
+                    for opr in op.get_operands()
+                ]
+                curr_res_shape_info = [
+                    self.var_table.get_shape_info(res)
+                    for res in op.get_results()
+                ]
+                new_op = op.realize(curr_opr_shape_info, curr_res_shape_info)
+                op_replacement[op] = new_op
+
+        # Replace the op with the new in self.operations
+        for idx, op in enumerate(self.operations):
+            if isinstance(op, FusedOpBase):
+                for idx_sub, sub_op in enumerate(op.ops):
+                    if op in op_replacement:
+                        op.ops[idx_sub] = op_replacement[op]
+            else:
+                if op in op_replacement:
+                    self.operations[idx] = op_replacement[op]
+
+        # Redo the shape analysis if it is done before
+        done_infer_shape_flag = False
+        for pass_record in self.var_table.passes_call_records:
+            if self.infer_shapes.__name__ == pass_record.funcname:
+                done_infer_shape_flag = True
+        if done_infer_shape_flag:
+            self.infer_shapes()
+
+        # Redo the def-use chain analysis if it is done before
+        done_value_numbering_flag = False
+        done_def_use_chain_analysis = False
+        for pass_record in self.var_table.passes_call_records:
+            if (
+                self.var_table.do_def_use_chain_analysis.__name__
+                == pass_record.funcname
+            ):
+                done_def_use_chain_analysis = True
+            if (
+                self.var_table.do_data_input_and_weight_var_analysis.__name__
+                == (pass_record.funcname)
+            ):
+                done_value_numbering_flag = True
+        if done_def_use_chain_analysis:
+            self.var_table.do_def_use_chain_analysis(
+                list(self.yield_basic_ops()), done_value_numbering_flag
+            )
+
+    @passes.register
+    @log_pass_calls("infer_shapes")
     def infer_shapes(self):
         """
         after differentiation or pattern match from the inter-op IR, we get all
         operations and unique variable names. We need to infer the shapes of all
         variables.
         """
-        for op in self.basic_op_gen():
+        for op in self.yield_basic_ops():
             curr_opr_shape_info = [
                 self.var_table.get_shape_info(opr) for opr in op.get_operands()
             ]
