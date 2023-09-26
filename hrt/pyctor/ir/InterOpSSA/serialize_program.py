@@ -6,19 +6,39 @@ from . import operators
 from typing import Union
 
 
-def find_scope_end(lines: list[str], scope_beg: int) -> int:
-    """Find the end of a scope, given the beginning of the scope"""
-    scopes_in_between = 0
-    for idx_line, line in enumerate(lines[scope_beg + 1 :]):
+def find_scope_end(
+    lines: list[str], scope_beg: int, allow_single_line_json_flag: bool = False
+) -> int:
+    """Find the end of a scope, given the beginning of the scope.
+    This function supports one-line scope, i.e., the scope is in the same line.
+    This function does not support { or } other than the beginning and ending of the scope in the strings.
+    allow_single_line_json_flag is used in op-spec-ssa serialization/deserialization.
+    """
+    scopes_in_between = -1
+    for idx_line, line in enumerate(lines[scope_beg:]):
         if line.find("{") != -1:
-            # beginning of another scope
-            scopes_in_between += 1
-        elif line.find("}") != -1:
-            # end of a scope
-            scopes_in_between -= 1
+            # Beginning of another scope
+            if allow_single_line_json_flag:
+                scopes_in_between += len([1 for c in line if c == "{"])
+            else:
+                assert (
+                    sum([1 for c in line if c == "{"]) == 1
+                ), "Only one { is allowed in a line"
+                scopes_in_between += 1
+        if line.find("}") != -1:
+            # End of a scope
+            if allow_single_line_json_flag:
+                scopes_in_between -= len([1 for c in line if c == "}"])
+                if scopes_in_between < -1:
+                    raise ValueError("Unexpected scope end")
+            else:
+                assert (
+                    sum([1 for c in line if c == "}"]) == 1
+                ), "Only one } is allowed in a line"
+                scopes_in_between -= 1
+            # Found the end of the scope
             if scopes_in_between == -1:
-                # found the end of the scope
-                return idx_line + scope_beg + 1
+                return idx_line + scope_beg
     raise ValueError("Scope not closed")
 
 
@@ -30,11 +50,12 @@ def find_first_level_scopes(lines: list[str]) -> list[tuple[int, int, str]]:
     while idx_line < len(lines):
         line = lines[idx_line]
         if line.find("{") != -1:
-            # beginning of a scope
+            # Beginning of a scope
             scope_name = line[: line.find("{")]
             scope_beg = idx_line
             scope_end = find_scope_end(lines, scope_beg)
             scope_beg_end_tags.append((scope_beg, scope_end, scope_name))
+            # A new scope should not be on the same line as the previous scope end
             idx_line = scope_end + 1
         else:
             idx_line += 1
@@ -139,6 +160,14 @@ def loads_op(
 
 # a simple test
 if __name__ == "__main__":
+    # Test scope finding
+    scopes = find_first_level_scopes(
+        ["DAG{", "}", "DAG{ }", "DAG{", "{}", "}"]
+    )
+    print(scopes)
+    print([(0, 1, "DAG"), (2, 2, "DAG"), (3, 5, "DAG")] == scopes)
+
+    # Test program serialization and deserialization
     ops = None
     with open("pyctor/examples/inter-op-ssa/hgt.inter-op-ssa") as fd:
         lines = fd.readlines()
