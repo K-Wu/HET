@@ -200,7 +200,7 @@ class VariableTable:
         :param lines begin with "ShapeTable{", and end with "}". To read a file,
         specify this parameter as fd.readlines()
         For now, we assume nothing else left in the first and the last line.
-        Adapted from loads_op from hrt/pyctor/ir/InterOpSSA/program_serializer.py
+        Adapted from loads_op from hrt/pyctor/ir/InterOpSSA/serialize_program.py
         """
         var_table = cls()
 
@@ -210,9 +210,9 @@ class VariableTable:
 
         # load initial variables and weights
 
-        from . import program_serializer
+        from . import serialize_program
 
-        scopes = program_serializer.find_first_level_scopes(lines)
+        scopes = serialize_program.find_first_level_scopes(lines)
         for scope_beg, scope_end, scope_tag in scopes:
             if scope_tag == "InitialVariablesAndWeights":
                 for line in lines[scope_beg + 1 : scope_end]:
@@ -648,13 +648,13 @@ class Program:
 
     @classmethod
     def loads(cls, lines: list[str]) -> "Program":
-        from . import program_serializer
+        from . import serialize_program
 
         scopes: list[
             tuple[int, int, str]
-        ] = program_serializer.find_first_level_scopes(lines)
+        ] = serialize_program.find_first_level_scopes(lines)
         var_table = VariableTable.loads(lines[scopes[0][0] : scopes[0][1] + 1])
-        ops = program_serializer.loads_op(lines[scopes[1][0] :])
+        ops = serialize_program.loads_op(lines[scopes[1][0] :])
 
         return cls(var_table, ops)
 
