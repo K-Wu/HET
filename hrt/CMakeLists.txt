@@ -250,6 +250,25 @@ add_executable(test_hyb_cu_cc ${HETEROEDGESOFTMAX_TEST_HYB_CU_CC_SRCS})
 set(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH} ${CMAKE_BINARY_DIR}/sputnik)
 target_link_libraries(test_hyb_cu_cc ${HETEROEDGESOFTMAX_LIBS})
 
+# Build test_ndarray_utils.cu.cc
+set(HETEROEDGESOFTMAX_TEST_NDARRAY_UTILS_CU_CC_SRCS)
+list(APPEND HETEROEDGESOFTMAX_TEST_NDARRAY_UTILS_CU_CC_SRCS
+     ${HETEROEDGESOFTMAX_INCLUDE_FILES})
+list(APPEND HETEROEDGESOFTMAX_TEST_NDARRAY_UTILS_CU_CC_SRCS
+     "src/test_ndarray_utils.cu.cc")
+set(HETEROEDGESOFTMAX_TEST_NDARRAY_UTILS_CU_CC_CUDA_SRCS
+    ${HETEROEDGESOFTMAX_TEST_NDARRAY_UTILS_CU_CC_SRCS})
+list(FILTER HETEROEDGESOFTMAX_TEST_NDARRAY_UTILS_CU_CC_CUDA_SRCS INCLUDE REGEX
+     "\.cu\.cc")
+set_source_files_properties(
+  ${HETEROEDGESOFTMAX_TEST_NDARRAY_UTILS_CU_CC_CUDA_SRCS} PROPERTIES LANGUAGE
+                                                                     CUDA)
+add_executable(test_ndarray_utils_cu_cc
+               ${HETEROEDGESOFTMAX_TEST_NDARRAY_UTILS_CU_CC_SRCS})
+# TODO: Clean up this hacky code
+set(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH} ${CMAKE_BINARY_DIR}/sputnik)
+target_link_libraries(test_ndarray_utils_cu_cc ${HETEROEDGESOFTMAX_LIBS})
+
 # Build exported to pytorch partially from
 # https://stackoverflow.com/questions/68401650/how-can-i-make-a-pytorch-extension-with-cmake
 if(BUILD_TORCH_API)
