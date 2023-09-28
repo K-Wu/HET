@@ -28,3 +28,6 @@
 [submodule "hetero_edgesoftmax/utils/nsight_utils"]
 	path = hrt/utils/nsight_utils
 	url = https://github.com/K-Wu/HET_nsight_utils.git
+[submodule "hrt/include/DGLHackKernel/OpPrototyping/MySimpleNDArray/utils"]
+	path = hrt/include/DGLHackKernel/OpPrototyping/MySimpleNDArray/utils
+	url = https://github.com/K-Wu/NDArrayUtils
