@@ -13,31 +13,3 @@ def consolidate_ncu_details(
     metric_per_row: "list[list[str]]",
 ) -> "list[list[str]]":
     return general_consolidate_ncu_details(metric_per_row, classify_het_kernel)
-
-
-if __name__ == "__main__":
-    from .detect_pwd import is_pwd_het_dev_root
-    from .nsight_utils import (
-        extract_ncu_values_from_details,
-        load_ncu_report,
-        reorder_columns_in_raw_csv,
-        extract_ncu_values_from_raws,
-        calculate_roofline_for_ncu_raw_csvs,
-    )
-
-    assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
-
-    # TODO: The following will trigger errors because Kernel Names is not a column. Add an API to plainly load raw nsys report without parsing logic that involve reading any kernel names
-    print(
-        load_nsys_report(
-            "utils/test/nsight_utils/graphiler_hgt_fb15k.nsys-rep",
-            "cuda_gpu_trace",
-        )
-    )
-
-    print(
-        load_nsys_report(
-            "utils/test/nsight_utils/graphiler_hgt_fb15k.nsys-rep",
-            "cuda_gpu_trace,nvtx_sum,osrt_sum,cuda_api_sum,cuda_gpu_kern_sum,cuda_gpu_mem_size_sum,cuda_gpu_mem_time_sum",
-        )
-    )
