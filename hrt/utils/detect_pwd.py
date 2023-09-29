@@ -1,45 +1,26 @@
-from .nsight_utils import get_git_root_path, get_env_name_from_setup
+from .nsight_utils import (
+    get_git_root_path,
+    get_env_name_from_setup,
+    is_generic_root_path,
+    is_pwd_generic_dev_root,
+    get_generic_root_path,
+)
 from .nsight_utils import create_new_results_dir as _create_new_results_dir
 import os
-import subprocess
 
 
 def get_het_root_path() -> str:
-    # go to the root path of the git repository, and go to the parent directory until we find the HET root path
-    path = get_git_root_path()
-    while not is_het_root_path(path):
-        path = os.path.dirname(path)
-    return path
+    """Go to the root path of the git repository, and go to the parent directory until we find the HET root path"""
+    return get_generic_root_path("HET")
 
 
 def is_het_root_path(path: str) -> bool:
-    try:
-        # Check if we can find title as HET in README.md
-        # File not found error during cat cannot be catched. So we use os.path.exists to check first
-        if not os.path.exists(os.path.join(path, "README.md")):
-            return False
-        res = subprocess.check_output(["cat", os.path.join(path, "README.md")])
-        res = res.decode("utf-8")
-        if "# HET" in res:
-            return True
-        elif "## What's in a name?" in res:
-            raise ValueError(
-                "Fatal! Detected sub-header, What's in a name, in README.md"
-                " but not found #HET. Is the top-level project renamed? Please"
-                " update it in the detect_pwd.py, or avoid using the"
-                " subheading in a non-top-level project."
-            )
-        return False
-    except OSError:
-        return False
+    return is_generic_root_path(path, "HET")
 
 
 def is_pwd_het_dev_root() -> bool:
-    # return if pwd is get_het_root_path()/hrt
-    return (
-        is_het_root_path(os.path.dirname(os.getcwd()))
-        and os.path.basename(os.getcwd()) == "hrt"
-    )
+    """Return if pwd is get_het_root_path()/hrt"""
+    return is_pwd_generic_dev_root("HET", "hrt")
 
 
 GRAPHILER_CONDA_ENV_NAME = "graphiler"
@@ -85,7 +66,11 @@ if __name__ == "__main__":
     # graphiler conda env name: graphiler
     # het conda env name: graphiler
     print("git root path:", get_git_root_path())
-    print("is het root path:", is_het_root_path(get_git_root_path()))
+    print(
+        "is get_git_root_path returning het root path:",
+        is_het_root_path(get_git_root_path()),
+    )
+    print("is_pwd_het_dev_root:", is_pwd_het_dev_root())
     print("het root path:", get_het_root_path())
     print("graphiler conda env name:", GRAPHILER_CONDA_ENV_NAME)
     print("het conda env name:", HET_CONDA_ENV_NAME)

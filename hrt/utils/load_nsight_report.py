@@ -27,6 +27,7 @@ if __name__ == "__main__":
 
     assert is_pwd_het_dev_root(), "Please run this script at het_dev root"
 
+    # TODO: The following will trigger errors because Kernel Names is not a column. Add an API to plainly load raw nsys report without parsing logic that involve reading any kernel names
     print(
         load_nsys_report(
             "utils/test/nsight_utils/graphiler_hgt_fb15k.nsys-rep",
@@ -39,39 +40,4 @@ if __name__ == "__main__":
             "utils/test/nsight_utils/graphiler_hgt_fb15k.nsys-rep",
             "cuda_gpu_trace,nvtx_sum,osrt_sum,cuda_api_sum,cuda_gpu_kern_sum,cuda_gpu_mem_size_sum,cuda_gpu_mem_time_sum",
         )
-    )
-
-    print(
-        consolidate_ncu_details(
-            extract_ncu_values_from_details(
-                load_ncu_report(
-                    "utils/test/nsight_utils/HGT.aifb...64.64.1.ncu-rep",
-                    "details",
-                )
-            )
-        )
-    )
-
-    print(
-        reorder_columns_in_raw_csv(
-            extract_ncu_values_from_raws(
-                load_ncu_report(
-                    "utils/test/nsight_utils/HGT.aifb...64.64.1.ncu-rep",
-                    "raw",
-                )
-            ),
-            metric_front=[],
-            metric_end=[],
-        )
-    )
-
-    print(
-        calculate_roofline_for_ncu_raw_csvs(
-            extract_ncu_values_from_raws(
-                load_ncu_report(
-                    "utils/test/nsight_utils/HGT.aifb...64.64.1.ncu-rep",
-                    "raw",
-                )
-            )
-        )[0:2]
     )
