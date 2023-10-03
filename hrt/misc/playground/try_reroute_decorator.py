@@ -25,11 +25,11 @@ def reroute_decorator(**kwargs):
 
 
 import argparse
-import test_args_dummy
-from test_args_dummy import try_intercept2
+import try_args_dummy
+from try_args_dummy import try_intercept2
 
 
-@reroute_decorator(argparse=test_args_dummy, debug=True)
+@reroute_decorator(argparse=try_args_dummy, debug=True)
 def try_intercept():
     parser = argparse.ArgumentParser()
     if parser is None:
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     else:
         print("parser is not None")
     try_intercept()
-    reroute_decorator(A=test_args_dummy, debug=True)(
-        test_args_dummy.try_intercept2
+    reroute_decorator(A=try_args_dummy, debug=True)(
+        try_args_dummy.try_intercept2
     )()
-    reroute_decorator(A=test_args_dummy, debug=True)(try_intercept2)()
+    reroute_decorator(A=try_args_dummy, debug=True)(try_intercept2)()
