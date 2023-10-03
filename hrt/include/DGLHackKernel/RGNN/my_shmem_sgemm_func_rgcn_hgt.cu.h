@@ -607,8 +607,8 @@ __global__ void MY_SGEMM_LAUNCH_BOUNDS HET_RGCNMatmulNoScatterGatherListFwProp(
       RIGHT_REG_TILED_FLAG, false, THREADING_BLOCK_SIZE_X,
       THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y,
       SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, false, false,
-      MySGEMMInnerProductKind::Disabled, false, false, false>::
-      // no need to use atomic update here
+      MySGEMMInnerProductKind::Disabled, false, false, true>::
+      // TODO: Why do I previously think no need to use atomic update here?
       execute_function(
           node_feat_input, &weights[idx_relation * input_dim * output_dim],
           linear_projected_node_feat, edge_norm, nullptr, nullptr,
@@ -679,8 +679,8 @@ HET_RGCNMatmulNoScatterGatherListDeltaNodeFeatBckProp(
       RIGHT_REG_TILED_FLAG, false, THREADING_BLOCK_SIZE_X,
       THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y,
       SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, false, false,
-      MySGEMMInnerProductKind::Disabled, true, false, false>::
-      // TODO: no need to use atomic update here
+      MySGEMMInnerProductKind::Disabled, true, false, true>::
+      // TODO: Why do I previously think no need to use atomic update here?
       execute_function(delta_linear_projected_node_feat,
                        &weights_transposed[idx_relation * delta_output_dim *
                                            delta_input_dim],
@@ -720,8 +720,8 @@ HET_HGTMessageGenerationAndAccumulationFwProp(
       RIGHT_REG_TILED_FLAG, false, THREADING_BLOCK_SIZE_X,
       THREADING_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y,
       SHMEM_BLOCK_SIZE_K, Idx, IdxPtr, true, false,
-      MySGEMMInnerProductKind::Disabled, false, false, false>::
-      // no need to use atomic update here
+      MySGEMMInnerProductKind::Disabled, false, false, true>::
+      // TODO: Why do I previously think no need to use atomic update here?
       execute_function(
           node_feat_input,
           &weights[idx_relation * num_heads * input_dim * output_dim],
