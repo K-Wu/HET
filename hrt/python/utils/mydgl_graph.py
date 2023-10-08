@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # NB: this class stores type in list and assumes the type order in this class and dglgraph are preserved across run. Therefore one should use the CPython implementation to ensure that.
+from __future__ import annotations
 from ..kernels import K
 
 from .. import utils
@@ -15,8 +16,6 @@ import functools
 
 import torch
 import torch.jit
-
-from typing import Dict
 
 import dgl
 
@@ -236,7 +235,7 @@ class MyDGLGraph:
             self.graph_data["transposed"]["eids"] = transposed_eids
         return self
 
-    def get_original_coo(self) -> Dict[str, torch.Tensor]:
+    def get_original_coo(self) -> dict[str, torch.Tensor]:
         original_coo = dict()
         original_coo["rel_types"] = self.graph_data["original"]["rel_types"]
         original_coo["row_indices"] = self.graph_data["original"][
@@ -248,7 +247,7 @@ class MyDGLGraph:
         original_coo["eids"] = self.graph_data["original"]["eids"]
         return original_coo
 
-    def get_out_csr(self) -> Dict[str, torch.Tensor]:
+    def get_out_csr(self) -> dict[str, torch.Tensor]:
         out_csr = dict()
         out_csr["rel_types"] = self.graph_data["original"]["rel_types"]
         out_csr["row_ptrs"] = self.graph_data["original"]["row_ptrs"]
@@ -256,7 +255,7 @@ class MyDGLGraph:
         out_csr["eids"] = self.graph_data["original"]["eids"]
         return out_csr
 
-    def get_transposed_coo(self) -> Dict[str, torch.Tensor]:
+    def get_transposed_coo(self) -> dict[str, torch.Tensor]:
         transposed_coo = dict()
         transposed_coo["rel_types"] = self.graph_data["transposed"][
             "rel_types"
@@ -270,7 +269,7 @@ class MyDGLGraph:
         transposed_coo["eids"] = self.graph_data["transposed"]["eids"]
         return transposed_coo
 
-    def get_in_csr(self) -> Dict[str, torch.Tensor]:
+    def get_in_csr(self) -> dict[str, torch.Tensor]:
         in_csr = dict()
         in_csr["rel_types"] = self.graph_data["transposed"]["rel_types"]
         in_csr["row_ptrs"] = self.graph_data["transposed"]["row_ptrs"]
@@ -281,7 +280,7 @@ class MyDGLGraph:
     def get_original_node_type_offsets(self) -> torch.Tensor:
         return self.graph_data["original"]["node_type_offsets"]
 
-    def get_separate_coo_original(self) -> Dict[str, torch.Tensor]:
+    def get_separate_coo_original(self) -> dict[str, torch.Tensor]:
         separate_coo_original = dict()
         separate_coo_original["rel_ptrs"] = self.graph_data["separate"]["coo"][
             "original"
@@ -297,7 +296,7 @@ class MyDGLGraph:
         ]["eids"]
         return separate_coo_original
 
-    def get_separate_csr_original(self) -> Dict[str, torch.Tensor]:
+    def get_separate_csr_original(self) -> dict[str, torch.Tensor]:
         separate_csr_original = dict()
         separate_csr_original["rel_ptrs"] = self.graph_data["separate"]["csr"][
             "original"
@@ -313,7 +312,7 @@ class MyDGLGraph:
         ]["eids"]
         return separate_csr_original
 
-    def get_separate_unique_node_indices(self) -> Dict[str, torch.Tensor]:
+    def get_separate_unique_node_indices(self) -> dict[str, torch.Tensor]:
         separate_unique_node_indices = dict()
         separate_unique_node_indices["rel_ptrs"] = self.graph_data["separate"][
             "unique_node_indices"
@@ -325,7 +324,7 @@ class MyDGLGraph:
 
     def get_separate_unique_node_indices_single_sided(
         self,
-    ) -> Dict[str, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         separate_unique_node_indices_single_sided = dict()
         separate_unique_node_indices_single_sided[
             "node_indices_row"
@@ -351,7 +350,7 @@ class MyDGLGraph:
 
     def get_separate_unique_node_indices_inverse_idx(
         self,
-    ) -> Dict[str, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         ret = dict()
         ret["rel_ptrs"] = self.graph_data["separate"]["unique_node_indices"][
             "rel_ptrs"
@@ -363,7 +362,7 @@ class MyDGLGraph:
 
     def get_separate_unique_node_indices_single_sided_inverse_idx(
         self,
-    ) -> Dict[str, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         ret = dict()
         ret["rel_ptrs_row"] = self.graph_data["separate"][
             "unique_node_indices_single_sided"
