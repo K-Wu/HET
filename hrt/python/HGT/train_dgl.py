@@ -107,6 +107,7 @@ def HGT_get_our_model(
 
 
 def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
+    """dgl_model_flag determines if the model execution uses dgl or HET. For train_dgl.py, it uses dgl_model_flag=True. And for train.py, it uses dgl_model_flag=False."""
     if dgl_model_flag:
         g, _, _2 = utils.graphiler_load_data(args.dataset, to_homo=False)
     else:
@@ -211,7 +212,7 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         else:
             if not args.full_graph_training:
                 raise NotImplementedError(
-                    "Not implemented full_graph_training in"
+                    "Not full_graph_training in"
                     " RGAT_main_procedure(dgl_model_flag == False)"
                 )
             HET_RGNN_train_full_graph(

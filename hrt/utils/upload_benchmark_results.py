@@ -128,6 +128,14 @@ def extract_het_results_from_folder(
                         avg_training_time = float(
                             line.split(":")[1].strip().split()[0]
                         )
+                    elif line.startswith(
+                        "Forward intermediate memory usage (MB):"
+                    ):
+                        # TODO: extract forward intermediate memory usage
+                        pass
+                    elif line.startswith("Intermediate memory usage (MB):"):
+                        # TODO: extract training intermediate memory usage
+                        pass
                     if line.lower().find("error") != -1:
                         status.append(line.strip())
             if len(status) == 0:

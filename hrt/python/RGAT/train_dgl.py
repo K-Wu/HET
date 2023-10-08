@@ -232,7 +232,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         else:
             if not args.full_graph_training:
                 raise NotImplementedError(
-                    "Not implemented full_graph_training in"
+                    "Not full_graph_training in"
                     " RGAT_main_procedure(dgl_model_flag == False)"
                 )
             HET_RGNN_train_full_graph(
