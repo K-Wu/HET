@@ -3,7 +3,7 @@
 
 
 # Manual step 1: set up the environment. The following commands assume you are at $(REPO_ROOT)/hrt
-# The prompt will be something like (dev_dgl_torch) kwu@kwu-machine-name:~/HET/hrt$
+# The prompt will be something like (dev_dgl_torch_new) kwu@kwu-machine-name:~/HET/hrt$
 # Manual step 2: set GPU persistence mode and lock its clock.
 # sudo nvidia-smi --persistence-mode=1
 # sudo nvidia-smi -lgc 1395,1395

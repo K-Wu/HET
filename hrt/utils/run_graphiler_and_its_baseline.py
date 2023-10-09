@@ -1,13 +1,16 @@
 import subprocess
 from .detect_pwd import (
     GRAPHILER_CONDA_ENV_NAME,
+    HET_CONDA_ENV_NAME,
     create_new_results_dir,
     get_het_root_path,
     is_pwd_het_dev_root,
 )
 
 DATASETS = ["aifb", "mutag", "bgs", "am", "mag", "wikikg2", "fb15k", "biokg"]
-HET_CONDA_ENV_NAME = "dev_dgl_torch_new"
+BASELINE_CONDA_ENV_NAME = (  # This is to run baseline defined in graphiler artifacts other than graphiler
+    "dev_dgl_torch_new"
+)
 
 
 def run_grapiler(results_dir: str):
@@ -29,7 +32,7 @@ def run_baselines(results_dir: str):
         for dataset in DATASETS:
             subprocess.run(
                 (
-                    f"yes | conda run -n {HET_CONDA_ENV_NAME} python3"
+                    f"yes | conda run -n {BASELINE_CONDA_ENV_NAME} python3"
                     f" {get_het_root_path()}/third_party/OthersArtifacts/graphiler/examples/{model}/{model}_baseline_standalone.py"
                     f" {dataset} 64 64"
                     f" >>{results_dir}/{model}_baseline_standalone.log 2>&1"
