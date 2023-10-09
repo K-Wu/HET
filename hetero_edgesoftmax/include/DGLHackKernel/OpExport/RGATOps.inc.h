@@ -8,6 +8,7 @@
 #include "DGLHackKernel/GAT/FusedGAT.cu.h"
 #include "DGLHackKernel/GAT/FusedGATBackward.cu.h"
 #include "DGLHackKernel/RGAT/RGATBackwardKernelsSeparateCOO.cu.h"
+#include "DGLHackKernel/RGAT/RGATBackwardKernelsSeparateCSR.cu.h"
 #include "DGLHackKernel/RGAT/RGATKernelsSeparateCOO.cu.h"
 #include "ThreadingGridsBlocksSchedules.h"
 #include "kernel_enums.h"
@@ -280,8 +281,8 @@ void RelationalFusedGAT(at::Tensor &incsr_row_ptr,
 namespace BckProp {
 template </*int XPU, */ typename Idx, typename DType, bool FLAG_KERNEL_FUSED,
           CompactAsOfNodeKind CompactKind,
-          bool IntegratedFormatRatherThanSeparateFlag,
-          bool CSRRatherThanCOOFlag>
+          bool IntegratedFormatRatherThanSeparateFlag, //want this to be false
+          bool CSRRatherThanCOOFlag> //want this to be true
 void _RelationalFusedGAT(
     at::Tensor &separate_coo_eids, at::Tensor &separate_coo_rel_ptrs,
     at::Tensor &separate_coo_row_indices, at::Tensor &separate_coo_col_indices,
@@ -372,7 +373,7 @@ void _RelationalFusedGAT(
     // node -> blockIdx.y
     // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
     auto [nblks, nthrs] =
-        get_type2_schedule(gdata.num_heads, gdata.feat_src_xlen, num_edges);
+        get_type2_schedule(gdata.num_heads, gdata.feat_src_xlen, num_edges); // last arg used to be num_edges
     ETypeMapperData<Idx, CompactKind> etype_mapper_data;
     if constexpr (IsCompact(CompactKind)) {
       if constexpr (IsBinarySearch(CompactKind)) {
@@ -420,6 +421,42 @@ void _RelationalFusedGAT(
           separate_coo_col_indices.data_ptr<Idx>(), num_edges,
           etype_mapper_data, etype_mapper_data_col);
     }
+  } else if constexpr (!IntegratedFormatRatherThanSeparateFlag &&
+                       CSRRatherThanCOOFlag) {
+    // separate CSR
+    
+      gdata.eids = outcsr_eids.data_ptr<Idx>();
+    int64_t outcsr_num_rows = outcsr_row_ptr.numel() - 1;
+    auto [nblks, nthrs] = get_type2_schedule(
+        gdata.num_heads, gdata.feat_src_xlen, outcsr_num_rows);
+    ETypeMapperData<Idx, CompactKind> etype_mapper_data;
+    if constexpr (IsCompact(CompactKind)) {
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+          unique_srcs_and_dests_rel_ptrs.data_ptr<Idx>();
+      etype_mapper_data.unique_srcs_and_dests_node_indices =
+          unique_srcs_and_dests_node_indices.data_ptr<Idx>();
+    }
+    ETypeData<Idx, false> etype_data{
+        .etypes = outcsr_reltypes.data_ptr<Idx>(),
+    };
+    if constexpr (!FLAG_KERNEL_FUSED) {
+      HET_fusedGatBackwardGradFeatSrc_relational_separate_csr_vertex_parallel<Idx, DType, CompactKind>
+          <<<nblks, nthrs, 0, stream>>>(gdata, etype_data ,outcsr_row_ptr.data_ptr<Idx>(), 
+                                        outcsr_col_indices.data_ptr<Idx>(), outcsr_num_rows,
+                                        etype_mapper_data, outcsr_reltypes.numel() - 1);
+
+      HET_fusedGatBackwardGradElEr_relational_separate_csr_vertex_parallel<Idx, DType, CompactKind>
+          <<<nblks, nthrs, 0, stream>>>(gdata, etype_data ,outcsr_row_ptr.data_ptr<Idx>(), 
+                                        outcsr_col_indices.data_ptr<Idx>(), outcsr_num_rows,
+                                        etype_mapper_data, outcsr_reltypes.numel() - 1);
+    } else {
+      HET_fusedGatBackwardGradElErFeatSrcFused_relational_separate_csr_vertex_parallel<
+             Idx, DType, CompactKind><<<nblks, nthrs, 0, stream>>>(
+             gdata, etype_data ,outcsr_row_ptr.data_ptr<Idx>(), 
+             outcsr_col_indices.data_ptr<Idx>(), outcsr_num_rows,
+             etype_mapper_data, outcsr_reltypes.numel() - 1);
+    }
+                        
   } else {
     assert(0 && "Not implemented");
   }
@@ -551,6 +588,43 @@ void RelationalFusedGAT(at::Tensor &separate_coo_eids,
 }
 }  // namespace EdgeParallel
 }  // namespace SeparateCOO
+
+namespace SeparateCSR
+{
+  void RelationalFusedGAT(at::Tensor &outcsr_row_ptr,
+                        at::Tensor &outcsr_col_indices, at::Tensor &outcsr_eids,
+                        at::Tensor &outcsr_reltypes,
+                        at::Tensor &unique_srcs_and_dests_rel_ptrs,
+                        at::Tensor &unique_srcs_and_dests_node_indices,
+                        at::Tensor &feat_src, at::Tensor &el, at::Tensor &er,
+                        at::Tensor &sum, at::Tensor &exp, at::Tensor &ret,
+                        at::Tensor &gradout, at::Tensor &grad_feat_src,
+                        at::Tensor &grad_el, at::Tensor &grad_er, double slope,
+                        bool CompactAsOfNodeFlag) {
+  at::Tensor dummy_tensor;
+  if (!CompactAsOfNodeFlag) {
+    _RelationalFusedGAT<int64_t, float, true, CompactAsOfNodeKind::Disabled,
+                        false, true>( // changed last to second templated bool to false
+        dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, outcsr_row_ptr,
+        outcsr_col_indices, outcsr_eids, outcsr_reltypes,
+        unique_srcs_and_dests_rel_ptrs, dummy_tensor,
+        unique_srcs_and_dests_node_indices, dummy_tensor, dummy_tensor,
+        dummy_tensor, feat_src, el, er, sum, exp, ret, gradout, grad_feat_src,
+        grad_el, grad_er, slope);
+  } else {
+    _RelationalFusedGAT<int64_t, float, true, CompactAsOfNodeKind::Enabled,
+                        false, true>( // changed last to second templated bool to false
+        dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, outcsr_row_ptr,
+        outcsr_col_indices, outcsr_eids, outcsr_reltypes,
+        unique_srcs_and_dests_rel_ptrs, dummy_tensor,
+        unique_srcs_and_dests_node_indices, dummy_tensor, dummy_tensor,
+        dummy_tensor, feat_src, el, er, sum, exp, ret, gradout, grad_feat_src,
+        grad_el, grad_er, slope);
+  }
+}
+  
+} // namespace SeparateCSR
+
 }  // namespace BckProp
 }  // namespace RGAT
 }  // namespace TorchExport
@@ -568,4 +642,6 @@ TORCH_LIBRARY_FRAGMENT(torch_hetero_edgesoftmax, m) {
         RGAT::FwProp::SeparateCOO::EdgeParallel::RelationalFusedGAT);
   m.def("backward_relational_fused_gat_separate_coo",
         RGAT::BckProp::SeparateCOO::EdgeParallel::RelationalFusedGAT);
+  m.def("backward_relational_fused_gat_separate_csr",
+        RGAT::BckProp::SeparateCSR::RelationalFusedGAT);
 }
