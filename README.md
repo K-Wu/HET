@@ -47,4 +47,4 @@ Here is the reference for the naming of `hrt` and `pyctor`.
 * [Heartland (United States) - Wikipedia](https://en.wikipedia.org/wiki/Heartland_(United_States))
 
 ## Contact
-Kun Wu kunwu2 (at) illinois (dot) edu  [![wakatime](https://wakatime.com/badge/github/K-Wu/hetero_edgesoftmax.svg)](https://wakatime.com/badge/github/K-Wu/hetero_edgesoftmax)
+Kun Wu kunwu2 (at) illinois (dot) edu  [![wakatime](https://wakatime.com/badge/user/4205e4a2-46a7-4331-8745-e517496eb256/project/82077fb2-08fd-4896-b1e5-086a8d2ce916.svg)](https://wakatime.com/badge/user/4205e4a2-46a7-4331-8745-e517496eb256/project/82077fb2-08fd-4896-b1e5-086a8d2ce916)
