@@ -37,7 +37,7 @@ GRAPHILER_DATASET = GRAPHILER_HOMO_DATASET.keys() | set(
 
 
 def graphiler_load_data(
-    name, to_homo: bool = True
+    name: str, to_homo: bool = True
 ) -> tuple[dgl.DGLHeteroGraph, list[int], list[tuple[int, int, int]]]:
     # feat_dim=GRAPHILER_DEFAULT_DIM,
     if name == "arxiv":

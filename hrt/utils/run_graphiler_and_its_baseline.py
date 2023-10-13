@@ -8,9 +8,8 @@ from .detect_pwd import (
 )
 
 DATASETS = ["aifb", "mutag", "bgs", "am", "mag", "wikikg2", "fb15k", "biokg"]
-BASELINE_CONDA_ENV_NAME = (  # This is to run baseline defined in graphiler artifacts other than graphiler
-    "dev_dgl_torch_new"
-)
+# This is to run baseline defined in graphiler artifacts other than graphiler
+BASELINE_CONDA_ENV_NAME = "dev_dgl_torch_new"
 
 
 def run_grapiler(results_dir: str):
