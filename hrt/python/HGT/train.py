@@ -3,7 +3,7 @@ from .train_dgl import HGT_main_procedure, HGT_parse_args
 from ..utils_lite import GRAPHILER_HETERO_DATASET
 
 if __name__ == "__main__":
-    args = HGT_parse_args()
+    args = HGT_get_and_parse_args()
     print(args)
     if args.dataset == "all":
         for dataset in GRAPHILER_HETERO_DATASET:

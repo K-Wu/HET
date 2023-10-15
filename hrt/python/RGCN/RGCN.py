@@ -26,6 +26,8 @@ from .. import utils
 from .. import utils_lite
 from ..RGNNUtils import *
 
+from typing import Union
+
 
 # from functools import partial
 
@@ -36,7 +38,7 @@ import torch as th
 from torch import nn
 
 
-class HET_EglRelGraphConv(nn.Module):
+class Seastar_EglRelGraphConv(nn.Module):
     @utils_lite.warn_default_arguments
     def __init__(
         self,
@@ -59,7 +61,7 @@ class HET_EglRelGraphConv(nn.Module):
         compact_direct_indexing_flag=False,
     ):
         # TODO: pass num_heads if applicable to RGCN
-        super(HET_EglRelGraphConv, self).__init__()
+        super(Seastar_EglRelGraphConv, self).__init__()
         self.hybrid_assign_flag = hybrid_assign_flag
         self.num_blocks_on_node_forward = num_blocks_on_node_forward
         self.num_blocks_on_node_backward = num_blocks_on_node_backward
@@ -190,6 +192,8 @@ class HET_EglRelGraphConv(nn.Module):
 
 
 class HET_EglRelGraphConv_EdgeParallel(nn.Module):
+    """Based on Seastar_EglRelGraphConv"""
+
     @utils_lite.warn_default_arguments
     def __init__(
         self,
@@ -353,6 +357,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
         n_infeat,
         out_dim,
         num_rels,
+        num_nodes,
         num_edges,
         sparse_format,
         num_bases,
@@ -365,6 +370,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
         compact_direct_indexing_flag,
     ):
         # TODO: pass num_heads if applicable to RGCN
+        self.num_nodes = num_nodes
         super(HET_EGLRGCNSingleLayerModel, self).__init__()
         if sparse_format == "separate_coo":
             self.layer2 = HET_EglRelGraphConv_EdgeParallel(
@@ -380,7 +386,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
                 compact_direct_indexing_flag=compact_direct_indexing_flag,
             )
         else:
-            self.layer2 = HET_EglRelGraphConv(
+            self.layer2 = Seastar_EglRelGraphConv(
                 n_infeat,
                 out_dim,
                 num_rels,
@@ -399,7 +405,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
         return h
 
 
-class HET_EGLRGCNModel(nn.Module):
+class Seastar_EGLRGCNModel(nn.Module):
     @utils_lite.warn_default_arguments
     def __init__(
         self,
@@ -414,8 +420,9 @@ class HET_EGLRGCNModel(nn.Module):
         activation,
         compact_direct_indexing_flag,
     ):
-        super(HET_EGLRGCNModel, self).__init__()
-        self.layer1 = HET_EglRelGraphConv(
+        self.num_nodes = num_nodes
+        super(Seastar_EGLRGCNModel, self).__init__()
+        self.layer1 = Seastar_EglRelGraphConv(
             num_nodes,
             hidden_dim,
             num_rels,
@@ -427,7 +434,7 @@ class HET_EGLRGCNModel(nn.Module):
             compact_direct_indexing_flag=compact_direct_indexing_flag,
             layer_type=0,
         )
-        self.layer2 = HET_EglRelGraphConv(
+        self.layer2 = Seastar_EglRelGraphConv(
             hidden_dim,
             out_dim,
             num_rels,
@@ -446,12 +453,12 @@ class HET_EGLRGCNModel(nn.Module):
         return h
 
 
-def get_model(args, mydglgraph):
+def get_seastar_model(args, mydglgraph):
     num_nodes = mydglgraph.get_num_nodes()
     num_rels = mydglgraph.get_num_rels()
     num_edges = mydglgraph.get_num_edges()
     num_classes = args.num_classes
-    model = HET_EGLRGCNModel(
+    model = Seastar_EGLRGCNModel(
         num_nodes,
         args.hidden_size,
         num_classes,
@@ -466,7 +473,7 @@ def get_model(args, mydglgraph):
     return model
 
 
-def main(args):
+def main_seastar(args):
     g, canonical_etype_indices_tuples = utils.RGNN_get_mydgl_graph(
         args.dataset,
         args.sort_by_src,
@@ -474,31 +481,34 @@ def main(args):
         args.no_reindex_eid,
         args.sparse_format,
     )
-    model = get_model(args, g)
+    # TODO: execute g = g.to_script_object() here so that 1) the script object veresion is stored as model.mydglgraph, and succeeding operation on g after get_our_model is applicable to model.mydglgraph
+
+    model: Seastar_EGLRGCNModel = get_seastar_model(args, g)
     num_nodes = g.get_num_nodes()
     # since the nodes are featureless, the input feature is then the node id.
-    feats = torch.arange(num_nodes)
 
-    RGCN_main_procedure(args, g, model, feats)
+    # TODO: 3. use RelGraphEmbed so that we can do embedding lookup embed_layer = RelGraphEmbed(g, args.n_infeat, exclude=[])
+    # embed_layer = RelGraphEmbed(
+    #     g, args.n_infeat, exclude=[]
+    # )
+    node_embed_layer = HET_RelGraphEmbed(
+        g, 1, dtype=torch.int64, requires_grad=False
+    )
+    node_embed = node_embed_layer()
+    # g = g.to_script_object()
+    if not args.full_graph_training:
+        raise NotImplementedError(
+            "Not full_graph_training in"
+            " RGAT_main_procedure(dgl_model_flag == False)"
+        )
+        # TODO: 1. Use convert_sampled_iteration_to_mydgl_graph from mydglgraph_converters to convert blocks[-1] to mydglgraph
+        # TODO: 2. use embedding_lookup with the input node indices tensor returned by step 1 to aggregate the input_nodes features. e.g. node_embed = node_embed_layer() line in HET_RGNN_train_full_graph in RGNNUtils.py
+    RGCN_main_procedure(args, g, model, node_embed)
 
 
-def RGCN_main_procedure(args, g, model, feats):
-    # TODO: argument specify num_classes, len(train_idx), len(test_idx) for now.
-    # aifb len(labels) == 8285, num_nodes == 8285, num_relations == 91, num_edges == 66371, len(train_idx) == 140, len(test_idx) == 36, num_classes = 4
-    # mutag len(labels) == 23644, num_nodes == 23644, num_relations == 47, num_edges == 172098, len(train_idx) == 272, len(test_idx) == 68, num_classes = 2
-    # bgs len(labels) == 333845, num_nodes == 333845, num_relations == 207, num_edges == 2166243, len(train_idx) == 117, len(test_idx) == 29, num_classes = 2
-    num_nodes = g.get_num_nodes()
-    num_classes = args.num_classes
-    labels = np.random.randint(0, num_classes, num_nodes)
-    train_idx = torch.randint(0, num_nodes, (args.train_size,))
-    test_idx = torch.randint(0, num_nodes, (args.test_size,))
-
-    # split dataset into train, validate, test
-    if args.validation:
-        val_idx = train_idx[: len(train_idx) // 5]
-        train_idx = train_idx[len(train_idx) // 5 :]
-    else:
-        val_idx = train_idx
+def RGCN_prepare_data(args, g, model, node_embed):
+    """This function creates the necessary tensors and move necessary tensors to cuda device. The logic in the function is originally at the beginning of RGCN_main_procedure(), but moved out to this individual function in an attempt to unify RGCN_main_procedure() with HET_RGNN_train_full_graph()."""
+    labels = np.random.randint(0, args.num_classes, model.num_nodes)
 
     # edge type and normalization factor
     edge_norm = torch.rand(g["original"]["eids"].size())
@@ -507,38 +517,77 @@ def RGCN_main_procedure(args, g, model, feats):
     # check cuda
     use_cuda = args.gpu >= 0 and torch.cuda.is_available()
     if use_cuda:
+        # This operation is effective because reference to g is stored in model and this operation does to() in place, i.e., without creating new g, all tensors as values of g's dictionaries is replaced with new tensors on device, while the keys stay the same.
+
         torch.cuda.set_device(args.gpu)
         g = g.cuda().contiguous()
-        feats = feats.cuda()
-        # print(feats.shape)
+        node_embed = node_embed.cuda()
+        # print(node_embed.shape)
         # edge_type = g["original"]["rel_types"]
         edge_norm = edge_norm.cuda()
         labels = labels.cuda()
         model = model.cuda()
-    feats.requires_grad_(True)
+    node_embed.requires_grad_(True)
     # optimizer
     optimizer = torch.optim.Adam(
         model.parameters(), lr=args.lr, weight_decay=args.l2norm
     )
 
+    return labels, edge_norm, node_embed, model, g, optimizer
+
+
+def RGCN_main_procedure(
+    args,
+    g,
+    model: Union[Seastar_EGLRGCNModel, HET_EGLRGCNSingleLayerModel],
+    node_embed,
+):
+    # TODO: argument specify num_classes, len(train_idx), len(test_idx) for now.
+    """
+    aifb len(labels) == 8285, num_nodes == 8285, num_relations == 91, num_edges == 66371, len(train_idx) == 140, len(test_idx) == 36, num_classes = 4
+    mutag len(labels) == 23644, num_nodes == 23644, num_relations == 47, num_edges == 172098, len(train_idx) == 272, len(test_idx) == 68, num_classes = 2
+    bgs len(labels) == 333845, num_nodes == 333845, num_relations == 207, num_edges == 2166243, len(train_idx) == 117, len(test_idx) == 29, num_classes = 2
+    """
+
+    labels, edge_norm, node_embed, model, g, optimizer = RGCN_prepare_data(
+        args, g, model, node_embed
+    )
+
+    # TODO: unify RGCN_main_procedure with HET_RGNN_train_full_graph
+    # TODO: move the above code out
+
+    if args.jit_script_enabled:
+        model = torch.jit.script(model)
+
     forward_time = []
     backward_time = []
     training_time = []
-    model.train()
-    # train_labels = labels[train_idx]
-    train_idx = list(train_idx)
 
+    warm_up_forward_intermediate_memory = []
+    warm_up_intermediate_memory = []
+
+    model.train()
+
+    memory_offset = torch.cuda.memory_allocated()
     # warm up
     if not args.no_warm_up:
         for epoch in range(5):
             optimizer.zero_grad()
-            logits = model(g, feats, edge_norm)
+            logits = model(g, node_embed, edge_norm)
+            # forward_intermediate_memory needs to be collected before backward
+            warm_up_forward_intermediate_memory.append(
+                torch.cuda.max_memory_allocated() - memory_offset
+            )
             loss = F.cross_entropy(logits, labels)
+
             loss.backward()
             optimizer.step()
-    torch.cuda.synchronize()
-    memory_offset = torch.cuda.memory_allocated()
-    reset_peak_memory_stats()
+            torch.cuda.synchronize()
+            warm_up_intermediate_memory.append(
+                torch.cuda.max_memory_allocated() - memory_offset
+            )
+            # Reset the memory stat to clear up the maximal memory allocated stat.
+            reset_peak_memory_stats()
 
     # training loop
     print("start training...")
@@ -549,7 +598,7 @@ def RGCN_main_procedure(args, g, model, feats):
         optimizer.zero_grad()
         torch.cuda.synchronize()
         t0 = time.time()
-        logits = model(g, feats, edge_norm)
+        logits = model(g, node_embed, edge_norm)
         torch.cuda.synchronize()
         tb = time.time()
         ta = time.time()
@@ -565,7 +614,22 @@ def RGCN_main_procedure(args, g, model, feats):
         forward_time.append(tb - t0)
         backward_time.append(t2 - t1)
         training_time.append(t2 - t0)
+
+        print(
+            f"Epoch: {epoch + 1 :02d}, "
+            f"Loss (w/o dividing sample num): {loss.item():.4f}, "
+        )
+        print(f"Forward prop time: {forward_time[-1] * 1000} ms")
+        print(f"Backward prop time: {backward_time[-1] * 1000} ms")
         if args.verbose:
+            # split dataset into train, validate, test
+            train_idx = torch.randint(0, model.num_nodes, (args.train_size,))
+            if args.validation:
+                val_idx = train_idx[: len(train_idx) // 5]
+                train_idx = train_idx[len(train_idx) // 5 :]
+            else:
+                val_idx = train_idx
+            train_idx = list(train_idx)
             print(
                 "Epoch {:05d} | Train Forward Time(s) {:.4f} (our kernel"
                 " {:.4f} cross entropy {:.4f}) | Backward Time(s) {:.4f}"
@@ -577,14 +641,13 @@ def RGCN_main_procedure(args, g, model, feats):
                     backward_time[-1],
                 )
             )
-        train_acc = torch.sum(
-            logits[train_idx].argmax(dim=1) == labels[train_idx]
-        ).item() / len(train_idx)
-        val_loss = F.cross_entropy(logits[val_idx], labels[val_idx])
-        val_acc = torch.sum(
-            logits[val_idx].argmax(dim=1) == labels[val_idx]
-        ).item() / len(val_idx)
-        if args.verbose:
+            train_acc = torch.sum(
+                logits[train_idx].argmax(dim=1) == labels[train_idx]
+            ).item() / len(train_idx)
+            val_loss = F.cross_entropy(logits[val_idx], labels[val_idx])
+            val_acc = torch.sum(
+                logits[val_idx].argmax(dim=1) == labels[val_idx]
+            ).item() / len(val_idx)
             print(
                 "Train Accuracy: {:.4f} | Train Loss: {:.4f} | Validation"
                 " Accuracy: {:.4f} | Validation loss: {:.4f}".format(
@@ -592,27 +655,22 @@ def RGCN_main_procedure(args, g, model, feats):
                 )
             )
     print(
-        "max memory allocated (MB) ",
+        "Epochs: Max memory allocated (MB) ",
         torch.cuda.max_memory_allocated() / 1024 / 1024,
     )
     print(
-        "intermediate memory allocated (MB) ",
+        "Epochs: Intermediate memory allocated (MB) ",
         (torch.cuda.max_memory_allocated() - memory_offset) / 1024 / 1024,
     )
-
-    model.eval()
-    logits = model.forward(g, feats, edge_norm)
-    test_loss = F.cross_entropy(logits[test_idx], labels[test_idx])
-    test_acc = torch.sum(
-        logits[test_idx].argmax(dim=1) == labels[test_idx]
-    ).item() / len(test_idx)
-    print(
-        "Test Accuracy: {:.4f} | Test loss: {:.4f}".format(
-            test_acc, test_loss.item()
+    if not args.no_warm_up:
+        print(
+            "WarmUp: Intermediate memory allocated (MB) ",
+            max(warm_up_intermediate_memory) / 1024 / 1024,
         )
-    )
-    print()
-
+        print(
+            "WarmUp: Forward intermediate memory allocated (MB) ",
+            max(warm_up_forward_intermediate_memory) / 1024 / 1024,
+        )
     if len(forward_time[len(forward_time) // 4 :]) == 0:
         print(
             "insufficient run to report mean time. skipping. (in the json it"
@@ -635,44 +693,68 @@ def RGCN_main_procedure(args, g, model, feats):
             )
         )
 
-    Used_memory = torch.cuda.max_memory_allocated(0) / (1024**3)
-    avg_run_time = np.mean(forward_time[len(forward_time) // 4 :]) + np.mean(
-        backward_time[len(backward_time) // 4 :]
-    )
-    # output we need
-    print("^^^{:6f}^^^{:6f}".format(Used_memory, avg_run_time))
-
     # write to file
     import json
 
-    with open(args.logfilename, "a") as fd:
-        json.dump(
-            {
-                "dataset": args.dataset,
-                "mean_forward_time": np.mean(
-                    forward_time[len(forward_time) // 4 :]
-                ),
-                "mean_backward_time": np.mean(
-                    backward_time[len(backward_time) // 4 :]
-                ),
-                "mean_training_time": np.mean(
-                    training_time[len(training_time) // 4 :]
-                ),
-                "forward_time": forward_time,
-                "backward_time": backward_time,
-                "training_time": training_time,
-                "max_memory_usage (mb)": (torch.cuda.max_memory_allocated())
-                / 1024
-                / 1024,
-                "intermediate_memory_usage (mb)": (
-                    torch.cuda.memory_allocated() - memory_offset
-                )
-                / 1024
-                / 1024,
-            },
-            fd,
+    if args.logfile_enabled:
+        with open(args.logfilename, "a") as fd:
+            json.dump(
+                {
+                    "dataset": args.dataset,
+                    "mean_forward_time": np.mean(
+                        forward_time[len(forward_time) // 4 :]
+                    ),
+                    "mean_backward_time": np.mean(
+                        backward_time[len(backward_time) // 4 :]
+                    ),
+                    "mean_training_time": np.mean(
+                        training_time[len(training_time) // 4 :]
+                    ),
+                    "forward_time": forward_time,
+                    "backward_time": backward_time,
+                    "training_time": training_time,
+                    "max_memory_usage (mb)": (
+                        torch.cuda.max_memory_allocated()
+                    )
+                    / 1024
+                    / 1024,
+                    "epochs_intermediate_memory_usage (mb)": (
+                        torch.cuda.memory_allocated() - memory_offset
+                    )
+                    / 1024
+                    / 1024,
+                    "warm_up_intermediate_memory_usage (mb)": (
+                        [
+                            ele / 1024 / 1024
+                            for ele in warm_up_intermediate_memory
+                        ]
+                    ),
+                    "warm_up_forward_intermediate_memory_usage (mb)": (
+                        [
+                            ele / 1024 / 1024
+                            for ele in warm_up_forward_intermediate_memory
+                        ]
+                    ),
+                },
+                fd,
+            )
+            fd.write("\n")
+
+    if args.verbose:
+        test_idx = torch.randint(0, model.num_nodes, (args.test_size,))
+        # Evaluating the accuracy
+        # TODO: move out the folloign code to an individual function
+        model.eval()
+        logits = model.forward(g, node_embed, edge_norm)
+        test_loss = F.cross_entropy(logits[test_idx], labels[test_idx])
+        test_acc = torch.sum(
+            logits[test_idx].argmax(dim=1) == labels[test_idx]
+        ).item() / len(test_idx)
+        print(
+            "Test Accuracy: {:.4f} | Test loss: {:.4f}".format(
+                test_acc, test_loss.item()
+            )
         )
-        fd.write("\n")
 
 
 def create_RGCN_parser(RGCN_single_layer_flag):
@@ -758,6 +840,6 @@ if __name__ == "__main__":
     if args.dataset == "all":
         for dataset in utils_lite.GRAPHILER_HETERO_DATASET:
             args.dataset = dataset
-            main(args)
+            main_seastar(args)
     else:
-        main(args)
+        main_seastar(args)

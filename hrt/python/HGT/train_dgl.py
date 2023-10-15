@@ -8,8 +8,10 @@ import torch as th
 from .models import *
 from .models_dgl import *
 
+from ..utils import MyDGLGraph
 
-def HGT_parse_args() -> argparse.Namespace:
+
+def HGT_get_and_parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="HGT")
     add_generic_RGNN_args(parser, "HGT.json", {})
     # parser.add_argument(
@@ -32,8 +34,8 @@ def HGT_parse_args() -> argparse.Namespace:
     return args
 
 
-def HGT_get_model(g: dgl.DGLGraph, num_classes, hypermeters):
-    embed_layer = RelGraphEmbed(g, hypermeters["n_infeat"], exclude=[])
+def HGT_get_model(g: dgl.DGLGraph, num_classes: int, args: argparse.Namespace):
+    embed_layer = RelGraphEmbed(g, args.n_infeat, exclude=[])
     node_dict = {}
     edge_dict = {}
     for ntype in g.ntypes:
@@ -43,11 +45,11 @@ def HGT_get_model(g: dgl.DGLGraph, num_classes, hypermeters):
     model = HGT_DGLHetero(
         node_dict,
         edge_dict,
-        hypermeters["n_infeat"],
+        args.n_infeat,
         # hypermeters["n_hidden"],
         num_classes,
-        num_heads=hypermeters["num_heads"],
-        dropout=hypermeters["dropout"],
+        num_heads=args.num_heads,
+        dropout=args.dropout,
     )
     print(embed_layer)
     print(
@@ -64,9 +66,9 @@ def HGT_get_model(g: dgl.DGLGraph, num_classes, hypermeters):
 
 
 def HGT_get_our_model(
-    g: utils.MyDGLGraph,
-    canonical_etype_indices_tuples,
-    num_classes,
+    g: MyDGLGraph,
+    canonical_etype_indices_tuples: list[tuple[int, int, int]],
+    num_classes: int,
     args: argparse.Namespace,
 ) -> tuple[HET_RelGraphEmbed, HET_HGT_DGLHetero]:
     embed_layer = HET_RelGraphEmbed(g, args.n_infeat, exclude=[])
@@ -118,6 +120,8 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
             args.no_reindex_eid,
             args.sparse_format,
         )
+
+        # TODO: Need to set g as script object here as g is set as a member of the model, rather than passed to the main procedure as an argument
     if args.use_real_labels_and_features:
         raise NotImplementedError(
             "Not implemented loading real labels and features in"
@@ -141,9 +145,11 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         embed_layer, model = HGT_get_model(g, num_classes, args)
     else:
         print("Using our HGT model")
+        # TODO: execute g = g.to_script_object() here so that 1) the script object veresion is stored as model.mydglgraph, and succeeding operation on g after get_our_model is applicable to model.mydglgraph
         embed_layer, model = HGT_get_our_model(
             g, canonical_etype_indices_tuples, num_classes, args
         )
+
         # TODO: only certain design choices call for this. Add an option to choose.
 
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
@@ -173,8 +179,9 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
     # ):
     device = f"cuda:0" if th.cuda.is_available() else "cpu"
     if not dgl_model_flag:
-        g = g.to(device)
-        g = g.contiguous()
+        # This operation is effective because reference to g is stored in model and this operation does to() in place, i.e., without creating new g, all tensors as values of g's dictionaries is replaced with new tensors on device, while the keys stay the same.
+        g.to(device)
+        g.contiguous()
     embed_layer = embed_layer.to(device)
     model = model.to(device)
     model.const_to(device)
@@ -189,7 +196,7 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         ]  # itertools.chain(model.parameters(), embed_layer.parameters())
         optimizer = th.optim.Adam(all_params, lr=args.lr)
         print(f"Run: {run + 1:02d}, ")
-        if dgl_model_flag:
+        if dgl_model_flag:  # Use vanilla DGL to execute the model
             if args.full_graph_training:
                 RGNN_train_full_graph(
                     model,
@@ -199,7 +206,7 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
                     optimizer,
                     args,
                 )
-            else:
+            else:  # Use HET to execute the model
                 RGNN_train_with_sampler(
                     model,
                     embed_layer(),
@@ -216,7 +223,6 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
                     " RGAT_main_procedure(dgl_model_flag == False)"
                 )
             HET_RGNN_train_full_graph(
-                g.to_script_object(),
                 model,
                 embed_layer,
                 optimizer,
@@ -232,6 +238,6 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
 
 
 if __name__ == "__main__":
-    args: argparse.Namespace = HGT_parse_args()
+    args: argparse.Namespace = HGT_get_and_parse_args()
     print(args)
     HGT_main_procedure(args, dgl_model_flag=True)

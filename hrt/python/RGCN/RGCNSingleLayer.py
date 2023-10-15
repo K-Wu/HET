@@ -6,15 +6,17 @@ from . import (
 )
 from .. import utils
 from .. import utils_lite
+from ..RGNNUtils import HET_RelGraphEmbed
 import torch as th
 import torch.nn.functional as F
 
 
 def get_single_layer_model(args, mydglgraph):
     num_rels = int(mydglgraph["original"]["rel_types"].max().item()) + 1
+    num_nodes = mydglgraph.get_num_nodes()
     num_edges = mydglgraph["original"]["rel_types"].numel()
     num_classes = args.num_classes
-    print("num_nodes", mydglgraph.get_num_nodes())
+    print("num_nodes", num_nodes)
     print("num_edges ", num_edges)
     print("num_classes ", num_classes)
     print("num_rels ", num_rels)
@@ -23,6 +25,7 @@ def get_single_layer_model(args, mydglgraph):
         args.n_infeat,
         num_classes,
         num_rels,
+        num_nodes,
         num_edges,
         args.sparse_format,
         num_bases=args.num_bases,
@@ -37,6 +40,7 @@ def get_single_layer_model(args, mydglgraph):
     return model
 
 
+# TODO: apply changes to main_seastar() in RGCN.py to this function
 def RGCNSingleLayer_main(args):
     if args.sparse_format == "separate_coo":
         mydgl_graph_format = "csr"
@@ -52,13 +56,17 @@ def RGCNSingleLayer_main(args):
         # args.sparse_format,
     )
     model = get_single_layer_model(args, g)
-    num_nodes = g.get_num_nodes()
-    feats = th.randn(
-        num_nodes,
-        args.n_infeat,
-        requires_grad=False,
-        device=th.device(f"cuda:{args.gpu}"),
-    )
+    # num_nodes = g.get_num_nodes()
+    # feats = th.randn(
+    #     num_nodes,
+    #     args.n_infeat,
+    #     requires_grad=False,
+    #     device=th.device(f"cuda:{args.gpu}"),
+    # )
+    node_embed_layer = HET_RelGraphEmbed(g, args.n_infeat)
+    node_embed_layer = node_embed_layer.to(th.device(f"cuda:{args.gpu}"))
+    feats = node_embed_layer()
+
     if args.sparse_format == "separate_coo":
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=False)
@@ -78,6 +86,7 @@ def RGCNSingleLayer_main(args):
 
         # g.separate_coo_rel_ptrs_cpu_contiguous = g.graph_data["separate"]["coo"]["original"]["rel_ptrs"].cpu().contiguous()
     g.canonicalize_eids()
+    # g = g.to_script_object()
     RGCN_main_procedure(args, g, model, feats)
 
 

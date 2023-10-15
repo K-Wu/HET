@@ -1,26 +1,19 @@
 #!/usr/bin/env python3
-# external code. @xiangsx knows the source.
-"""RGAT layer implementation"""
+"""RGAT layer implementation. External code. @xiangsx knows the source. Involves code heavily from dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py"""
 
 from typing import Union
 import torch as th
 from torch import nn
 import torch.nn.functional as F
 
-# from ogb.nodeproppred import DglNodePropPredDataset
 import dgl.nn as dglnn
 from dgl.heterograph import DGLBlock
 
-# from hrt.python.utils.mydgl_graph import MyDGLGraph
-# from ogb.nodeproppred import DglNodePropPredDataset
-# from .models import HET_RelationalGATEncoder  # , HET_RelationalAttLayer
 from .. import utils_lite
-
-# involve code heavily from dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
 
 
 class RelationalAttLayer(nn.Module):
-    # corresponding to RelGraphConvLayer in dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
+    # Corresponding to RelGraphConvLayer in dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
     r"""Relational graph attention layer.
 
     For inner relation message aggregation we use multi-head attention network.
@@ -76,15 +69,13 @@ class RelationalAttLayer(nn.Module):
             }
         )  # NB: RGAT model definition
 
-        # bias
+        # Bias
         if bias:
             self.h_bias = nn.Parameter(th.Tensor(out_feat))
 
-        # weight for self loop
+        # Weight for self loop
         if self.self_loop:
             self.loop_weight = nn.Parameter(th.Tensor(in_feat, out_feat))
-
-        # self.reset_parameters()
 
         self.dropout = nn.Dropout(dropout)
 
@@ -149,7 +140,7 @@ class RelationalAttLayer(nn.Module):
                         (g.number_of_dst_nodes(k), self.out_feat),
                         device=device,
                     )
-                    # TODO the above might fail if the device is a different GPU
+                    # TODO: the above might fail if the device is a different GPU
                 else:
                     hs[k] = hs[k].view(
                         hs[k].shape[0], hs[k].shape[1] * hs[k].shape[2]
@@ -159,7 +150,7 @@ class RelationalAttLayer(nn.Module):
 
 
 class RelationalGATEncoder(nn.Module):
-    # corresponding to EntityClassify in dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
+    # Corresponding to EntityClassify in dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
     r"""Relational graph attention encoder
 
     Parameters
@@ -227,7 +218,7 @@ class RelationalGATEncoder(nn.Module):
                 self.h_dim,
                 self.out_dim,
                 self.g.etypes,
-                1,  # overwrting the num_heads setting as the classification should be output in this stage
+                1,  # Overwrting the num_heads setting as the classification should be output in this stage
                 activation=F.relu if self.last_layer_act else None,
                 self_loop=self.use_self_loop,
             )
@@ -248,11 +239,11 @@ class RelationalGATEncoder(nn.Module):
             Sampled subgraph in DGL MFG
         """
         if blocks is None:
-            # full graph training
+            # Full graph training
             for layer in self.layers:
                 h = layer(self.g, h)
         else:
-            # minibatch training
+            # Minibatch training
             for layer, block in zip(self.layers, blocks):
                 h = layer(block, h)
         return h

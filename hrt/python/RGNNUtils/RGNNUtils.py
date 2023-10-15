@@ -11,11 +11,11 @@ from torch.cuda import (
 )
 
 # import torch.jit
-from .. import utils
 from .. import utils_lite
 
 import nvtx
 
+from ..utils import MyDGLGraph
 from dgl.heterograph import DGLBlock
 import argparse
 import numpy as np
@@ -58,8 +58,11 @@ class RelGraphEmbed(nn.Module):
         for emb in self.embeds.values():
             nn.init.xavier_uniform_(emb)
 
-    def forward(self, block: Union[None, DGLBlock] = None):
-        return self.embeds
+    def forward(self, indices=None, block: Union[None, DGLBlock] = None):
+        if indices is None:
+            return self.embeds
+        else:
+            return {k: self.embeds[k][indices[k]] for k in indices}
 
 
 class HET_RelGraphEmbed(nn.Module):
@@ -76,21 +79,34 @@ class HET_RelGraphEmbed(nn.Module):
     """
 
     @utils_lite.warn_default_arguments
-    def __init__(self, g: utils.MyDGLGraph, embed_size, exclude=list()):
+    def __init__(
+        self, g: MyDGLGraph, embed_size, dtype=th.float32, requires_grad=True
+    ):
         super(HET_RelGraphEmbed, self).__init__()
         self.embed_size = embed_size
 
-        # create learnable embeddings for all nodes, except those with a node-type in the "exclude" list
-
-        self.embeds = nn.Parameter(
-            th.Tensor(g.get_num_nodes(), self.embed_size)
-        )
+        # dtype and requires_grad are introduced to support special cases such as seastar RGCN (int64 and False)
+        if dtype == th.int64:
+            assert embed_size == 1, (
+                "embed_size must be 1 for int64 as this is specifically"
+                " provided for seastar RGCN"
+            )
+            data = torch.arange(g.get_num_nodes())
+        elif dtype == th.float32:
+            data = th.Tensor(g.get_num_nodes(), self.embed_size)
+        else:
+            raise ValueError("dtype not supported")
+        self.embeds = nn.Parameter(data, requires_grad=requires_grad)
 
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.embeds)
 
-    def forward(self, block: Union[None, DGLBlock] = None):
-        return self.embeds
+    def forward(self, indices=None, block: Union[None, DGLBlock] = None):
+        # indices: embedding lookup in minibatch training/inference
+        if indices is None:
+            return self.embeds
+        else:
+            return self.embeds[indices]
 
 
 def extract_embed(node_embed, input_nodes):
@@ -111,24 +127,34 @@ def HET_RGNN_train_with_sampler(
 
 
 def HET_RGNN_train_full_graph(
-    g,
     model,
-    node_embed_layer,
+    node_embed_layer: HET_RelGraphEmbed,
     optimizer,
     labels: th.Tensor,
     args: argparse.Namespace,
+    # TODO: add optional argument edge_norm to support RGCN
 ):
     # training loop
+
+    if args.jit_script_enabled:
+        model = torch.jit.script(model)
+
     forward_time = []
     backward_time = []
     training_time = []
+
+    warm_up_forward_intermediate_memory = []
+    warm_up_intermediate_memory = []
 
     model.train()
     model.requires_grad_(True)
     node_embed_layer.train()
     node_embed_layer.requires_grad_(True)
+
+    # TODO: specify input node indices when training minibatches
     node_embed = node_embed_layer()
 
+    memory_offset = torch.cuda.memory_allocated()
     # warm up
     if not args.no_warm_up:
         for epoch in range(5):
@@ -138,12 +164,22 @@ def HET_RGNN_train_full_graph(
             node_embed_layer.requires_grad_(True)
             optimizer.zero_grad()
             logits = model(node_embed)
+            # forward_intermediate_memory needs to be collected before backward
+            warm_up_forward_intermediate_memory.append(
+                torch.cuda.max_memory_allocated() - memory_offset
+            )
             y_hat = logits.log_softmax(dim=-1)
             loss = F.nll_loss(y_hat, labels)
-    torch.cuda.synchronize()
-    memory_offset = torch.cuda.memory_allocated()
-    reset_peak_memory_stats()
+            loss.backward()
+            optimizer.step()
+            torch.cuda.synchronize()
+            warm_up_intermediate_memory.append(
+                torch.cuda.max_memory_allocated() - memory_offset
+            )
+            # Reset the memory stat to clear up the maximal memory allocated stat.
+            reset_peak_memory_stats()
     print("start training...")
+    print(model.mydglgraph.graph_data["original"])
 
     for epoch in range(args.n_epochs):
         print(f"Epoch {epoch:02d}")
@@ -215,6 +251,23 @@ def HET_RGNN_train_full_graph(
                 forward_prop_start.elapsed_time(backward_prop_end)
             )
 
+    print(
+        "Epochs: Max memory allocated (MB) ",
+        torch.cuda.max_memory_allocated() / 1024 / 1024,
+    )
+    print(
+        "Epochs: Intermediate memory allocated (MB) ",
+        (torch.cuda.max_memory_allocated() - memory_offset) / 1024 / 1024,
+    )
+    if not args.no_warm_up:
+        print(
+            "WarmUp: Intermediate memory allocated (MB) ",
+            max(warm_up_intermediate_memory) / 1024 / 1024,
+        )
+        print(
+            "WarmUp: Forward intermediate memory allocated (MB) ",
+            max(warm_up_forward_intermediate_memory) / 1024 / 1024,
+        )
     if len(forward_time[len(forward_time) // 4 :]) == 0:
         print(
             "insufficient run to report mean time. skipping. (in the json it"
@@ -236,48 +289,53 @@ def HET_RGNN_train_full_graph(
                 np.mean(training_time[len(training_time) // 4 :])
             )
         )
-    print(
-        "max memory usage: {:4f}".format(
-            (torch.cuda.max_memory_allocated()) / 1024 / 1024
-        )
-    )
-    print(
-        "intermediate memory usage: {:4f}".format(
-            (torch.cuda.memory_allocated() - memory_offset) / 1024 / 1024
-        )
-    )
 
     # write to file
     import json
 
-    with open(args.logfilename, "a") as fd:
-        json.dump(
-            {
-                "dataset": args.dataset,
-                "mean_forward_time": np.mean(
-                    forward_time[len(forward_time) // 4 :]
-                ),
-                "mean_backward_time": np.mean(
-                    backward_time[len(backward_time) // 4 :]
-                ),
-                "mean_training_time": np.mean(
-                    training_time[len(training_time) // 4 :]
-                ),
-                "forward_time": forward_time,
-                "backward_time": backward_time,
-                "training_time": training_time,
-                "max_memory_usage (mb)": (torch.cuda.max_memory_allocated())
-                / 1024
-                / 1024,
-                "intermediate_memory_usage (mb)": (
-                    torch.cuda.memory_allocated() - memory_offset
-                )
-                / 1024
-                / 1024,
-            },
-            fd,
-        )
-        fd.write("\n")
+    if args.logfile_enabled:
+        with open(args.logfilename, "a") as fd:
+            json.dump(
+                {
+                    "dataset": args.dataset,
+                    "mean_forward_time": np.mean(
+                        forward_time[len(forward_time) // 4 :]
+                    ),
+                    "mean_backward_time": np.mean(
+                        backward_time[len(backward_time) // 4 :]
+                    ),
+                    "mean_training_time": np.mean(
+                        training_time[len(training_time) // 4 :]
+                    ),
+                    "forward_time": forward_time,
+                    "backward_time": backward_time,
+                    "training_time": training_time,
+                    "max_memory_usage (mb)": (
+                        torch.cuda.max_memory_allocated()
+                    )
+                    / 1024
+                    / 1024,
+                    "epochs_intermediate_memory_usage (mb)": (
+                        torch.cuda.memory_allocated() - memory_offset
+                    )
+                    / 1024
+                    / 1024,
+                    "warm_up_intermediate_memory_usage (mb)": (
+                        [
+                            ele / 1024 / 1024
+                            for ele in warm_up_intermediate_memory
+                        ]
+                    ),
+                    "warm_up_forward_intermediate_memory_usage (mb)": (
+                        [
+                            ele / 1024 / 1024
+                            for ele in warm_up_forward_intermediate_memory
+                        ]
+                    ),
+                },
+                fd,
+            )
+            fd.write("\n")
 
     return  # logger
 
@@ -301,7 +359,6 @@ def RGNN_train_full_graph(
         if th.cuda.is_available():
             emb = {k: e.cuda() for k, e in emb.items()}
             lbl = {k: e.cuda() for k, e in lbl.items()}
-
         optimizer.zero_grad()
         forward_prop_start = th.cuda.Event(enable_timing=True)
         forward_prop_end = th.cuda.Event(enable_timing=True)
@@ -427,6 +484,10 @@ def add_generic_RGNN_args(parser, default_logfilename, filtered_args={}):
             ),
             filtered_args,
         )
+    parser.add_argument("--jit_script_enabled", action="store_true")
+    parser.add_argument(
+        "--logfile_enabled", action="store_true", help="enable logging to json"
+    )
     parser.add_argument("--logfilename", type=str, default=default_logfilename)
     # DGL
     if not "dataset" in filtered_args:

@@ -13,7 +13,7 @@ from .. import backend as B
 from .. import utils_lite
 
 
-class HET_RelationalAttLayer(nn.Module):
+class HET_RGATLayer(nn.Module):
     # corresponding to RelGraphConvLayer in dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
     r"""Relational graph attention layer.
 
@@ -58,7 +58,7 @@ class HET_RelationalAttLayer(nn.Module):
         dropout=0.5,
         leaky_relu_slope=0.2,
     ):
-        super(HET_RelationalAttLayer, self).__init__()
+        super(HET_RGATLayer, self).__init__()
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.num_rels = num_rels
@@ -392,7 +392,7 @@ class HET_RelationalAttLayer(nn.Module):
         return h
 
 
-class HET_RelationalGATEncoder(nn.Module):
+class HET_RGATModel(nn.Module):
     # corresponding to EntityClassify in dgl/examples/pytorch/ogb/ogbn-mag/hetero_rgcn.py
     r"""Relational graph attention encoder
 
@@ -430,7 +430,7 @@ class HET_RelationalGATEncoder(nn.Module):
         multiply_among_weights_first_flag: bool = False,
         gat_edge_parallel_flag: bool = False,
     ):
-        super(HET_RelationalGATEncoder, self).__init__()
+        super(HET_RGATModel, self).__init__()
         self.mydglgraph = mydglgraph
         self.num_heads = num_heads
         self.num_etypes = num_etypes
@@ -455,7 +455,7 @@ class HET_RelationalGATEncoder(nn.Module):
         # h2h
         for _ in range(self.num_hidden_layers):
             self.layers.append(
-                HET_RelationalAttLayer(
+                HET_RGATLayer(
                     self.h_dim,
                     self.h_dim,
                     self.num_etypes,
@@ -476,7 +476,7 @@ class HET_RelationalGATEncoder(nn.Module):
         )
         # h2o
         self.layers.append(
-            HET_RelationalAttLayer(
+            HET_RGATLayer(
                 self.h_dim,
                 self.out_dim,
                 self.num_etypes,

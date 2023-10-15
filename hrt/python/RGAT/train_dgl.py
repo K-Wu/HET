@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 from .models import (
-    HET_RelationalGATEncoder,
-    # HET_RelationalAttLayer,
+    HET_RGATModel,
+    # HET_RGATLayer,
 )
 from .models_dgl import (
     RelationalGATEncoder,
@@ -23,7 +23,7 @@ from .. import utils
 from ..RGNNUtils import *
 
 
-def RGAT_parse_args() -> argparse.Namespace:
+def RGAT_get_and_parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="RGAT")
     add_generic_RGNN_args(parser, "RGAT.json", {})
     parser.add_argument(
@@ -36,7 +36,7 @@ def RGAT_parse_args() -> argparse.Namespace:
     return args
 
 
-def RGAT_get_model(g, num_classes, args):
+def RGAT_get_model(g, num_classes, args: argparse.Namespace):
     embed_layer = RelGraphEmbed(
         g, args.n_infeat, exclude=[]
     )  # exclude=["paper"])
@@ -67,12 +67,12 @@ def RGAT_get_model(g, num_classes, args):
 
 def RGAT_get_our_model(
     g: utils.MyDGLGraph, num_classes, args: argparse.Namespace
-) -> tuple[HET_RelGraphEmbed, HET_RelationalGATEncoder]:
+) -> tuple[HET_RelGraphEmbed, HET_RGATModel]:
     embed_layer = HET_RelGraphEmbed(
         g, args.n_infeat, exclude=[]
     )  # exclude=["paper"])
 
-    model = HET_RelationalGATEncoder(
+    model = HET_RGATModel(
         g,
         g.get_num_rels(),
         h_dim=args.n_infeat,
@@ -102,19 +102,7 @@ def RGAT_get_our_model(
 
 
 def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
-    # argument sanity check
-    # Static parameters
-    # NB: default values are all moved to args
-    # hyperparameters = dict(
-    # num_layers=2,
-    # fanout=[25, 20],
-    # batch_size=1024,
-    # )
-    # hyperparameters.update(vars(args))
-    # hyperparameters = vars(args)
-    # print(hyperparameters)
-
-    # loading data
+    # Loading data
     if dgl_model_flag:
         if args.dataset != "mag" or not args.use_real_labels_and_features:
             g, _, _2 = utils.graphiler_load_data(args.dataset, to_homo=False)
@@ -134,6 +122,8 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
             args.no_reindex_eid,
             args.sparse_format,
         )
+
+        # TODO: Need to set g as script object here as g is set as a member of the model, rather than passed to the main procedure as an argument
     if args.use_real_labels_and_features:
         raise NotImplementedError(
             "Not implemented loading real labels and features in"
@@ -159,11 +149,13 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
             labels = th.randint(0, args.num_classes, [g.get_num_nodes()])
 
     # creating model and data loader
-    if dgl_model_flag:
+    if dgl_model_flag:  # Use vanilla DGL to execute the model
         print("Using DGL RGAT model")
         embed_layer, model = RGAT_get_model(g, num_classes, args)
-    else:
+    else:  # Use HET to execute the model
         print("Using our RGAT model")
+        # TODO: execute g = g.to_script_object() here so that 1) the script object veresion is stored as model.mydglgraph, and succeeding operation on g after get_our_model is applicable to model.mydglgraph
+
         embed_layer, model = RGAT_get_our_model(g, num_classes, args)
         # TODO: only certain design choices call for this. Add an option to choose.
 
@@ -194,10 +186,13 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
     # ):
     device = f"cuda:0" if th.cuda.is_available() else "cpu"
     if not dgl_model_flag:
+        # This operation is effective because reference to g is stored in model and this operation does to() in place, i.e., without creating new g, all tensors as values of g's dictionaries is replaced with new tensors on device, while the keys stay the same.
         g = g.to(device)
         g = g.contiguous()
     embed_layer = embed_layer.to(device)
     model = model.to(device)
+    # TODO: implement const_to in HET_RGATModel and then uncomment the following
+    # model.const_to(device)
     labels = labels.to(device)
     for run in range(args.runs):
         embed_layer.reset_parameters()
@@ -229,14 +224,13 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
                     device,
                     args,
                 )
-        else:
+        else:  # Not dgl_model_flag
             if not args.full_graph_training:
                 raise NotImplementedError(
                     "Not full_graph_training in"
                     " RGAT_main_procedure(dgl_model_flag == False)"
                 )
             HET_RGNN_train_full_graph(
-                g.to_script_object(),
                 model,
                 embed_layer,
                 optimizer,
@@ -252,7 +246,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
 
 
 if __name__ == "__main__":
-    args: argparse.Namespace = RGAT_parse_args()
+    args: argparse.Namespace = RGAT_get_and_parse_args()
     print(args)
 
     print(
