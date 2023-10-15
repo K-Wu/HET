@@ -4,12 +4,13 @@
 # from pathlib import Path
 from ..utils_lite import *
 from . import mydglgraph_converters
+from . import MyDGLGraph
 import torch
 
 
 def graphiler_load_data_as_mydgl_graph(
     name, to_homo=True, dataset_originally_homo_flag=False
-):
+) -> tuple[MyDGLGraph, list[int], list[tuple[int, int, int]]]:
     if to_homo:
         g, ntype_offsets, canonical_etype_indices_tuples = graphiler_load_data(
             name, to_homo=True
@@ -42,7 +43,43 @@ def graphiler_setup_device(device="cuda:0"):
 
 if __name__ == "__main__":
     # a place for testing data loading
-    for dataset in GRAPHILER_HOMO_DATASET:
-        graphiler_load_data(dataset)
+
     for dataset in GRAPHILER_HETERO_DATASET:
-        graphiler_load_data(dataset)
+        g, ntype_offsets, _2 = graphiler_load_data(dataset)
+        num_nodes = ntype_offsets[-1]
+        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(3)
+        dataloader = dgl.dataloading.DataLoader(
+            g,
+            list(range(num_nodes)),
+            sampler,
+            batch_size=1024,
+            shuffle=True,
+            drop_last=False,
+            num_workers=4,
+        )
+        print(g.edata)
+        print(g.ndata)
+        # Reference: https://docs.dgl.ai/en/1.1.x/generated/dgl.dataloading.NeighborSampler.html#dgl.dataloading.NeighborSampler
+        # DGL Dataloader inherits pytorch's torch.utils.data.DataLoader https://github.com/pytorch/pytorch/blob/main/torch/utils/data/dataloader.py
+
+        for idx, (input_nodes, output_nodes, blocks) in enumerate(dataloader):
+            if idx == 0:
+                # input_nodes[i] and output_nodes[i] maps subgraph node index, `i`, to the node index in the original graph. block.edges() stores the node pair with subgraph node index.
+                print(input_nodes, output_nodes, blocks)
+                print(blocks[-1].edges())
+                print(dgl.to_homogeneous(blocks[-1], return_count=True))
+                print(max(blocks[-1].edges()[0]))
+                print(max(blocks[-1].edges()[1]))
+
+                # Use convert_sampled_iteration_to_mydgl_graph from mydglgraph_converters to convert blocks[-1] to mydglgraph
+                (
+                    input_nodes,
+                    output_nodes,
+                    my_g,
+                    canonical_etypes_id_tuple,
+                ) = mydglgraph_converters.convert_sampled_iteration_to_mydgl_graph(
+                    input_nodes, output_nodes, blocks
+                )
+
+    for dataset in GRAPHILER_HOMO_DATASET:
+        g, _, _2 = graphiler_load_data(dataset)

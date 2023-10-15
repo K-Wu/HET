@@ -1,20 +1,56 @@
 #!/usr/bin/env python3
-
+from __future__ import annotations
 from .loaders_from_npy import *
 import torch as th
 from ..utils_lite import sparse_matrix_converters
 from . import mydgl_graph
 from . import graphiler_datasets_loader
+from . import mydglgraph_converters
 import numpy as np
+
+from ..utils import MyDGLGraph
+from dgl.heterograph import DGLBlock
+import dgl
+
+
+def convert_sampled_iteration_to_mydgl_graph(
+    input_nodes: th.Tensor, output_nodes: th.Tensor, blocks: list[DGLBlock]
+):
+    """This is similar to the graphiler conditional branch in RGNN_get_mydgl_graph(), and graphiler_load_data_as_mydgl_graph"""
+    assert len(blocks) == 1, "only support one block"
+    assert blocks[0].canonical_etypes is not None
+
+    canonical_etypes_id_tuple: list[tuple[int, int, int]] = []
+
+    ntype_dict = dict(zip(blocks[0].ntypes, range(len(blocks[0].ntypes))))
+    etype_dict = dict(zip(blocks[0].etypes, range(len(blocks[0].etypes))))
+    for src_type, etype, dst_type in blocks[0].canonical_etypes:
+        canonical_etypes_id_tuple.append(
+            (ntype_dict[src_type], etype_dict[etype], ntype_dict[dst_type])
+        )
+
+    g, ntype_counts, _etype_counts = dgl.to_homogeneous(
+        blocks[0], return_count=True
+    )
+
+    my_g = mydglgraph_converters.create_mydgl_graph_coo_from_homo_dgl_graph(
+        g, False
+    )
+    assert isinstance(ntype_counts, list)
+    ntype_offsets = np.cumsum([0] + ntype_counts).tolist()
+
+    my_g["original"]["node_type_offsets"] = th.LongTensor(ntype_offsets)
+
+    return input_nodes, output_nodes, my_g, canonical_etypes_id_tuple
 
 
 def RGNN_get_mydgl_graph(
-    dataset,
-    sort_by_src_flag,
-    sort_by_etype_flag,
-    no_reindex_eid_flag,
-    sparse_format,
-):
+    dataset: str,
+    sort_by_src_flag: bool,
+    sort_by_etype_flag: bool,
+    no_reindex_eid_flag: bool,
+    sparse_format: str,
+) -> tuple[MyDGLGraph, list[tuple[int, int, int]]]:
     # TODO: add args for dataset, and refactor these following lines into dedicated load data function
     # load graph data
     # data_rowptr, data_colidx, data_reltypes, data_eids
@@ -29,6 +65,7 @@ def RGNN_get_mydgl_graph(
             " loader"
         )
 
+    # Loading dataset
     if dataset == "fb15k":
         print(
             "WARNING - loading fb15k. Currently we only support a few dataset."
@@ -162,6 +199,8 @@ def RGNN_get_mydgl_graph(
             " datasets. Loading it now"
         )
         exit(1)
+
+    # Reindex eid
     if no_reindex_eid_flag:
         raise NotImplementedError(
             "reindex eid is currently a must for logic like inverse idx and"
@@ -188,6 +227,7 @@ def RGNN_get_mydgl_graph(
                 transposed_edge_new_eids
             )
 
+    # Create MyDGLGraph object
     if sparse_format == "coo":
         g = create_mydgl_graph_coo_with_transpose(
             edge_srcs,
@@ -242,6 +282,7 @@ def RGNN_get_mydgl_graph(
     else:
         raise NotImplementedError("sparse format not supported")
     g["original"]["node_type_offsets"] = th.LongTensor(ntype_offsets)
+
     return g, canonical_etype_indices_tuples
 
 
@@ -351,7 +392,9 @@ def create_mydgl_graph_csr_with_transpose_torch(
     return g
 
 
-def create_mydgl_graph_csr_torch(row_ptr, col_idx, rel_types, eids):
+def create_mydgl_graph_csr_torch(
+    row_ptr, col_idx, rel_types, eids
+) -> MyDGLGraph:
     g = mydgl_graph.MyDGLGraph()
     g["original"] = dict()
     g["original"]["row_ptrs"] = row_ptr
@@ -370,7 +413,7 @@ def create_mydgl_graph_csr_with_transpose_numpy(
     transposed_col_idx,
     transposed_rel_types,
     transposed_eids,
-):
+) -> MyDGLGraph:
     row_ptr = th.from_numpy(row_ptr).long()
     col_idx = th.from_numpy(col_idx).long()
     rel_types = th.from_numpy(rel_types).long()
@@ -400,7 +443,7 @@ def create_mydgl_graph_csr_with_transpose(
     transposed_col_idx,
     transposed_rel_types,
     transposed_eids,
-):
+) -> MyDGLGraph:
     if th.is_tensor(row_ptr):
         return create_mydgl_graph_csr_with_transpose_torch(
             row_ptr,
@@ -434,7 +477,7 @@ def create_mydgl_graph_coo_with_transpose(
     transposed_col_idx,
     transposed_rel_types,
     transposed_eids,
-):
+) -> MyDGLGraph:
     if th.is_tensor(row_ptr):
         return create_mydgl_graph_coo_with_transpose_torch(
             row_ptr,
@@ -459,7 +502,9 @@ def create_mydgl_graph_coo_with_transpose(
         )
 
 
-def create_mydgl_graph_csr_numpy(row_ptr, col_idx, rel_types, eids):
+def create_mydgl_graph_csr_numpy(
+    row_ptr, col_idx, rel_types, eids
+) -> MyDGLGraph:
     row_ptr = th.from_numpy(row_ptr).long()
     col_idx = th.from_numpy(col_idx).long()
     rel_types = th.from_numpy(rel_types).long()
@@ -468,7 +513,7 @@ def create_mydgl_graph_csr_numpy(row_ptr, col_idx, rel_types, eids):
 
 
 @th.no_grad()
-def create_mydgl_graph_coo_from_hetero_dgl_graph(g):
+def create_mydgl_graph_coo_from_hetero_dgl_graph(g) -> MyDGLGraph:
     etype_offsets = np.zeros(len(g.etypes) + 1, dtype=np.int64)
 
     # calculate the offsets for each node type. See the following NB for more details.
@@ -523,7 +568,7 @@ def create_mydgl_graph_coo_from_hetero_dgl_graph(g):
 @th.no_grad()
 def create_mydgl_graph_coo_from_homo_dgl_graph(
     g, dataset_originally_homo_flag
-):
+) -> MyDGLGraph:
     total_edge_srcs, total_edge_dsts = g.edges()
     if dataset_originally_homo_flag:
         etypes = th.zeros(g.number_of_edges(), dtype=th.int64)
@@ -551,7 +596,7 @@ def create_mydgl_graph_coo_with_transpose_torch(
     transposed_edge_dsts,
     transposed_edge_etypes,
     transposed_edge_eids,
-):
+) -> MyDGLGraph:
     g = mydgl_graph.MyDGLGraph()
     g["original"] = dict()
     g["original"]["row_indices"] = edge_srcs
@@ -568,7 +613,7 @@ def create_mydgl_graph_coo_with_transpose_torch(
 
 def create_mydgl_graph_coo_torch(
     edge_srcs, edge_dsts, edge_etypes, edge_referential_eids
-):
+) -> MyDGLGraph:
     g = mydgl_graph.MyDGLGraph()
     g["original"] = dict()
     g["original"]["row_indices"] = edge_srcs
@@ -587,7 +632,7 @@ def create_mydgl_graph_coo_with_transpose_numpy(
     transposed_edge_dsts,
     transposed_edge_etypes,
     transposed_edge_eids,
-):
+) -> MyDGLGraph:
     edge_srcs = th.from_numpy(edge_srcs).long()
     edge_dsts = th.from_numpy(edge_dsts).long()
     edge_etypes = th.from_numpy(edge_etypes).long()
