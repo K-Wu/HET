@@ -45,9 +45,11 @@ if __name__ == "__main__":
     # a place for testing data loading
 
     for dataset in GRAPHILER_HETERO_DATASET:
+        print(f"Now working on {dataset}")
         g, ntype_offsets, _2 = graphiler_load_data(dataset)
         num_nodes = ntype_offsets[-1]
-        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(3)
+        # Only one level of neighbour (1 layer)
+        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(1)
         dataloader = dgl.dataloading.DataLoader(
             g,
             list(range(num_nodes)),

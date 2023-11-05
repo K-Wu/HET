@@ -89,6 +89,8 @@ def graphiler_load_data(
         hetero_dict = {}
         for i in range(num_etypes):
             type_index = (reltype == i).nonzero()
+            # This is to support block from NeighborSampler
+            type_index = type_index.to("cpu")
             hetero_dict[("n", str(i), "n")] = (
                 torch.flatten(src[type_index]),
                 torch.flatten(dst[type_index]),
@@ -106,6 +108,8 @@ def graphiler_load_data(
         hetero_dict = {}
         for i in range(num_etypes):
             type_index = (reltype == i).nonzero()
+            # This is to support block from NeighborSampler
+            type_index = type_index.to("cpu")
             hetero_dict[("n", str(i), "n")] = (
                 torch.flatten(src[type_index]),
                 torch.flatten(dst[type_index]),
