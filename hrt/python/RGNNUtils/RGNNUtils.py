@@ -4,6 +4,8 @@ import torch as th
 import torch.nn.functional as F
 from torch import nn
 
+from typing import NoReturn
+
 from torch.cuda import (
     memory_allocated,
     max_memory_allocated,
@@ -118,11 +120,10 @@ def extract_embed(node_embed, input_nodes):
     return emb
 
 
-def HET_RGNN_train_with_sampler(
-    g, model, node_embed, optimizer, train_loader, labels, device, args
-):
+def HET_RGNN_train_with_sampler(*args, **kwargs) -> NoReturn:
     raise NotImplementedError(
-        "HET_RGNN_train_with_sampler not implemented yet"
+        "In HET, minibatch and full-graph use the same training procedure"
+        " function."
     )
 
 

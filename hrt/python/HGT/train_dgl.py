@@ -71,7 +71,7 @@ def HGT_get_our_model(
     num_classes: int,
     args: argparse.Namespace,
 ) -> tuple[HET_RelGraphEmbed, HET_HGT_DGLHetero]:
-    embed_layer = HET_RelGraphEmbed(g, args.n_infeat, exclude=[])
+    embed_layer = HET_RelGraphEmbed(g, args.n_infeat)
     model = HET_HGT_DGLHetero(
         g,
         args.n_infeat,
@@ -121,7 +121,6 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
             args.sparse_format,
         )
 
-        # TODO: Need to set g as script object here as g is set as a member of the model, rather than passed to the main procedure as an argument
     if args.use_real_labels_and_features:
         raise NotImplementedError(
             "Not implemented loading real labels and features in"
@@ -139,16 +138,12 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
             )
             labels = th.randint(0, args.num_classes, [g.get_num_nodes()])
 
-    # creating model and data loader
+    # Creating model and data loader
     if dgl_model_flag:
         print("Using DGL HGT model")
         embed_layer, model = HGT_get_model(g, num_classes, args)
     else:
         print("Using our HGT model")
-        # TODO: execute g = g.to_script_object() here so that 1) the script object veresion is stored as model.mydglgraph, and succeeding operation on g after get_our_model is applicable to model.mydglgraph
-        embed_layer, model = HGT_get_our_model(
-            g, canonical_etype_indices_tuples, num_classes, args
-        )
 
         # TODO: only certain design choices call for this. Add an option to choose.
 
@@ -157,6 +152,22 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         g.generate_separate_unique_node_indices_for_each_etype()
         g.generate_separate_unique_node_indices_single_sided_for_each_etype()
         g.canonicalize_eids()
+
+        # Training
+        device = f"cuda:0" if th.cuda.is_available() else "cpu"
+        # This operation is effective because reference to g is stored in model and this operation does to() in place, i.e., without creating new g, all tensors as values of g's dictionaries is replaced with new tensors on device, while the keys stay the same.
+        g.to(device)
+        g.contiguous()
+
+        # execute g = g.to_script_object() here so that 1) the script object veresion is stored as model.mydglgraph, and succeeding operation on g after get_our_model is applicable to model.mydglgraph
+        # TODO: fix this in future if it breaks
+        # g = g.to_script_object()
+
+        embed_layer, model = HGT_get_our_model(
+            g, canonical_etype_indices_tuples, num_classes, args
+        )
+
+        # TODO: check if this clause is needed
         if not args.full_graph_training:
             # need to prepare dgl graph for sampler
             g_dglgraph = g.get_dgl_graph()
@@ -173,15 +184,12 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
                 num_workers=0,
             )
 
-    # training
-    # def RGAT_main_train_procedure(
-    #     g, model, embed_layer, labels, args, dgl_model_flag: bool
-    # ):
+    # Training
     device = f"cuda:0" if th.cuda.is_available() else "cpu"
-    if not dgl_model_flag:
-        # This operation is effective because reference to g is stored in model and this operation does to() in place, i.e., without creating new g, all tensors as values of g's dictionaries is replaced with new tensors on device, while the keys stay the same.
-        g.to(device)
-        g.contiguous()
+    # if not dgl_model_flag:
+    #     # This operation is effective because reference to g is stored in model and this operation does to() in place, i.e., without creating new g, all tensors as values of g's dictionaries is replaced with new tensors on device, while the keys stay the same.
+    #     g.to(device)
+    #     g.contiguous()
     embed_layer = embed_layer.to(device)
     model = model.to(device)
     model.const_to(device)
@@ -216,7 +224,9 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
                     device,
                     args,
                 )
-        else:
+        else:  # Not dgl_model_flag
+            # Type annotation
+            assert isinstance(embed_layer, HET_RelGraphEmbed)
             if not args.full_graph_training:
                 raise NotImplementedError(
                     "Not full_graph_training in"
@@ -230,11 +240,6 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
                 # device,
                 args,
             )
-        # logger.print_statistics(run)
-        # print("Final performance: ")
-        # logger.print_statistics()
-
-    # RGAT_main_train_procedure(g, model, embed_layer, labels, args, dgl_model_flag)
 
 
 if __name__ == "__main__":

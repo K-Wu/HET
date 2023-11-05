@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from .train_dgl import HGT_main_procedure, HGT_parse_args
+from .train_dgl import HGT_main_procedure, HGT_get_and_parse_args
 from ..utils_lite import GRAPHILER_HETERO_DATASET
 
 if __name__ == "__main__":

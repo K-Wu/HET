@@ -122,7 +122,7 @@ class HET_RGATLayer(nn.Module):
         )
 
     # pylint: disable=invalid-name
-    def forward(self, g, inputs: th.Tensor, myblock: Union[None, list] = None):
+    def forward(self, g, inputs: th.Tensor):
         """Forward computation
 
         Parameters
@@ -138,14 +138,15 @@ class HET_RGATLayer(nn.Module):
             New node features for each node type.
         """
         # with nvtx.annotate("forward", color="purple"):
-        if myblock is not None:
-            raise NotImplementedError("Block is not supported by us yet")
-            inputs_src = inputs
-            inputs_dst = {
-                k: v[: g.number_of_dst_nodes(k)] for k, v in inputs.items()
-            }
-        else:
-            inputs_src = inputs_dst = inputs
+        # if myblock is not None:
+        #     raise NotImplementedError("Block is not supported by us yet")
+        #     inputs_src = inputs
+        #     inputs_dst = {
+        #         k: v[: g.number_of_dst_nodes(k)] for k, v in inputs.items()
+        #     }
+        # else:
+
+        inputs_src = inputs_dst = inputs
 
         # NB: this line originally calls DGL R(GAT) impl and is now replaced with our own logic
         if self.compact_as_of_node_flag:

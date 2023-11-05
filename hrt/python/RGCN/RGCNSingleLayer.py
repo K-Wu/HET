@@ -3,6 +3,7 @@ from . import (
     HET_EGLRGCNSingleLayerModel,
     RGCN_main_procedure,
     create_RGCN_parser,
+    RGCN_prepare_data,
 )
 from .. import utils
 from .. import utils_lite
@@ -22,6 +23,7 @@ def get_single_layer_model(args, mydglgraph):
     print("num_rels ", num_rels)
     # TODO: pass num_heads if applicable to RGCN
     model = HET_EGLRGCNSingleLayerModel(
+        mydglgraph,
         args.n_infeat,
         num_classes,
         num_rels,
@@ -55,17 +57,6 @@ def RGCNSingleLayer_main(args):
         mydgl_graph_format
         # args.sparse_format,
     )
-    model = get_single_layer_model(args, g)
-    # num_nodes = g.get_num_nodes()
-    # feats = th.randn(
-    #     num_nodes,
-    #     args.n_infeat,
-    #     requires_grad=False,
-    #     device=th.device(f"cuda:{args.gpu}"),
-    # )
-    node_embed_layer = HET_RelGraphEmbed(g, args.n_infeat)
-    node_embed_layer = node_embed_layer.to(th.device(f"cuda:{args.gpu}"))
-    feats = node_embed_layer()
 
     if args.sparse_format == "separate_coo":
         g.generate_separate_coo_adj_for_each_etype(transposed_flag=True)
@@ -83,11 +74,40 @@ def RGCNSingleLayer_main(args):
                     "node_indices_col"
                 ].shape,
             )
-
         # g.separate_coo_rel_ptrs_cpu_contiguous = g.graph_data["separate"]["coo"]["original"]["rel_ptrs"].cpu().contiguous()
+
     g.canonicalize_eids()
+    g = g.cuda().contiguous()
+    # Execute g = g.to_script_object() here so that 1) the script object veresion is stored as model.mydglgraph, and succeeding operation on g after get_our_model is applicable to model.mydglgraph
+    # TODO: fix this in future if it breaks
     # g = g.to_script_object()
-    RGCN_main_procedure(args, g, model, feats)
+
+    # TODO: need to move g to cuda and then store g in the model
+    model = get_single_layer_model(args, g)
+    # num_nodes = g.get_num_nodes()
+    # feats = th.randn(
+    #     num_nodes,
+    #     args.n_infeat,
+    #     requires_grad=False,
+    #     device=th.device(f"cuda:{args.gpu}"),
+    # )
+    node_embed_layer = HET_RelGraphEmbed(g, args.n_infeat)
+    node_embed_layer = node_embed_layer.to(th.device(f"cuda:{args.gpu}"))
+    # feats = node_embed_layer()
+
+    # g = g.to_script_object()
+
+    (
+        labels,
+        edge_norm,
+        node_embed_layer,
+        model,
+        optimizer,
+    ) = RGCN_prepare_data(args, g, model, node_embed_layer)
+
+    RGCN_main_procedure(
+        model, node_embed_layer, optimizer, labels, args, edge_norm
+    )
 
 
 if __name__ == "__main__":
