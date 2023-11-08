@@ -55,6 +55,7 @@ class HET_RelationalAttLayer(nn.Module):
         compact_direct_indexing_flag: bool = False,
         multiply_among_weights_first_flag: bool = False,
         gat_edge_parallel_flag: bool = False,
+        node_parallel_flag: bool = True,
         dropout=0.5,
         leaky_relu_slope=0.2,
     ):
@@ -71,6 +72,7 @@ class HET_RelationalAttLayer(nn.Module):
         self.multiply_among_weights_first_flag = multiply_among_weights_first_flag
         self.gat_edge_parallel_flag = gat_edge_parallel_flag
         self.leaky_relu_slope = leaky_relu_slope
+        self.node_parallel_flag = node_parallel_flag
 
         assert (
             num_rels > 1
@@ -336,9 +338,14 @@ class HET_RelationalAttLayer(nn.Module):
 
             # with nvtx.annotate("hector_op_category = weighted aggregation", color="cyan"):
             if self.gat_edge_parallel_flag:  # NB: use a flag to switch this
-                h = B.relational_fused_gat_separate_coo(
+                # if self.node_parallel_flag:
+                h = B.relational_fused_gat_separate_csr(
                     g, feat_src_per_edge, el, er, self.leaky_relu_slope
                 )
+                # else:
+                #     h = B.relational_fused_gat_separate_coo(
+                #         g, feat_src_per_edge, el, er, self.leaky_relu_slope
+                #     )
             else:
                 h = B.relational_fused_gat_csr(
                     g, feat_src_per_edge, el, er, self.leaky_relu_slope

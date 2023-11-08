@@ -267,7 +267,7 @@ void RelationalFusedGAT(at::Tensor &incsr_row_ptr,
         unique_srcs_and_dests_node_indices, dummy_tensor, dummy_tensor,
         dummy_tensor, feat_src, el, er, sum, exp, ret, slope);
   } else {
-    _RelationalFusedGAT<int64_t, float, CompactAsOfNodeKind::Disabled, true,
+    _RelationalFusedGAT<int64_t, float, CompactAsOfNodeKind::Disabled, true, // used to be true
                         true>(
         dummy_tensor, dummy_tensor, dummy_tensor, dummy_tensor, incsr_row_ptr,
         incsr_col_indices, incsr_eids, incsr_reltypes,

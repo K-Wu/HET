@@ -839,6 +839,33 @@ def relational_fused_gat_separate_coo(g, feat, el, er, negative_slope):
     )
 
 
+def relational_fused_gat_separate_csr(g, feat, el, er, negative_slope):
+    separate_csr_dict = g.get_separate_csr_original()
+
+    exp = el.new_empty([g.get_num_edges()] + list(el.size()[1:]))
+    s = el.new_empty([g.get_num_nodes()] + list(el.size()[1:]))
+
+    ret = th.empty(
+        [g.get_num_nodes()] + list(feat.size()[1:]),
+        dtype=feat.dtype,
+        device=feat.device,
+        memory_format=th.contiguous_format,
+    )
+    return RelationalFusedGatSeparateCSR.apply(
+        separate_csr_dict["eids"],
+        separate_csr_dict["rel_ptrs"],
+        separate_csr_dict["row_indices"],
+        separate_csr_dict["col_indices"],
+        feat,
+        el,
+        er,
+        s,
+        exp,
+        ret,
+        negative_slope,
+    )
+
+
 def relational_fused_gat_compact_as_of_node_separate_coo_dual_unique_node_list(
     g, feat_compact, el_compact, er_compact, negative_slope
 ):
