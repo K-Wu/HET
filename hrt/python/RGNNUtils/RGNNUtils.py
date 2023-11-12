@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 from typing import Union
 import torch as th
 import torch.nn.functional as F
 from torch import nn
+
 
 from typing import NoReturn
 
@@ -19,6 +21,8 @@ import nvtx
 
 from ..utils import MyDGLGraph
 from dgl.heterograph import DGLBlock
+from dgl import DGLHeteroGraph
+from dgl.dataloading import DataLoader
 import argparse
 import numpy as np
 
@@ -39,7 +43,7 @@ class RelGraphEmbed(nn.Module):
     """
 
     @utils_lite.warn_default_arguments
-    def __init__(self, g, embed_size, exclude=list()):
+    def __init__(self, g: DGLHeteroGraph, embed_size, exclude=list()):
         super(RelGraphEmbed, self).__init__()
         self.g = g
         self.embed_size = embed_size
@@ -72,8 +76,8 @@ class HET_RelGraphEmbed(nn.Module):
 
     Parameters
     ----------RelGraphEmbed
-    g : DGLGraph
-        Input graph.
+    num_nodes : int
+        Number of nodes of the input graph.
     embed_size : int
         The length of each embedding vector
     exclude : list[str]
@@ -82,7 +86,7 @@ class HET_RelGraphEmbed(nn.Module):
 
     @utils_lite.warn_default_arguments
     def __init__(
-        self, g: MyDGLGraph, embed_size, dtype=th.float32, requires_grad=True
+        self, num_nodes: int, embed_size, dtype=th.float32, requires_grad=True
     ):
         super(HET_RelGraphEmbed, self).__init__()
         self.embed_size = embed_size
@@ -93,9 +97,9 @@ class HET_RelGraphEmbed(nn.Module):
                 "embed_size must be 1 for int64 as this is specifically"
                 " provided for seastar RGCN"
             )
-            data = torch.arange(g.get_num_nodes())
+            data = torch.arange(num_nodes)
         elif dtype == th.float32:
-            data = th.Tensor(g.get_num_nodes(), self.embed_size)
+            data = th.Tensor(num_nodes, self.embed_size)
         else:
             raise ValueError("dtype not supported")
         self.embeds = nn.Parameter(data, requires_grad=requires_grad)
@@ -128,6 +132,7 @@ def HET_RGNN_train_with_sampler(*args, **kwargs) -> NoReturn:
 
 
 def HET_RGNN_train_full_graph(
+    g: MyDGLGraph,
     model,
     node_embed_layer: HET_RelGraphEmbed,
     optimizer,
@@ -164,7 +169,7 @@ def HET_RGNN_train_full_graph(
             node_embed_layer.train()
             node_embed_layer.requires_grad_(True)
             optimizer.zero_grad()
-            logits = model(node_embed)
+            logits = model(g, node_embed)
             # forward_intermediate_memory needs to be collected before backward
             warm_up_forward_intermediate_memory.append(
                 torch.cuda.max_memory_allocated() - memory_offset
@@ -180,7 +185,6 @@ def HET_RGNN_train_full_graph(
             # Reset the memory stat to clear up the maximal memory allocated stat.
             reset_peak_memory_stats()
     print("start training...")
-    print(model.mydglgraph.graph_data["original"])
 
     for epoch in range(args.n_epochs):
         print(f"Epoch {epoch:02d}")
@@ -200,7 +204,7 @@ def HET_RGNN_train_full_graph(
         forward_prop_end = th.cuda.Event(enable_timing=True)
         forward_prop_start.record()
         # for idx in range(10):
-        logits = model(node_embed)
+        logits = model(g, node_embed)
         # logits = scripted_model(node_embed)
         # logits = model(emb, blocks)
         forward_prop_end.record()
@@ -343,7 +347,11 @@ def HET_RGNN_train_full_graph(
 
 # * g(dglgraph) is already set as a member of model
 def RGNN_train_full_graph(
-    model, node_embed, optimizer, labels, args: argparse.Namespace
+    model,
+    node_embed: RelGraphEmbed,
+    optimizer,
+    labels,
+    args: argparse.Namespace,
 ):
     # training loop
     print("start training...")
@@ -409,9 +417,9 @@ def RGNN_train_full_graph(
 # * g(dglgraph) is already set as a member of model
 def RGNN_train_with_sampler(
     model,
-    node_embed,
+    node_embed: RelGraphEmbed,
     optimizer,
-    train_loader,
+    train_loader: DataLoader,
     labels,
     device,
     args: argparse.Namespace,
@@ -476,7 +484,11 @@ def RGNN_train_with_sampler(
 
 # TODO: implement logging to json and run all datasets
 # TODO: Use conditional arguments to get a clearer structure of arguments as explained in https://stackoverflow.com/questions/9505898/conditional-command-line-arguments-in-python-using-argparse
-def add_generic_RGNN_args(parser, default_logfilename, filtered_args={}):
+def add_generic_RGNN_args(
+    parser: argparse.ArgumentParser,
+    default_logfilename: str,
+    filtered_args: set[str] = {},
+):
     if len(filtered_args) > 0:
         print(
             (

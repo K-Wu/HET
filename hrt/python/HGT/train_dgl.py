@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 from .. import utils
 from ..RGNNUtils import *
 
@@ -71,9 +72,10 @@ def HGT_get_our_model(
     num_classes: int,
     args: argparse.Namespace,
 ) -> tuple[HET_RelGraphEmbed, HET_HGT_DGLHetero]:
-    embed_layer = HET_RelGraphEmbed(g, args.n_infeat)
+    embed_layer = HET_RelGraphEmbed(g.get_num_nodes(), args.n_infeat)
     model = HET_HGT_DGLHetero(
-        g,
+        g.get_num_ntypes(),
+        g.get_num_rels(),
         args.n_infeat,
         # args.n_hidden,
         num_classes,
@@ -156,8 +158,8 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         # Training
         device = f"cuda:0" if th.cuda.is_available() else "cpu"
         # This operation is effective because reference to g is stored in model and this operation does to() in place, i.e., without creating new g, all tensors as values of g's dictionaries is replaced with new tensors on device, while the keys stay the same.
-        g.to(device)
-        g.contiguous()
+        g.to_(device)
+        g.contiguous_()
 
         # execute g = g.to_script_object() here so that 1) the script object veresion is stored as model.mydglgraph, and succeeding operation on g after get_our_model is applicable to model.mydglgraph
         # TODO: fix this in future if it breaks
@@ -233,6 +235,7 @@ def HGT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
                     " RGAT_main_procedure(dgl_model_flag == False)"
                 )
             HET_RGNN_train_full_graph(
+                g,
                 model,
                 embed_layer,
                 optimizer,

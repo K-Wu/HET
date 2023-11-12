@@ -8,6 +8,7 @@ import torch.nn.functional as F
 
 import dgl.nn as dglnn
 from dgl.heterograph import DGLBlock
+from dgl import DGLHeteroGraph
 
 from .. import utils_lite
 
@@ -90,7 +91,7 @@ class RelationalAttLayer(nn.Module):
             module.reset_parameters()
 
     # pylint: disable=invalid-name
-    def forward(self, g, inputs):
+    def forward(self, g: DGLHeteroGraph, inputs):
         """Forward computation
 
         Parameters
@@ -175,7 +176,7 @@ class RelationalGATEncoder(nn.Module):
     @utils_lite.warn_default_arguments
     def __init__(
         self,
-        g,
+        g: DGLHeteroGraph,
         h_dim,
         out_dim,
         num_heads,

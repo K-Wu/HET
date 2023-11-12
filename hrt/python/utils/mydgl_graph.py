@@ -143,19 +143,23 @@ class MyDGLGraph:
             func, self.graph_data, ["legacy_metadata_from_dgl"]
         )
 
-    def to(self, device):
+    def to_(self, device):
+        """The _ in the end suggests that this function is in-place, i.e., the change apply to the original object."""
         self.apply_to_each_tensor(lambda x: x.to(device))
         return self
 
-    def cuda(self):
+    def cuda_(self):
+        """The _ in the end suggests that this function is in-place, i.e., the change apply to the original object."""
         self.apply_to_each_tensor(lambda x: x.cuda())
         return self
 
-    def cpu(self):
+    def cpu_(self):
+        """The _ in the end suggests that this function is in-place, i.e., the change apply to the original object."""
         self.apply_to_each_tensor(lambda x: x.cpu())
         return self
 
-    def contiguous(self):
+    def contiguous_(self):
+        """The _ in the end suggests that this function is in-place, i.e., the change apply to the original object."""
         self.apply_to_each_tensor(lambda x: x.contiguous())
         return self
 
@@ -486,7 +490,7 @@ class MyDGLGraph:
                 " for separate_csr_adj generation."
             )
         # first make sure graph data, as torch tensors, are on cpu
-        self = self.cpu()
+        self.cpu_()
 
         if "separate" not in self.graph_data:
             self.graph_data["separate"] = dict()
@@ -577,7 +581,7 @@ class MyDGLGraph:
     ):
         # store rel_ptr, row_idx, col_idx, eids in self.graph_data["separate"]["coo"]["original"] and self.graph_data["separate"]["coo"]["transposed"]
         # first make sure graph data, as torch tensors, are on cpu
-        self = self.cpu()
+        self.cpu_()
 
         if "separate" not in self.graph_data:
             self.graph_data["separate"] = dict()
@@ -675,27 +679,13 @@ class MyDGLGraph:
         ] = separate_coo_eids
 
     @torch.no_grad()
-    def canonicalize_eids(self, target_sequential_eids_format="separate_coo"):
+    def get_canonicalize_eid_mapping(
+        self, target_sequential_eids_format="separate_coo"
+    ):
         @torch.no_grad()
         def _get_old_to_sequential_mapping(eid_tensor):
             return dict(zip(eid_tensor.tolist(), range(eid_tensor.shape[0])))
 
-        @torch.no_grad()
-        def _canonicalize_eids(old_to_new_eid_mapping, dict_prefix):
-            dict_prefix["eids"] = torch.tensor(
-                list(
-                    map(
-                        old_to_new_eid_mapping.get,
-                        dict_prefix["eids"].tolist(),
-                    )
-                )
-            )
-
-        if target_sequential_eids_format == self.sequential_eids_format:
-            print("WARNING: already in target sequential eids format")
-            return
-
-        # step 1 get the mapping
         old_to_new_eid_mapping = dict()
         if target_sequential_eids_format == "separate_coo":
             old_to_new_eid_mapping = _get_old_to_sequential_mapping(
@@ -715,6 +705,29 @@ class MyDGLGraph:
             )
         else:
             raise ValueError("unknown sequential eids format")
+        return old_to_new_eid_mapping
+
+    @torch.no_grad()
+    def canonicalize_eids(self, target_sequential_eids_format="separate_coo"):
+        @torch.no_grad()
+        def _canonicalize_eids(old_to_new_eid_mapping, dict_prefix):
+            dict_prefix["eids"] = torch.tensor(
+                list(
+                    map(
+                        old_to_new_eid_mapping.get,
+                        dict_prefix["eids"].tolist(),
+                    )
+                )
+            )
+
+        if target_sequential_eids_format == self.sequential_eids_format:
+            print("WARNING: already in target sequential eids format")
+            return
+
+        # step 1 get the mapping
+        old_to_new_eid_mapping = self.get_canonicalize_eid_mapping(
+            target_sequential_eids_format
+        )
 
         # step 2 apply the mapping
         if (

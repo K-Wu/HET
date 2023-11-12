@@ -417,7 +417,6 @@ class HET_RGATModel(nn.Module):
     @utils_lite.warn_default_arguments
     def __init__(
         self,
-        mydglgraph,
         num_etypes,
         h_dim,
         out_dim,
@@ -432,7 +431,6 @@ class HET_RGATModel(nn.Module):
         gat_edge_parallel_flag: bool = False,
     ):
         super(HET_RGATModel, self).__init__()
-        self.mydglgraph = mydglgraph
         self.num_heads = num_heads
         self.num_etypes = num_etypes
         self.h_dim = h_dim
@@ -497,6 +495,7 @@ class HET_RGATModel(nn.Module):
 
     def forward(
         self,
+        mydglgraph,
         h: Union[th.Tensor, None] = None,
         blocks: Union[None, list] = None,
     ):
@@ -513,7 +512,7 @@ class HET_RGATModel(nn.Module):
         if blocks is None:
             # full graph training
             for layer in self.layers:
-                h = layer(self.mydglgraph, h)
+                h = layer(mydglgraph, h)
         else:
             # minibatch training
             for layer, block in zip(self.layers, blocks):

@@ -6,6 +6,7 @@ import math
 import torch
 import torch.nn as nn
 
+from dgl import DGLHeteroGraph
 import dgl.function as fn
 from dgl.nn.functional import edge_softmax
 
@@ -68,7 +69,7 @@ class HGTLayerHetero(nn.Module):
         nn.init.xavier_uniform_(self.relation_att)
         nn.init.xavier_uniform_(self.relation_msg)
 
-    def forward(self, G, h):
+    def forward(self, G: DGLHeteroGraph, h):
         with G.local_scope():
             node_dict, edge_dict = self.node_dict, self.edge_dict
             for srctype, etype, dsttype in G.canonical_etypes:
@@ -162,7 +163,7 @@ class HGT_DGLHetero(nn.Module):
         #    h_dim, out_dim, node_dict, edge_dict, num_heads=num_heads, dropout=dropout
         # )
 
-    def forward(self, G, h):
+    def forward(self, G: DGLHeteroGraph, h):
         h = self.layer0(G, h)
         # h = self.layer1(G, h)
         return h

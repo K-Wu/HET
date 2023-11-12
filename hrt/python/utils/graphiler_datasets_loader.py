@@ -41,6 +41,29 @@ def graphiler_setup_device(device="cuda:0"):
     return device
 
 
+def yield_batch_as_mydglgraph(
+    dataloader: dgl.dataloading.DataLoader,
+    funcs_to_apply: set[str] = {
+        "generate_separate_unique_node_indices_for_each_etype",
+        "generate_separate_unique_node_indices_single_sided_for_each_etype",
+    },
+):
+    for idx, (input_nodes, output_nodes, blocks) in enumerate(dataloader):
+        (
+            input_nodes,
+            output_nodes,
+            my_g,
+            canonical_etypes_id_tuple,
+        ) = mydglgraph_converters.convert_sampled_iteration_to_mydgl_graph(
+            input_nodes, output_nodes, blocks
+        )
+
+        for func_name in funcs_to_apply:
+            getattr(my_g, func_name)()
+
+        yield my_g
+
+
 if __name__ == "__main__":
     # a place for testing data loading
 

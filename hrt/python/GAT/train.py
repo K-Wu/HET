@@ -116,7 +116,7 @@ def GAT_train(args, single_layer_flag: bool):
     else:
         cuda = True
         torch.cuda.set_device(args.gpu)
-        mydgl_graph.to(args.gpu)
+        mydgl_graph.to_(args.gpu)
         features = features.cuda()
         labels = labels.cuda()
         train_idx = train_idx.cuda()

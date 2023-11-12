@@ -19,6 +19,24 @@ class ScriptedMyDGLGraph(object):
     optional: self.graph_data["transposed"], self.graph_data["separate"]["csr"]["original"], self.graph_data["separate"]["csr"]["transposed"], self.graph_data["separate"]["coo"]["original"], self.graph_data["separate"]["coo"]["transposed"], self.graph_data["separate"]["unique_node_indices"], all as dict[str, torch.Tensor]
     """
 
+    # This maps ScriptedMyDGLGraph data member to MyDGLGraph function that produces it.
+    member_to_function: dict[str, str] = {
+        "transposed_sparse_format": "transpose",
+        "transposed_coo": "transpose",
+        "separate_unique_node_indices": (
+            "generate_separate_unique_node_indices_for_each_etype"
+        ),
+        "separate_unique_node_indices_single_sided": (
+            "generate_separate_unique_node_indices_single_sided_for_each_etype"
+        ),
+        "separate_unique_node_indices_inverse_idx": (
+            "generate_separate_unique_node_indices_for_each_etype"
+        ),
+        "separate_unique_node_indices_single_sided_inverse_idx": (
+            "generate_separate_unique_node_indices_single_sided_for_each_etype"
+        ),
+    }
+
     def __init__(
         self,
         num_nodes: int,

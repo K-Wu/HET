@@ -37,7 +37,7 @@ def RGAT_get_and_parse_args() -> argparse.Namespace:
     return args
 
 
-def RGAT_get_model(g, num_classes, args: argparse.Namespace):
+def RGAT_get_model(g: DGLHeteroGraph, num_classes, args: argparse.Namespace):
     embed_layer = RelGraphEmbed(
         g, args.n_infeat, exclude=[]
     )  # exclude=["paper"])
@@ -69,10 +69,11 @@ def RGAT_get_model(g, num_classes, args: argparse.Namespace):
 def RGAT_get_our_model(
     g: MyDGLGraph, num_classes, args: argparse.Namespace
 ) -> tuple[HET_RelGraphEmbed, HET_RGATModel]:
-    embed_layer = HET_RelGraphEmbed(g, args.n_infeat)  # exclude=["paper"])
+    embed_layer = HET_RelGraphEmbed(
+        g.get_num_nodes(), args.n_infeat
+    )  # exclude=["paper"])
 
     model = HET_RGATModel(
-        g,
         g.get_num_rels(),
         h_dim=args.n_infeat,
         out_dim=num_classes,
@@ -163,8 +164,8 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         # Training
         device = f"cuda:0" if th.cuda.is_available() else "cpu"
         # This operation is effective because reference to g is stored in model and this operation does to() in place, i.e., without creating new g, all tensors as values of g's dictionaries is replaced with new tensors on device, while the keys stay the same.
-        g = g.to(device)
-        g = g.contiguous()
+        g = g.to_(device)
+        g = g.contiguous_()
 
         # Execute g = g.to_script_object() here so that 1) the script object veresion is stored as model.mydglgraph, and succeeding operation on g after get_our_model is applicable to model.mydglgraph
         # TODO: fix this in future if it breaks
@@ -193,8 +194,8 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
     device = f"cuda:0" if th.cuda.is_available() else "cpu"
     if not dgl_model_flag:
         # This operation is effective because reference to g is stored in model and this operation does to() in place, i.e., without creating new g, all tensors as values of g's dictionaries is replaced with new tensors on device, while the keys stay the same.
-        g = g.to(device)
-        g = g.contiguous()
+        g = g.to_(device)
+        g = g.contiguous_()
     embed_layer = embed_layer.to(device)
     model = model.to(device)
     # TODO: implement const_to in HET_RGATModel and then uncomment the following
@@ -239,6 +240,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
                     " RGAT_main_procedure(dgl_model_flag == False)"
                 )
             HET_RGNN_train_full_graph(
+                g,
                 model,
                 embed_layer,
                 optimizer,

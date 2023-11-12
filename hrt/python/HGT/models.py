@@ -16,9 +16,10 @@ class HET_HGTLayerHetero(nn.Module):
     @utils_lite.warn_default_arguments
     def __init__(
         self,
+        num_ntypes,
+        num_rels,
         in_dim,
         out_dim,
-        mydglgraph,
         src_node_type_per_canonical_edge_type,
         dst_node_type_per_canonical_edge_type,
         num_heads=1,
@@ -40,8 +41,8 @@ class HET_HGTLayerHetero(nn.Module):
 
         self.in_dim = in_dim
         self.out_dim = out_dim
-        self.num_ntypes = mydglgraph.get_num_ntypes()  # len(self.node_dict)
-        self.num_relations = mydglgraph.get_num_rels()  # len(self.edge_dict)
+        self.num_ntypes = num_ntypes  # len(self.node_dict)
+        self.num_relations = num_rels  # len(self.edge_dict)
 
         self.multiply_among_weights_first_flag = (
             multiply_among_weights_first_flag
@@ -289,7 +290,8 @@ class HET_HGT_DGLHetero(nn.Module):
     @utils_lite.warn_default_arguments
     def __init__(
         self,
-        mydglgraph,
+        num_ntypes,
+        num_rels,
         in_dim,
         out_dim,
         src_node_type_per_canonical_edge_type: torch.Tensor,
@@ -303,15 +305,15 @@ class HET_HGT_DGLHetero(nn.Module):
         fused_message_mean_aggregation_flag=False,
     ):  # ,h_dim
         super(HET_HGT_DGLHetero, self).__init__()
-        self.mydglgraph = mydglgraph
         self.gcs = nn.ModuleList()
         self.in_dim = in_dim
         # self.h_dim = h_dim
         self.out_dim = out_dim
         self.layer0 = HET_HGTLayerHetero(
+            num_ntypes,
+            num_rels,
             in_dim,
             out_dim,
-            mydglgraph,
             src_node_type_per_canonical_edge_type,
             dst_node_type_per_canonical_edge_type,
             num_heads=num_heads,
@@ -339,7 +341,7 @@ class HET_HGT_DGLHetero(nn.Module):
             self.layer0.dst_node_type_per_canonical_edge_type.to(device)
         )
 
-    def forward(self, h):
-        h = self.layer0(self.mydglgraph, h)
+    def forward(self, mydglgraph, h):
+        h = self.layer0(mydglgraph, h)
         # h = self.layer1(G, h)
         return h

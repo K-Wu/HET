@@ -38,7 +38,7 @@ import torch as th
 from torch import nn
 
 
-class Seastar_EglRelGraphConv(nn.Module):
+class Seastar_EglRGCNLayer(nn.Module):
     @utils_lite.warn_default_arguments
     def __init__(
         self,
@@ -61,7 +61,7 @@ class Seastar_EglRelGraphConv(nn.Module):
         compact_direct_indexing_flag=False,
     ):
         # TODO: pass num_heads if applicable to RGCN
-        super(Seastar_EglRelGraphConv, self).__init__()
+        super(Seastar_EglRGCNLayer, self).__init__()
         self.hybrid_assign_flag = hybrid_assign_flag
         self.num_blocks_on_node_forward = num_blocks_on_node_forward
         self.num_blocks_on_node_backward = num_blocks_on_node_backward
@@ -192,7 +192,7 @@ class Seastar_EglRelGraphConv(nn.Module):
 
 
 class HET_EglRelGraphConv_EdgeParallel(nn.Module):
-    """Based on Seastar_EglRelGraphConv"""
+    """Based on Seastar_EglRGCNLayer"""
 
     @utils_lite.warn_default_arguments
     def __init__(
@@ -354,7 +354,6 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
     @utils_lite.warn_default_arguments
     def __init__(
         self,
-        mydglgraph,
         n_infeat,
         out_dim,
         num_rels,
@@ -370,7 +369,6 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
         compact_as_of_node_flag,
         compact_direct_indexing_flag,
     ):
-        self.mydglgraph = mydglgraph
         # TODO: pass num_heads if applicable to RGCN
         self.num_nodes = num_nodes
         super(HET_EGLRGCNSingleLayerModel, self).__init__()
@@ -388,7 +386,7 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
                 compact_direct_indexing_flag=compact_direct_indexing_flag,
             )
         else:
-            self.layer2 = Seastar_EglRelGraphConv(
+            self.layer2 = Seastar_EglRGCNLayer(
                 n_infeat,
                 out_dim,
                 num_rels,
@@ -402,8 +400,8 @@ class HET_EGLRGCNSingleLayerModel(nn.Module):
                 compact_direct_indexing_flag=compact_direct_indexing_flag,
             )
 
-    def forward(self, feats, edge_norm):
-        h = self.layer2.forward(self.mydglgraph, feats, edge_norm)
+    def forward(self, mydglgraph, feats, edge_norm):
+        h = self.layer2.forward(mydglgraph, feats, edge_norm)
         return h
 
 
@@ -411,7 +409,6 @@ class Seastar_EGLRGCNModel(nn.Module):
     @utils_lite.warn_default_arguments
     def __init__(
         self,
-        mydglgraph,
         num_nodes,
         hidden_dim,
         out_dim,
@@ -423,10 +420,9 @@ class Seastar_EGLRGCNModel(nn.Module):
         activation,
         compact_direct_indexing_flag,
     ):
-        self.mydglgraph = mydglgraph
         self.num_nodes = num_nodes
         super(Seastar_EGLRGCNModel, self).__init__()
-        self.layer1 = Seastar_EglRelGraphConv(
+        self.layer1 = Seastar_EglRGCNLayer(
             num_nodes,
             hidden_dim,
             num_rels,
@@ -438,7 +434,7 @@ class Seastar_EGLRGCNModel(nn.Module):
             compact_direct_indexing_flag=compact_direct_indexing_flag,
             layer_type=0,
         )
-        self.layer2 = Seastar_EglRelGraphConv(
+        self.layer2 = Seastar_EglRGCNLayer(
             hidden_dim,
             out_dim,
             num_rels,
@@ -451,9 +447,9 @@ class Seastar_EGLRGCNModel(nn.Module):
             layer_type=1,
         )
 
-    def forward(self, feats, edge_norm):
-        h = self.layer1.forward(self.mydglgraph, feats, edge_norm)
-        h = self.layer2.forward(self.mydglgraph, h, edge_norm)
+    def forward(self, mydglgraph, feats, edge_norm):
+        h = self.layer1.forward(mydglgraph, feats, edge_norm)
+        h = self.layer2.forward(mydglgraph, h, edge_norm)
         return h
 
 
@@ -463,7 +459,6 @@ def get_seastar_model(args, mydglgraph):
     num_edges = mydglgraph.get_num_edges()
     num_classes = args.num_classes
     model = Seastar_EGLRGCNModel(
-        mydglgraph,
         num_nodes,
         args.hidden_size,
         num_classes,
@@ -502,7 +497,7 @@ def main_seastar(args):
     #     g, args.n_infeat, exclude=[]
     # )
     node_embed_layer = HET_RelGraphEmbed(
-        g, 1, dtype=torch.int64, requires_grad=False
+        g.get_num_nodes(), 1, dtype=torch.int64, requires_grad=False
     )
     # node_embed = node_embed_layer()
     # g = g.to_script_object()
@@ -523,7 +518,7 @@ def main_seastar(args):
     ) = RGCN_prepare_data(args, g, model, node_embed_layer)
 
     RGCN_main_procedure(
-        model, node_embed_layer, optimizer, labels, args, edge_norm
+        g, model, node_embed_layer, optimizer, labels, args, edge_norm
     )
 
 
@@ -600,6 +595,7 @@ def RGCN_eval_during_train(
 
 
 def RGCN_test_after_train(
+    g: MyDGLGraph,
     model: Union[Seastar_EGLRGCNModel, HET_EGLRGCNSingleLayerModel],
     node_embed_layer: HET_RelGraphEmbed,
     optimizer,
@@ -611,7 +607,7 @@ def RGCN_test_after_train(
     # Evaluating the accuracy
     # TODO: move out the folloign code to an individual function
     model.eval()
-    logits = model.forward(node_embed_layer(), edge_norm)
+    logits = model.forward(g, node_embed_layer(), edge_norm)
     test_loss = F.cross_entropy(logits[test_idx], labels[test_idx])
     test_acc = torch.sum(
         logits[test_idx].argmax(dim=1) == labels[test_idx]
@@ -624,6 +620,7 @@ def RGCN_test_after_train(
 
 
 def RGCN_main_procedure(
+    g: MyDGLGraph,
     model: Union[Seastar_EGLRGCNModel, HET_EGLRGCNSingleLayerModel],
     node_embed_layer: HET_RelGraphEmbed,
     optimizer,
@@ -659,7 +656,7 @@ def RGCN_main_procedure(
     if not args.no_warm_up:
         for epoch in range(5):
             optimizer.zero_grad()
-            logits = model(node_embed_layer(), edge_norm)
+            logits = model(g, node_embed_layer(), edge_norm)
             # forward_intermediate_memory needs to be collected before backward
             warm_up_forward_intermediate_memory.append(
                 torch.cuda.max_memory_allocated() - memory_offset
@@ -684,7 +681,7 @@ def RGCN_main_procedure(
         optimizer.zero_grad()
         torch.cuda.synchronize()
         t0 = time.time()
-        logits = model(node_embed_layer(), edge_norm)
+        logits = model(g, node_embed_layer(), edge_norm)
         torch.cuda.synchronize()
         tb = time.time()
         ta = time.time()
@@ -805,7 +802,9 @@ def RGCN_main_procedure(
             fd.write("\n")
 
     if args.verbose:
-        RGCN_test_after_train(model, node_embed_layer, optimizer, labels, args)
+        RGCN_test_after_train(
+            g, model, node_embed_layer, optimizer, labels, args, edge_norm
+        )
 
 
 def create_RGCN_parser(RGCN_single_layer_flag):
