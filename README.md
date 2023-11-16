@@ -1,9 +1,13 @@
-# HET [![CodeFactor](https://www.codefactor.io/repository/github/k-wu/hetero_edgesoftmax/badge?s=34a94a8b3a8b3d83b6582edc6e24b1e5d0a207b9)](https://www.codefactor.io/repository/github/k-wu/hetero_edgesoftmax) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9c41863c914e4153883f24eeff256280)](https://www.codacy.com?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=K-Wu/hetero_edgesoftmax&amp;utm_campaign=Badge_Grade) [![DeepSource](https://app.deepsource.com/gh/K-Wu/hetero_edgesoftmax.svg/?label=active+issues&show_trend=true&token=hA6-EP3JaW1Y08vzTD9kDiAr)](https://app.deepsource.com/gh/K-Wu/hetero_edgesoftmax/?ref=repository-badge)
+# HET [![CodeFactor](https://www.codefactor.io/repository/github/k-wu/het/badge?s=7c0ed599f222a217c8682e478c593e0ca4b434da)](https://www.codefactor.io/repository/github/k-wu/het) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9c41863c914e4153883f24eeff256280)](https://app.codacy.com?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade) [![DeepSource](https://app.deepsource.com/gh/K-Wu/HET.svg/?label=active+issues&show_trend=true&token=hA6-EP3JaW1Y08vzTD9kDiAr)](https://app.deepsource.com/gh/K-Wu/HET/?ref=repository-badge)
 
 The HET Hetero-GNN Kernel Optimization and Code Generation project.
 
 ## Dependencies
-The following repos, as submodules in `third_party/`, are required. Please recursively clone these submodules.
+The following repos, as submodules in `third_party/`, are depended on to compile our code. Please recursively clone these submodules.
+
+[libnpy](https://github.com/llohse/libnpy)
+
+[cusplibrary](https://github.com/cusplibrary/cusplibrary)
 
 [CUTLASS](https://github.com/NVIDIA/cutlass)
 
@@ -47,4 +51,4 @@ Here is the reference for the naming of `hrt` and `pyctor`.
 * [Heartland (United States) - Wikipedia](https://en.wikipedia.org/wiki/Heartland_(United_States))
 
 ## Contact
-Kun Wu kunwu2 (at) illinois (dot) edu  [![wakatime](https://wakatime.com/badge/github/K-Wu/hetero_edgesoftmax.svg)](https://wakatime.com/badge/github/K-Wu/hetero_edgesoftmax)
+Kun Wu kunwu2 (at) illinois (dot) edu  [![wakatime](https://wakatime.com/badge/user/4205e4a2-46a7-4331-8745-e517496eb256/project/82077fb2-08fd-4896-b1e5-086a8d2ce916.svg)](https://wakatime.com/badge/user/4205e4a2-46a7-4331-8745-e517496eb256/project/82077fb2-08fd-4896-b1e5-086a8d2ce916)

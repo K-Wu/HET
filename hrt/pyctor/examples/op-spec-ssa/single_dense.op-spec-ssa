@@ -1,0 +1,15 @@
+///
+/// DAG
+/// Similar to the DAG scope in inter-op-ssa, the DAG scope stores the SSA of the computation.
+DAG{
+(EDGEWISE, "zi") = gemm_1((SRCNODE, "feature"), (W, EDGETYPE));
+}
+
+///
+/// OPSPEC
+/// each op has a dedicated scope with a single-line json that describes the specification.
+OPSPEC{
+gemm_1{
+ {"C": "(EDGEWISE, \"zi\")", "A": "(SRCNODE, \"feature\")", "B": "(W, EDGETYPE)", "schedule": {"param": {"tile_sz": 16}, "A": "[GATHER (row_idx), NO_TRANSPOSE]", "B": "[WEIGHTS]", "C": "[NO_SCATTER]"}}
+}
+}

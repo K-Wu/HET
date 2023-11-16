@@ -23,5 +23,14 @@
 	path = third_party/OthersArtifacts/hgl
 	url = https://K-Wu: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@github.com/K-Wu/hgl_experimental
 [submodule "hetero_edgesoftmax/utils/sass_analyzer"]
-	path = hetero_edgesoftmax/utils/sass_analyzer
+	path = hrt/utils/sass_analyzer
 	url = git@github.com:K-Wu/sass_analyzer.git
+[submodule "hetero_edgesoftmax/utils/nsight_utils"]
+	path = hrt/utils/nsight_utils
+	url = https://github.com/K-Wu/HET_nsight_utils.git
+[submodule "hrt/include/DGLHackKernel/OpPrototyping/MySimpleNDArray/utils"]
+	path = hrt/include/DGLHackKernel/OpPrototyping/MySimpleNDArray/utils
+	url = https://github.com/K-Wu/NDArrayUtils
+[submodule "hrt/misc/playground"]
+	path = hrt/misc/playground
+	url = git@github.com:K-Wu/python_and_bash_playground.git

@@ -11,6 +11,3 @@ name = "python"
 
 [[analyzers]]
 name = "cxx"
-
-[[transformers]]
-name = "black"

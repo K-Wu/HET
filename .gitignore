@@ -26,3 +26,5 @@ data/ogbn_mag
 *.json
 **/misc/artifacts/**.txt
 *.pkl
+!**/ogbn_mag_0.1/**.npy
+/**/artifacts

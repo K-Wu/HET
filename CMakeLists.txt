@@ -8,7 +8,6 @@ cmake_policy(SET CMP0104 OLD)
 #
 # Build options.
 #
-# option(BUILD_TEST "Build test suite" OFF)
 option(BUILD_TEST "build sputnik test suite" ON)
 option(BUILD_BENCHMARK "build sputnik benchmark suite" ON)
 option(BUILD_GENERATED "build sputnik-based generated op code" ON)
@@ -42,7 +41,7 @@ else()
   set(CUDA_ARCHS ${CUDA_ARCH_LIST})
 endif()
 
-# pass in CUDA_ARCHS as a C++ macro
+# Pass in CUDA_ARCHS as a C++ macro
 add_definitions(-DCUDA_ARCHS=${CUDA_ARCHS})
 
 #
@@ -50,29 +49,6 @@ add_definitions(-DCUDA_ARCHS=${CUDA_ARCHS})
 #
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
 include(cmake/Dependencies.cmake)
-
-# Get git status from https://stackoverflow.com/a/63924044/5555077 Get the
-# current working branch
-execute_process(
-  COMMAND git rev-parse --abbrev-ref HEAD
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE GIT_BRANCH
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-# Get the latest commit hash
-execute_process(
-  COMMAND git rev-parse HEAD
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE GIT_COMMIT_HASH OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-execute_process(
-  COMMAND git diff HEAD
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE GIT_DIRTY_MESSAGE OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-if(NOT GIT_DIRTY_MESSAGE STREQUAL "")
-  set(GIT_DIRTY_MESSAGE "-dirty")
-endif()
 
 #
 # C++ and CUDA flags.
@@ -99,15 +75,9 @@ if(RES_USAGE)
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -res-usage")
 endif()
 
-# if(BUILD_TEST) set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSPUTNIK_BUILD_TEST")
-# set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DSPUTNIK_BUILD_TEST") endif()
-
-# if(NOT DEFINED CMAKE_CUDA_STANDARD) set(CMAKE_CUDA_STANDARD 17)
-# set(CMAKE_CUDA_STANDARD_REQUIRED ON) endif()
-
 #
 # Project build.
 #
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-add_subdirectory(hetero_edgesoftmax)
+add_subdirectory(hrt)

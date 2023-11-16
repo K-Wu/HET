@@ -1,0 +1,11 @@
+///
+/// SHAPE INFORMATION
+///
+// TODO: fullfil this
+
+///
+/// DAG
+///
+DAG{
+(EDGEWISE, "zi") = EdgeDense(input = (SRCNODE, "feature"), weight = (W,EDGETYPE));
+}

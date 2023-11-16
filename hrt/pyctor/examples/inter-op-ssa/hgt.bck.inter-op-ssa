@@ -1,0 +1,51 @@
+///
+/// SHAPE INFORMATION
+///
+// TODO: fullfil this
+
+///
+/// DAG
+///
+DAG{
+// TODO: this beginning is semantically same as the beginning of RGAT. Make sure they are the same in lowering
+(EDGEWISE, "attn_delta") = EdgeInnerProduct(left=(NODEWISE,"output_delta"),right=(EDGEWISE,"msg"));
+(EDGEWISE, "msg_delta") = EdgeScalarVectorMul(scalar=(EDGEWISE,"attn"),vector=(NODEWISE,"output_delta"));
+
+(EDGEWISE, "raw_attn_delta_term1") = ScalarDivide(left = (EDGEWISE, "attn_delta"), right = (DSTNODE, "attn_sum"));
+(DSTNODE, "attn_sum_delta_tmp1")=ScalarMultiply(left=(DSTNODE, "attn_sum"),right=(DSTNODE,"attn_sum"));
+(EDGEWISE, "attn_sum_dst_delta_tmp1") = ScalarDivide(left=(EDGEWISE, "raw_attn_delta"), right=(DSTNODE, "attn_sum_delta_tmp1"));
+(EDGEWISE, "attn_sum_dst_delta_tmp2") = Negative(input=(EDGEWISE, "attn_sum_dst_delta_tmp1"));
+(DSTNODE, "attn_sum_delta") = NodeSumAccumulation(input=(EDGEWISE, "attn_sum_dst_delta_tmp2"));
+
+(EDGEWISE, "raw_attn_delta") = ScalarAdd(left=(EDGEWISE, "raw_attn_delta_term1"), right=(DSTNODE, "attn_sum_delta"));
+
+(EDGEWISE, "raw_attn_tmp2_delta") = InverseExponential(input=(EDGEWISE, "raw_attn_delta"));
+(EDGEWISE, "raw_attn_tmp1_delta") = EdgeScalarVectorMul(scalar=(EDGEWISE, "raw_attn_tmp2_delta"), vector=(DSTNODE, "ht_attn"));
+(EDGEWISE, "ht_attn_dst_delta_tmp1") = EdgeScalarVectorMul(scalar=(EDGEWISE, "raw_attn_tmp2_delta"), vector=(EDGEWISE, "raw_attn_tmp1"));
+(DSTNODE, "ht_attn_delta") = NodeSumAccumulation(input=(EDGEWISE, "ht_attn_dst_delta_tmp1"));
+(W_attn_transposed, EDGETYPE) = Transpose(input=(W_attn, EDGETYPE));
+(EDGEWISE, "hs_attn_src_delta_tmp1") = EdgeDense(input = (EDGEWISE, "raw_attn_tmp1_delta"), weight = (W_attn_tranpsose, EDGETYPE));
+(SRCNODE, "hs_attn_delta") = NodeSumAccumulation(input=(EDGEWISE, "hs_attn_src_delta_tmp1"));
+(EDGEWISE, "W_attn_delta_tmp1") = EdgeOuterProduct(left=(SRCNODE, "hs_attn"), right=(EDGEWISE, "raw_attn_tmp1_delta"));
+(W_attn_delta, EDGETYPE) = EdgeTypeSumAccumulation(input=(EDDGEWISE, "W_attn_delta_tmp1));
+(W_msg_transposed, EDGETYPE) = Transpose(input=(W_msg, EDGETYPE));
+(SRCNODE, "hs_delta") = EdgeDense(input =(EDGEWISE, "msg_delta"), weight=(W_msg_transposed, EDGETYPE));
+(EDGEWISE, "W_msg_delta_tmp1") = EdgeOuterProduct(left=(SRCNODE, "hs"), right=(EDGEWISE, "msg_delta"));
+(W_msg_delta,EDGETYPE) = EdgeTypeSumAccumulation(input=(EDGEWISE, "msg_delta"));
+
+(NODEWISE, "Q_delta") = NodeOuterProduct(left=(NODEWISE, "feature"), right=(NODEWISE, "ht_attn_delta"));
+// TODO; add support to NodeTypeSumAccumulation
+(Q_delta, NODETYPE) = NodeTypeSumAccumulation(input=(NODEWISE, "Q_delta"));
+(Q_transposed, NODETYPE) = Transpose(input=(Q, NODETYPE));
+(NODEWISE, "feature_delta_term1") = NodeInnerProduct(left=(NODEWISE, "ht_attn"), right=(Q_transposed, NODETYPE));
+(NODEWISE, "K_delta") = NodeOuterProduct(left=(NODEWISE, "feature"), right=(NODEWISE, "hs_attn_delta"));
+(K_delta, NODETYPE) = NodeTypeSumAccumulation(input=(NODEWISE, "K_delta"));
+(K_transposed, NODETYPE) = Transpose(input=(K, NODETYPE));
+(NODEWISE, "feature_delta_term2") = NodeInnerProduct(left=(NODEWISE, "hs_attn"), right=(K_transposed, NODETYPE));
+(NODEWISE, "V_delta") = NodeOuterProduct(left=(NODEWISE, "feature"), right=(NODEWISE, "hs_delta"));
+(V_delta, NODETYPE) = NodeTypeSumAccumulation(input=(NODEWISE, "V_delta"));
+(V_transposed, NODETYPE) = Transpose(input=(V, NODETYPE));
+(NODEWISE, "feature_delta_term3") = NodeInnerProduct(left=(NODEWISE, "hs"), right=(V_transposed, NODETYPE));
+(NODEWISE, "feature_delta_tmp1") = VectorAdd(left=(NODEWISE, "feature_delta_term1"), right=(NODEWISE, "feature_delta_term2"));
+(NODEWISE, "feature_delta") = VectorAdd(left=(NODEWISE, "feature_delta_tmp1"), right=(NODEWISE, "feature_delta_term3"));
+}
