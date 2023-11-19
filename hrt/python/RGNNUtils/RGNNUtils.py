@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-from typing import Union
+from typing import Union, Iterable, Callable
 import torch as th
 import torch.nn.functional as F
 from torch import nn
-
+import dgl
 
 from typing import NoReturn
 
@@ -19,7 +19,11 @@ from .. import utils_lite
 
 import nvtx
 
-from ..utils import MyDGLGraph
+from ..utils import (
+    MyDGLGraph,
+    get_mydgl_graph_dataloader,
+    get_funcs_to_propagate_and_produce_metadata,
+)
 from dgl.heterograph import DGLBlock
 from dgl import DGLHeteroGraph
 from dgl.dataloading import DataLoader
@@ -131,10 +135,74 @@ def HET_RGNN_train_with_sampler(*args, **kwargs) -> NoReturn:
     )
 
 
+def get_labels(labels: th.Tensor, output_node_idxes: th.Tensor | None):
+    if output_node_idxes is None:
+        return labels
+    else:
+        return labels[output_node_idxes]
+
+
 def HET_RGNN_train_full_graph(
     g: MyDGLGraph,
     model,
     node_embed_layer: HET_RelGraphEmbed,
+    optimizer,
+    labels: th.Tensor,
+    args: argparse.Namespace,
+    # TODO: add optional argument edge_norm to support RGCN
+):
+    return HET_RGNN_train(
+        lambda: [(None, None, g)],
+        model,
+        node_embed_layer,
+        optimizer,
+        labels,
+        args,
+    )
+
+
+def HET_RGNN_train_with_sampler(
+    g: MyDGLGraph,
+    dataloader: dgl.dataloading.DataLoader,
+    model,
+    node_embed_layer,
+    optimizer,
+    labels: th.Tensor,
+    args: argparse.Namespace,
+):
+    """
+    An example of dataloader is
+    dataloader = dgl.dataloading.DataLoader(
+        g_dgl_homo,
+        list(range(g_dgl_homo.number_of_nodes())),
+        dgl.dataloading.MultiLayerFullNeighborSampler(1),
+        batch_size=1024,
+        shuffle=True,
+        drop_last=False,
+        num_workers=4,
+    )
+    """
+    funcs_to_apply = get_funcs_to_propagate_and_produce_metadata(g)
+    get_new_dataloader = lambda: get_mydgl_graph_dataloader(
+        dataloader, funcs_to_apply
+    )
+    return HET_RGNN_train(
+        get_new_dataloader,
+        model,
+        node_embed_layer,
+        optimizer,
+        labels,
+        args,
+    )
+
+
+def HET_RGNN_train(
+    get_new_dataloader: Callable[
+        [],
+        Iterable[tuple[None | th.Tensor, None | th.Tensor, MyDGLGraph]],
+    ],
+    model,
+    node_embed_layer,
     optimizer,
     labels: th.Tensor,
     args: argparse.Namespace,
@@ -157,9 +225,6 @@ def HET_RGNN_train_full_graph(
     node_embed_layer.train()
     node_embed_layer.requires_grad_(True)
 
-    # TODO: specify input node indices when training minibatches
-    node_embed = node_embed_layer()
-
     memory_offset = torch.cuda.memory_allocated()
     # warm up
     if not args.no_warm_up:
@@ -168,22 +233,37 @@ def HET_RGNN_train_full_graph(
             model.requires_grad_(True)
             node_embed_layer.train()
             node_embed_layer.requires_grad_(True)
-            optimizer.zero_grad()
-            logits = model(g, node_embed)
-            # forward_intermediate_memory needs to be collected before backward
-            warm_up_forward_intermediate_memory.append(
-                torch.cuda.max_memory_allocated() - memory_offset
-            )
-            y_hat = logits.log_softmax(dim=-1)
-            loss = F.nll_loss(y_hat, labels)
-            loss.backward()
-            optimizer.step()
-            torch.cuda.synchronize()
-            warm_up_intermediate_memory.append(
-                torch.cuda.max_memory_allocated() - memory_offset
-            )
-            # Reset the memory stat to clear up the maximal memory allocated stat.
-            reset_peak_memory_stats()
+            dataloader = get_new_dataloader()
+            for input_nodes, output_nodes, g in dataloader:
+                all_nodes = (
+                    torch.cat([output_nodes, input_nodes])
+                    if (output_nodes is not None)
+                    else None
+                )
+                print(
+                    "Graph stats: ",
+                    g.get_num_edges(),
+                    g.get_num_nodes(),
+                    g.get_num_rels(),
+                )
+
+                optimizer.zero_grad()
+                node_embed = node_embed_layer(all_nodes)
+                logits = model(g, node_embed)
+                # forward_intermediate_memory needs to be collected before backward
+                warm_up_forward_intermediate_memory.append(
+                    torch.cuda.max_memory_allocated() - memory_offset
+                )
+                y_hat = logits.log_softmax(dim=-1)
+                loss = F.nll_loss(y_hat, labels)
+                loss.backward()
+                optimizer.step()
+                torch.cuda.synchronize()
+                warm_up_intermediate_memory.append(
+                    torch.cuda.max_memory_allocated() - memory_offset
+                )
+                # Reset the memory stat to clear up the maximal memory allocated stat.
+                reset_peak_memory_stats()
     print("start training...")
 
     for epoch in range(args.n_epochs):
@@ -195,66 +275,74 @@ def HET_RGNN_train_full_graph(
         node_embed_layer.train()
         node_embed_layer.requires_grad_(True)
 
-        node_embed = node_embed_layer()
-
-        optimizer.zero_grad()
-        th.cuda.synchronize()
-        # nvtx.push_range("inference", domain="my_domain")
-        forward_prop_start = th.cuda.Event(enable_timing=True)
-        forward_prop_end = th.cuda.Event(enable_timing=True)
-        forward_prop_start.record()
-        # for idx in range(10):
-        logits = model(g, node_embed)
-        # logits = scripted_model(node_embed)
-        # logits = model(emb, blocks)
-        forward_prop_end.record()
-        th.cuda.synchronize()
-
-        y_hat = logits.log_softmax(dim=-1)
-        loss = F.nll_loss(y_hat, labels)
-
-        backward_prop_start = th.cuda.Event(enable_timing=True)
-        backward_prop_end = th.cuda.Event(enable_timing=True)
-        backward_prop_start.record()
-
-        loss.backward()
-        optimizer.step()
-        backward_prop_end.record()
-        th.cuda.synchronize()
-        # nvtx.pop_range()
-
-        # TODO: should be # edges when training full graph
-        # total_loss += loss.item() * args.batch_size
-
-        # result = test(g, model, node_embed, labels, device, split_idx, args)
-        # logger.add_result(run, result)
-        # train_acc, valid_acc, test_acc = result
-        print(
-            f"Epoch: {epoch + 1 :02d}, "
-            f"Loss (w/o dividing sample num): {loss:.4f}, "
-        )
-        print(
-            "Forward prop time:"
-            f" {forward_prop_start.elapsed_time(forward_prop_end)} ms"
-        )
-        print(
-            "Backward prop time:"
-            f" {backward_prop_start.elapsed_time(backward_prop_end)} ms"
-        )
-        print(
-            "Total time:"
-            f" {forward_prop_start.elapsed_time(backward_prop_end)} ms"
-        )
-        if epoch >= 3:
-            forward_time.append(
-                forward_prop_start.elapsed_time(forward_prop_end)
+        dataloader = get_new_dataloader()
+        for idx_step, (input_nodes, output_nodes, g) in enumerate(dataloader):
+            all_nodes = (
+                torch.cat([output_nodes, input_nodes])
+                if (output_nodes is not None)
+                else None
             )
-            backward_time.append(
-                backward_prop_start.elapsed_time(backward_prop_end)
+            node_embed = node_embed_layer(all_nodes)
+            curr_labels = get_labels(labels, all_nodes)
+
+            optimizer.zero_grad()
+            th.cuda.synchronize()
+            # nvtx.push_range("inference", domain="my_domain")
+            forward_prop_start = th.cuda.Event(enable_timing=True)
+            forward_prop_end = th.cuda.Event(enable_timing=True)
+            forward_prop_start.record()
+            # for idx in range(10):
+            logits = model(g, node_embed)
+            # logits = scripted_model(node_embed)
+            # logits = model(emb, blocks)
+            forward_prop_end.record()
+            th.cuda.synchronize()
+
+            y_hat = logits.log_softmax(dim=-1)
+            loss = F.nll_loss(y_hat, curr_labels)
+
+            backward_prop_start = th.cuda.Event(enable_timing=True)
+            backward_prop_end = th.cuda.Event(enable_timing=True)
+            backward_prop_start.record()
+
+            loss.backward()
+            optimizer.step()
+            backward_prop_end.record()
+            th.cuda.synchronize()
+            # nvtx.pop_range()
+
+            # TODO: should be # edges when training full graph
+            # total_loss += loss.item() * args.batch_size
+
+            # result = test(g, model, node_embed, labels, device, split_idx, args)
+            # logger.add_result(run, result)
+            # train_acc, valid_acc, test_acc = result
+            print(
+                f"Epoch: {epoch + 1 :02d}, Step: {idx_step + 1 :02d},"
+                f"Loss (w/o dividing sample num): {loss:.4f}, "
             )
-            training_time.append(
-                forward_prop_start.elapsed_time(backward_prop_end)
+            print(
+                "Forward prop time:"
+                f" {forward_prop_start.elapsed_time(forward_prop_end)} ms"
             )
+            print(
+                "Backward prop time:"
+                f" {backward_prop_start.elapsed_time(backward_prop_end)} ms"
+            )
+            print(
+                "Total time:"
+                f" {forward_prop_start.elapsed_time(backward_prop_end)} ms"
+            )
+            if epoch >= 3:
+                forward_time.append(
+                    forward_prop_start.elapsed_time(forward_prop_end)
+                )
+                backward_time.append(
+                    backward_prop_start.elapsed_time(backward_prop_end)
+                )
+                training_time.append(
+                    forward_prop_start.elapsed_time(backward_prop_end)
+                )
 
     print(
         "Epochs: Max memory allocated (MB) ",

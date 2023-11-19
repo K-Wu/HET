@@ -173,22 +173,27 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
 
         embed_layer, model = RGAT_get_our_model(g, num_classes, args)
 
-        # TODO: check if this clause is needed
-        if not args.full_graph_training:
-            # need to prepare dgl graph for sampler
-            g_dglgraph = g.get_dgl_graph()
-            # train sampler
-            # TODO: figure out split_idx train for this case
-            assert len(args.fanout) == args.num_layers
-            sampler = dgl.dataloading.MultiLayerNeighborSampler(args.fanout)
-            train_loader = dgl.dataloading.NodeDataLoader(
-                g_dglgraph,
-                split_idx["train"],
-                sampler,
-                batch_size=args.batch_size,
-                shuffle=True,
-                num_workers=0,
-            )
+    if not args.full_graph_training:
+        # need to prepare dgl graph for sampler
+        # g_dglgraph = g.get_dgl_graph()
+        g_dglgraph_hetero, _, _2 = utils.graphiler_load_data(
+            args.dataset, to_homo=False
+        )
+        num_of_nodes = sum(
+            [
+                g_dglgraph_hetero.number_of_nodes(ntype)
+                for ntype in g_dglgraph_hetero.ntypes
+            ]
+        )
+        train_loader = dgl.dataloading.DataLoader(
+            g_dglgraph_hetero,
+            list(range(num_of_nodes)),
+            dgl.dataloading.MultiLayerFullNeighborSampler(1),
+            batch_size=1024,
+            shuffle=True,
+            drop_last=False,
+            num_workers=4,
+        )
 
     # Training
     device = f"cuda:0" if th.cuda.is_available() else "cpu"
@@ -212,6 +217,7 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         optimizer = th.optim.Adam(all_params, lr=args.lr)
         print(f"Run: {run + 1:02d}, ")
         if dgl_model_flag:
+            assert len(args.fanout) == args.num_layers
             if args.full_graph_training:
                 RGNN_train_full_graph(
                     model,
@@ -234,20 +240,26 @@ def RGAT_main_procedure(args: argparse.Namespace, dgl_model_flag: bool):
         else:  # Not dgl_model_flag
             # Type annotation
             assert isinstance(embed_layer, HET_RelGraphEmbed)
-            if not args.full_graph_training:
-                raise NotImplementedError(
-                    "Not full_graph_training in"
-                    " RGAT_main_procedure(dgl_model_flag == False)"
+            if args.full_graph_training:
+                HET_RGNN_train_full_graph(
+                    g,
+                    model,
+                    embed_layer,
+                    optimizer,
+                    labels,
+                    # device,
+                    args,
                 )
-            HET_RGNN_train_full_graph(
-                g,
-                model,
-                embed_layer,
-                optimizer,
-                labels,
-                # device,
-                args,
-            )
+            else:
+                HET_RGNN_train_with_sampler(
+                    g,
+                    train_loader,
+                    model,
+                    embed_layer,
+                    optimizer,
+                    labels,
+                    args,
+                )
 
 
 if __name__ == "__main__":

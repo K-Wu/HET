@@ -7,30 +7,57 @@ from . import mydgl_graph
 from . import graphiler_datasets_loader
 from . import mydglgraph_converters
 import numpy as np
+from typing import Callable, Generator, Any
 
 from ..utils import MyDGLGraph
+from dgl.base import EID, ETYPE, NID, NTYPE
 from dgl.heterograph import DGLBlock
 import dgl
 
 
-def convert_sampled_iteration_to_mydgl_graph(
-    input_nodes: th.Tensor, output_nodes: th.Tensor, blocks: list[DGLBlock]
-):
+def get_mydgl_graph_dataloader(
+    dataloader: dgl.dataloading.DataLoader,
+    funcs_to_apply: list[Callable] = [
+        lambda subg: subg.generate_separate_unique_node_indices_for_each_etype(),
+        lambda subg: subg.generate_separate_unique_node_indices_single_sided_for_each_etype(),
+    ],  # You may get funcs_to_appy = get_funcs_to_propagate_and_produce_metadata(g)
+) -> Generator[tuple[Any, Any, MyDGLGraph], Any, None]:
+    for idx, (input_nodes, output_nodes, blocks) in enumerate(dataloader):
+        # Use convert_sampled_iteration_to_mydgl_graph from mydglgraph_converters to convert blocks[-1] to mydglgraph
+        (
+            my_g,
+            canonical_etypes_id_tuple,
+        ) = mydglgraph_converters.convert_sampled_iteration_to_mydgl_graph(
+            blocks
+        )
+
+        # TODO: Now my_g is still on CPU. Move my_g.graph_data to GPU, e.g., separate_coo
+        for idx_func, func in enumerate(funcs_to_apply):
+            print("applied func", idx_func, func)
+            func(my_g)
+        yield input_nodes, output_nodes, my_g
+
+
+def convert_sampled_iteration_to_mydgl_graph(blocks_hetero: list[DGLBlock]):
     """This is similar to the graphiler conditional branch in RGNN_get_mydgl_graph(), and graphiler_load_data_as_mydgl_graph"""
-    assert len(blocks) == 1, "only support one block"
-    assert blocks[0].canonical_etypes is not None
+    assert len(blocks_hetero) == 1, "only support one block"
+    assert blocks_hetero[0].canonical_etypes is not None
 
     canonical_etypes_id_tuple: list[tuple[int, int, int]] = []
 
-    ntype_dict = dict(zip(blocks[0].ntypes, range(len(blocks[0].ntypes))))
-    etype_dict = dict(zip(blocks[0].etypes, range(len(blocks[0].etypes))))
-    for src_type, etype, dst_type in blocks[0].canonical_etypes:
+    ntype_dict = dict(
+        zip(blocks_hetero[0].ntypes, range(len(blocks_hetero[0].ntypes)))
+    )
+    etype_dict = dict(
+        zip(blocks_hetero[0].etypes, range(len(blocks_hetero[0].etypes)))
+    )
+    for src_type, etype, dst_type in blocks_hetero[0].canonical_etypes:
         canonical_etypes_id_tuple.append(
             (ntype_dict[src_type], etype_dict[etype], ntype_dict[dst_type])
         )
 
     g, ntype_counts, _etype_counts = dgl.to_homogeneous(
-        blocks[0], return_count=True
+        blocks_hetero[0], return_count=True
     )
 
     my_g = mydglgraph_converters.create_mydgl_graph_coo_from_homo_dgl_graph(
@@ -41,7 +68,37 @@ def convert_sampled_iteration_to_mydgl_graph(
 
     my_g["original"]["node_type_offsets"] = th.LongTensor(ntype_offsets)
 
-    return input_nodes, output_nodes, my_g, canonical_etypes_id_tuple
+    return my_g, canonical_etypes_id_tuple
+
+
+def get_homogeneous_graph_from_dgl_block(block):
+    """DGL Block is generated from homogeneous graph, and is homogeneous with the only exception that input nodes and output nodes are marked as two node types.
+    This function creates a new homogeneous graph, merge the input node and output node type, and copy NID, NTYPE, EID, ETYPE
+    """
+    block_ = dgl.block_to_graph(block)
+    original_node_idx_unique, node_to_new_idx = th.unique(
+        th.cat([block_.ndata[NID]["_N_src"], block_.ndata[NID]["_N_dst"]], 0),
+        return_inverse=True,
+    )
+    src_node_to_new_idx = node_to_new_idx[: len(block_.ndata[NID]["_N_src"])]
+    dst_node_to_new_idx = node_to_new_idx[len(block_.ndata[NID]["_N_src"]) :]
+    new_edges_src = block_.edges()[0][src_node_to_new_idx]
+    new_edges_dst = block_.edges()[1][dst_node_to_new_idx]
+
+    g = dgl.graph((new_edges_src, new_edges_dst))
+    g.edata[EID] = block_.edata[EID]
+    g.edata[ETYPE] = block_.edata[ETYPE]
+    g.ndata[NID] = original_node_idx_unique
+    g.ndata[NTYPE] = th.zeros_like(original_node_idx_unique)
+    for idx in range(len(block_.ndata[NID]["_N_src"])):
+        g.ndata[NTYPE][src_node_to_new_idx[idx]] = block_.ndata[NTYPE][
+            "_N_src"
+        ][idx]
+    for idx in range(len(block_.ndata[NID]["_N_dst"])):
+        g.ndata[NTYPE][dst_node_to_new_idx[idx]] = block_.ndata[NTYPE][
+            "_N_dst"
+        ][idx]
+    return g
 
 
 def RGNN_get_mydgl_graph(
@@ -66,7 +123,7 @@ def RGNN_get_mydgl_graph(
         )
 
     # Loading dataset
-    if dataset == "fb15k":
+    if dataset == "my_fb15k":
         print(
             "WARNING - loading fb15k. Currently we only support a few dataset."
         )
@@ -98,7 +155,7 @@ def RGNN_get_mydgl_graph(
         canonical_etype_indices_tuples = []
         for idx_etype in range(int(max(edge_etypes)) + 1):
             canonical_etype_indices_tuples.append((0, idx_etype, 0))
-    elif dataset == "wikikg2":
+    elif dataset == "my_wikikg2":
         print(
             "WARNING - loading wikikg2. Currently we only support a few"
             " dataset."

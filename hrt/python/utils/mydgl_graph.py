@@ -19,6 +19,45 @@ import torch.jit
 
 import dgl
 
+# This maps ScriptedMyDGLGraph data member to MyDGLGraph function that produces it.
+scripted_member_to_function: dict[str, str] = {
+    "transposed_sparse_format": "transpose",
+    "transposed_coo": "transpose",
+    "separate_unique_node_indices": (
+        "generate_separate_unique_node_indices_for_each_etype"
+    ),
+    # TODO: add separate CSR
+    "separate_unique_node_indices_single_sided": (
+        "generate_separate_unique_node_indices_single_sided_for_each_etype"
+    ),
+    "separate_unique_node_indices_inverse_idx": (
+        "generate_separate_unique_node_indices_for_each_etype"
+    ),
+    "separate_unique_node_indices_single_sided_inverse_idx": (
+        "generate_separate_unique_node_indices_single_sided_for_each_etype"
+    ),
+    "separate_coo_original": "generate_separate_coo_adj_for_each_etype",
+    "separate_csr_original": "generate_separate_csr_adj_for_each_etype",
+}
+
+# Store this in list to make sure the order is preserved.
+graph_data_key_to_function: list[tuple[tuple[str, ...], str]] = [
+    (("transposed",), "transpose"),
+    (
+        ("separate", "coo"),
+        "generate_separate_coo_adj_for_each_etype_both_transposed_and_non_transposed",
+    ),
+    (("separate", "csr"), "generate_separate_csr_adj_for_each_etype"),
+    (("separate", "unique_node_indices"), "separate_unique_node_indices"),
+    (
+        (
+            "separate",
+            "unique_node_indices_single_sided",
+        ),
+        "generate_separate_unique_node_indices_single_sided_for_each_etype",
+    ),
+]
+
 
 def recursive_apply_to_each_tensor_in_dict(func, dict_var, filter_key_set):
     for second_key in dict_var:
@@ -576,6 +615,19 @@ class MyDGLGraph:
         ] = separate_csr_eids
 
     @torch.no_grad()
+    def generate_separate_coo_adj_for_each_etype_both_transposed_and_non_transposed(
+        self,
+    ):
+        """This is defined for the ease of get_funcs_to_propagate_and_produce_metadata"""
+        # TODO: refine the implementation for get_funcs_to_propagate_and_produce_metadata
+        self.generate_separate_coo_adj_for_each_etype(
+            transposed_flag=False, rel_eid_sorted_flag=True
+        )
+        self.generate_separate_coo_adj_for_each_etype(
+            transposed_flag=True, rel_eid_sorted_flag=True
+        )
+
+    @torch.no_grad()
     def generate_separate_coo_adj_for_each_etype(
         self, transposed_flag, rel_eid_sorted_flag=True
     ):
@@ -648,6 +700,8 @@ class MyDGLGraph:
                 self.graph_data[original_or_transposed]["col_indices"],
                 self.graph_data[original_or_transposed]["rel_types"],
                 self.graph_data[original_or_transposed]["eids"],
+                self.get_num_nodes(),
+                self.get_num_rels(),
             )
         else:
             raise ValueError("unknown sparse format")
@@ -885,18 +939,20 @@ class MyDGLGraph:
             "canonical_etypes"
         ] = dglgraph.canonical_etypes
         self["legacy_metadata_from_dgl"]["ntypes"] = dglgraph.ntypes
-        self["legacy_metadata_from_dgl"][
-            "number_of_nodes"
-        ] = dglgraph.number_of_nodes()
+
         self["legacy_metadata_from_dgl"]["number_of_nodes_per_type"] = dict(
             [
                 (ntype, dglgraph.number_of_nodes(ntype))
                 for ntype in dglgraph.ntypes
             ]
         )
-        self["legacy_metadata_from_dgl"][
-            "number_of_edges"
-        ] = dglgraph.number_of_edges()
+        # Number of nodes and number of edges in legacy_metadata_from_dgl are unused and causes confusion when propagating metadata to subgraphs
+        # self["legacy_metadata_from_dgl"][
+        #     "number_of_nodes"
+        # ] = dglgraph.number_of_nodes()
+        # self["legacy_metadata_from_dgl"][
+        #     "number_of_edges"
+        # ] = dglgraph.number_of_edges()
         self["legacy_metadata_from_dgl"]["number_of_edges_per_type"] = dict(
             [
                 (etype, dglgraph.number_of_edges(etype))
