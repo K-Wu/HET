@@ -185,12 +185,6 @@ class HET_RGATLayer(nn.Module):
                     ),
                     self.attn_r.view(-1, self.out_feat // self.num_heads, 1),
                 ).view(-1, self.num_heads, self.in_feat, 1)
-                product_of_conv_weights_attn_l = th.bmm(
-                    self.conv_weights.view(
-                        -1, self.in_feat, self.out_feat // self.num_heads
-                    ),
-                    self.attn_l.view(-1, self.out_feat // self.num_heads, 1),
-                ).view(-1, self.num_heads, self.in_feat, 1)
                 feat_compact = B.rgnn_relational_matmul(
                     args_tensor_dict_row,
                     self.conv_weights,
@@ -198,13 +192,11 @@ class HET_RGATLayer(nn.Module):
                     True,  # fixme: check if this is correct
                     matmul_compact_as_of_node_kind,  # CompactAsOfNodeKind::Enabled or Direct Index
                 )  # NB: use single side instead without need to modify kernel
-                el_compact = B.rgnn_relational_matmul(
-                    args_tensor_dict_row,
-                    product_of_conv_weights_attn_l,
-                    inputs,
-                    True,
-                    matmul_compact_as_of_node_kind,  # CompactAsOfNodeKind::Enabled or Direct Index
-                )  # NB: use single side instead without need to modify kernel
+                el_compact = B.rgnn_relational_matmul_no_scatter_gather_list(
+                    separate_unique_node_indices_single_sided["rel_ptrs_row"],
+                    self.attn_l.unsqueeze(-1),
+                    feat_compact,
+                )
                 er_compact = B.rgnn_relational_matmul(
                     args_tensor_dict_col,
                     product_of_conv_weights_attn_r,
