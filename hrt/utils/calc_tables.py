@@ -148,7 +148,7 @@ class BenchAllRecords:
     @classmethod
     def load_HET_results_from_uploader(
         cls, out_csv: "list[list[Union[float, str, int]]]", cfg_fmt: str
-    ) -> "tuple[dict[str, BenchAllRecords], dict[str, BenchAllRecords]]":
+    ) -> "tuple[dict[str, BenchAllRecords], dict[str, BenchAllRecords], dict[str, BenchAllRecords]]":
         """
         This function takes in the csv from extract_het_results_from_folder and store all the records in the result object
         cfg_format corresponds to the one specified in extract_info_from(filename) in upload_benchmark_results.py
@@ -158,17 +158,24 @@ class BenchAllRecords:
         time_records: dict[
             str, BenchAllRecords
         ] = dict()  # cls.get_HETAllRecords(cfg_fmt)
+        dram_records: dict[
+            str, BenchAllRecords
+        ] = dict()  # cls.get_HETAllRecords(cfg_fmt)
         status_records: dict[
             str, BenchAllRecords
         ] = dict()  # cls.get_HETAllRecords(cfg_fmt)
         for row in out_csv:
             row = list(map(str, row))
             model, dataset = row[0], row[1]
-            inference_time = row[-4]
-            # Omitting row[-3], which is backward prop time
-            training_time = row[-2]
-            status = row[-1]
-            configs = list(map(str, row[2:-4]))
+            # row[-6], row[-5], row[-4], row[-3], row[-2], row[-1] are
+            # inference_time, backward_prop_time, training_time, status, inference_dram, training_dram
+            inference_time = row[-6]
+            # Omitting row[-5], which is backward prop time
+            training_time = row[-4]
+            status = row[-3]
+            inference_dram = row[-2]
+            training_dram = row[-1]
+            configs = list(map(str, row[2:-6]))
             configs_dimensions = ConfigCanonicalizer.get_dimensions(
                 configs, cfg_fmt
             )
@@ -182,6 +189,9 @@ class BenchAllRecords:
                     cfg_fmt
                 )
                 status_records[configs_dimensions] = cls.get_HETAllRecords(
+                    cfg_fmt
+                )
+                dram_records[configs_dimensions] = cls.get_HETAllRecords(
                     cfg_fmt
                 )
             time_records[configs_dimensions].store_record(
@@ -198,6 +208,20 @@ class BenchAllRecords:
                 configs_rest,
                 training_time,
             )
+            dram_records[configs_dimensions].store_record(
+                "inference",
+                dataset,
+                model,
+                configs_rest,
+                inference_dram,
+            )
+            dram_records[configs_dimensions].store_record(
+                "training",
+                dataset,
+                model,
+                configs_rest,
+                training_dram,
+            )
             status_records[configs_dimensions].store_record(
                 "inference",
                 dataset,
@@ -212,7 +236,7 @@ class BenchAllRecords:
                 configs_rest,
                 status,
             )
-        return time_records, status_records
+        return time_records, dram_records, status_records
 
     @classmethod
     def get_BaselineAllRecords(cls) -> "BenchAllRecords":
@@ -683,6 +707,7 @@ if __name__ == "__main__":
     )
     (
         all_het_time_records,
+        all_het_dram_records,
         all_het_status_records,
     ) = BenchAllRecords.load_HET_results_from_uploader(
         het_names_and_info, "flag_mul.flag_compact.ax_in.ax_out.ax_head"

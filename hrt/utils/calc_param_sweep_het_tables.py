@@ -29,6 +29,7 @@ if __name__ == "__main__":
     het_names_and_info = extract_het_results_from_folder(het_results_dir)
     (
         all_het_time_records,
+        all_het_dram_records,
         all_het_status_records,
     ) = BenchAllRecords.load_HET_results_from_uploader(
         het_names_and_info, "flag_mul.flag_compact.ax_in.ax_out.ax_head"

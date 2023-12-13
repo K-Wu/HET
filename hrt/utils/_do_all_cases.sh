@@ -1,11 +1,14 @@
 do_all_cases() {
   declare -a MODELS=("RGAT" "HGT")
   # declare -a MODELS=("RGAT")
-  declare -a CompactFlag=("--compact_as_of_node_flag" "" "--compact_as_of_node_flag --compact_direct_indexing_flag")
+  #declare -a CompactFlag=("--compact_as_of_node_flag" "" "--compact_as_of_node_flag --compact_direct_indexing_flag")
+  declare -a CompactFlag=("" "--compact_as_of_node_flag --compact_direct_indexing_flag")
   declare -a MulFlag=("--multiply_among_weights_first_flag" "")
   declare -a Datasets=("aifb" "mutag" "bgs" "am" "mag" "wikikg2" "fb15k" "biokg")
-  DimsX=( 32 64 128 )
-  DimsY=( 32 64 128 )
+  #DimsX=( 32 64 128 )
+  #DimsY=( 32 64 128 )
+  DimsX=${DimsX:- 32 64 128}
+  DimsY=${DimsY:- 32 64 128}
   # TODO: num_classes need to be out_feat_per_head * num_heads
   OUTPUT_DIR=$1
   mkdir -p ${OUTPUT_DIR}

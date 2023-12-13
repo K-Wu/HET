@@ -112,6 +112,8 @@ def extract_het_results_from_folder(
             avg_forward_time = "NotFound"
             avg_backward_time = "NotFound"
             avg_training_time = "NotFound"
+            forward_prop_memory = "NotFound"
+            training_memory = "NotFound"
             status = []
             with open(os.path.join(path, filename), "r") as f:
                 lines = f.readlines()
@@ -129,12 +131,16 @@ def extract_het_results_from_folder(
                             line.split(":")[1].strip().split()[0]
                         )
                     elif line.startswith(
-                        "Forward intermediate memory usage (MB):"
+                        "WarmUp: Forward intermediate memory allocated (MB)"
                     ):
-                        # TODO: extract forward intermediate memory usage
+                        # Extract forward intermediate memory usage
+                        forward_prop_memory = float(line.split()[-1].strip())
                         pass
-                    elif line.startswith("Intermediate memory usage (MB):"):
-                        # TODO: extract training intermediate memory usage
+                    elif line.startswith(
+                        "WarmUp: Intermediate memory allocated (MB)"
+                    ):
+                        # Extract training intermediate memory usage
+                        training_memory = float(line.split()[-1].strip())
                         pass
                     if line.lower().find("error") != -1:
                         status.append(line.strip())
@@ -153,6 +159,8 @@ def extract_het_results_from_folder(
                 avg_backward_time,
                 avg_training_time,
                 status_str,
+                forward_prop_memory,
+                training_memory,
             ]
             all_names_and_info.append(name_info)
     return all_names_and_info
