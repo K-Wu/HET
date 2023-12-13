@@ -45,7 +45,7 @@ void Layer1_NodeMeanAggregation_CompactAsOfNode(
   // node -> blockIdx.y
   // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
   auto [nblks2, nthrs2] =
-      get_type2_schedule(/*num_heads*/ 1, num_edges, num_edges);
+      get_type2_schedule(/*num_heads*/ 1, gdata.feat_src_xlen, num_edges);
 
   ETypeData<Idx, true> etype_data{
       .etypes = separate_coo_rel_ptrs.data_ptr<Idx>(),
