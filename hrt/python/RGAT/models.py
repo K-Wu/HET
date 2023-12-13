@@ -262,7 +262,7 @@ class HET_RGATLayer(nn.Module):
                     self.leaky_relu_slope,
                 )  # TODO: need to modify kernel to enable single side
 
-        else:
+        else:  # Else clause of condition self.compact_as_of_node_flag
             separate_coo_original_dict = g.get_separate_coo_original()
             # with nvtx.annotate("hector_op_category = edgewise mm", color="cyan"):
             feat_src_per_edge = B.rgnn_relational_matmul(
@@ -324,7 +324,7 @@ class HET_RGATLayer(nn.Module):
                     False,
                     0,  # CompactAsOfNodeKind::Disabled
                 )
-            else:
+            else:  # Else clause of condition self.multiply_among_weights_first_flag
                 separate_coo_original_dict = g.get_separate_coo_original()
                 feat_dst_per_edge = B.rgnn_relational_matmul(
                     {
