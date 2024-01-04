@@ -4,8 +4,8 @@ from .nsight_utils import (
     update_gspread,
     create_worksheet,
     get_pretty_hostname,
-    extract_from_ncu_folder,
-    extract_from_ncu_file,
+    extract_csv_from_ncu_folder,
+    extract_csv_from_ncu_file,
 )
 from .classify_het_kernels import classify_het_kernel
 from .detect_pwd import is_pwd_het_dev_root, RESULTS_DIR
@@ -33,11 +33,11 @@ if __name__ == "__main__":
 
     # Extract results
     if os.path.isdir(path_name):
-        csv_rows = extract_from_ncu_folder(
+        csv_rows = extract_csv_from_ncu_folder(
             path_name, True, True, classify_het_kernel
         )
     else:
-        csv_rows = extract_from_ncu_file(
+        csv_rows = extract_csv_from_ncu_file(
             path_name, True, True, classify_het_kernel
         )
 
