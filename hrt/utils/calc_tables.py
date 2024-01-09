@@ -280,7 +280,7 @@ def _calc_best(
     )  # [mode][model][config][dataset]
     # Iterate through [inference/training], [dataset], [model], [config] in order
     for mode in ["inference", "training"]:
-        for dataset in time_records[dimensions_cfg].datasets_in(mode):
+        for dataset in sorted(time_records[dimensions_cfg].datasets_in(mode)):
             for model in time_records[dimensions_cfg].models_in(mode, dataset):
                 # keep track of the best time and config
                 best_time = float("inf")
@@ -333,11 +333,11 @@ def _calc_best(
         for model in sorted(tmp_records[mode], reverse=True):
             # Title of the sub-table
             results += [[mode, model]]
-            datasets_: list[str] = sorted(
+            datasets_sorted_: list[str] = sorted(
                 time_records[dimensions_cfg].get_all_dataset(), reverse=True
             )
             # Header of the sub-table
-            results.append(["system"] + datasets_)
+            results.append(["system"] + datasets_sorted_)
             # put $BEST at the end
             for config in sorted(
                 list(
@@ -347,7 +347,7 @@ def _calc_best(
                 )
             ) + ["$BEST"]:
                 row = [config]
-                for dataset in datasets_:
+                for dataset in datasets_sorted_:
                     if dataset not in tmp_records[mode][model][config]:
                         row.append("Not Presented")
                     else:
@@ -507,7 +507,7 @@ def _calc_worst_mean_best(
             num_oom_baseline: int = 0
             num_oom_HET: int = 0
             num_degradation: int = 0
-            for dataset in HET_time_records.get_all_dataset():
+            for dataset in sorted(HET_time_records.get_all_dataset()):
                 best_baseline = baseline_time_records.get_record(
                     mode, dataset, model, "$BEST"
                 )
@@ -626,7 +626,7 @@ def _calc_opt_matrix(
                     mode, dataset, model, unoptimized_cfg
                 )
                 if not is_float(unoptimized):
-                    # find the largest time
+                    # Try to find the largest time
                     for config in HET_time_records.get_all_config().difference(
                         {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
                     ):
@@ -639,7 +639,7 @@ def _calc_opt_matrix(
                             else:
                                 unoptimized = curr
                 if not is_float(unoptimized):
-                    # all OOM
+                    # The trial in the previous if clause fails: all cases are OOMs
                     for config in HET_time_records.get_all_config().difference(
                         {unoptimized_cfg, "$BEST", "$BESTCONFIG"}
                     ):
