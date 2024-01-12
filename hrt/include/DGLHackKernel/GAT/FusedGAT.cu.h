@@ -13,7 +13,7 @@ struct GatFusedData {
   DType leaky_relu_slope;
   // Inputs
   DType *__restrict__ feat_src{nullptr}, *__restrict__ el{nullptr},
-                                             *__restrict__ er{nullptr};
+      *__restrict__ er{nullptr};
   // Intermediates
   DType *__restrict__ sum{nullptr}, *__restrict__ exp{nullptr};
   // Output
@@ -57,6 +57,8 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel(
               etype = etype_data.etypes[eidx];
             }
             if constexpr (IsCompact(kind)) {
+              // TODO: etype is not needed if etype_mapper_data
+              // !IsBinarySearch(kind)
               feat_src_entry_id = find_relational_compact_as_of_node_index(
                   etype, src_vid, edata_idx, etype_mapper_data);
 

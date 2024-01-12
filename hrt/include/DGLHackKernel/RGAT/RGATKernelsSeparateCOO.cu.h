@@ -54,6 +54,8 @@ __device__ __forceinline__ void _gatSumProdZipDivKernel_edge_parallel(
             etype = etype_data.etypes[eidx];
           }
           if constexpr (CompactAsOfNodeFlag) {
+            // TODO: etype is not needed if etype_mapper_data
+            // !IsBinarySearch(kind)
             feat_src_entry_id = find_relational_compact_as_of_node_index(
                 etype, src_vid, edata_idx, etype_mapper_data);
             if constexpr (FullCartesianFlag) {

@@ -34,6 +34,8 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
         if constexpr (RelationalFlag) {
           if constexpr (IsCompact(kind)) {
             Idx etype = -1;
+            // TODO: etype is not needed if etype_mapper_data
+            // !IsBinarySearch(kind)
             if constexpr (ETypeRelPtrFlag) {
               if constexpr (EtypeRelPtrIndexSearch) {
                 etype = linear_search(etype_data.num_relations,
@@ -46,7 +48,8 @@ __global__ void HET_inner_product_fw_kernel_edge_parallel(
             } else {
               etype = etype_data.etypes[eidx];
             }
-
+            // TODO: etype is not needed if etype_mapper_data
+            // !IsBinarySearch(kind)
             feat_src_entry_id = find_relational_compact_as_of_node_index(
                 etype, src_vid, edata_idx, etype_mapper_data);
 

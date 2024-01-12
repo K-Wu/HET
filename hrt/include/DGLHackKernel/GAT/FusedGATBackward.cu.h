@@ -11,13 +11,12 @@ struct BackwardGatFusedData {
   DType leaky_relu_slope;
   // Inputs
   DType *__restrict__ feat_src{nullptr}, *__restrict__ el{nullptr},
-                                             *__restrict__ er{nullptr};
+      *__restrict__ er{nullptr};
   DType *__restrict__ sum{nullptr}, *__restrict__ exp{nullptr},
-                                        *__restrict__ ret{nullptr};
+      *__restrict__ ret{nullptr};
   // Output
   DType *__restrict__ grad_out{nullptr}, *__restrict__ grad_feat_src{nullptr},
-                                             *__restrict__ grad_el{nullptr},
-                                                 *__restrict__ grad_er{nullptr};
+      *__restrict__ grad_el{nullptr}, *__restrict__ grad_er{nullptr};
 };
 
 template <typename DType>
@@ -82,6 +81,8 @@ __device__ __forceinline__ void _fusedGatBackwardGradElErFeatSrcFused(
               } else {
                 etype = etype_data.etypes[e];
               }
+              // TODO: etype is not needed if etype_mapper_data
+              // !IsBinarySearch(kind)
               dst_vid_relational = find_relational_compact_as_of_node_index(
                   etype, dst_vid, edata_idx, etype_mapper_data);
               er_idx = dst_vid_relational * num_heads + head_idx;

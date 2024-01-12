@@ -75,6 +75,8 @@ _fusedGatBackwardGradElErFeatSrcFused_edge_parallel(
               etype = etype_data.etypes[e];
             }
             if constexpr (DualUniqueNodeList) {
+              // TODO: etype is not needed if etype_mapper_data
+              // !IsBinarySearch(kind)
               dst_vid_relational = find_relational_compact_as_of_node_index(
                   etype, dst_vid, edata_idx, etype_mapper_data_col);
             } else {

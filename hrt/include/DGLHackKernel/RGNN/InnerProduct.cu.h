@@ -26,8 +26,8 @@ struct BackwardInnerProductData {
   DType *__restrict__ feat_src{nullptr}, *__restrict__ feat_dst{nullptr};
   DType *__restrict__ grad_inner_product{nullptr};
   // Output
-  DType *__restrict__ grad_feat_dst{nullptr}, *__restrict__ grad_feat_src{
-                                                  nullptr};
+  DType *__restrict__ grad_feat_dst{nullptr},
+      *__restrict__ grad_feat_src{nullptr};
 };
 
 // adapted from _gatSumProdZipDivKernel in
@@ -61,7 +61,8 @@ __global__ void HET_inner_product_fw_kernel(
               } else {
                 etype = etype_data.etypes[eidx];
               }
-
+              // TODO: etype is not needed if etype_mapper_data
+              // !IsBinarySearch(kind)
               feat_src_entry_id = find_relational_compact_as_of_node_index(
                   etype, src_vid, edata_idx, etype_mapper_data);
 

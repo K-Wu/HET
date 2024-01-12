@@ -36,6 +36,8 @@ __device__ __forceinline__ float &GetRowMajorElementAdvancedBinarySearch(
     float *matrix_data, IdxPtr unique_srcs_and_dests_rel_ptr,
     IdxPtr unique_srcs_and_dests_node_indices, Idx idx_relation, Idx idx_node,
     Idx idx_head, Idx idx_feat, int num_heads, Idx feat_dim_per_head) {
+  // TODO: etype is not needed if etype_mapper_data
+  // !IsBinarySearch(kind)
   Idx offset = find_relational_compact_as_of_node_index(
       idx_relation, idx_node, unique_srcs_and_dests_rel_ptr,
       unique_srcs_and_dests_node_indices);

@@ -213,8 +213,8 @@ struct HgtDstOutData<Idx, DType, 0> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ edgesoftmax_sum_per_node{nullptr},
       *__restrict__ message{nullptr}, *__restrict__ ret{nullptr};
-  DType *__restrict__ mu{nullptr}, *__restrict__ unnormalized_attn_score{
-                                       nullptr};
+  DType *__restrict__ mu{nullptr},
+      *__restrict__ unnormalized_attn_score{nullptr};
 };
 
 template <typename Idx, typename DType>
@@ -272,6 +272,8 @@ __global__ void HET_HGTMessageAccumBasedOnOriAttnScoreAndEdgeSoftmaxSum(
               etype = etype_data.etypes[eidx];
             }
             if constexpr (IsCompact(kind)) {
+              // TODO: etype is not needed if etype_mapper_data
+              // !IsBinarySearch(kind)
               feat_src_entry_id = find_relational_compact_as_of_node_index(
                   etype, src_vid, edata_idx, etype_mapper_data);
 
@@ -380,7 +382,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 0> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ mu{nullptr},
       *__restrict__ unnormalized_attn_score{nullptr},
-          *__restrict__ edgesoftmax_sum_per_node{nullptr};
+      *__restrict__ edgesoftmax_sum_per_node{nullptr};
 };
 
 template <typename Idx, typename DType>
@@ -389,7 +391,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 1> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ mu{nullptr},
       *__restrict__ unnormalized_attn_score{nullptr},
-          *__restrict__ edgesoftmax_sum_per_node{nullptr};
+      *__restrict__ edgesoftmax_sum_per_node{nullptr};
   DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
 };
 
@@ -399,7 +401,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 2> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ mu{nullptr},
       *__restrict__ unnormalized_attn_score{nullptr},
-          *__restrict__ edgesoftmax_sum_per_node{nullptr};
+      *__restrict__ edgesoftmax_sum_per_node{nullptr};
   DType *__restrict__ normalized_attn_score{nullptr};
 };
 
@@ -409,7 +411,7 @@ struct HgtEdgeSoftmaxAccumData<Idx, DType, 3> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ mu{nullptr},
       *__restrict__ unnormalized_attn_score{nullptr},
-          *__restrict__ edgesoftmax_sum_per_node{nullptr};
+      *__restrict__ edgesoftmax_sum_per_node{nullptr};
   DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
   DType *__restrict__ normalized_attn_score{nullptr};
 };

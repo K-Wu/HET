@@ -64,6 +64,8 @@ __device__ __forceinline__ void _RGCNBackwardNodeMeanAggregation_edge_parallel(
           } else {
             etype = etype_data.etypes[e];
           }
+          // TODO: etype is not needed if etype_mapper_data
+          // !IsBinarySearch(kind)
           Idx src_vid_relational = find_relational_compact_as_of_node_index(
               etype, src_vid, edata_idx, etype_mapper_data);
           feat_src_offset = src_vid_relational * gdata.feat_src_xlen + feat_idx;

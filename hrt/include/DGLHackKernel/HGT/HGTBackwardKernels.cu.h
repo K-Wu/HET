@@ -17,8 +17,8 @@ struct BackwardHGTMessageData<Idx, DType, 2> {
   Idx num_heads{0};
   Idx message_src_xlen{0};
   Idx *__restrict__ eids{nullptr};
-  DType *__restrict__ grad_message_src{nullptr}, *__restrict__ grad_out{
-                                                     nullptr};
+  DType *__restrict__ grad_message_src{nullptr},
+      *__restrict__ grad_out{nullptr};
   DType *__restrict__ normalized_attn_score{nullptr};
 };
 
@@ -29,9 +29,9 @@ struct BackwardHGTMessageData<Idx, DType, 1> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ grad_message_src{nullptr},
       *__restrict__ grad_out{nullptr},
-          *__restrict__ edgesoftmax_sum_per_node{nullptr};
-  DType *__restrict__ unnormalized_attn_score{nullptr}, *__restrict__ mu{
-                                                            nullptr};
+      *__restrict__ edgesoftmax_sum_per_node{nullptr};
+  DType *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ mu{nullptr};
   DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
 };
 
@@ -42,9 +42,9 @@ struct BackwardHGTMessageData<Idx, DType, 0> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ grad_message_src{nullptr},
       *__restrict__ grad_out{nullptr},
-          *__restrict__ edgesoftmax_sum_per_node{nullptr};
-  DType *__restrict__ unnormalized_attn_score{nullptr}, *__restrict__ mu{
-                                                            nullptr};
+      *__restrict__ edgesoftmax_sum_per_node{nullptr};
+  DType *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ mu{nullptr};
 };
 
 template <typename Idx, typename DType>
@@ -53,7 +53,7 @@ struct BackwardNormToUnNormalizedAttnScoreData {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ grad_normalized_attn_score{nullptr},
       *__restrict__ normalized_attn_score{nullptr},
-          *__restrict__ grad_mu{nullptr}, *__restrict__ mu{nullptr};
+      *__restrict__ grad_mu{nullptr}, *__restrict__ mu{nullptr};
   DType *__restrict__ unnormalized_attn_score{nullptr},
       *__restrict__ grad_unnormalized_attn_score{nullptr};
 };
@@ -67,7 +67,7 @@ struct BackwardToDeltaQData {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ grad_unnormalized_attn_score{nullptr},
       *__restrict__ k_inner_product{nullptr},
-          *__restrict__ grad_q_vectors{nullptr};
+      *__restrict__ grad_q_vectors{nullptr};
 };
 
 // delta_q = delta_attn_score*inner_product
@@ -110,6 +110,8 @@ __global__ void HET_HGTQVectType2BackwardKernel(
               } else {  // !ETypeRelPtrFlag
                 etype = etype_data.etypes[e];
               }
+              // TODO: etype is not needed if etype_mapper_data
+              // !IsBinarySearch(kind)
               Idx src_vid_relational = find_relational_compact_as_of_node_index(
                   etype, src_vid, edata_idx, etype_mapper_data);
               k_inner_product_offset =
@@ -452,8 +454,8 @@ struct BackwardHGTAttnScoreData<Idx, DType, 2> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ grad_attn_score{nullptr},
       *__restrict__ message_src{nullptr},
-          *__restrict__ unnormalized_attn_score{nullptr},
-              *__restrict__ out{nullptr}, *__restrict__ grad_out{nullptr};
+      *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ out{nullptr}, *__restrict__ grad_out{nullptr};
   DType *__restrict__ grad_mu{nullptr}, *__restrict__ mu{nullptr};
   DType *__restrict__ normalized_attn_score{nullptr};
 };
@@ -465,8 +467,8 @@ struct BackwardHGTAttnScoreData<Idx, DType, 1> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ grad_attn_score{nullptr},
       *__restrict__ message_src{nullptr},
-          *__restrict__ unnormalized_attn_score{nullptr},
-              *__restrict__ out{nullptr}, *__restrict__ grad_out{nullptr};
+      *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ out{nullptr}, *__restrict__ grad_out{nullptr};
   DType *__restrict__ grad_mu{nullptr}, *__restrict__ mu{nullptr};
   DType *__restrict__ edgesoftmax_sum_per_node{nullptr};
   DType *__restrict__ mu_softmax_applied_unnormalized_attn_score{nullptr};
@@ -479,8 +481,8 @@ struct BackwardHGTAttnScoreData<Idx, DType, 0> {
   Idx *__restrict__ eids{nullptr};
   DType *__restrict__ grad_attn_score{nullptr},
       *__restrict__ message_src{nullptr},
-          *__restrict__ unnormalized_attn_score{nullptr},
-              *__restrict__ out{nullptr}, *__restrict__ grad_out{nullptr};
+      *__restrict__ unnormalized_attn_score{nullptr},
+      *__restrict__ out{nullptr}, *__restrict__ grad_out{nullptr};
   DType *__restrict__ grad_mu{nullptr}, *__restrict__ mu{nullptr};
   DType *__restrict__ edgesoftmax_sum_per_node{nullptr};
 };
