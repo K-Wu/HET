@@ -1,2 +1,2 @@
 for e in g.edges():
-    e["zi"] = linear(W[e.etype], e.src.feature)
+    e["zi"] = linear(W[e.etype], e.src.feature)

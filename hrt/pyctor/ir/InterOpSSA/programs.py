@@ -210,9 +210,9 @@ class VariableTable:
 
         # load initial variables and weights
 
-        from . import serialize_program
+        from . import program_serializer
 
-        scopes = serialize_program.find_first_level_scopes(lines)
+        scopes = program_serializer.find_first_level_scopes(lines)
         for scope_beg, scope_end, scope_tag in scopes:
             if scope_tag == "InitialVariablesAndWeights":
                 for line in lines[scope_beg + 1 : scope_end]:
@@ -648,13 +648,13 @@ class Program:
 
     @classmethod
     def loads(cls, lines: list[str]) -> "Program":
-        from . import serialize_program
+        from . import program_serializer
 
         scopes: list[
             tuple[int, int, str]
-        ] = serialize_program.find_first_level_scopes(lines)
+        ] = program_serializer.find_first_level_scopes(lines)
         var_table = VariableTable.loads(lines[scopes[0][0] : scopes[0][1] + 1])
-        ops = serialize_program.loads_op(lines[scopes[1][0] :])
+        ops = program_serializer.loads_op(lines[scopes[1][0] :])
 
         return cls(var_table, ops)
 

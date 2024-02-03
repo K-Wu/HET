@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from .InterOp import canonicalize
+from .InterOp import canonicalizer
 from ..ir.InterOp.pattern_match import matchers
 
 
@@ -21,7 +21,7 @@ def lower_ops(module_node) -> list:
 
 # TODO: add shape inference so that we return a complete inter_op_ssa_prog
 def lower(module_node):
-    module_node = canonicalize.canonicalize_for_loop_pass(module_node)
+    module_node = canonicalizer.canonicalize_for_loop_pass(module_node)
     ssa_statements = lower_ops(module_node)
     raise NotImplementedError("shape information is not available yet")
     return inter_op_ssa_prog
