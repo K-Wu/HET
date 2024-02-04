@@ -55,7 +55,7 @@ class VariableTable:
 
     vars_input: set[VarBase]
 
-    vars_shape: dict[VarBase, Shape]
+    vars_shape: dict[str, Shape]
     dsl_vars: Annotated[
         set[VarBase],
         "variables defined during the lowering from Inter Op DSL to SSA",
@@ -65,7 +65,7 @@ class VariableTable:
         """map the full string representation to full string representation, e.g., (EDGEWISE, "var_name2") to (EDGEWISE, "var_name")""",
     ]
     numbered_key_vals: Annotated[
-        dict[VarBase, list[VarBase]],
+        dict[str, list[VarBase]],
         """
     reverse of numbered_val_to_key""",
     ]
@@ -203,7 +203,9 @@ class VariableTable:
                         var_varnames_strs[0]
                     )
                     varnames = var_varnames_strs[1:]
-                    var_table.vars_shape[var] = Shape(type=shape)
+                    var_table.vars_shape[
+                        var_table.get_var_key_str(var)
+                    ] = Shape(type=shape)
 
                     var_table.numbered_key_vals[var] = [var]
                     var_table.numbered_val_to_key[var] = var
@@ -211,7 +213,9 @@ class VariableTable:
                         var_newer = var.get_numbered_var(varname)
                         var_table.numbered_key_vals[var].append(var_newer)
                         var_table.numbered_val_to_key[var_newer] = var
-                    var_table.vars_shape[var] = Shape(type=shape)
+                    var_table.vars_shape[
+                        var_table.get_var_key_str(var)
+                    ] = Shape(type=shape)
         return cls(var_table)
 
     def dumps(self) -> str:
@@ -227,11 +231,10 @@ class VariableTable:
 
         # Step 2: Output shape info
         result += "VariableNumbersAndShapes{\n"
-        for var, shape in self.vars_shape.items():
-            result += f"{shape.type}: {var.to_string()}"
-            if var in self.numbered_key_vals:
-                for var_newer in self.numbered_key_vals[var][1:]:
-                    result += f" <- {var_newer.to_string()}"
+        for var_str, shape in self.vars_shape.items():
+            result += f"{shape.type}: {var_str}"
+            for var_newer in self.numbered_key_vals[var_str][1:]:
+                result += f" <- {var_newer.to_string()}"
             result += "\n"
         result += "}\n"
 
@@ -242,7 +245,7 @@ class VariableTable:
     # TODO: implement shape in this table
     def get_shape_info(self, var: VarBase) -> Union[Shape, None]:
         """get the shape of a variable"""
-        key = self.get_var_key(var)
+        key: str = self.get_var_key_str(var)
         if key not in self.vars_shape:
             return None
         return self.vars_shape[key]
@@ -259,7 +262,7 @@ class VariableTable:
 
     def set_shape_info_or_throw(self, var: VarBase, new_shape_info) -> None:
         """set the shape of a variable"""
-        key = self.get_var_key(var)
+        key = self.get_var_key_str(var)
         if key in self.vars_shape and self.vars_shape[key] != new_shape_info:
             raise ValueError(
                 f"Variable {var.get_name()} already has a shape"
@@ -267,7 +270,11 @@ class VariableTable:
             )
         self.vars_shape[key] = new_shape_info
 
-    def _get_var_by(self, hint: VarBase, suffix: str) -> VarBase:
+    def contains(self, var: VarBase) -> bool:
+        """check if the variable is in the table"""
+        return var in self.numbered_val_to_key
+
+    def _create_var_by(self, hint: VarBase, suffix: str) -> VarBase:
         """
         This internal method creates and returns a new variable. The variable
         type, i.e., weight or data, and slice_type/type will be the same as the
@@ -318,12 +325,12 @@ class VariableTable:
         new_var = hint.__class__.from_dict(new_temp_var)
         return new_var
 
-    def _get_temp_var(self, hint: VarBase) -> VarBase:
-        return self._get_var_by(hint, "tmp")
+    def _create_temp_var(self, hint: VarBase) -> VarBase:
+        return self._create_var_by(hint, "tmp")
 
     # This function seems unncessary
     # def _get_var_decollision(self, hint: VarBase) -> VarBase:
-    #     return self._get_var_by(hint, "decollision")
+    #     return self._create_var_by(hint, "decollision")
 
     def get_temp_var_dsl(self, hint: VarBase) -> VarBase:
         """
@@ -334,7 +341,7 @@ class VariableTable:
         and all the rest of the information in the variable table are not
         produced yet.
         """
-        new_var = self._get_temp_var(hint)
+        new_var = self._create_temp_var(hint)
         self.register_dsl_var(new_var)
         return new_var
 
@@ -361,7 +368,7 @@ class VariableTable:
         """
         Register the first value of a variable name.
         """
-        self.numbered_key_vals[var] = [var]
+        self.numbered_key_vals[self.get_var_key_str(var)] = [var]
         self.numbered_val_to_key[var] = var
 
     def increase_and_register_value_number(self, var: VarBase) -> VarBase:
@@ -375,9 +382,9 @@ class VariableTable:
         when def-use chain analysis has been done.
         """
         # For now, we use the _numbered suffix to number values
-        new_var = self._get_var_by(var, "numbered")
+        new_var = self._create_var_by(var, "numbered")
         self.numbered_val_to_key[new_var] = var
-        self.numbered_key_vals[var].append(new_var)
+        self.numbered_key_vals[self.get_var_key_str(var)].append(new_var)
         return new_var
 
     @classmethod
@@ -397,8 +404,13 @@ class VariableTable:
             # Use set to deduplicate for cases where one operand/result shows multiple times, so that only one replacement for all these occurrence will be applied
             for opr in {*op.get_operands()}:
                 # For operands, use the latest numbered value
-                if opr in var_table.numbered_key_vals:
-                    new_opr = var_table.numbered_key_vals[opr][-1]
+                if (
+                    var_table.get_var_key_str(opr)
+                    in var_table.numbered_key_vals
+                ):
+                    new_opr = var_table.numbered_key_vals[
+                        var_table.get_var_key_str(opr)
+                    ][-1]
                     new_op = new_op.replace_all_operands_with(opr, new_opr)
                 else:
                     # register the variable as data input or weights
@@ -406,7 +418,10 @@ class VariableTable:
 
             for opr in {*op.get_results()}:
                 # For results, increase the value number if already defined
-                if opr in var_table.numbered_key_vals:
+                if (
+                    var_table.get_var_key_str(opr)
+                    in var_table.numbered_key_vals
+                ):
                     # increment the number
                     new_opr = var_table.increase_and_register_value_number(opr)
                     new_op = new_op.replace_all_results_with(opr, new_opr)
@@ -444,6 +459,7 @@ class VariableTable:
         """
         if len(self.def_use_table) != 0:
             print("Warning: def_use_table is not empty, will be overwritten.")
+        # Reset the def_use_table to an empty dict
         self.def_use_table = dict()
 
         # Step 1 create dummy entry for input variables and weight variables

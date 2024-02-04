@@ -24,7 +24,7 @@ class Program:
     passes: MySet[Callable] = MySet()  # Stores analysis and transform passes
 
     operations: list[Union[OpBase, FusedOpBase]]
-    op_to_seq: dict[
+    op_to_seq_no: dict[
         OpBase, int
     ]  # fused op is broken down into basic ops in this dict
     var_table: VariableTable
@@ -34,17 +34,17 @@ class Program:
     ) -> dict[OpBase, int]:
         """calculate the operation to sequence id mapping. Fused op will be broken
         down into basic ops and each will be assigned a unique id"""
-        op_to_seq: dict[OpBase, int] = dict()
+        op_to_seq_no: dict[OpBase, int] = dict()
         curr_idx = 0
         for op in operations:
             if isinstance(op, FusedOpBase):
                 for sub_op in op.ops:
-                    op_to_seq[sub_op] = curr_idx
+                    op_to_seq_no[sub_op] = curr_idx
                     curr_idx += 1
             else:
-                op_to_seq[op] = curr_idx
+                op_to_seq_no[op] = curr_idx
             curr_idx += 1
-        return op_to_seq
+        return op_to_seq_no
 
     def __init__(
         self,
@@ -53,7 +53,7 @@ class Program:
     ):
         self.var_table = var_table
         self.operations = operations
-        self.op_to_seq = self.calc_op_to_seq(operations)
+        self.op_to_seq_no = self.calc_op_to_seq(operations)
 
     # TODO: implement based on get_defining_op
     def get_using_ops(self, var: VarBase) -> list[OpBase]:
@@ -64,27 +64,17 @@ class Program:
         This function will return None if the variable is an input or weight variable,
         and this function will raise Error if the variable is not found in the program.
         """
-        if var not in self.var_table.numbered_val_to_key:
+        if not self.var_table.contains(var):
             raise ValueError(
                 f"Variable {var} is not found in this program. Make sure the"
                 " analysis is run before calling get_defining_op!"
             )
-        if isinstance(
-            self.var_table.def_use_table[self.var_table.get_var_key_str(var)],
-            list,
-        ):
-            for entry in self.var_table.def_use_table[
-                self.var_table.get_var_key_str(var)
-            ]:
-                assert isinstance(entry, DefUseEntry)
-                if entry.name == var.get_name():
-                    return entry.def_op
-        else:
-            entry = self.var_table.def_use_table[
-                self.var_table.get_var_key_str(var)
-            ]
+        for entry in self.var_table.def_use_table[
+            self.var_table.get_var_key_str(var)
+        ]:
             assert isinstance(entry, DefUseEntry)
-            return entry.def_op
+            if entry.name == var.get_name():
+                return entry.def_op
 
     def get_seqid(self, op: OpBase) -> int:
         """returns the sequence id of the operation"""
@@ -92,7 +82,7 @@ class Program:
         return self.operations.index(op)
 
     def assert_define_before_use(self, operand: VarBase, op: OpBase):
-        assert operand in self.var_table.numbered_val_to_key
+        assert self.var_table.contains(operand)
         # operand should either be a weight, or defined before
         if not isinstance(operand, WeightVar):
             operand_def_op = self.get_defining_op(operand)
@@ -199,7 +189,7 @@ class Program:
                 if op in op_replacement:
                     self.operations[idx] = op_replacement[op]
 
-        # Redo the shape analysis if it is done before
+        # Redo the shape analysis if it is done before because there is new information
         done_infer_shape_flag = False
         for pass_record in self.var_table.passes_call_records:
             if self.infer_shapes.__name__ == pass_record.funcname:
@@ -207,7 +197,7 @@ class Program:
         if done_infer_shape_flag:
             self.infer_shapes()
 
-        # Redo the def-use chain analysis if it is done before
+        # Redo the def-use chain analysis if it is done before because there is operator changes
         done_value_numbering_flag = False
         done_def_use_chain_analysis = False
         for pass_record in self.var_table.passes_call_records:
@@ -216,9 +206,8 @@ class Program:
                 == pass_record.funcname
             ):
                 done_def_use_chain_analysis = True
-            if (
-                self.var_table.do_data_input_and_weight_var_analysis.__name__
-                == (pass_record.funcname)
+            if self.var_table.do_value_number_on_program.__name__ == (
+                pass_record.funcname
             ):
                 done_value_numbering_flag = True
         if done_def_use_chain_analysis:
