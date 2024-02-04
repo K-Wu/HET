@@ -14,74 +14,12 @@ from typing import (
     Annotated,
     Generator,
     Callable,
-    Generic,
-    TypeVar,
 )
-import traceback
+
+# TODO: Add OpSpecifier to Program
+from ..OpSpecSSA.op_specifier import OpSpecifier
 import re
-from functools import wraps
-from recordclass import dataobject
-
-
-class CallRecord(dataobject):
-    callstack: list[str]
-    funcname: str
-    msg: str
-
-
-# From hrt/misc/playground/try_print_call_site.py and https://stackoverflow.com/questions/60219591/using-a-paramaterized-decorator-for-recording-methods-in-a-class
-def log_pass_calls(description: str):
-    """Decorate class functions that do analysis or transform pass and record the call site in the called_function list of the class instance"""
-
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            msg = ("STARTED | FUNCTION: {} | ARGS: {} | KWARGS: {} ").format(
-                func.__name__, args, kwargs
-            )
-            # print(msg)
-
-            args[0].passes_call_records.append(
-                CallRecord(
-                    callstack=traceback.format_stack(),
-                    funcname=func.__name__,
-                    msg=msg,
-                )
-            )  # i.e., self.called_function
-
-            return func(*args, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
-T = TypeVar("T")
-
-
-class MySet(set[T], Generic[T]):
-    """
-    Set that records analysis passes and transform passes.
-    Example:
-    ```
-    class Program:
-        analysis_passes: MySet[Callable]
-        transform_passes: MySet[Callable]
-
-        @transform_passes.register
-        def do_something(self):
-            ...
-
-        @analysis_passes.register
-        def check_something(self):
-            ...
-    ```
-    From https://stackoverflow.com/questions/50372342/class-with-a-registry-of-methods-based-on-decorators
-    """
-
-    def register(self, method):
-        self.add(method)
-        return method
+from .utils import CallRecord, log_pass_calls, MySet
 
 
 def remove_white_spaces(line: str) -> str:
@@ -139,7 +77,7 @@ class VariableTable:
     ]
     def_use_table: Annotated[
         # after SSA numbering, each value will be a single DefUseEntry
-        dict[VarBase, Union[DefUseEntry, list[DefUseEntry]]],
+        dict[str, list[DefUseEntry]],
         """
     numbered_key_vals and def_use_table together store the value numbering information
 
@@ -192,6 +130,23 @@ class VariableTable:
         else:
             print("Warning: value number not done before get_var_key")
             return var
+
+    def get_var_key_str(
+        self, var: VarBase, after_value_numbering: bool | None = None
+    ) -> str:
+        """
+        This method returns the key of the variable. The key is used to query
+        shape information from self.vars_shape
+        """
+        if (
+            after_value_numbering is not None
+            and not var in self.numbered_val_to_key
+        ):
+            assert (
+                not after_value_numbering
+            ), f"Value numbering is not done for {var}"
+        var_key_str = self.get_var_key(var).get_name()
+        return var_key_str
 
     @classmethod
     def loads(cls, lines: list[str]) -> "VariableTable":
@@ -425,8 +380,8 @@ class VariableTable:
         analysis. And this process is usually called during the value numbering,
         when def-use chain analysis has been done.
         """
-        # TODO: for now, we reuse the _tmp suffix to number values
-        new_var = self._get_temp_var(var)
+        # For now, we use the _numbered suffix to number values
+        new_var = self._get_var_by(var, "numbered")
         self.numbered_val_to_key[new_var] = var
         self.numbered_key_vals[var].append(new_var)
         return new_var
@@ -503,11 +458,14 @@ class VariableTable:
             self.do_data_input_and_weight_var_analysis(ops)
         for var in self.vars_input:
             # Set def_op as none to indicate input and weight variables
-            entry = DefUseEntry(name=var.get_name(), def_op=None, use_ops=[])
-            if after_value_numbering:
-                self.def_use_table[var] = entry
-            else:
-                self.def_use_table[var] = [entry]
+            entry = DefUseEntry(
+                name=self.get_var_key_str(var, after_value_numbering),
+                def_op=None,
+                use_ops=[],
+            )
+            self.def_use_table[
+                self.get_var_key_str(var, after_value_numbering)
+            ] = [entry]
 
         # Step 2 process every operation
         for op in ops:
@@ -517,25 +475,24 @@ class VariableTable:
             for res in {*op.get_results()}:
                 entry = DefUseEntry(name=res.get_name(), def_op=op, use_ops=[])
                 # Whether after_value_numbering is True or not, we don't need to (calculate and ) refer to numbered_val_to_key to find the dictionary key
-                if after_value_numbering:
-                    self.def_use_table[res] = entry
-                else:
-                    if res not in self.def_use_table:
-                        self.def_use_table[res] = []
-                    dict_record = self.def_use_table[res]
-                    assert isinstance(dict_record, list)
-                    dict_record.append(entry)
+                if res not in self.def_use_table:
+                    self.def_use_table[
+                        self.get_var_key_str(res, after_value_numbering)
+                    ] = []
+                dict_record: list[DefUseEntry] = self.def_use_table[
+                    self.get_var_key_str(res, after_value_numbering)
+                ]
+                assert isinstance(dict_record, list)
+                dict_record.append(entry)
 
             for opr in {*op.get_operands()}:
-                # Whether after_value_numbering is True or not, we can use opr.to_string() as the dictionary key
+                # TODO: Whether after_value_numbering is True or not, self.get_var_key_str returns the variable name (i.e., the name before _numberedXX) as the dictionary key
                 assert opr in self.def_use_table
-                dict_record = self.def_use_table[opr]
-                if after_value_numbering:
-                    assert isinstance(dict_record, DefUseEntry)
-                    dict_record.use_ops.append(op)
-                else:
-                    assert isinstance(dict_record, list)
-                    dict_record[-1].use_ops.append(op)
+                dict_record = self.def_use_table[
+                    self.get_var_key_str(opr, after_value_numbering)
+                ]
+                assert isinstance(dict_record, list)
+                dict_record[-1].use_ops.append(op)
 
     def differentiate(
         self, diff_ops: list[Union[OpBase, FusedOpBase]]
@@ -582,9 +539,9 @@ class Program:
         self.operations = operations
         self.op_to_seq = calc_op_to_seq(operations)
 
-    # TODO: remove if not used
-    # def get_users_of_result(self, operation: OpBase) -> list[OpBase]:
-    #     raise NotImplementedError
+    # TODO: implement based on get_defining_op
+    def get_using_ops(self, var: VarBase) -> list[OpBase]:
+        raise NotImplementedError
 
     def get_defining_op(self, var: VarBase) -> Union[OpBase, None]:
         """returns the operation that defines the variable.
@@ -596,13 +553,20 @@ class Program:
                 f"Variable {var} is not found in this program. Make sure the"
                 " analysis is run before calling get_defining_op!"
             )
-        if isinstance(self.var_table.def_use_table[var], list):
-            for entry in self.var_table.def_use_table[var]:
+        if isinstance(
+            self.var_table.def_use_table[self.var_table.get_var_key_str(var)],
+            list,
+        ):
+            for entry in self.var_table.def_use_table[
+                self.var_table.get_var_key_str(var)
+            ]:
                 assert isinstance(entry, DefUseEntry)
                 if entry.name == var.get_name():
                     return entry.def_op
         else:
-            entry = self.var_table.def_use_table[var]
+            entry = self.var_table.def_use_table[
+                self.var_table.get_var_key_str(var)
+            ]
             assert isinstance(entry, DefUseEntry)
             return entry.def_op
 
@@ -766,10 +730,8 @@ class Program:
                 curr_opr_shape_info, curr_res_shape_info
             )
             for opr, shape_info in zip(op.get_operands(), opr_shape_info):
-                if shape_info is not None:
-                    self.var_table.set_shape_info_or_throw(opr, shape_info)
+                self.var_table.set_shape_info_or_throw(opr, shape_info)
             for res, shape_info in zip(op.get_results(), res_shape_info):
-                if shape_info is not None:
-                    self.var_table.set_shape_info_or_throw(res, shape_info)
+                self.var_table.set_shape_info_or_throw(res, shape_info)
 
         raise NotImplementedError
