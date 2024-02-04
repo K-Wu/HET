@@ -1,0 +1,7 @@
+for e in g.edges():
+    e["hs"] = e.src.feature * W[e.etype]
+    w_s_new = W[e.etype] * transpose(w_s[e.etype])
+    e["atts"] = inner_product(hs, w_s_new)
+    w_t_new = W[e.etype] * transpose(w_t[e.etype])
+    e["attt"] = inner_product(ht, w_t_new)
+    e['att'] = leakyrelu(atts + attt)

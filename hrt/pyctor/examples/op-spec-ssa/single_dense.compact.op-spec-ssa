@@ -10,6 +10,6 @@ DAG{
 /// each op has a dedicated scope with a single-line json that describes the specification.
 OPSPEC{
 gemm_1{
- {"C": "(EDGEWISE, \"zi\")", "A": "(SRCNODE, \"feature\")", "B": "(W, EDGETYPE)", "schedule": {"param": {"tile_sz": 16}, "A": "[GATHER (row_idx), NO_TRANSPOSE]", "B": "[WEIGHTS]", "C": "[SCATTER (entry_idx_per_etype + etype_ptr[etype_idx])]"}}
+ {"C": "(UNIQUE_NODE_ETYPE, \"zi\")", "A": "(SRCNODE, \"feature\")", "B": "(W, EDGETYPE)", "schedule": {"param": {"tile_sz": 16}, "A": "[GATHER (row_idx), NO_TRANSPOSE]", "B": "[WEIGHTS]", "C": "[SCATTER (entry_idx_per_etype + unique_etype_ptr[etype_idx])]"}}
 }
 }

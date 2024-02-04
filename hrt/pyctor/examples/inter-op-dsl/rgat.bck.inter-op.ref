@@ -17,7 +17,7 @@ for e in g.edges():
     attn_vec[e.etype].delta += e.raw_attn_tmp1.delta * e.zizj
     e.zizj.delta = inner_product(attn_vec[e.etype], e.raw_attn_tmp1.delta)
     [e.zi.delta, e.zj.delta] = split(e.zizj.delta)
-    e.src.feature.delta = e["zi"].delta * transpose(W[e.etype])
-    e.dst.feature.delta = e["zj"].delta * transpose(W[e.etype])
+    e.src.feature.delta += e["zi"].delta * transpose(W[e.etype])
+    e.dst.feature.delta += e["zj"].delta * transpose(W[e.etype])
     W[e.etype].delta += outer_product(e.src.feature, e["zi"].delta)
     W[e.etype].delta += outer_product(e.dst.feature, e["zj"].delta)
