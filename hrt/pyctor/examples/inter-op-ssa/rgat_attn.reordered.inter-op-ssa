@@ -1,0 +1,21 @@
+///
+/// SHAPE INFORMATION
+///
+// TODO: fullfil this
+VariableTable{
+
+}
+
+///
+/// DAG
+///
+DAG{
+w_s_t = Transpose(input = (w_s, EDGETYPE));
+(w_s_new, EDGETYPE) = WeightDense(left = (W, EDGETYPE), right = (w_s_t, EDGETYPE));
+(EDGEWISE, "atts") = EdgeInnerProduct(left = (SRCNODE, "feature"), right = (w_s_new, EDGETYPE));
+w_t_t = Transpose(input = (w_t, EDGETYPE));
+(w_t_new, EDGETYPE) = WeightDense(left = (W, EDGETYPE), right = (w_t_t, EDGETYPE));
+(EDGEWISE, "attt") = EdgeInnerProduct(left = (DSTNODE, "feature"), right = (w_t_new, EDGETYPE));
+(EDGEWISE, "att_tmp1") = VectorAdd(left = (EDGEWISE, "atts"), right = (EDGEWISE, "attt"));
+(EDGEWISE, "att") = LeakyRelu(input = (EDGEWISE, "att_tmp1"));
+}
