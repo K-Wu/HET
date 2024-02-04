@@ -171,6 +171,12 @@ class _NodeDenseOp(dataobject):
     weight: WeightVar
 
 
+class _WeightDenseOp(dataobject):
+    result: WeightVar
+    left: WeightVar
+    right: WeightVar
+
+
 class _EdgeDenseOp(dataobject):
     result: DataVar
     input: DataVar
@@ -378,6 +384,112 @@ class NodeDenseOp(_NodeDenseOp, OpBase, metaclass=FinalOpMeta):
         return [Shape.get_vector_shape(), Shape.get_matrix_shape()], [
             Shape.get_vector_shape()
         ]
+
+
+class WeightDenseOp(_WeightDenseOp, OpBase, metaclass=FinalOpMeta):
+    # result: WeightVar
+    # left: WeightVar
+    # right: WeightVar
+
+    def validate(self) -> None:
+        # Delta of weight is not possible to be the output: it needs outer-product
+        assert isinstance(self.result, WeightVar)
+        assert isinstance(self.left, WeightVar)
+        assert isinstance(self.right, WeightVar)
+        self.result.validate()
+        self.left.validate()
+        self.right.validate()
+
+    @classmethod
+    def from_keyval_pairs(cls, d: dict["str", "str"]) -> "NodeDenseOp":
+        result = WeightVar.from_string(d["result"])
+        left = WeightVar.from_string(d["left"])
+        right = WeightVar.from_string(d["right"])
+        return cls(result=result, left=left, right=right)
+
+    def fusable_with(self, other: "OpBase") -> bool:
+        raise NotImplementedError
+
+    def differentiate(self) -> list["OpBase"]:
+        raise NotImplementedError
+
+    def lower(self) -> bool:
+        raise NotImplementedError
+
+    def to_keyval_pairs(self) -> dict["str", "str"]:
+        return {
+            "result": self.result.to_string(),
+            "left": self.left.to_string(),
+            "right": self.right.to_string(),
+        }
+
+    def to_string(self) -> str:
+        return (
+            f"{self.result}={self.get_opname()}(left = {self.left}, right ="
+            f" {self.right})"
+        )
+
+    def get_operands(self) -> list[VarBase]:
+        return [self.left, self.right]
+
+    def get_results(self) -> list[VarBase]:
+        return [self.result]
+
+    def inplace_replace_all_operands_with(
+        self: ..., old: VarBase, new: VarBase
+    ) -> None:
+        self.left = replace_if_matched(self.left, old, new)
+        self.right = replace_if_matched(self.right, old, new)
+
+    def inplace_replace_all_results_with(
+        self: ..., old: VarBase, new: VarBase
+    ) -> None:
+        self.result = replace_if_matched(self.result, old, new)
+
+    def replace_all_operands_with(
+        self: ..., old: VarBase, new: VarBase
+    ) -> ...:
+        return self.__class__(
+            result=self.result,
+            left=replace_if_matched(self.left, old, new),
+            right=replace_if_matched(self.right, old, new),
+        )
+
+    def replace_all_results_with(self: ..., old: VarBase, new: VarBase) -> ...:
+        return self.__class__(
+            result=replace_if_matched(self.result, old, new),
+            left=self.left,
+            right=self.right,
+        )
+
+    def infer_shape(
+        self,
+        curr_opr_shape_info: list[Shape | None],
+        curr_res_shape_info: list[Shape | None],
+    ) -> tuple[list[Shape | None], list[Shape | None]]:
+        # Now only works for vector <- matrix * vector specifically for RGAT linear operator reorder,
+        # Or matrix <- matrix * matrix specifically for HGT linear operator reorder
+        if curr_res_shape_info[0] is None:
+            raise NotImplementedError(
+                "Currently we only support WeightDenseOp that is generated"
+                " during linear reorder pass. In other words, all the other"
+                " shapes, especially the result shape of the operator should"
+                " be already known."
+            )
+        if curr_res_shape_info[0].type == "vector":
+            return [Shape.get_vector_shape(), Shape.get_matrix_shape()], [
+                Shape.get_vector_shape()
+            ]
+        elif curr_res_shape_info[0].type == "matrix":
+            return [Shape.get_matrix_shape(), Shape.get_matrix_shape()], [
+                Shape.get_matrix_shape()
+            ]
+        else:
+            raise NotImplementedError(
+                "Currently we only support vector <- matrix * vector or matrix"
+                " <- matrix * matrix specifically for RGAT linear operator"
+                " reorder or HGT linear operator reorder."
+            )
 
 
 class EdgeDenseOp(_EdgeDenseOp, OpBase, metaclass=FinalOpMeta):
@@ -1184,6 +1296,7 @@ class UnrealizedAddOp(UnrealizedBinaryOp):
 func_name_to_op: dict[str, Type[OpBase]] = {
     "Split": SplitOp,  # (results) input
     "NodeDense": NodeDenseOp,  # input, weight
+    "WeightDense": WeightDenseOp,  # left, right
     "EdgeDense": EdgeDenseOp,  # input, weight
     "EdgeScalarVectorMul": EdgeScalarVectorMulOp,  # scalar, vector
     # Unary Ops. keyword: input
