@@ -84,7 +84,7 @@ class MySet(set[T], Generic[T]):
         return method
 
 
-def strip_white_spaces(line: str) -> str:
+def remove_white_spaces(line: str) -> str:
     """Strip whitespaces from line"""
     return re.sub(r"\s+", "", line)
 
@@ -197,15 +197,15 @@ class VariableTable:
     def loads(cls, lines: list[str]) -> "VariableTable":
         """
         initiate the variable table by loading the shape info in the text
-        :param lines begin with "ShapeTable{", and end with "}". To read a file,
+        :param lines begin with "VariableTable{", and end with "}". To read a file,
         specify this parameter as fd.readlines()
         For now, we assume nothing else left in the first and the last line.
         Adapted from loads_op from hrt/pyctor/ir/InterOpSSA/serialize_program.py
         """
         var_table = cls()
 
-        assert strip_white_spaces(lines[0].strip()) == "ShapeTable{"
-        assert strip_white_spaces(lines[-1].strip()) == "}"
+        assert remove_white_spaces(lines[0].strip()) == "VariableTable{"
+        assert lines[-1].strip() == "}"
         lines = lines[1:-1]
 
         # load initial variables and weights
@@ -214,20 +214,23 @@ class VariableTable:
 
         scopes = program_serializer.find_first_level_scopes(lines)
         for scope_beg, scope_end, scope_tag in scopes:
+            # For simplicity of parsing, we assume the scope beginning line only contains tag and "{"
+            assert (
+                remove_white_spaces(lines[scope_beg].strip())
+                == scope_tag + "{"
+            )
+            # Similarly, we assume the scope ending line only contains "}"
+            assert lines[scope_end].strip() == "}"
             if scope_tag == "InitialVariablesAndWeights":
+                # Assume only one line in current scheme
+                assert scope_end - scope_beg - 1 == 1
                 for line in lines[scope_beg + 1 : scope_end]:
-                    line_var_strs = line.replace(")", "))").split(")")
+                    # Split by ';' because variable string (name, type) contains ','
+                    line_var_strs = line.split(";")
+                    # Remove the beginning whitespaces
                     line_var_strs = [
                         var_str.strip() for var_str in line_var_strs
                     ]
-                    line_var_strs = [
-                        var_str[1:]
-                        for var_str in line_var_strs
-                        if var_str[0] == ","
-                    ]
-                    line_var_strs = {
-                        var_str.strip() for var_str in line_var_strs
-                    }
                     line_vars: set[VarBase] = {
                         parse_var_class(var_str).from_string(var_str)
                         for var_str in line_var_strs
@@ -264,10 +267,13 @@ class VariableTable:
 
     def dumps(self) -> str:
         """output the variable table in the text, i.e., the shape table"""
-        result = "ShapeTable{\n"
+        result = "VariableTable{\n"
         # Step 1: Output initial variables and weights
         result += "InitialVariablesAndWeights{\n"
-        result += ", ".join([var.to_string() for var in self.vars_input])
+        variable_strings = [var.to_string() for var in self.vars_input]
+        for var_str in variable_strings:
+            assert ";" not in var_str, f"Variable name {var_str} contains ';'"
+        result += "; ".join([var.to_string() for var in self.vars_input])
         result += "\n}\n"
 
         # Step 2: Output shape info
@@ -359,7 +365,7 @@ class VariableTable:
         else:
             new_temp_var["name"] += "_{suffix}1".format(suffix=suffix)
 
-        # create a new variable
+        # Create a new variable
         new_var = hint.__class__.from_dict(new_temp_var)
         return new_var
 
@@ -653,6 +659,9 @@ class Program:
         scopes: list[
             tuple[int, int, str]
         ] = program_serializer.find_first_level_scopes(lines)
+        assert len(scopes) == 2
+        assert scopes[0][2] == "VariableTable"
+        assert scopes[1][2] == "DAG"
         var_table = VariableTable.loads(lines[scopes[0][0] : scopes[0][1] + 1])
         ops = program_serializer.loads_op(lines[scopes[1][0] :])
 

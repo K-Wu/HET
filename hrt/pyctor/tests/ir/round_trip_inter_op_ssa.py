@@ -19,8 +19,7 @@ def remove_comment_and_whitespace(lines: list[str]) -> str:
     for line in lines:
         if line.find("//") != -1:
             line = line[: line.find("//")]
-        line = line.strip()
-        line = programs.strip_white_spaces(line)
+        line = programs.remove_white_spaces(line.strip())
         # skip empty or comment lines
         if len(line) == 0:
             continue
