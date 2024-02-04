@@ -76,6 +76,16 @@ class OrderedSetQueue(queue.Queue):
         self.queue = OrderedSet()
 
     def _put(self, item):
+        current_length = len(self.queue)
+        self.queue.add(item)
+
+        # If the item is already in the queue, remove and readd it so that it is moved to the end, i.e., the next item to be popped
+        if current_length == len(self.queue):
+            self.move_to_end(item)
+
+    def move_to_end(self, item):
+        assert item in self.queue
+        self.queue.pop(self.queue.index(item))
         self.queue.add(item)
 
     def _get(self):
@@ -84,3 +94,6 @@ class OrderedSetQueue(queue.Queue):
     def __contains__(self, item):
         with self.mutex:
             return item in self.queue
+
+    def _qsize(self):
+        return len(self.queue)
