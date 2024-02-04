@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 from . import regex_patterns
 import re
-from .programs import remove_white_spaces, VariableTable, Program
+from .variable_tables import remove_white_spaces, VariableTable
+from .programs import Program
 from . import operators
 from typing import Union
 

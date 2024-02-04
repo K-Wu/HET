@@ -2,7 +2,7 @@
 """
 use round trip to test the serialize/deserialize of inter-op SSA work as intended.
 """
-from ...ir.InterOpSSA import programs
+from ...ir.InterOpSSA import variable_tables
 
 filenames = [
     "pyctor/examples/inter-op-ssa/hgt.inter-op-ssa",
@@ -19,7 +19,7 @@ def remove_comment_and_whitespace(lines: list[str]) -> str:
     for line in lines:
         if line.find("//") != -1:
             line = line[: line.find("//")]
-        line = programs.remove_white_spaces(line.strip())
+        line = variable_tables.remove_white_spaces(line.strip())
         # skip empty or comment lines
         if len(line) == 0:
             continue
