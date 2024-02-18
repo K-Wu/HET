@@ -450,7 +450,7 @@ def match_data_input(
         return input_symbol, []
 
     # It should be match chain after this line. For now, we assume the intermediate data is of the same type, i.e., edgewise or nodewise, as output symbol
-    output_temp_symbol = var_table.get_temp_var_dsl(output_symbol)
+    output_temp_symbol = var_table.create_temp_var_dsl(output_symbol)
     # treat chaining as regular assignment, compared to augAssign
     ops = match_right_hand_side_expr(
         var_table, output_temp_symbol, loop_type, node, "assign"

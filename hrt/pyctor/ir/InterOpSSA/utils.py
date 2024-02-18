@@ -45,14 +45,14 @@ def log_pass_calls(description: str):
 T = TypeVar("T")
 
 
-class MySet(set[T], Generic[T]):
+class RegistrySet(set[T], Generic[T]):
     """
     Set that records analysis passes and transform passes.
     Example:
     ```
     class Program:
-        analysis_passes: MySet[Callable]
-        transform_passes: MySet[Callable]
+        analysis_passes: RegistrySet[Callable]
+        transform_passes: RegistrySet[Callable]
 
         @transform_passes.register
         def do_something(self):
@@ -81,9 +81,9 @@ class OrderedSetQueue(queue.Queue):
 
         # If the item is already in the queue, remove and readd it so that it is moved to the end, i.e., the next item to be popped
         if current_length == len(self.queue):
-            self.move_to_end(item)
+            self.move_to_head(item)
 
-    def move_to_end(self, item):
+    def move_to_head(self, item):
         assert item in self.queue
         self.queue.pop(self.queue.index(item))
         self.queue.add(item)

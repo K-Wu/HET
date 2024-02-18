@@ -14,7 +14,8 @@ from typing import (
 )
 
 import re
-from .utils import CallRecord, log_pass_calls, MySet
+from .utils import CallRecord, log_pass_calls
+from ...transforms import pass_manager
 
 DefUseEntry = NamedTuple(
     "DefUseEntry",
@@ -51,7 +52,6 @@ class VariableTable:
     passes_call_records: list[
         CallRecord
     ]  # Stores the logging by @log_pass_calls
-    passes: MySet[Callable] = MySet()  # Stores analysis and transform passes
 
     vars_input: set[VarBase]
 
@@ -82,13 +82,9 @@ class VariableTable:
     (var_key, [var_name, var_name2, var_name3]) (another_var, [another_var])
 
     def_use_table
-    before value numbering, each (key, value) in def_use_table looks like
+    whether before or after value numbering, each (key, value) in def_use_table looks like
     (var_key, [DefUseEntry(var_name, opid0, [opid1]), DefUseEntry(var_name, opid2, [opid3, opid4])])
     (another_var, [DefUseEntry(another_var, opid5, [opid6])])
-    after value numbering, the above entry may now look like
-    (var_name, DefUseEntry(var_name, opid0, opid1)),
-    (var_name2, DefUseEntry(var_name2, opid2, [opid3, opid4]))
-    (another_var, DefUseEntry(another_var, opid5, [opid6]))
     """,
     ]
 
@@ -242,7 +238,6 @@ class VariableTable:
 
         return result
 
-    # TODO: implement shape in this table
     def get_shape_info(self, var: VarBase) -> Union[Shape, None]:
         """get the shape of a variable"""
         key: str = self.get_var_key_str(var)
@@ -332,7 +327,7 @@ class VariableTable:
     # def _get_var_decollision(self, hint: VarBase) -> VarBase:
     #     return self._create_var_by(hint, "decollision")
 
-    def get_temp_var_dsl(self, hint: VarBase) -> VarBase:
+    def create_temp_var_dsl(self, hint: VarBase) -> VarBase:
         """
         This method creates and returns a new variable, and add it to the table.
         It can be used during the pattern matching process that lowers Inter Op
@@ -344,13 +339,6 @@ class VariableTable:
         new_var = self._create_temp_var(hint)
         self.register_dsl_var(new_var)
         return new_var
-
-    def register_input_and_weight_var(self, var: VarBase) -> None:
-        """
-        This method is called to register a variable that is the input data or weight variable
-        """
-        self.vars_input.add(var)
-        self.register_value_zero(var)
 
     def register_dsl_var(self, var: VarBase) -> None:
         """
@@ -364,6 +352,20 @@ class VariableTable:
         # self.numbered_name_vals[var.to_string()] = [var.to_string()]
         self.dsl_vars.add(var)
 
+    def differentiate(
+        self, diff_ops: list[Union[OpBase, FusedOpBase]]
+    ) -> "VariableTable":
+        raise NotImplementedError
+
+    # TODO: Move to value_numberer.py
+    def register_input_and_weight_var(self, var: VarBase) -> None:
+        """
+        This method is called to register a variable that is the input data or weight variable
+        """
+        self.vars_input.add(var)
+        self.register_value_zero(var)
+
+    # TODO: Move to value_numberer.py
     def register_value_zero(self, var: VarBase) -> None:
         """
         Register the first value of a variable name.
@@ -371,6 +373,7 @@ class VariableTable:
         self.numbered_key_vals[self.get_var_key_str(var)] = [var]
         self.numbered_val_to_key[var] = var
 
+    # TODO: Move to value_numberer.py
     def increase_and_register_value_number(self, var: VarBase) -> VarBase:
         """
         This method creates and returns a new variable indicating numbered value
@@ -387,6 +390,7 @@ class VariableTable:
         self.numbered_key_vals[self.get_var_key_str(var)].append(new_var)
         return new_var
 
+    # TODO: Move to value_numberer.py
     @classmethod
     def _do_value_number_on_program(
         cls, ops: list[OpBase]
@@ -431,7 +435,15 @@ class VariableTable:
             new_ops.append(new_op)
         return var_table, new_ops
 
-    @passes.register
+    # TODO: Move to value_numberer.py
+    @log_pass_calls("do_data_input_and_weight_var_analysis")
+    def do_data_input_and_weight_var_analysis(self, ops: list[OpBase]) -> None:
+        """This method does the same thing as do_value_number_on_program, except that it does not store the results of numbered_key_vals and numbered_val_to_key. It only stores the results of vars_input."""
+        new_var_table, _ = self._do_value_number_on_program(ops)
+        self.vars_input = new_var_table.vars_input
+        return
+
+    # TODO: Move to value_numberer.py
     @log_pass_calls("do_value_number_on_program")
     def do_value_number_on_program(self, ops: list[OpBase]) -> list[OpBase]:
         new_var_table, new_ops = self._do_value_number_on_program(ops)
@@ -440,14 +452,7 @@ class VariableTable:
         self.vars_input = new_var_table.vars_input
         return new_ops
 
-    @passes.register
-    @log_pass_calls("do_data_input_and_weight_var_analysis")
-    def do_data_input_and_weight_var_analysis(self, ops: list[OpBase]) -> None:
-        new_var_table, _ = self._do_value_number_on_program(ops)
-        self.vars_input = new_var_table.vars_input
-        return
-
-    @passes.register
+    # TODO: Move to def_use_analyzer.py
     @log_pass_calls("do_def_use_chain_analysis")
     def do_def_use_chain_analysis(
         self, ops: list[OpBase], after_value_numbering: bool
@@ -456,6 +461,8 @@ class VariableTable:
         This method does def-use chain analysis on all the operations in a
         program, and creates def_use_table.
         No fused op is allowed.
+        Prerequisite: value_numberer (for simplicity, let's just run the full value_numbering for now)
+        Invalidate: None
         """
         if len(self.def_use_table) != 0:
             print("Warning: def_use_table is not empty, will be overwritten.")
@@ -467,7 +474,7 @@ class VariableTable:
             # TODO: skip this step if this pass is already done though not after_value_numbering
             self.do_data_input_and_weight_var_analysis(ops)
         for var in self.vars_input:
-            # Set def_op as none to indicate input and weight variables
+            # Set def_op as None to indicate input and weight variables
             entry = DefUseEntry(
                 name=self.get_var_key_str(var, after_value_numbering),
                 def_op=None,
@@ -503,8 +510,3 @@ class VariableTable:
                 ]
                 assert isinstance(dict_record, list)
                 dict_record[-1].use_ops.append(op)
-
-    def differentiate(
-        self, diff_ops: list[Union[OpBase, FusedOpBase]]
-    ) -> "VariableTable":
-        raise NotImplementedError

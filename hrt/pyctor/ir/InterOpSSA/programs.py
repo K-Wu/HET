@@ -13,7 +13,8 @@ from typing import (
 
 # TODO: Add OpSpecifier to Program
 from ..OpSpecSSA.op_specifier import OpSpecifier
-from .utils import CallRecord, log_pass_calls, MySet
+from ...transforms import pass_manager
+from .utils import CallRecord, log_pass_calls, OrderedSetQueue
 from .variable_tables import DefUseEntry, VariableTable
 
 
@@ -21,7 +22,6 @@ class Program:
     passes_call_records: list[
         CallRecord
     ]  # Stores the logging by @log_pass_calls
-    passes: MySet[Callable] = MySet()  # Stores analysis and transform passes
 
     operations: list[Union[OpBase, FusedOpBase]]
     op_to_seq_no: dict[
@@ -55,15 +55,7 @@ class Program:
         self.operations = operations
         self.op_to_seq_no = self.calc_op_to_seq(operations)
 
-    # TODO: implement based on get_defining_op
-    def get_using_ops(self, var: VarBase) -> list[OpBase]:
-        raise NotImplementedError
-
-    def get_defining_op(self, var: VarBase) -> Union[OpBase, None]:
-        """returns the operation that defines the variable.
-        This function will return None if the variable is an input or weight variable,
-        and this function will raise Error if the variable is not found in the program.
-        """
+    def _get_def_use_entry(self, var: VarBase) -> DefUseEntry:
         if not self.var_table.contains(var):
             raise ValueError(
                 f"Variable {var} is not found in this program. Make sure the"
@@ -74,7 +66,19 @@ class Program:
         ]:
             assert isinstance(entry, DefUseEntry)
             if entry.name == var.get_name():
-                return entry.def_op
+                return entry
+        raise ValueError("Variable not found in def-use table!")
+
+    def get_using_ops(self, var: VarBase) -> list[OpBase]:
+        return self._get_def_use_entry(var).use_ops
+
+    def get_defining_op(self, var: VarBase) -> Union[OpBase, None]:
+        """returns the operation that defines the variable.
+        This function will return None if the variable is an input or weight variable,
+        and this function will raise Error if the variable is not found in the program.
+        """
+        # TODO: handle None case, i.e., input or weight variable
+        return self._get_def_use_entry(var).def_op
 
     def get_seqid(self, op: OpBase) -> int:
         """returns the sequence id of the operation"""
@@ -137,7 +141,15 @@ class Program:
 
         return cls(var_table, ops)
 
-    @passes.register
+    def yield_basic_ops(self) -> Generator[OpBase, None, None]:
+        for op in self.operations:
+            if isinstance(op, FusedOpBase):
+                for sub_op in op.ops:
+                    yield sub_op
+            else:
+                yield op
+
+    # TODO: Move to auto_differer.py
     @log_pass_calls("differentiate")
     def differentiate(self) -> "Program":
         """
@@ -152,18 +164,13 @@ class Program:
         diff_var_table = self.var_table.differentiate(diff_ops)
         return Program(diff_var_table, diff_ops)
 
-    def yield_basic_ops(self) -> Generator[OpBase, None, None]:
-        for op in self.operations:
-            if isinstance(op, FusedOpBase):
-                for sub_op in op.ops:
-                    yield sub_op
-            else:
-                yield op
-
-    @passes.register
+    # TODO: Move to binop_realizer.py
     @log_pass_calls("realize_ops")
     def realize_ops(self):
-        """Realize Unrealized.* ops after shape has been inferred"""
+        """Realize Unrealized.* ops after shape has been inferred.
+        Prerequisite: shape_inferer.
+        Invalidate shape_inferer, def_use_analyzer, and value_numberer if changes have been made.
+        """
 
         op_replacement: dict[OpBase, OpBase] = dict()
         for op in self.yield_basic_ops():
@@ -189,6 +196,7 @@ class Program:
                 if op in op_replacement:
                     self.operations[idx] = op_replacement[op]
 
+        # TODO: no need to redo here but return it in the invalidated pass list in the new pass manager
         # Redo the shape analysis if it is done before because there is new information
         done_infer_shape_flag = False
         for pass_record in self.var_table.passes_call_records:
@@ -197,6 +205,7 @@ class Program:
         if done_infer_shape_flag:
             self.infer_shapes()
 
+        # TODO: no need to redo here but return it in the invalidated pass list in the new pass manager
         # Redo the def-use chain analysis if it is done before because there is operator changes
         done_value_numbering_flag = False
         done_def_use_chain_analysis = False
@@ -215,15 +224,18 @@ class Program:
                 list(self.yield_basic_ops()), done_value_numbering_flag
             )
 
-    @passes.register
+    # TODO: Move to shape_inferer.py
     @log_pass_calls("infer_shapes")
     def infer_shapes(self):
         """
-        after differentiation or pattern match from the inter-op IR, we get all
-        operations and unique variable names. We need to infer the shapes of all
-        variables.
+        After pattern match from the inter-op IR (or, after differentiation for the backward propagation), we get all operations and unique variable names. We need to infer the shapes of all variables.
+        Prerequisite: def_use_analyzer.
         """
+        worklist = OrderedSetQueue()
         for op in self.yield_basic_ops():
+            worklist.put(op)
+        while not worklist.empty():
+            op = worklist.get()
             curr_opr_shape_info = [
                 self.var_table.get_shape_info(opr) for opr in op.get_operands()
             ]
@@ -239,4 +251,21 @@ class Program:
             for res, shape_info in zip(op.get_results(), res_shape_info):
                 self.var_table.set_shape_info_or_throw(res, shape_info)
 
-        raise NotImplementedError
+            for opr, old_shape_info, new_shape_info in zip(
+                op.get_results(), curr_res_shape_info, res_shape_info
+            ):
+                # If an result shape has changed from None to known, move the using ops to the head of the queue
+                if old_shape_info is None and new_shape_info is not None:
+                    for using_op in self.get_using_ops(opr):
+                        worklist.move_to_head(using_op)
+
+            for res, old_shape_info, new_shape_info in zip(
+                op.get_operands(), curr_opr_shape_info, opr_shape_info
+            ):
+                # If an operand shape has changed from known to None, move the defining ops to the head of the queue
+                if old_shape_info is not None and new_shape_info is None:
+                    defining_op = self.get_defining_op(res)
+                    if defining_op is not None:
+                        worklist.move_to_head(defining_op)
+
+        return
