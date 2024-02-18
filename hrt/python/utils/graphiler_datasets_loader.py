@@ -84,7 +84,7 @@ def get_funcs_to_propagate_and_produce_metadata(
 
 
 if __name__ == "__main__":
-    # a place for testing data loading
+    # a simple routine that tests data loading
 
     for dataset in GRAPHILER_HETERO_DATASET:
         print(f"Now working on {dataset}")
