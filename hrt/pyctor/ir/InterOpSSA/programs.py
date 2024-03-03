@@ -4,7 +4,7 @@ from .variables import (
     is_valid_var_name,
     WeightVar,
 )
-from .operators import OpBase, FusedOpBase, UnrealizedBinaryOp
+from .operators import OpBase, FusedOpBase
 from typing import (
     Union,
     Generator,
@@ -13,8 +13,7 @@ from typing import (
 
 # TODO: Add OpSpecifier to Program
 from ..OpSpecSSA.op_specifier import OpSpecifier
-from ...transforms import pass_manager
-from .utils import CallRecord, log_pass_calls, OrderedSetQueue
+from .utils import CallRecord, log_pass_calls
 from .variable_tables import DefUseEntry, VariableTable
 
 
@@ -24,27 +23,29 @@ class Program:
     ]  # Stores the logging by @log_pass_calls
 
     operations: list[Union[OpBase, FusedOpBase]]
-    op_to_seq_no: dict[
+    base_op_to_base_seq_no: dict[
         OpBase, int
     ]  # fused op is broken down into basic ops in this dict
     var_table: VariableTable
 
-    def calc_op_to_seq(
+    def calc_base_op_to_base_seq(
         self, operations: list[Union[OpBase, FusedOpBase]]
     ) -> dict[OpBase, int]:
-        """calculate the operation to sequence id mapping. Fused op will be broken
-        down into basic ops and each will be assigned a unique id"""
-        op_to_seq_no: dict[OpBase, int] = dict()
+        """Calculate the operation to sequence id mapping. Fused op will be broken
+        down into basic ops and each will be assigned a unique id.
+        This is done at the program instance initialization and operator-fusion invariant.
+        """
+        base_op_to_base_seq_no: dict[OpBase, int] = dict()
         curr_idx = 0
         for op in operations:
             if isinstance(op, FusedOpBase):
                 for sub_op in op.ops:
-                    op_to_seq_no[sub_op] = curr_idx
+                    base_op_to_base_seq_no[sub_op] = curr_idx
                     curr_idx += 1
             else:
-                op_to_seq_no[op] = curr_idx
+                base_op_to_base_seq_no[op] = curr_idx
             curr_idx += 1
-        return op_to_seq_no
+        return base_op_to_base_seq_no
 
     def __init__(
         self,
@@ -53,7 +54,7 @@ class Program:
     ):
         self.var_table = var_table
         self.operations = operations
-        self.op_to_seq_no = self.calc_op_to_seq(operations)
+        self.base_op_to_base_seq_no = self.calc_base_op_to_base_seq(operations)
 
     def _get_def_use_entry(self, var: VarBase) -> DefUseEntry:
         if not self.var_table.contains(var):
@@ -141,7 +142,7 @@ class Program:
 
         return cls(var_table, ops)
 
-    def yield_basic_ops(self) -> Generator[OpBase, None, None]:
+    def yield_base_ops(self) -> Generator[OpBase, None, None]:
         for op in self.operations:
             if isinstance(op, FusedOpBase):
                 for sub_op in op.ops:
@@ -163,109 +164,3 @@ class Program:
         # numbering, the value number chain of the same key may not be preserved
         diff_var_table = self.var_table.differentiate(diff_ops)
         return Program(diff_var_table, diff_ops)
-
-    # TODO: Move to binop_realizer.py
-    @log_pass_calls("realize_ops")
-    def realize_ops(self):
-        """Realize Unrealized.* ops after shape has been inferred.
-        Prerequisite: shape_inferer.
-        Invalidate shape_inferer, def_use_analyzer, and value_numberer if changes have been made.
-        """
-
-        op_replacement: dict[OpBase, OpBase] = dict()
-        for op in self.yield_basic_ops():
-            if isinstance(op, UnrealizedBinaryOp):
-                curr_opr_shape_info = [
-                    self.var_table.get_shape_info(opr)
-                    for opr in op.get_operands()
-                ]
-                curr_res_shape_info = [
-                    self.var_table.get_shape_info(res)
-                    for res in op.get_results()
-                ]
-                new_op = op.realize(curr_opr_shape_info, curr_res_shape_info)
-                op_replacement[op] = new_op
-
-        # Replace the op with the new in self.operations
-        for idx, op in enumerate(self.operations):
-            if isinstance(op, FusedOpBase):
-                for idx_sub, sub_op in enumerate(op.ops):
-                    if op in op_replacement:
-                        op.ops[idx_sub] = op_replacement[op]
-            else:
-                if op in op_replacement:
-                    self.operations[idx] = op_replacement[op]
-
-        # TODO: no need to redo here but return it in the invalidated pass list in the new pass manager
-        # Redo the shape analysis if it is done before because there is new information
-        done_infer_shape_flag = False
-        for pass_record in self.var_table.passes_call_records:
-            if self.infer_shapes.__name__ == pass_record.funcname:
-                done_infer_shape_flag = True
-        if done_infer_shape_flag:
-            self.infer_shapes()
-
-        # TODO: no need to redo here but return it in the invalidated pass list in the new pass manager
-        # Redo the def-use chain analysis if it is done before because there is operator changes
-        done_value_numbering_flag = False
-        done_def_use_chain_analysis = False
-        for pass_record in self.var_table.passes_call_records:
-            if (
-                self.var_table.do_def_use_chain_analysis.__name__
-                == pass_record.funcname
-            ):
-                done_def_use_chain_analysis = True
-            if self.var_table.do_value_number_on_program.__name__ == (
-                pass_record.funcname
-            ):
-                done_value_numbering_flag = True
-        if done_def_use_chain_analysis:
-            self.var_table.do_def_use_chain_analysis(
-                list(self.yield_basic_ops()), done_value_numbering_flag
-            )
-
-    # TODO: Move to shape_inferer.py
-    @log_pass_calls("infer_shapes")
-    def infer_shapes(self):
-        """
-        After pattern match from the inter-op IR (or, after differentiation for the backward propagation), we get all operations and unique variable names. We need to infer the shapes of all variables.
-        Prerequisite: def_use_analyzer.
-        """
-        worklist = OrderedSetQueue()
-        for op in self.yield_basic_ops():
-            worklist.put(op)
-        while not worklist.empty():
-            op = worklist.get()
-            curr_opr_shape_info = [
-                self.var_table.get_shape_info(opr) for opr in op.get_operands()
-            ]
-            curr_res_shape_info = [
-                self.var_table.get_shape_info(res) for res in op.get_results()
-            ]
-
-            opr_shape_info, res_shape_info = op.infer_shape(
-                curr_opr_shape_info, curr_res_shape_info
-            )
-            for opr, shape_info in zip(op.get_operands(), opr_shape_info):
-                self.var_table.set_shape_info_or_throw(opr, shape_info)
-            for res, shape_info in zip(op.get_results(), res_shape_info):
-                self.var_table.set_shape_info_or_throw(res, shape_info)
-
-            for opr, old_shape_info, new_shape_info in zip(
-                op.get_results(), curr_res_shape_info, res_shape_info
-            ):
-                # If an result shape has changed from None to known, move the using ops to the head of the queue
-                if old_shape_info is None and new_shape_info is not None:
-                    for using_op in self.get_using_ops(opr):
-                        worklist.move_to_head(using_op)
-
-            for res, old_shape_info, new_shape_info in zip(
-                op.get_operands(), curr_opr_shape_info, opr_shape_info
-            ):
-                # If an operand shape has changed from known to None, move the defining ops to the head of the queue
-                if old_shape_info is not None and new_shape_info is None:
-                    defining_op = self.get_defining_op(res)
-                    if defining_op is not None:
-                        worklist.move_to_head(defining_op)
-
-        return
