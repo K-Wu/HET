@@ -1,6 +1,9 @@
 def modify_indent(
     py_template: str, original_indent: int, new_indent: int
 ) -> str:
+    """Modify the indentation of a python template string. This
+    function is useful when you want to change the indentation of a
+    multi-line string."""
     new_py_template = ""
     for line in py_template.splitlines():
         if line.strip() == "":

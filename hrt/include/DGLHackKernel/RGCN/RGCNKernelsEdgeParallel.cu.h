@@ -10,7 +10,7 @@ struct RGCNData {
   Idx feat_src_xlen{0};
   Idx* __restrict__ eids{nullptr};
   // Inputs
-  DType* __restrict__ feat_src{nullptr}, * __restrict__ enorm{nullptr};
+  DType* __restrict__ feat_src{nullptr}, *__restrict__ enorm{nullptr};
   // Output
   DType* __restrict__ ret{nullptr};
 };
@@ -51,6 +51,8 @@ __device__ __forceinline__ void _RGCNNodeMeanAggregation_edge_parallel(
           etype = etype_data.etypes[eidx];
         }
         if constexpr (IsCompact(kind)) {
+          // TODO: shouldn't obtaining feat_src_entry_id use
+          // find_relational_compact_as_of_node_index?
           feat_src_entry_id = src_vid;
           if constexpr (FullCartesianFlag) {
             // NB: This is the case where we have the data stored in
