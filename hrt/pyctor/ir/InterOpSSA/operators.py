@@ -103,6 +103,8 @@ class FinalOpMeta(type(dataobject), type(OpBase)):
 
 
 class FusedOpBase(metaclass=abc.ABCMeta):
+    """This class is deliberately not inheriting from OpBase to distinguish itself from ordinary ops."""
+
     ops: list[OpBase]
 
     def __init__(self, ops: list[OpBase]):

@@ -8,7 +8,6 @@ from .operators import OpBase, FusedOpBase
 from typing import (
     Union,
     Generator,
-    Callable,
 )
 
 # TODO: Add OpSpecifier to Program
@@ -17,35 +16,37 @@ from .utils import CallRecord, log_pass_calls
 from .variable_tables import DefUseEntry, VariableTable
 
 
+def yield_base_ops(
+    operations: list[Union[OpBase, FusedOpBase]]
+) -> Generator[OpBase, None, None]:
+    for op in operations:
+        if isinstance(op, FusedOpBase):
+            for sub_op in op.ops:
+                yield sub_op
+        else:
+            yield op
+
+
 class Program:
     passes_call_records: list[
         CallRecord
     ]  # Stores the logging by @log_pass_calls
 
     operations: list[Union[OpBase, FusedOpBase]]
+    base_ops: list[OpBase]  # list of basic ops
+    var_table: VariableTable
+
+    ##
+    ## BaseOpSequencer
     base_op_to_base_seq_no: dict[
         OpBase, int
     ]  # fused op is broken down into basic ops in this dict
-    var_table: VariableTable
 
-    def calc_base_op_to_base_seq(
-        self, operations: list[Union[OpBase, FusedOpBase]]
-    ) -> dict[OpBase, int]:
-        """Calculate the operation to sequence id mapping. Fused op will be broken
-        down into basic ops and each will be assigned a unique id.
-        This is done at the program instance initialization and operator-fusion invariant.
-        """
-        base_op_to_base_seq_no: dict[OpBase, int] = dict()
-        curr_idx = 0
-        for op in operations:
-            if isinstance(op, FusedOpBase):
-                for sub_op in op.ops:
-                    base_op_to_base_seq_no[sub_op] = curr_idx
-                    curr_idx += 1
-            else:
-                base_op_to_base_seq_no[op] = curr_idx
-            curr_idx += 1
-        return base_op_to_base_seq_no
+    ##
+    ## OpSequencer
+    base_seq_no_to_seq_no: dict[
+        int, Union[int, tuple[int, int]]
+    ]  # base_seq_no to seq_no mapping
 
     def __init__(
         self,
@@ -54,7 +55,8 @@ class Program:
     ):
         self.var_table = var_table
         self.operations = operations
-        self.base_op_to_base_seq_no = self.calc_base_op_to_base_seq(operations)
+        self.base_ops = list(yield_base_ops(operations))
+        # self.base_op_to_base_seq_no = calc_base_op_to_base_seq(operations)
 
     def _get_def_use_entry(self, var: VarBase) -> DefUseEntry:
         if not self.var_table.contains(var):
@@ -81,10 +83,20 @@ class Program:
         # TODO: handle None case, i.e., input or weight variable
         return self._get_def_use_entry(var).def_op
 
-    def get_seqid(self, op: OpBase) -> int:
+    def get_base_seqid(self, op: OpBase) -> int:
         """returns the sequence id of the operation"""
-        assert op in self.operations
-        return self.operations.index(op)
+        assert op in self.base_ops
+        return self.base_ops.index(op)
+
+    def get_seqid(
+        self, op: Union[OpBase, FusedOpBase]
+    ) -> int | tuple[int, int]:
+        """returns the sequence id of the operation"""
+        if isinstance(op, FusedOpBase):
+            assert op in self.operations
+            return self.operations.index(op)
+        else:
+            return self.base_seq_no_to_seq_no[self.get_base_seqid(op)]
 
     def assert_define_before_use(self, operand: VarBase, op: OpBase):
         assert self.var_table.contains(operand)
@@ -95,7 +107,9 @@ class Program:
                 # this is an input variable or weight. Skipping the seqid check
                 return
 
-            assert self.get_seqid(operand_def_op) < self.get_seqid(op)
+            assert self.get_base_seqid(operand_def_op) < self.get_base_seqid(
+                op
+            )
 
     def validate(self) -> None:
         # returns True if 1) every operation has all key-value pairs correctly
@@ -141,14 +155,6 @@ class Program:
         ops = program_serializer.loads_op(lines[scopes[1][0] :])
 
         return cls(var_table, ops)
-
-    def yield_base_ops(self) -> Generator[OpBase, None, None]:
-        for op in self.operations:
-            if isinstance(op, FusedOpBase):
-                for sub_op in op.ops:
-                    yield sub_op
-            else:
-                yield op
 
     # TODO: Move to auto_differer.py
     @log_pass_calls("differentiate")

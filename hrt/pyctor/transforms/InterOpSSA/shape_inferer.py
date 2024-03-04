@@ -3,6 +3,7 @@ from ..passes import Pass
 from ...ir.InterOpSSA.programs import Program
 from .def_use_analyzer import DefUseAnalyzerPass
 from ...ir.InterOpSSA.utils import OrderedSetQueue
+from .base_op_sequencer import BaseOpSequencer
 
 
 class ShapeInfererPass(Pass):
@@ -11,15 +12,15 @@ class ShapeInfererPass(Pass):
         return "ShapeInfererPass"
 
     def get_prerequisites(self, program: Program) -> list[str]:
-        return [DefUseAnalyzerPass.get_name()]
+        return [BaseOpSequencer.get_name(), DefUseAnalyzerPass.get_name()]
 
     def run(self, program: Program) -> list[str]:
         """
-        After pattern match from the inter-op IR (or, after differentiation for the backward propagation), we get all operations and unique variable names. We need to infer the shapes of all variables.
+        After pattern match from the inter-op IR (or, after differentiation for the backward propagation), we get all base_ops and unique variable names. We need to infer the shapes of all variables.
         Prerequisite: def_use_analyzer.
         """
         worklist = OrderedSetQueue()
-        for op in program.yield_base_ops():
+        for op in program.base_ops:
             worklist.put(op)
         while not worklist.empty():
             op = worklist.get()

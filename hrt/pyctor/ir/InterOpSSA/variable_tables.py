@@ -10,12 +10,9 @@ from typing import (
     Union,
     NamedTuple,
     Annotated,
-    Callable,
 )
 
 import re
-from .utils import CallRecord, log_pass_calls
-from ...transforms import pass_manager
 
 DefUseEntry = NamedTuple(
     "DefUseEntry",
@@ -49,26 +46,30 @@ class VariableTable:
     and only stores their name with (slice_)type omitted
     """
 
-    passes_call_records: list[
-        CallRecord
-    ]  # Stores the logging by @log_pass_calls
-
-    vars_input: set[VarBase]
-
-    vars_shape: dict[str, Shape]
     dsl_vars: Annotated[
         set[VarBase],
         "variables defined during the lowering from Inter Op DSL to SSA",
     ]
+
+    ##
+    ## ShapeInferer
+    vars_shape: dict[str, Shape]
+
+    ##
+    ## ValueNumberer
+    vars_input: set[VarBase]
     numbered_val_to_key: Annotated[
         dict[VarBase, VarBase],
-        """map the full string representation to full string representation, e.g., (EDGEWISE, "var_name2") to (EDGEWISE, "var_name")""",
+        """map the full string representation of numbered variable to full string representation of variable in its original name, e.g., (EDGEWISE, "var_name2") to (EDGEWISE, "var_name")""",
     ]
     numbered_key_vals: Annotated[
         dict[str, list[VarBase]],
         """
     reverse of numbered_val_to_key""",
     ]
+
+    ##
+    ## DefUseAnalyzer
     def_use_table: Annotated[
         # after SSA numbering, each value will be a single DefUseEntry
         dict[str, list[DefUseEntry]],
@@ -83,7 +84,7 @@ class VariableTable:
 
     def_use_table
     whether before or after value numbering, each (key, value) in def_use_table looks like
-    (var_key, [DefUseEntry(var_name, opid0, [opid1]), DefUseEntry(var_name, opid2, [opid3, opid4])])
+    (var_key, [DefUseEntry(var_name, opid0, [opid1]), DefUseEntry(var_name(2), opid2, [opid3, opid4])])
     (another_var, [DefUseEntry(another_var, opid5, [opid6])])
     """,
     ]
@@ -335,6 +336,7 @@ class VariableTable:
         At that time only variables names are registered in the variable table,
         and all the rest of the information in the variable table are not
         produced yet.
+        Solely used by pattern_matcher.py
         """
         new_var = self._create_temp_var(hint)
         self.register_dsl_var(new_var)
@@ -347,6 +349,7 @@ class VariableTable:
         SSA in order to have knowledge about the existing variable names. This
         is necessary to make sure during creating temporary variable names, no
         name collision happens.
+        Solely used by pattern_matcher.py
         """
         # self.numbered_val_to_name[var.to_string()] = var.to_string()
         # self.numbered_name_vals[var.to_string()] = [var.to_string()]
