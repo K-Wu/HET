@@ -15,15 +15,16 @@
 template <bool RIGHT_REG_TILED_FLAG, int THREADING_BLOCK_SIZE_X,
           int THREADING_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_X,
           int SHMEM_BLOCK_SIZE_Y, int SHMEM_BLOCK_SIZE_K, typename Idx,
-          typename IdxPtr, bool HGT_INSTEAD_OF_RGCN_FLAG, bool OuterProductFlag,
-          MySGEMMInnerProductKind DoInnerProductSwitch,
+          typename IdxPtr, bool HGT_INSTEAD_OF_RGCN_FLAG_FOR_NUM_HEAD_ASSERTION,
+          bool OuterProductFlag, MySGEMMInnerProductKind DoInnerProductSwitch,
           bool InnerProductGatherListNodeInsteadOfEdge, bool NoEdgeNormFlag,
           bool AtomicUpdateFlag>
 class _simplified_basic_MatMulKernel<
     RIGHT_REG_TILED_FLAG, false, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
     SHMEM_BLOCK_SIZE_X, SHMEM_BLOCK_SIZE_Y, SHMEM_BLOCK_SIZE_K, Idx, IdxPtr,
-    HGT_INSTEAD_OF_RGCN_FLAG, OuterProductFlag, DoInnerProductSwitch,
-    InnerProductGatherListNodeInsteadOfEdge, NoEdgeNormFlag, AtomicUpdateFlag> {
+    HGT_INSTEAD_OF_RGCN_FLAG_FOR_NUM_HEAD_ASSERTION, OuterProductFlag,
+    DoInnerProductSwitch, InnerProductGatherListNodeInsteadOfEdge,
+    NoEdgeNormFlag, AtomicUpdateFlag> {
   // TODO: investigate why there are zeros in grad_normalized_attn_score
   // FIXME:
  public:
@@ -102,7 +103,8 @@ class _simplified_basic_MatMulKernel<
                           (THREADING_BLOCK_SIZE_X * THREADING_BLOCK_SIZE_Y) ==
                       0,
                   "");
-    if constexpr (!HGT_INSTEAD_OF_RGCN_FLAG && !OuterProductFlag) {
+    if constexpr (!HGT_INSTEAD_OF_RGCN_FLAG_FOR_NUM_HEAD_ASSERTION &&
+                  !OuterProductFlag) {
       // assuming this case is RGCN and there is no multiple head
       assert((gridDim.z == 1));
     }  // otherwise assuming HGT
