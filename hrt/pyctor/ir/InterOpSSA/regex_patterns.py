@@ -16,6 +16,11 @@ non_weight_pattern = r"\((?P<type>EDGEWISE|NODEWISE|DSTNODE|SRCNODE),\"(?P<var_n
 # (Wname, NONE) rather than mere Wname
 weight_pattern = r"\((?P<weight_name>[A-z0-9_]*),(?P<type_slice>[A-Z]*)\)"
 
+
+result_pattern = r"{weight_pattern}|{non_weight_pattern}".format(
+    weight_pattern=strip_group_names(weight_pattern),
+    non_weight_pattern=strip_group_names(non_weight_pattern),
+)
 keyword_value_pair_pattern = (
     r"(?P<keyword>[a-z0-9_]*)=(?P<value>{weight_pattern}|{non_weight_pattern})"
     .format(
@@ -24,12 +29,19 @@ keyword_value_pair_pattern = (
     )
 )
 
-# operator_pattern = r"(?P<funcname>[A-Z][A-z0-9_]*)\s*\(((?P<keywords>[a-z0-9_]*\s*=\s*.*)\s*,)*\s*(?P<lastkeyword>[a-z0-9_]*\s*=\s*.*\)),?\)\s*;"
+# Non-fused operators have 1--2 results, and fused operators may have more.
 # NB: plain assignment e.g. (NODEWISE, "msg") <- (EDGEWISE, "zi") is denoted as
 # (NODEWISE, "msg")=Copy(input=(EDGEWISE, "zi"));
-operator_pattern = r"((?P<result2>{weight_pattern}|{non_weight_pattern}),)?(?P<result>{weight_pattern}|{non_weight_pattern})=(?P<funcname>[A-Z][A-z0-9_]*)\((?P<keyword_fields>({keyword_value_pair},)*{keyword_value_pair},?)\);".format(
-    weight_pattern=strip_group_names(weight_pattern),
-    non_weight_pattern=strip_group_names(non_weight_pattern),
+nonfused_operator_pattern = r"((?P<result2>{result_pattern}),)?(?P<result>{result_pattern})=(?P<funcname>[A-Z][A-z0-9_]*)\((?P<keyword_fields>({keyword_value_pair},)*{keyword_value_pair},?)\);".format(
+    result_pattern=strip_group_names(result_pattern),
+    keyword_value_pair=strip_group_names(keyword_value_pair_pattern),
+)
+
+fused_operator_results_pattern = r"((?P<results>({result_pattern}),)*({result_pattern}))=(?P<funcname>[A-Z][A-z0-9_]*)".format(
+    result_pattern=strip_group_names(result_pattern),
+)
+fused_operator_operands_pattern = r"=(?P<funcname>[A-Z][A-z0-9_]*)\((?P<keyword_fields>({keyword_value_pair},)*{keyword_value_pair},?)\);".format(
+    result_pattern=strip_group_names(result_pattern),
     keyword_value_pair=strip_group_names(keyword_value_pair_pattern),
 )
 
@@ -37,11 +49,11 @@ operator_pattern = r"((?P<result2>{weight_pattern}|{non_weight_pattern}),)?(?P<r
 # Usage
 # For every line, do the following steps:
 # 1. strip comments, and whitespaces
-# 2. match operator_pattern
+# 2. match nonfused_operator_pattern
 # 3. if matched, extract the substring in the match group "keyword_fields", and apply match_all using keyword_value_pair_pattern
 
 
 # The main routine is provided to aid development process
 if __name__ == "__main__":
     print(keyword_value_pair_pattern)
-    print(operator_pattern)
+    print(nonfused_operator_pattern)

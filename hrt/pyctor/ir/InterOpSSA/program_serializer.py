@@ -72,19 +72,27 @@ def find_first_level_scopes(lines: list[str]) -> list[tuple[int, int, str]]:
 def loads_op(
     lines: list[str],
 ) -> list[Union[operators.FusedOpBase, operators.OpBase]]:
+    """This function is used to parse the DAG or DAGDict portion in .inter-op-ssa file.
+    It uses regex to match the operators, so whether it is DAGDict, i.e., the operators are values and sequence numbers are keys, or DAG does not matter.
+    """
     # For every line, do the following steps:
     # 1. strip comments, and whitespaces
-    # 2. match operator_pattern
+    # 2. match nonfused_operator_pattern
     # 3. if matched, extract the substring in the match group "keyword_fields",
     # and apply match_all using keyword_value_pair_pattern
     results = []
-    assert remove_white_spaces(lines[0].strip()) == "DAG{"
+    assert (
+        remove_white_spaces(lines[0].strip()) == "DAG{"
+        or remove_white_spaces(lines[0].strip()) == "DAGDict{"
+    )
     assert lines[-1].strip() == "}"
-    # Use[1:-1] to avoid adding the outmost DAG{} to the result
+    # Use [1:-1] to avoid adding the outmost DAG{} to the result
     lines = lines[1:-1]
     scopes: list[tuple[int, int, str]] = find_first_level_scopes(lines)
-    curr_scope: Union[None, str] = None
-    curr_scope_ops: list[operators.OpBase] = []
+    curr_fusion_scope: Union[None, str] = None
+    curr_fusion_scope_ops: Union[None, list[operators.OpBase]] = None
+    curr_fusion_scope_operands: Union[None, list[operators.VarBase]] = None
+    curr_fusion_scope_results: Union[None, list[operators.VarBase]] = None
     for idx_line, line in enumerate(lines):
         # Strip comments
         if line.find("//") != -1:
@@ -96,24 +104,60 @@ def loads_op(
 
         # Handle scope tags
         if len(scopes) > 0 and idx_line == scopes[0][0]:
-            curr_scope = scopes[0][2]
+            # Scope opens
+            curr_fusion_scope = scopes[0][2]
+            curr_fusion_scope_ops = []
+            curr_fusion_scope_operands = []
+            curr_fusion_scope_results = []
+            # Retrieve operands (inputs) and results (outputs) of the fusion scope
+            match_operands = re.match(
+                regex_patterns.fused_operator_operands_pattern, line
+            )
+            match_results = re.match(
+                regex_patterns.fused_operator_results_pattern, line
+            )
+            assert match_operands is not None
+            assert match_results is not None
+
+            keyword_value_pairs = re.findall(
+                regex_patterns.keyword_value_pair_pattern,
+                match_operands.group("keyword_fields"),
+            )
+            for keyword, value in keyword_value_pairs:
+                curr_fusion_scope_operands.append(value)
+
+            results = re.findall(
+                regex_patterns.result_pattern, match_results.group("results")
+            )
+            for result in results:
+                curr_fusion_scope_results.append(result)
+
             continue
         elif len(scopes) > 0 and idx_line == scopes[0][1]:
-            # put the fused ops into the results
-            assert curr_scope is not None  # make language server happy
-            if curr_scope.find("GEMMOp") != -1:
-                results.append(operators.GEMMFusedOp.from_ops(curr_scope_ops))
-            elif curr_scope.find("TraversalOp") != -1:
+            # Scope closes
+            # NB:For now we store ops fusion schemes in DAG. We may want to store the fusion scheme separately in future.
+            # Put the fused ops into the results
+            assert curr_fusion_scope is not None  # Make language server happy
+            if curr_fusion_scope.find("GEMMOp") != -1:
                 results.append(
-                    operators.TraversalFusedOp.from_ops(curr_scope_ops)
+                    operators.GEMMFusedOp.from_ops(curr_fusion_scope_ops)
+                )
+            elif curr_fusion_scope.find("TraversalOp") != -1:
+                results.append(
+                    operators.TraversalFusedOp.from_ops(curr_fusion_scope_ops)
                 )
             else:
-                print(curr_scope)
+                print(curr_fusion_scope)
                 raise ValueError("unrecognized fused op type!")
             scopes.pop(0)
-            curr_scope = None
+            curr_fusion_scope = None
+            curr_fusion_scope_ops = None
+            curr_fusion_scope_operands = None
+            curr_fusion_scope_results = None
             continue
-        match = re.match(regex_patterns.operator_pattern, line)
+
+        # Match operators
+        match = re.match(regex_patterns.nonfused_operator_pattern, line)
         if match:
             curr_op_data: dict["str", Union["str", list[str]]] = dict()
             result = match.group("result")
@@ -131,6 +175,7 @@ def loads_op(
             curr_op_data["func_name"] = func_name
             # print every matched key_value pair
             for keyword_value_pair in keyword_value_pairs:
+                # keyword and value are the first two elements of the tuple from the regex match. There are other elements in the tuple, but we don't need them.
                 keyword = keyword_value_pair[0]
                 value = keyword_value_pair[1]
                 # print("   ", keyword, value)
@@ -140,10 +185,10 @@ def loads_op(
             curr_op: operators.OpBase = operator_cls.from_keyval_pairs(
                 curr_op_data
             )
-            if curr_scope is None:
+            if curr_fusion_scope is None:
                 results.append(curr_op)
             else:
-                curr_scope_ops.append(curr_op)
+                curr_fusion_scope_ops.append(curr_op)
     return results
 
 
@@ -175,35 +220,40 @@ if __name__ == "__main__":
 
     # Test program serialization and deserialization
     # The following is essentially the DAG portion in Program.loads() in hrt/pyctor/ir/InterOpSSA/programs.py
-    ops = None
-    with open("pyctor/examples/inter-op-ssa/hgt.inter-op-ssa") as fd:
-        lines = fd.readlines()
-        scopes: list[tuple[int, int, str]] = find_first_level_scopes(lines)
-        print("scopes in hgt.inter-op-ssa", scopes)
-        for scope_beg, scope_end, scope_tag in scopes:
-            # For simplicity of parsing, we assume the scope beginning line only contains tag and "{"
-            assert (
-                remove_white_spaces(lines[scope_beg].strip())
-                == scope_tag + "{"
-            )
-            # Similarly, we assume the scope ending line only contains "}"
-            assert lines[scope_end].strip() == "}"
-            if scope_tag.find("DAG") != -1:
-                ops = loads_op(lines[scope_beg : scope_end + 1])
-
-                # Set an example to show yaml serialization and deserialization
-                # Use .out suffix to avoid git diff
-                import yaml
-
-                yaml.dump(ops, open("hgt.inter-op-ssa.temp.yaml.out", "w"))
-                yaml.load(
-                    open("hgt.inter-op-ssa.temp.yaml.out", "r"),
-                    Loader=yaml.Loader,
+    TEST_INPUTS = [
+        # "pyctor/examples/op-spec-ssa/edgewise_fused.op-spec-ssa",
+        "pyctor/examples/inter-op-ssa/hgt.inter-op-ssa",
+    ]
+    for input in TEST_INPUTS:
+        ops = None
+        with open(input) as fd:
+            lines = fd.readlines()
+            scopes: list[tuple[int, int, str]] = find_first_level_scopes(lines)
+            print("scopes in hgt.inter-op-ssa", scopes)
+            for scope_beg, scope_end, scope_tag in scopes:
+                # For simplicity of parsing, we assume the scope beginning line only contains tag and "{"
+                assert (
+                    remove_white_spaces(lines[scope_beg].strip())
+                    == scope_tag + "{"
                 )
+                # Similarly, we assume the scope ending line only contains "}"
+                assert lines[scope_end].strip() == "}"
+                if scope_tag.find("DAG") != -1:
+                    ops = loads_op(lines[scope_beg : scope_end + 1])
 
-                # Set an example to show json serialization and deserialization
-                import jsonpickle
+                    # Set an example to show yaml serialization and deserialization
+                    # Use .out suffix to avoid git diff
+                    import yaml
 
-                jsonpickle.loads(jsonpickle.dumps(ops))
-    if ops is None:
-        print("DAG not found")
+                    yaml.dump(ops, open("hgt.inter-op-ssa.temp.yaml.out", "w"))
+                    yaml.load(
+                        open("hgt.inter-op-ssa.temp.yaml.out", "r"),
+                        Loader=yaml.Loader,
+                    )
+
+                    # Set an example to show json serialization and deserialization
+                    import jsonpickle
+
+                    jsonpickle.loads(jsonpickle.dumps(ops))
+        if ops is None:
+            print("DAG not found")
