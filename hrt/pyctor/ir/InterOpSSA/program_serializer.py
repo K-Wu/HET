@@ -5,6 +5,7 @@ from .variable_tables import remove_white_spaces, VariableTable
 from .programs import Program
 from . import operators
 from typing import Union
+from types import ModuleType
 
 
 def find_scope_end(
@@ -49,7 +50,9 @@ def find_scope_end(
 
 def find_first_level_scopes(lines: list[str]) -> list[tuple[int, int, str]]:
     """Find the first level scopes, and return a dict mapping the scope name to
-    the scope beginning and end"""
+    the scope beginning and end.
+    This method is superceded by the regex-based method. This method now serves as a reference. It has some limitations, e.g., it does not support one-line scope, i.e., the scope is in the same line. Besides, it does not support multiple { or } in a line.
+    """
     scope_beg_end_tags = list()
     idx_line = 0
     while idx_line < len(lines):
@@ -66,6 +69,50 @@ def find_first_level_scopes(lines: list[str]) -> list[tuple[int, int, str]]:
             idx_line = scope_end + 1
         else:
             idx_line += 1
+    return scope_beg_end_tags
+
+
+def find_all_matches(pattern: str, string: str, re_or_pcre: ModuleType):
+    """From https://stackoverflow.com/a/77830224/5555077"""
+    pat = re_or_pcre.compile(pattern)
+    pos = 0
+    out = []
+    while (match := pat.search(string, pos)) is not None:
+        pos = match.start() + 1
+        out.append(match[1])
+    return out
+
+
+def find_first_level_scopes_regex(
+    lines: list[str],
+) -> list[tuple[int, int, str]]:
+    import pcre  # Package https://pypi.org/project/python-pcre/ is required
+
+    multilines = "\n".join(lines)
+
+    # From https://stackoverflow.com/a/35271017/5555077
+    # The pattern will match the contents from { to } of each first-level scope.
+    pattern = r"\{(?:[^{}]+|(?R))*+\}"
+
+    # Match all and return the results
+    matches = find_all_matches(pattern, multilines, pcre)
+
+    scope_beg_end_tags = list()
+    for match in matches:
+        char_beg: int = match.span()[0]
+        char_end: int = match.span()[1]
+        # Count the number of newlines before the match
+        num_newlines_before = match.count("\n", 0, char_beg)
+        # Count the number of newlines in the match
+        num_newlines_in = match.count("\n", char_beg, char_end)
+        scope_name = multilines[multilines[:char_beg].rfind("\n") : char_beg]
+        scope_beg_end_tags.append(
+            (
+                num_newlines_before,
+                num_newlines_before + num_newlines_in,
+                scope_name,
+            )
+        )
     return scope_beg_end_tags
 
 
@@ -220,11 +267,11 @@ if __name__ == "__main__":
 
     # Test program serialization and deserialization
     # The following is essentially the DAG portion in Program.loads() in hrt/pyctor/ir/InterOpSSA/programs.py
-    TEST_INPUTS = [
+    TEST_DAG_FILENAMES = [
         # "pyctor/examples/op-spec-ssa/edgewise_fused.op-spec-ssa",
         "pyctor/examples/inter-op-ssa/hgt.inter-op-ssa",
     ]
-    for input in TEST_INPUTS:
+    for input in TEST_DAG_FILENAMES:
         ops = None
         with open(input) as fd:
             lines = fd.readlines()
@@ -257,3 +304,15 @@ if __name__ == "__main__":
                     jsonpickle.loads(jsonpickle.dumps(ops))
         if ops is None:
             print("DAG not found")
+
+    # Test load op spec
+    TEST_OPSPEC_FILENAME = [
+        "pyctor/examples/op-spec-ssa/single_dense.compact.op-spec-ssa",
+        "pyctor/examples/op-spec-ssa/single_dense.op-spec-ssa",
+    ]
+    for input in TEST_OPSPEC_FILENAME:
+        ops = None
+        with open(input) as fd:
+            lines = fd.readlines()
+            scopes: list[tuple[int, int, str]] = find_first_level_scopes(lines)
+            print("scopes in hgt.inter-op-ssa", scopes)

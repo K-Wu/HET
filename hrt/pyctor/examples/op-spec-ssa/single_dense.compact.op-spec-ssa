@@ -7,9 +7,16 @@ DAG{
 
 ///
 /// OPSPEC
-/// each op has a dedicated scope with a single-line json that describes the specification.
+/// each op has a dedicated scope in which there is a json substring that describes the specification.
 OPSPEC{
 gemm_1{
- {"C": "(UNIQUE_NODE_ETYPE, \"zi\")", "A": "(SRCNODE, \"feature\")", "B": "(W, EDGETYPE)", "schedule": {"param": {"tile_sz": 16}, "A": "[GATHER (row_idx), NO_TRANSPOSE]", "B": "[WEIGHTS]", "C": "[SCATTER (entry_idx_per_etype + unique_etype_ptr[etype_idx])]"}}
+{"A":["SRCNODE","feature"], "B":["W","EDGETYPE"],
+"C":["UNIQUE_NODE_ETYPE","msg"],
+"schedule":{"tile_sz": 16},
+"access":{
+"A":["GATHER(row_idx)","NO_TRANSPOSE"],
+"B":["WEIGHTS"],
+"C":["SCATTER", "entry_idx_per_etype + unique_etype_ptr[etype_idx]"]}
+}
 }
 }
