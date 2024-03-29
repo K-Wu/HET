@@ -72,22 +72,22 @@ def find_first_level_scopes(lines: list[str]) -> list[tuple[int, int, str]]:
     return scope_beg_end_tags
 
 
-def find_all_matches(pattern: str, string: str, re_or_pcre: ModuleType):
-    """From https://stackoverflow.com/a/77830224/5555077"""
-    pat = re_or_pcre.compile(pattern)
+def find_all_matches(pattern: str, string: str):
+    import pcre  # Package https://pypi.org/project/python-pcre/ is required
+
+    """Adapted from https://stackoverflow.com/a/77830224/5555077"""
+    pat = pcre.compile(pattern)
     pos = 0
     out = []
     while (match := pat.search(string, pos)) is not None:
-        pos = match.start() + 1
-        out.append(match[1])
+        pos = match.span()[1] + 1
+        out.append(match)
     return out
 
 
 def find_first_level_scopes_regex(
     lines: list[str],
 ) -> list[tuple[int, int, str]]:
-    import pcre  # Package https://pypi.org/project/python-pcre/ is required
-
     multilines = "\n".join(lines)
 
     # From https://stackoverflow.com/a/35271017/5555077
@@ -95,17 +95,19 @@ def find_first_level_scopes_regex(
     pattern = r"\{(?:[^{}]+|(?R))*+\}"
 
     # Match all and return the results
-    matches = find_all_matches(pattern, multilines, pcre)
+    matches = find_all_matches(pattern, multilines)
 
     scope_beg_end_tags = list()
     for match in matches:
         char_beg: int = match.span()[0]
         char_end: int = match.span()[1]
         # Count the number of newlines before the match
-        num_newlines_before = match.count("\n", 0, char_beg)
+        num_newlines_before = multilines.count("\n", 0, char_beg)
         # Count the number of newlines in the match
-        num_newlines_in = match.count("\n", char_beg, char_end)
-        scope_name = multilines[multilines[:char_beg].rfind("\n") : char_beg]
+        num_newlines_in = multilines.count("\n", char_beg, char_end)
+        scope_name = multilines[
+            multilines[:char_beg].rfind("\n") + 1 : char_beg
+        ]
         scope_beg_end_tags.append(
             (
                 num_newlines_before,
@@ -239,30 +241,16 @@ def loads_op(
     return results
 
 
-# Superceded by VariableTable.loads() in hrt/pyctor/ir/InterOpSSA/programs.py
-# def loads_shape_table(lines: list[str]) -> tuple[VariableTable, int]:
-#     """Find the scope with ShapeTable tag, and pass the lines in between to
-#     VariableTable.loads"""
-#     shapetable_scope_beg = -1
-#     for idx_line, line in enumerate(lines):
-#         if line.find("{") != -1 and line.find("ShapeTable") != -1:
-#             shapetable_scope_beg = idx_line
-#             break
-#     if shapetable_scope_beg == -1:
-#         raise ValueError("ShapeTable not found")
-#     shapetable_scope_end = find_scope_end(lines, shapetable_scope_beg)
-#     return (
-#         VariableTable.loads(lines[shapetable_scope_beg : shapetable_scope_end + 1]),
-#         shapetable_scope_end + 1,
-#     )
-
-
 if __name__ == "__main__":
     # Test scope finding
     scopes = find_first_level_scopes(
         ["DAG{", "}", "DAG{ }", "DAG{", "{}", "}"]
     )
+    scopes_regex = find_first_level_scopes_regex(
+        ["DAG{", "}", "DAG{ }", "DAG{", "{}", "}"]
+    )
     print(scopes)
+    print(scopes_regex)
     print([(0, 1, "DAG"), (2, 2, "DAG"), (3, 5, "DAG")] == scopes)
 
     # Test program serialization and deserialization
@@ -316,3 +304,27 @@ if __name__ == "__main__":
             lines = fd.readlines()
             scopes: list[tuple[int, int, str]] = find_first_level_scopes(lines)
             print("scopes in hgt.inter-op-ssa", scopes)
+            for idx_line_beg, idx_line_end, scope_tag in scopes:
+                if scope_tag.find("OPSPEC") != -1:
+                    op_specs_scope_list = find_first_level_scopes(
+                        lines[idx_line_beg + 1 : idx_line_end]
+                    )
+                    print("op_specs_scope_list", op_specs_scope_list)
+                    for (
+                        op_spec_line_beg,
+                        op_spec_line_end,
+                        op_spec_tag,
+                    ) in op_specs_scope_list:
+                        import json
+
+                        op_spec_line_beg = idx_line_beg + 1 + op_spec_line_beg
+                        op_spec_line_end = idx_line_beg + 1 + op_spec_line_end
+                        print(
+                            json.loads(
+                                "\n".join(
+                                    lines[
+                                        op_spec_line_beg + 1 : op_spec_line_end
+                                    ]
+                                )
+                            )
+                        )
