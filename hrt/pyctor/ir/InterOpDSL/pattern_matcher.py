@@ -6,6 +6,7 @@ from ..InterOpSSA.variables import VarBase
 from ..InterOpSSA.variables import *
 from ..InterOpSSA.programs import VariableTable
 from typing import Union
+from ...utils.logger import logger, get_oneline_str
 
 
 def determine_loop_type(loop_type: list[tuple[str, str, str]]) -> str:
@@ -345,7 +346,11 @@ def match_weight_var(
         assert isinstance(node.value, ast.Name)
         assert isinstance(node.slice, ast.Attribute)
         assert isinstance(node.slice.value, ast.Name)
-        print("Weight: ", node.value.id, node.slice.value.id, node.slice.attr)
+        logger.debug(
+            get_oneline_str(
+                "Weight: ", node.value.id, node.slice.value.id, node.slice.attr
+            )
+        )
         if node.slice.attr == "ntype":
             slice_type = "NODETYPE"
         elif node.slice.attr == "etype":
@@ -357,7 +362,7 @@ def match_weight_var(
             [],
         )
     elif isinstance(node, ast.Name):
-        print("Weight(Sliceless): ", node.id)
+        logger.debug(get_oneline_str(("Weight(Sliceless): ", node.id)))
         return WeightVar.from_dict({"name": node.id, "slice_type": "NONE"}), []
     # It should be match chain then, we currently only support transpose
     elif isinstance(node, ast.Call):
@@ -384,7 +389,9 @@ def match_unchained_edge_input(
     if isinstance(node, ast.Attribute):
         assert isinstance(node.value, ast.Name)
         if node.value.id == "e":
-            print("(EDGEWISE) input_key: ", node.attr)
+            logger.debug(
+                get_oneline_str(("(EDGEWISE) input_key: ", node.attr))
+            )
             return DataVar.from_dict({"name": node.attr, "type": "EDGEWISE"})
     return None
 
@@ -399,7 +406,11 @@ def _match_edge_output(
         assert isinstance(node.value, ast.Name)
         if node.value.id == "e":
             assert isinstance(node.slice, ast.Constant)
-            print("(EDGEWISE) output_key: ", node.value.id, node.slice.value)
+            logger.debug(
+                get_oneline_str(
+                    "(EDGEWISE) output_key: ", node.value.id, node.slice.value
+                )
+            )
             return DataVar.from_dict(
                 {"name": node.slice.value, "type": "EDGEWISE"}
             )
@@ -413,7 +424,9 @@ def match_zero_initialize(
     """lower xxx = 0.0 to an accumulation node or an assertion"""
     if isinstance(rhs_node, ast.Constant):
         if rhs_node.value == 0.0:
-            print(output_symbol, "is an accumulation node")
+            logger.debug(
+                get_oneline_str((output_symbol, "is an accumulation node"))
+            )
             # TODO: return a hint or assertion
             raise NotImplementedError
     # No match chain in zero_initialize
@@ -431,7 +444,9 @@ def match_unchained_vertex_input(
     if isinstance(node, ast.Attribute):
         assert isinstance(node.value, ast.Name)
         if node.value.id == "n":
-            print("(", var_type, ") input_key: ", node.attr)
+            logger.debug(
+                get_oneline_str(("(", var_type, ") input_key: ", node.attr))
+            )
             # distinguish DST_NODE, SRC_NODE from NODEWISE
             return DataVar.from_dict({"name": node.attr, "type": var_type})
     return None
@@ -504,12 +519,16 @@ def _match_vertex_output(
         assert isinstance(node.value, ast.Name)
         if node.value.id == "n":
             assert isinstance(node.slice, ast.Constant)
-            print(
-                "(",
-                var_type,
-                ") output_key: ",
-                node.value.id,
-                node.slice.value,
+            logger.debug(
+                get_oneline_str(
+                    (
+                        "(",
+                        var_type,
+                        ") output_key: ",
+                        node.value.id,
+                        node.slice.value,
+                    )
+                )
             )
             return DataVar.from_dict(
                 {"name": node.slice.value, "type": var_type}
@@ -522,7 +541,7 @@ def _match_return_values(
     loop_type: list[tuple[str, str, str]], node, num_return_values
 ) -> list[Union[VarBase, None]]:
     if len(node.targets) != num_return_values:
-        print(node.targets)
+        logger.debug(node.targets)
         return [None] * num_return_values
     output_symbols = []
     for idx_target in range(len(node.targets)):
@@ -771,15 +790,23 @@ def match_unary_functions_and_throw_unmatched_func_calls(
                 assert isinstance(rhs_node.args[0], ast.List)
                 assert isinstance(rhs_node.args[0].elts[0], ast.Attribute)
                 assert isinstance(rhs_node.args[0].elts[0].value, ast.Name)
-                print(
-                    rhs_node.args[0].elts[0].value.id,
-                    rhs_node.args[0].elts[0].attr,
+                logger.debug(
+                    get_oneline_str(
+                        (
+                            rhs_node.args[0].elts[0].value.id,
+                            rhs_node.args[0].elts[0].attr,
+                        )
+                    )
                 )
                 assert isinstance(rhs_node.args[0].elts[1], ast.Attribute)
                 assert isinstance(rhs_node.args[0].elts[1].value, ast.Name)
-                print(
-                    rhs_node.args[0].elts[1].value.id,
-                    rhs_node.args[0].elts[1].attr,
+                logger.debug(
+                    get_oneline_str(
+                        (
+                            rhs_node.args[0].elts[1].value.id,
+                            rhs_node.args[0].elts[1].attr,
+                        )
+                    )
                 )
                 # Match-chain handled in the following match functions
                 input_symbol0, ops0 = match_data_input(
@@ -838,7 +865,7 @@ def match_copy_and_negation(
         )
         if input_symbol is None:
             raise ValueError("copy input not found")
-        print(input_symbol, output_symbol)
+        logger.debug(get_oneline_str((input_symbol, output_symbol)))
         return ops + [CopyOp(input=input_symbol, result=output_symbol)]
 
 
@@ -856,8 +883,8 @@ def _match_nonlinear(
         return None
     if len(rhs_node.args) != 1:
         return None
-    print("func name, ", rhs_node.func.id)
-    print("input, ", rhs_node.args[0])
+    logger.debug(get_oneline_str(("func name, ", rhs_node.func.id)))
+    logger.debug(get_oneline_str(("input, ", rhs_node.args[0])))
     input_symbol, ops = match_data_input(
         output_symbol, var_table, loop_type, rhs_node.args[0]
     )
@@ -881,6 +908,7 @@ def _match_nonlinear(
 
 
 if __name__ == "__main__":
+    logger.setLevel("DEBUG")
     print(ast.dump(ast.parse('e["zizj"] = 0.0')))
     print(ast.dump(ast.parse('e["zizj"] = concat([e.zi, e.zj])')))
     print(ast.dump(ast.parse('n["hs"] = Linear(V[n.ntype], n.feature)')))

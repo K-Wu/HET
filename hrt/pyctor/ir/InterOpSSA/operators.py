@@ -4,6 +4,7 @@ from .variables import VarBase, DataVar, WeightVar, parse_var_class, Shape
 from typing import Union, Type, TypeVar  # , Namedtuple
 import abc
 from recordclass import dataobject
+from ...utils.logger import logger
 
 
 T = TypeVar("T")
@@ -105,9 +106,18 @@ class FinalOpMeta(type(dataobject), type(OpBase)):
 class FusedOpBase(metaclass=abc.ABCMeta):
     """This class is deliberately not inheriting from OpBase to distinguish itself from ordinary ops."""
 
+    results: list[VarBase]
+    operands: list[VarBase]
     ops: list[OpBase]
 
-    def __init__(self, ops: list[OpBase]):
+    def __init__(
+        self,
+        results: list[VarBase],
+        operands: list[VarBase],
+        ops: list[OpBase],
+    ):
+        self.results = results
+        self.operands = operands
         self.ops = ops
 
     @classmethod
@@ -115,16 +125,23 @@ class FusedOpBase(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @classmethod
-    def from_ops(cls: Type[T], ops: list[OpBase]) -> T:
-        return cls(ops)
+    def from_ops(
+        cls: Type[T],
+        results: list[VarBase],
+        operands: list[VarBase],
+        ops: list[OpBase],
+    ) -> T:
+        return cls(results, operands, ops)
 
     def to_string(self) -> str:
-        result = self.get_opname() + "{\n"
+        results = ",".join([ele.to_string() for ele in self.results])
+        operands = ",".join([ele.to_string() for ele in self.operands])
+        result_string = f"{results} = {self.get_opname()}({operands});" + "{\n"
         for op in self.ops:
-            result += op.to_string()
-            result += "\n"
-        result += "}"
-        return result
+            result_string += op.to_string()
+            result_string += "\n"
+        result_string += "}"
+        return result_string
 
     @abc.abstractmethod
     def validate(self) -> None:
@@ -1205,7 +1222,7 @@ class UnrealizedMulOp(UnrealizedBinaryOp):
                 return [Shape.get_vector_shape(), Shape.get_vector_shape()], [
                     Shape.get_scalar_shape()
                 ]
-        print("Warning: insufficient information to infer shape of mul op")
+        logger.warning("Insufficient information to infer shape of mul op")
         return curr_opr_shape_info, curr_res_shape_info
 
     def realize(
@@ -1361,6 +1378,7 @@ class GEMMFusedOp(FusedOpBase):
 
 
 if __name__ == "__main__":
+    logger.setLevel("DEBUG")
     a = DataVar.from_string('(NODEWISE,"a")')
     print(a.to_string())
     b = SplitOp.from_keyval_pairs(
@@ -1380,4 +1398,4 @@ if __name__ == "__main__":
     print(b.to_keyval_pairs())
     print(b.to_keyval_pairs.__name__)
     print(isinstance(b, _SplitOp))
-    print(TraversalFusedOp.from_ops([b, b]).to_string())
+    print(TraversalFusedOp.from_ops(b.results, [b.input], [b, b]).to_string())

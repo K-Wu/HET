@@ -11,6 +11,7 @@ from typing import (
     NamedTuple,
     Annotated,
 )
+from ...utils.logger import logger
 
 import re
 
@@ -119,7 +120,7 @@ class VariableTable:
         if var in self.numbered_val_to_key:
             return self.numbered_val_to_key[var]
         else:
-            print("Warning: value number not done before get_var_key")
+            logger.warning("Value number not done before get_var_key")
             return var
 
     def get_var_key_str(
