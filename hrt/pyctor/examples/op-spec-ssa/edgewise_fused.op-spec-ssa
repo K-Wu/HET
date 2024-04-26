@@ -1,0 +1,28 @@
+// Excerpt from hgt.inter-op-ssa
+///
+/// SHAPE INFORMATION
+///
+// TODO: fullfil this
+
+///
+/// DAG
+///
+DAG{
+1: (EDGEWISE, "attn") = TraversalOp(opr0=(EDGEWISE, "raw_attn_tmp2"));{
+  1:(EDGEWISE, "raw_attn") = Exponential(input = (EDGEWISE, "raw_attn_tmp2"));
+  // edge softmax
+  2:(DSTNODE, "attn_sum") = NodeSumAccumulation(input = (EDGEWISE, "raw_attn"));
+  3:(EDGEWISE, "attn") = ScalarDivide(left = (EDGEWISE, "raw_attn"), right = (DSTNODE, "attn_sum"));
+  }
+}
+
+///
+/// OPSPEC
+/// each op has a dedicated scope <optype>_<opidx> in which there is a json substring that describes the specification.
+OPSPEC{
+  traversal_1{
+    {
+
+    }
+  }
+}

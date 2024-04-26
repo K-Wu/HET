@@ -1,0 +1,54 @@
+// Excerpt from hgt.inter-op-ssa
+///
+/// SHAPE INFORMATION
+///
+// TODO: fullfil this
+
+///
+/// DAG
+///
+DAG{
+1:(EDGEWISE, "raw_attn_delta_term1") = ScalarDivide(left = (EDGEWISE, "attn_delta"), right = (DSTNODE, "attn_sum"));
+2:(DSTNODE, "attn_sum_delta_tmp1")=ScalarMultiply(left=(DSTNODE, "attn_sum"),right=(DSTNODE,"attn_sum"));
+3:(EDGEWISE, "attn_sum_dst_delta_tmp1") = ScalarDivide(left=(EDGEWISE, "raw_attn_delta"), right=(DSTNODE, "attn_sum_delta_tmp1"));
+4:(EDGEWISE, "attn_sum_dst_delta_tmp2") = Negative(input=(EDGEWISE, "attn_sum_dst_delta_tmp1"));
+5:(DSTNODE, "attn_sum_delta") = NodeSumAccumulation(input=(EDGEWISE, "attn_sum_dst_delta_tmp2"));
+
+6:(EDGEWISE, "raw_attn_delta") = ScalarAdd(left=(EDGEWISE, "raw_attn_delta_term1"), right=(DSTNODE, "attn_sum_delta"));
+}
+
+///
+/// OPSPEC
+/// each op has a dedicated scope <optype>_<opidx> in which there is a json substring that describes the specification.
+OPSPEC{
+  traversal_1{
+    {
+      
+    }
+  }
+  traversal_2{
+    {
+      
+    }
+  }
+  traversal_3{
+    {
+      
+    }
+  }
+  traversal_4{
+    {
+      
+    }
+  }
+  traversal_5{
+    {
+      
+    }
+  }
+  traversal_6{
+    {
+      
+    }
+  }
+}
