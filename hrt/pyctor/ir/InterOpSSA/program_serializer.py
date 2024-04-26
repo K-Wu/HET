@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 from . import regex_patterns
 import re
-from .variable_tables import remove_white_spaces, VariableTable
-from .programs import Program
+from .variable_tables import remove_white_spaces
+from .variables import parse_var_class
 from . import operators
 from typing import Union
-from types import ModuleType
+from ...utils.logger import logger, get_oneline_str
 
 
 def find_scope_end(
@@ -25,18 +25,16 @@ def find_scope_end(
             if allow_single_line_json_flag:
                 num_open_scopes += len([1 for c in line if c == "{"])
             else:
-                assert (
-                    sum([1 for c in line if c == "{"]) == 1
-                ), "Only one { is allowed in a line"
+                if sum([1 for c in line if c == "{"]) != 1:
+                    raise ValueError("Only one { is allowed in a line", line)
                 num_open_scopes += 1
         if line.find("}") != -1:
             # End of a scope
             if allow_single_line_json_flag:
                 num_open_scopes -= len([1 for c in line if c == "}"])
             else:
-                assert (
-                    sum([1 for c in line if c == "}"]) == 1
-                ), "Only one } is allowed in a line"
+                if sum([1 for c in line if c == "}"]) != 1:
+                    raise ValueError("Only one } is allowed in a line", line)
                 num_open_scopes -= 1
 
             if num_open_scopes == 0:
@@ -59,7 +57,7 @@ def find_first_level_scopes(lines: list[str]) -> list[tuple[int, int, str]]:
         line = lines[idx_line]
         if line.find("{") != -1:
             # This line is the beginning of a scope
-            scope_name = line[: line.find("{")]
+            scope_name = line[: line.find("{")].strip()  # Remove the indents
             scope_beg = idx_line
             # Find the end of the scope and skip the lines in between
             scope_end = find_scope_end(lines, scope_beg)
@@ -85,6 +83,7 @@ def find_all_matches(pattern: str, string: str):
     return out
 
 
+# TODO: use dataclass to store the scope information
 def find_first_level_scopes_regex(
     lines: list[str],
 ) -> list[tuple[int, int, str]]:
@@ -118,8 +117,34 @@ def find_first_level_scopes_regex(
     return scope_beg_end_tags
 
 
+def loads_opspec(lines: list[str]) -> dict[str, dict]:
+    assert remove_white_spaces(lines[0].strip()) == "OPSPEC{"
+    assert lines[-1].strip() == "}"
+    # Get the list of opspecs
+    op_specs_scope_list = find_first_level_scopes(lines[1:])
+    logger.info(get_oneline_str("op_specs_scope_list", op_specs_scope_list))
+
+    results: dict[str, dict] = dict()
+
+    # For each opspec of an operator, get the json specificaition
+    for (
+        op_spec_line_beg,
+        op_spec_line_end,
+        op_spec_tag,
+    ) in op_specs_scope_list:
+        import json
+
+        op_spec_line_beg = 1 + op_spec_line_beg
+        op_spec_line_end = 1 + op_spec_line_end
+
+        results[op_spec_tag] = json.loads(
+            "\n".join(lines[op_spec_line_beg + 1 : op_spec_line_end])
+        )
+    return results
+
+
 def loads_op(
-    lines: list[str],
+    lines: list[str], test_experimental_find_scope=False
 ) -> list[Union[operators.FusedOpBase, operators.OpBase]]:
     """This function is used to parse the DAG or DAGDict portion in .inter-op-ssa file.
     It uses regex to match the operators, so whether it is DAGDict, i.e., the operators are values and sequence numbers are keys, or DAG does not matter.
@@ -138,6 +163,9 @@ def loads_op(
     # Use [1:-1] to avoid adding the outmost DAG{} to the result
     lines = lines[1:-1]
     scopes: list[tuple[int, int, str]] = find_first_level_scopes(lines)
+    if test_experimental_find_scope:
+        scopes_regex = find_first_level_scopes_regex(lines)
+        assert scopes == scopes_regex
     curr_fusion_scope: Union[None, str] = None
     curr_fusion_scope_ops: Union[None, list[operators.OpBase]] = None
     curr_fusion_scope_operands: Union[None, list[operators.VarBase]] = None
@@ -151,7 +179,7 @@ def loads_op(
         if len(line) == 0:
             continue
 
-        # Handle scope tags
+        # Handle this fused operator. The fused operator statement is in the scope tag. The operators in the fused region is in the scope.
         if len(scopes) > 0 and idx_line == scopes[0][0]:
             # Scope opens
             curr_fusion_scope = scopes[0][2]
@@ -173,30 +201,52 @@ def loads_op(
                 match_operands.group("keyword_fields"),
             )
             for keyword, value in keyword_value_pairs:
-                curr_fusion_scope_operands.append(value)
+                curr_fusion_scope_operands.append(
+                    parse_var_class(value).from_string(value)
+                )
 
             results = re.findall(
                 regex_patterns.result_pattern, match_results.group("results")
             )
             for result in results:
-                curr_fusion_scope_results.append(result)
+                curr_fusion_scope_results.append(
+                    parse_var_class(value).from_string(result)
+                )
 
             continue
         elif len(scopes) > 0 and idx_line == scopes[0][1]:
             # Scope closes
             # NB:For now we store ops fusion schemes in DAG. We may want to store the fusion scheme separately in future.
             # Put the fused ops into the results
-            assert curr_fusion_scope is not None  # Make language server happy
+
+            # Make language server happy
+            assert curr_fusion_scope is not None
+            assert curr_fusion_scope_results is not None
+            assert curr_fusion_scope_operands is not None
+            assert curr_fusion_scope_ops is not None
+
             if curr_fusion_scope.find("GEMMOp") != -1:
                 results.append(
-                    operators.GEMMFusedOp.from_ops(curr_fusion_scope_ops)
+                    operators.GEMMFusedOp.from_ops(
+                        curr_fusion_scope_results,
+                        curr_fusion_scope_operands,
+                        curr_fusion_scope_ops,
+                    )
                 )
             elif curr_fusion_scope.find("TraversalOp") != -1:
                 results.append(
-                    operators.TraversalFusedOp.from_ops(curr_fusion_scope_ops)
+                    operators.TraversalFusedOp.from_ops(
+                        curr_fusion_scope_results,
+                        curr_fusion_scope_operands,
+                        curr_fusion_scope_ops,
+                    )
                 )
             else:
-                print(curr_fusion_scope)
+                logger.info(
+                    get_oneline_str(
+                        "Current fusion scope: ", curr_fusion_scope
+                    )
+                )
                 raise ValueError("unrecognized fused op type!")
             scopes.pop(0)
             curr_fusion_scope = None
@@ -237,11 +287,17 @@ def loads_op(
             if curr_fusion_scope is None:
                 results.append(curr_op)
             else:
+                assert curr_fusion_scope_ops is not None
                 curr_fusion_scope_ops.append(curr_op)
+        else:
+            logger.warning(
+                get_oneline_str("Skipping empty or comment line", line)
+            )
     return results
 
 
 if __name__ == "__main__":
+    logger.setLevel("DEBUG")
     # Test scope finding
     scopes = find_first_level_scopes(
         ["DAG{", "}", "DAG{ }", "DAG{", "{}", "}"]
@@ -274,7 +330,10 @@ if __name__ == "__main__":
                 # Similarly, we assume the scope ending line only contains "}"
                 assert lines[scope_end].strip() == "}"
                 if scope_tag.find("DAG") != -1:
-                    ops = loads_op(lines[scope_beg : scope_end + 1])
+                    ops = loads_op(
+                        lines[scope_beg : scope_end + 1],
+                        test_experimental_find_scope=True,
+                    )
 
                     # Set an example to show yaml serialization and deserialization
                     # Use .out suffix to avoid git diff
@@ -299,6 +358,7 @@ if __name__ == "__main__":
         "pyctor/examples/op-spec-ssa/single_dense.op-spec-ssa",
     ]
     for input in TEST_OPSPEC_FILENAME:
+        print("Loading", input)
         ops = None
         with open(input) as fd:
             lines = fd.readlines()
@@ -306,25 +366,7 @@ if __name__ == "__main__":
             print("scopes in hgt.inter-op-ssa", scopes)
             for idx_line_beg, idx_line_end, scope_tag in scopes:
                 if scope_tag.find("OPSPEC") != -1:
-                    op_specs_scope_list = find_first_level_scopes(
-                        lines[idx_line_beg + 1 : idx_line_end]
+                    op_specs = loads_opspec(
+                        lines[idx_line_beg : idx_line_end + 1]
                     )
-                    print("op_specs_scope_list", op_specs_scope_list)
-                    for (
-                        op_spec_line_beg,
-                        op_spec_line_end,
-                        op_spec_tag,
-                    ) in op_specs_scope_list:
-                        import json
-
-                        op_spec_line_beg = idx_line_beg + 1 + op_spec_line_beg
-                        op_spec_line_end = idx_line_beg + 1 + op_spec_line_end
-                        print(
-                            json.loads(
-                                "\n".join(
-                                    lines[
-                                        op_spec_line_beg + 1 : op_spec_line_end
-                                    ]
-                                )
-                            )
-                        )
+                    print(op_specs)
