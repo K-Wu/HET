@@ -4,3 +4,4 @@ This file contains the APIs that mimic those in DGL and PyG. The goal is to supp
 The APIs could be implemented using frontend_interface or inter_op_ir, and utilties to switch the existing script to use our backend could also be provided in this file.
 This file uses the techniques in [hrt/misc/playground/test_reroute_decorator.py]
 """
+raise NotImplementedError
