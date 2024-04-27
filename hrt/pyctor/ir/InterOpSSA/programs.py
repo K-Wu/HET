@@ -11,7 +11,7 @@ from typing import (
 )
 
 # TODO: Add OpSpecifier to Program
-from ..OpSpecSSA.op_specifier import OpSpecifier
+from ..OpSpecSSA.op_specifications import OpSpecBase
 from .utils import CallRecord, log_pass_calls
 from .variable_tables import DefUseEntry, VariableTable
 
@@ -33,6 +33,7 @@ class Program:
     ]  # Stores the logging by @log_pass_calls
 
     operations: list[Union[OpBase, FusedOpBase]]
+    op_specs: list[OpSpecBase]  # each fused op is mapped to one OpSpecfication
     base_ops: list[OpBase]  # list of basic ops
     var_table: VariableTable
 
@@ -56,6 +57,7 @@ class Program:
         self.var_table = var_table
         self.operations = operations
         self.base_ops = list(yield_base_ops(operations))
+        self.op_specs = []
         # self.base_op_to_base_seq_no = calc_base_op_to_base_seq(operations)
 
     def _get_def_use_entry(self, var: VarBase) -> DefUseEntry:
@@ -139,6 +141,14 @@ class Program:
             result += op.to_string()
             result += "\n"
         result += "}\n"
+
+        if len(self.op_specs) > 0:
+            result += "OPSPEC{\n"
+            for op_spec in self.op_specs:
+                result += op_spec.to_string()
+                result += "\n"
+            result += "}\n"
+
         return result
 
     @classmethod
