@@ -6,6 +6,11 @@ from .variables import parse_var_class
 from . import operators
 from typing import Union
 from ...utils.logger import logger, get_oneline_str
+from ..OpSpecSSA.op_specs import (
+    GEMMOpSpec,
+    TraversalOpSpec,
+    OpSpecBase,
+)
 
 
 def find_scope_end(
@@ -117,14 +122,14 @@ def find_first_level_scopes_regex(
     return scope_beg_end_tags
 
 
-def loads_opspec(lines: list[str]) -> dict[str, dict]:
+def loads_opspec(lines: list[str]) -> dict[str, OpSpecBase]:
     assert remove_white_spaces(lines[0].strip()) == "OPSPEC{"
     assert lines[-1].strip() == "}"
     # Get the list of opspecs
     op_specs_scope_list = find_first_level_scopes(lines[1:])
     logger.info(get_oneline_str("op_specs_scope_list", op_specs_scope_list))
 
-    results: dict[str, dict] = dict()
+    results: dict[str, OpSpecBase] = dict()
 
     # For each opspec of an operator, get the json specificaition
     for (
@@ -137,9 +142,18 @@ def loads_opspec(lines: list[str]) -> dict[str, dict]:
         op_spec_line_beg = 1 + op_spec_line_beg
         op_spec_line_end = 1 + op_spec_line_end
 
-        results[op_spec_tag] = json.loads(
+        op_spec_dict = json.loads(
             "\n".join(lines[op_spec_line_beg + 1 : op_spec_line_end])
         )
+        if "gemm" in op_spec_dict:
+            results[op_spec_tag] = GEMMOpSpec.from_opspec_dict(op_spec_dict)
+        elif "traversal" in op_spec_dict:
+            results[op_spec_tag] = TraversalOpSpec.from_opspec_dict(
+                op_spec_dict
+            )
+        else:
+            raise ValueError("Unknown opspec type", op_spec_tag, op_spec_dict)
+
     return results
 
 

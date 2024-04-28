@@ -159,6 +159,16 @@ class WeightVar(_WeightVar, VarBase):
     def from_dict(cls, d: dict["str", "str"]) -> "WeightVar":
         return cls(name=d["name"], slice_type=d["slice_type"])
 
+    @classmethod
+    def from_list(cls, l: list[str]) -> "WeightVar":
+        """This method is provided for opspec deserialization."""
+        return cls(name=l[0], slice_type=l[1])
+
+    def to_list(self) -> list[str]:
+        """This method is provided for opspec serialization."""
+        # return [self.name, self.slice_type]
+        return list(self.to_dict().values())
+
     def to_dict(self) -> dict["str", "str"]:
         return {"name": self.name, "slice_type": self.slice_type}
 

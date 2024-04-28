@@ -11,8 +11,7 @@ from typing import (
 )
 
 # TODO: Add OpSpecifier to Program
-from ..OpSpecSSA.op_specifications import OpSpecBase
-from .utils import CallRecord, log_pass_calls
+from ..OpSpecSSA.op_specs import OpSpecBase
 from .variable_tables import DefUseEntry, VariableTable
 
 
@@ -28,10 +27,6 @@ def yield_base_ops(
 
 
 class Program:
-    passes_call_records: list[
-        CallRecord
-    ]  # Stores the logging by @log_pass_calls
-
     operations: list[Union[OpBase, FusedOpBase]]
     op_specs: list[OpSpecBase]  # each fused op is mapped to one OpSpecfication
     base_ops: list[OpBase]  # list of basic ops
@@ -53,11 +48,12 @@ class Program:
         self,
         var_table: VariableTable,
         operations: list[Union[OpBase, FusedOpBase]],
+        op_specs: list[OpSpecBase] = [],
     ):
         self.var_table = var_table
         self.operations = operations
         self.base_ops = list(yield_base_ops(operations))
-        self.op_specs = []
+        self.op_specs = op_specs
         # self.base_op_to_base_seq_no = calc_base_op_to_base_seq(operations)
 
     def _get_def_use_entry(self, var: VarBase) -> DefUseEntry:
@@ -128,6 +124,7 @@ class Program:
             else:
                 for operand in op.get_operands():
                     self.assert_define_before_use(operand, op)
+        # TODO: validate op_specs
         return
 
     def dumps(self) -> str:
@@ -158,16 +155,22 @@ class Program:
         scopes: list[
             tuple[int, int, str]
         ] = program_serializer.find_first_level_scopes(lines)
-        assert len(scopes) == 2
+        # assert len(scopes) == 2
         assert scopes[0][2] == "VariableTable"
         assert scopes[1][2] == "DAG" or scopes[1][2] == "DAGDict"
         var_table = VariableTable.loads(lines[scopes[0][0] : scopes[0][1] + 1])
         ops = program_serializer.loads_op(lines[scopes[1][0] :])
-
-        return cls(var_table, ops)
+        if len(scopes) == 2:
+            return cls(var_table, ops)
+        else:
+            assert scopes[2][2] == "OPSPEC"
+            op_specs = program_serializer.loads_opspec(
+                lines[scopes[2][0] : scopes[2][1] + 1]
+            )
+            return cls(var_table, ops, list(op_specs.values()))
 
     # TODO: Move to auto_differer.py
-    @log_pass_calls("differentiate")
+    # @log_pass_calls("differentiate")
     def differentiate(self) -> "Program":
         """
         differentiate the program, and return the differentiated program
