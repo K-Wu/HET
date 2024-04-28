@@ -15,6 +15,7 @@ DAG{
 5:(DSTNODE, "attn_sum_delta") = NodeSumAccumulation(input=(EDGEWISE, "attn_sum_dst_delta_tmp2"));
 
 6:(EDGEWISE, "raw_attn_delta") = ScalarAdd(left=(EDGEWISE, "raw_attn_delta_term1"), right=(DSTNODE, "attn_sum_delta"));
+7:(EDGEWISE, "raw_attn_tmp2_delta") = InverseExponential(input=(EDGEWISE, "raw_attn_delta"));
 }
 
 ///
@@ -47,6 +48,11 @@ OPSPEC{
     }
   }
   traversal_6{
+    {
+      
+    }
+  }
+  traversal_7{
     {
       
     }

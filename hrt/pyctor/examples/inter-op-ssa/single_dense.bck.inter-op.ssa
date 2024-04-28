@@ -7,7 +7,7 @@
 /// DAG
 ///
 DAG{
-(SRCNODE, "feature_delta") = EdgeDense(input = (EDGEWISE, "zi_delta"), weight = (W_transposed, EDGETYPE));
-(EDGEWISE, "W_delta_tmp1") = EdgeOuterProduct(left = (SRCNODE, "feature"), right = (EDGEWISE, "zi_delta"));
+(SRCNODE, "feature_delta") = EdgeDense(input = (EDGEWISE, "msg_delta"), weight = (W_transposed, EDGETYPE));
+(EDGEWISE, "W_delta_tmp1") = EdgeOuterProduct(left = (SRCNODE, "feature"), right = (EDGEWISE, "msg_delta"));
 (W_delta, EDGETYPE) = EdgeTypeSumAccumulation(input =(EDGEWISE, "W_delta_tmp1"));
 }

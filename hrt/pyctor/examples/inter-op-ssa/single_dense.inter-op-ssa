@@ -7,5 +7,5 @@
 /// DAG
 ///
 DAG{
-(EDGEWISE, "zi") = EdgeDense(input = (SRCNODE, "feature"), weight = (W,EDGETYPE));
+(EDGEWISE, "msg") = EdgeDense(input = (SRCNODE, "feature"), weight = (W,EDGETYPE));
 }

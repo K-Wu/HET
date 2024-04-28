@@ -10,13 +10,13 @@ DAG{
 /// each op has a dedicated scope <optype>_<opidx> in which there is a json substring that describes the specification.
 OPSPEC{
   gemm_1{
-    {"A":["SRCNODE","feature"], "B":["W","EDGETYPE"],
-    "C":["UNIQUE_NODE_ETYPE","msg"],
+    {"left":["SRCNODE","feature"], "right":["W","EDGETYPE"],
+    "product":["UNIQUE_NODE_ETYPE","msg"],
     "schedule":{"tile_sz": 16},
     "access":{
-    "A":["GATHER(row_idx)","NO_TRANSPOSE"],
-    "B":["WEIGHTS"],
-    "C":["SCATTER", "entry_idx_per_etype + unique_etype_ptr[etype_idx]"]}
+    "left":["GATHER(row_idx)","NO_TRANSPOSE"],
+    "right":["WEIGHTS"],
+    "product":["SCATTER(entry_idx_per_etype + unique_etype_ptr[etype_idx])"]}
     }
   }
 }
