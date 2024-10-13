@@ -1,6 +1,33 @@
 # from sputnik/CMakeLists.txt
 cmake_minimum_required(VERSION 3.14)
 
+# from https://stackoverflow.com/a/69353718
+if(GITHUB_ACTION_TEST)
+  # set a fake cuda arch for github action test purpose
+  set(CUDA_ARCHS 75)
+  set(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCHS})
+  set_property(GLOBAL PROPERTY CUDA_ARCHITECTURES "${CUDA_ARCHS}")
+else()
+  include(FindCUDA/select_compute_arch)
+  # If CUDA_ARCH_LIST is not set
+  if(NOT DEFINED CUDA_ARCH_LIST)
+    cuda_detect_installed_gpus(INSTALLED_GPU_CCS_1)
+    string(STRIP "${INSTALLED_GPU_CCS_1}" INSTALLED_GPU_CCS_2)
+    string(REPLACE " " ";" INSTALLED_GPU_CCS_3 "${INSTALLED_GPU_CCS_2}")
+    string(REPLACE "." "" INSTALLED_GPU_CCS_4 "${INSTALLED_GPU_CCS_3}")
+    string(REPLACE "+PTX" "" CUDA_ARCH_LIST "${INSTALLED_GPU_CCS_4}")
+  endif()
+  message("CUDA_ARCH_LIST = ${CUDA_ARCH_LIST}")
+  set(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
+  set_property(GLOBAL PROPERTY CUDA_ARCHITECTURES "${CUDA_ARCH_LIST}")
+  # TODO: this scheme works on machine with single type of GPU. generalize it
+  # set CUDA_ARCHS as a two-digit number for sputnik
+  set(CUDA_ARCHS ${CUDA_ARCH_LIST})
+endif()
+
+# Pass in CUDA_ARCHS as a C++ macro
+add_definitions(-DCUDA_ARCHS=${CUDA_ARCHS})
+
 project(HETEROEDGESOFTMAX CUDA CXX C)
 
 cmake_policy(SET CMP0104 OLD)
@@ -20,29 +47,6 @@ option(GITHUB_ACTION_TEST
 if(DEFINED CUDA_ARCHS)
   message(WARNING "CUDA_ARCHS is set as ${CUDA_ARCHS}.")
 endif()
-
-# from https://stackoverflow.com/a/69353718
-if(GITHUB_ACTION_TEST)
-  # set a fake cuda arch for github action test purpose
-  set(CUDA_ARCHS 75)
-  set(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCHS})
-  set_property(GLOBAL PROPERTY CUDA_ARCHITECTURES "${CUDA_ARCHS}")
-else()
-  include(FindCUDA/select_compute_arch)
-  cuda_detect_installed_gpus(INSTALLED_GPU_CCS_1)
-  string(STRIP "${INSTALLED_GPU_CCS_1}" INSTALLED_GPU_CCS_2)
-  string(REPLACE " " ";" INSTALLED_GPU_CCS_3 "${INSTALLED_GPU_CCS_2}")
-  string(REPLACE "." "" CUDA_ARCH_LIST "${INSTALLED_GPU_CCS_3}")
-  message("CUDA_ARCH_LIST = ${CUDA_ARCH_LIST}")
-  set(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
-  set_property(GLOBAL PROPERTY CUDA_ARCHITECTURES "${CUDA_ARCH_LIST}")
-  # TODO: this scheme works on machine with single type of GPU. generalize it
-  # set CUDA_ARCHS as a two-digit number for sputnik
-  set(CUDA_ARCHS ${CUDA_ARCH_LIST})
-endif()
-
-# Pass in CUDA_ARCHS as a C++ macro
-add_definitions(-DCUDA_ARCHS=${CUDA_ARCHS})
 
 #
 # Handle Dependencies.

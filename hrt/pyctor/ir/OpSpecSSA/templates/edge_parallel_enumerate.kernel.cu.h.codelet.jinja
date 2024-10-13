@@ -1,0 +1,13 @@
+{# Adapted from _InnerProductVariousLeftAndNodeRight in hrt/include/DGLHackKernel/RGNN/InnerProductEdgeParallel.cu.h #}
+{# The variables need to be specified during instantiation are kernel_cuda_func_name, args_and_types, main_loop #}
+template <typename Idx, typename DType, CompactAsOfNodeKind kind,
+          bool ETypeRelPtrFlag>
+__global__ void {{kernel_cuda_func_name}}({%- for arg, type in args_and_types -%}{{type}} {{ arg }}, {%- endfor -%}, const Idx *eids, const Idx *row_indices,
+    const Idx *column_indices, const ETypeData<Idx, ETypeRelPtrFlag> etype_data,
+    int64_t num_edges, const ETypeMapperData<Idx, kind> etype_mapper_data) {
+  /// PYCTOR: Prologue
+  {{ cuda_kernel_prologue }}
+
+  /// PYCTOR: Main loop
+  {main_loop}
+}

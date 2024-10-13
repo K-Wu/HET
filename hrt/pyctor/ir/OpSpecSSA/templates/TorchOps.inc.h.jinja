@@ -1,0 +1,35 @@
+{# Adapted from hrt/include/DGLHackKernel/OpExport/PyctorPlaygroundOps.inc.h. func_name_to_cpp_signature is a dictionary of function Python names to their C++ signatures. func_cpp_definitions is a list of functions' C++ definition. #}
+{# The other variables need to be specified during instantiation are func_name_to_cpp_signature, func_cpp_definitions #}
+#pragma once
+#include <c10/cuda/CUDAException.h>
+#include <c10/cuda/CUDAStream.h>
+#include <torch/extension.h>
+#include <torch/library.h>
+
+#include "DGLHackKernel/DGLHackUtils.h"
+#include "DGLHackKernel/PyctorPlayground/Enumerate_kernels.cu.h"
+#include "DGLHackKernel/PyctorPlayground/Gemm_kernels.cu.h"
+#include "DGLHackKernel/RGNN/InnerProductEdgeParallel.cu.h"
+#include "DGLHackKernel/RGNN/my_shmem_sgemm_func.cu.h"
+#include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h"
+#include "DGLHackKernel/RGNN/mysgemm_KernelsBlockConfigurations.h"
+#include "ThreadingGridsBlocksSchedules.h"
+#include "macros.h"
+
+namespace HET {
+namespace TorchExport {
+namespace PYCTOR {
+{%- for func_definition in func_cpp_definitions %}
+{{ func_definition }}
+{% endfor -%}
+}  // namespace PYCTOR
+}  // namespace TorchExport
+}  // namespace HET
+
+using namespace HET::TorchExport::PYCTOR;
+
+TORCH_LIBRARY_FRAGMENT(torch_hrt, m) {
+  {%- for func_python_name_str, func_cpp_name_str in func_python_name_to_cpp_name.items() %}
+    m.def("{{ func_python_name_str }}", {{ func_cpp_name_str }});
+  {% endfor -%}
+}

@@ -2,7 +2,22 @@
 ///
 /// SHAPE INFORMATION
 ///
-// TODO: fullfil this
+VARIABLETABLE{
+  InitialVariableAndWeight{
+    (EDGEWISE, "raw_attn_tmp2");(EDGEWISE, "raw_attn");
+  }
+  Shape{
+    (EDGEWISE, "raw_attn_delta_term1"):['edgewise','scalar']
+    (EDGEWISE, "raw_attn_delta"):['edgewise','scalar']
+    (EDGEWISE, "raw_attn_tmp2_delta"):['edgewise','scalar']
+    (EDGEWISE, "attn_delta"):['edgewise','scalar']
+    (DSTNODE,"attn_sum"):['dstnode','scalar']
+    (EDGEWISE, "attn_sum_dst_delta_tmp1"):['edgewise','scalar']
+    (EDGEWISE, "attn_sum_dst_delta_tmp2"):['edgewise','scalar']
+    (DSTNODE, "attn_sum_delta_tmp1"):['dstnode','scalar']
+    (DSTNODE, "attn_sum_delta"):['dstnode','scalar']
+  }
+}
 
 ///
 /// DAG
@@ -24,37 +39,192 @@ DAG{
 OPSPEC{
   traversal_1{
     {
-      
+      "inputs": [["EDGEWISE","attn_delta"],["DSTNODE","attn_sum"]],
+      "outputs": [["EDGEWISE","raw_attn_delta_term1"]],
+      "schedule": "type1",
+      "operators":{
+        "1:loop":{
+          "loop_variable":"idx_edge",
+          "loop_begin":"0",
+          "loop_end":"num_edges",
+          "loop_step":"blockDim.y*gridDim.y",
+          "operators":{
+            "1:op":{
+              "op":"divide",
+              "op_type":"elementwise",
+              "broadcast":{
+                "operand":"right",
+                "source":"dstnode"
+              },
+              "inputs":[
+                ["EDGEWISE","attn_delta"],
+                ["DSTNODE","attn_sum"]
+              ],
+              "output":["EDGEWISE","raw_attn_delta_term1"]
+            }
+          }
+        }
+      }
     }
   }
   traversal_2{
     {
-      
+      "inputs": [["DSTNODE","attn_sum"]],
+      "outputs": [["DSTNODE","attn_sum_delta_tmp1"]],
+      "schedule": "type1",
+      "operators":{
+        "1:loop":{
+          "loop_variable":"idx_node",
+          "loop_begin":"0",
+          "loop_end":"num_dst_nodes",
+          "loop_step":"blockDim.y*gridDim.y",
+          "operators":{
+            "1:op":{
+              "op":"multiply",
+              "op_type":"elementwise",
+              "inputs":[
+                ["DSTNODE","attn_sum"],
+                ["DSTNODE","attn_sum"]
+              ],
+              "output":["DSTNODE","attn_sum_delta_tmp1"]
+            }
+          }
+        }
+      }
     }
   }
   traversal_3{
     {
-      
+      "inputs": [["EDGEWISE","raw_attn_delta"],["DSTNODE","attn_sum_delta_tmp1"]],
+      "outputs": [["EDGEWISE","attn_sum_dst_delta_tmp1"]],
+      "schedule": "type1",
+      "operators":{
+        "1:loop":{
+          "loop_variable":"idx_edge",
+          "loop_begin":"0",
+          "loop_end":"num_edges",
+          "loop_step":"blockDim.y*gridDim.y",
+          "operators":{
+            "1:op":{
+              "op":"divide",
+              "op_type":"elementwise",
+              "broadcast":{
+                "operand":"right",
+                "source":"dstnode"
+              },
+              "inputs":[
+                ["EDGEWISE","raw_attn_delta"],
+                ["DSTNODE","attn_sum_delta_tmp1"]
+              ],
+              "output":["EDGEWISE","attn_sum_dst_delta_tmp1"]
+            }
+          }
+        }
+      }
     }
   }
   traversal_4{
     {
-      
+      "inputs": [["EDGEWISE","attn_sum_dst_delta_tmp1"]],
+      "outputs": [["EDGEWISE","attn_sum_dst_delta_tmp2"]],
+      "schedule": "type1",
+      "operators":{
+        "1:loop":{
+          "loop_variable":"idx_edge",
+          "loop_begin":"0",
+          "loop_end":"num_edges",
+          "loop_step":"blockDim.y*gridDim.y",
+          "operators":{
+            "1:op":{
+              "op":"negative",
+              "op_type":"elementwise",
+              "inputs":[[
+                "EDGEWISE","attn_sum_dst_delta_tmp1"
+              ]],
+              "output":["EDGEWISE","attn_sum_dst_delta_tmp2"]
+            }
+          }
+        }
+      }
     }
   }
   traversal_5{
     {
-      
+      "inputs": [["EDGEWISE","attn_sum_dst_delta_tmp2"]],
+      "outputs": [["DSTNODE","attn_sum_delta"]],
+      "schedule": "type1",
+      "operators":{
+        "1:loop":{
+          "loop_variable":"idx_edge",
+          "loop_begin":"0",
+          "loop_end":"num_edges",
+          "loop_step":"blockDim.y*gridDim.y",
+          "operators":{
+            "1:op":{
+              "op":"sum",
+              "op_type":{
+                "type":"accumulation",
+                "sink":"node"
+              },
+              "inputs":[["EDGEWISE","attn_sum_dst_delta_tmp2"]],
+              "output":["DSTNODE","attn_sum_delta"]
+            }
+          }
+        }
+      }
     }
   }
   traversal_6{
     {
-      
+      "inputs": [["EDGEWISE","raw_attn_delta_term1"],["DSTNODE","attn_sum_delta"]],
+      "outputs": [["EDGEWISE","raw_attn_delta"]],
+      "schedule": "type1",
+      "operators":{
+        "1:loop":{
+          "loop_variable":"idx_edge",
+          "loop_begin":"0",
+          "loop_end":"num_edges",
+          "loop_step":"blockDim.y*gridDim.y",
+          "operators":{
+            "1:op":{
+              "op":"divide",
+              "op_type":"elementwise",
+              "broadcast":{
+                "operand":"right",
+                "source":"dstnode"
+              },
+              "inputs":[
+                ["EDGEWISE","raw_attn_delta_term1"],
+                ["DSTNODE","attn_sum_delta"]
+              ],
+              "output":["EDGEWISE","raw_attn_delta"]
+            }
+          }
+        }
+      }
     }
   }
   traversal_7{
     {
-      
+      "inputs": [["EDGEWISE","raw_attn_delta"]],
+      "outputs": [["EDGEWISE","raw_attn_tmp2_delta"]],
+      "schedule": "type1",
+      "operators":{
+        "1:loop":{
+          "loop_variable":"idx_edge",
+          "loop_begin":"0",
+          "loop_end":"num_edges",
+          "loop_step":"blockDim.y*gridDim.y",
+          "operators":{
+            "1:op":{
+              "op":"expf",
+              "op_type":"elementwise",
+              "inputs":[["EDGEWISE","raw_attn_delta"]],
+              "output":["EDGEWISE","raw_attn_tmp2_delta"]
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -1,0 +1,33 @@
+{# Python code. Indent == 4 #}
+class AutogradFuncClassName(th.autograd.Function):
+    @staticmethod
+    def forward(ctx, graph_tensors_dict, out {%- for scalar in scalars -%},{{ scalars }} {%- endfor -%} {%- for arg in tensor_args -%},{{ arg }} {%- endfor -%}):
+        ctx.save_for_backward(out {%- for arg in tensor_args -%},{{ arg }} {%- endfor -%})
+        {% for scalar in scalars -%}
+        {{ scalar }} = graph_tensors_dict["{{ scalar }}"]
+        {%- endfor %}
+        ctx.graph_tensors_dict = graph_tensors_dict
+        # The following is a simple invocation that only works when there is one forward propagation kernel and one backward propagation kernel and their formal argument lists follow the specific order.
+        # K.{{ forward_func_name }}(graph_tensors_dict, out {%- for scalar in scalars -%},{{ scalars }} {%- endfor -%} {%- for arg in tensor_args -%},{{ arg }} {%- endfor -%})
+        {% for foward_func_name, args in forward_func_names_args.items() -%}
+        K.{{ forward_func_name }}({%- for arg in args -%}{{ arg }}, {%- endfor -%})
+        {%- endfor %}
+        return out
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        out {%- for arg in tensor_args -%},{{ arg }} {%- endfor -%} = ctx.saved_tensors
+        graph_tensors_dict = ctx.graph_tensors_dict
+        ctx.graph_tensors_dict = None
+        {% for scalar in input_scalars -%}
+        {{ scalar }} = graph_tensors_dict["{{ scalar }}"]
+        {%- endfor -%}
+        {% for arg in tensor_args -%}
+        grad_{{ arg }} = torch.zeros_like(graph_tensors_dict["{{ arg }}"])
+        {%- endfor %}
+        # The following is a simple invocation that only works when there is one forward propagation kernel and one backward propagation kernel and their formal argument lists follow the specific order.
+        # K.{{ backward_func_name }}(graph_tensors_dict, out, grad_out {%- for arg in tensor_args -%},{{ arg }}, grad_{{ arg }} {%- endfor -%})
+        {% for backward_func_name, args in backward_func_names_args.items() -%}
+        K.{{ backward_func_name }}({%- for arg in args -%}{{ arg }}, {%- endfor -%})
+        {%- endfor %}
+        return None, None {%- for arg in tensor_args -%},grad_{{ arg }} {%- endfor -%}

@@ -4,6 +4,7 @@ from ...ir.InterOpSSA.programs import Program
 from ...ir.InterOpSSA.operators import OpBase
 from ...ir.InterOpSSA.variable_tables import DefUseEntry
 from .value_numberer import ValueNumbererPass
+from ...utils.logger import logger
 
 
 class DefUseAnalyzerPass(Pass):
@@ -24,7 +25,7 @@ class DefUseAnalyzerPass(Pass):
         Invalidate: None
         """
         if len(program.var_table.def_use_table) != 0:
-            print("Warning: def_use_table is not empty, will be overwritten.")
+            logger.warning("def_use_table is not empty, will be overwritten.")
         # Reset the def_use_table to an empty dict
         program.var_table.def_use_table = dict()
 

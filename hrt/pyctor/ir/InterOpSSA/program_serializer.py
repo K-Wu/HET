@@ -171,7 +171,7 @@ def loads_op(
     results = []
     assert (
         remove_white_spaces(lines[0].strip()) == "DAG{"
-        or remove_white_spaces(lines[0].strip()) == "DAGDict{"
+        or remove_white_spaces(lines[0].strip()) == "DAGDICT{"
     )
     assert lines[-1].strip() == "}"
     # Use [1:-1] to avoid adding the outmost DAG{} to the result

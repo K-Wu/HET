@@ -1,8 +1,20 @@
+VARIABLETABLE{
+  InitialVariableAndWeight{
+    (SRCNODE, "feature");(W, EDGETYPE);
+  }
+  Shape{
+    (SRCNODE, "feature"):['srcnode','vector']
+    (W, EDGETYPE):['edgetype','matrix']
+    (EDGEWISE, "msg"):['unique_node_etype','vector']
+  }
+}
+
+
 ///
 /// DAG
 /// Similar to the DAG scope in inter-op-ssa, the DAG scope stores the SSA of the computation.
 DAG{
-(EDGEWISE, "zi") = gemm_1((SRCNODE, "feature"), (W, EDGETYPE));
+(EDGEWISE, "msg") = gemm_1((SRCNODE, "feature"), (W, EDGETYPE));
 }
 
 ///

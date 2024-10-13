@@ -1,3 +1,6 @@
+import re
+
+
 def modify_indent(
     py_template: str, original_indent: int, new_indent: int
 ) -> str:
@@ -23,3 +26,13 @@ def modify_indent(
                 " " * new_curr_line_indent + line[curr_line_indent:] + "\n"
             )
     return new_py_template
+
+
+def camel_case_to_snake_case(name: str) -> str:
+    """Convert CamelCase to snake_case."""
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+def snake_case_to_camel_case(name: str) -> str:
+    """Convert snake_case to CamelCase."""
+    return "".join(word.title() for word in name.split("_"))

@@ -1,0 +1,13 @@
+{# Python code. Indent == 4 #}
+{# This file template instantiates the python script file that contains all the forward statements to be placed in the model class's forward() definition. #}
+{# The variables need to be specified during instantiation are vars, autograd_funcs #}
+
+# Initialize any intermediate and output variables
+{% for var, shape in vars.items() %}
+{{ var }} = torch.zeros({{ shape }}, device=device).contiguous()
+{% endfor %}
+
+{% for autograd_func_name, out_and_arguments in autograd_funcs.items() %}
+# Call autograd function {{ autograd_func_name }}
+{{ out_and_arguments[0] }} = pyctor_layers_and_funcs.{{ autograd_func_name }}({% for arg in out_and_arguments %}{{ arg }}, {% endfor %})
+{% endfor %}

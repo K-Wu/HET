@@ -2,19 +2,18 @@
 ///
 /// SHAPE INFORMATION
 ///
-// TODO: Support relation-wise data, e.g., mu
 VARIABLETABLE{
   InitialVariableAndWeight{
     (EDGEWISE, "raw_attn_tmp2");(EDGEWISE, "msg");
   }
   Shape{
     (DSTNODE, "attn_sum"):['dstnode','scalar']
-    (EDGEWISE, "raw_attn"):['edgewise','scalar']
-    (EDGEWISE, "raw_attn_tmp2"):['edgewise','scalar']
-    (EDGEWISE, "attn"):['edgewise','scalar']
+    (EDGEWISE, "raw_attn"):['unique_node_etype','scalar']
+    (EDGEWISE, "raw_attn_tmp2"):['unique_node_etype','scalar']
+    (EDGEWISE, "attn"):['unique_node_etype','scalar']
     (DSTNODE, "output"):['dstnode','vector']
-    (EDGEWISE, "msg"):['edgewise','vector']
-    (EDGEWISE, "output_tmp1"):['edgewise','vector']
+    (EDGEWISE, "msg"):['unique_node_etype','vector']
+    (EDGEWISE, "output_tmp1"):['unique_node_etype','vector']
   }
 }
 
@@ -36,8 +35,8 @@ DAG{
 OPSPEC{
   traversal_1{
     {
-      "inputs": [["EDGEWISE","raw_attn_tmp2"]],
-      "outputs": [["EDGEWISE","raw_attn"]],
+      "inputs": [["UNIQUE_NODE_ETYPE","raw_attn_tmp2"]],
+      "outputs": [["UNIQUE_NODE_ETYPE","raw_attn"]],
       "schedule": "type1",
       "operators":{
         "1:loop":{
@@ -49,8 +48,8 @@ OPSPEC{
             "1:op":{
               "op":"expf",
               "op_type":"elementwise",
-              "inputs":[["EDGEWISE","raw_attn_tmp2"]],
-              "output":["EDGEWISE","raw_attn"]
+              "inputs":[["UNIQUE_NODE_ETYPE","raw_attn_tmp2"]],
+              "output":["UNIQUE_NODE_ETYPE","raw_attn"]
             }
           }
         }
@@ -59,7 +58,7 @@ OPSPEC{
   }
   traversal_2{
     {
-      "inputs": [["EDGEWISE","raw_attn"]],
+      "inputs": [["UNIQUE_NODE_ETYPE","raw_attn"]],
       "outputs": [["DSTNODE","attn_sum"]],
       "schedule": "type1",
       "operators":{
@@ -75,8 +74,8 @@ OPSPEC{
                 "type":"accumulation",
                 "sink":"node"
               },
-              "inputs": [["EDGEWISE","raw_attn"]],
-              "output": ["DSTNODE","attn_sum"]
+              "inputs":[["UNIQUE_NODE_ETYPE","raw_attn"]],
+              "output":["DSTNODE","attn_sum"]
             }
           }
         }
@@ -85,8 +84,8 @@ OPSPEC{
   }
   traversal_3{
     {
-      "inputs": [["EDGEWISE","raw_attn"],["DSTNODE","attn_sum"]],
-      "outputs": [["EDGEWISE","attn"]],
+      "inputs": [["UNIQUE_NODE_ETYPE","raw_attn"],["DSTNODE","attn_sum"]],
+      "outputs": [["UNIQUE_NODE_ETYPE","attn"]],
       "schedule": "type1",
       "operators":{
         "1:loop":{
@@ -97,16 +96,15 @@ OPSPEC{
           "operators":{
             "1:op":{
               "op":"divide",
-              "op_type":{
-                "type":"broadcast",
+              "broadcast":{
                 "operand":"right",
-                "source":"node"
+                "source":"nodewise"
               },
               "inputs":[
-                ["EDGEWISE","raw_attn"],
+                ["UNIQUE_NODE_ETYPE","raw_attn"],
                 ["DSTNODE","attn_sum"]
               ],
-              "output":["EDGEWISE","attn"]
+              "output":["UNIQUE_NODE_ETYPE","attn"]
             }
           }
         }
@@ -115,8 +113,8 @@ OPSPEC{
   }
   traversal_4{
     {
-      "inputs": [["EDGEWISE","attn"],["EDGEWISE","msg"]],
-      "outputs": [["EDGEWISE","output_tmp1"]],
+      "inputs": [["UNIQUE_NODE_ETYPE","attn"],["UNIQUE_NODE_ETYPE","msg"]],
+      "outputs": [["UNIQUE_NODE_ETYPE","output_tmp1"]],
       "schedule": "type2",
       "operators":{
         "1:loop":{
@@ -129,7 +127,7 @@ OPSPEC{
               "loop_variable":"idx_feature",
               "loop_begin":"0",
               "loop_end":"num_features",
-              "loop_step":"blockDim.x*gridDim.x",
+              "loop_step":"gridDim.x*blockDim.x",
               "operators":{
                 "1:op":{
                   "op":"mul",
@@ -138,10 +136,10 @@ OPSPEC{
                     "source":"edgewise"
                   },
                   "inputs":[
-                    ["EDGEWISE","attn"],
-                    ["EDGEWISE","msg"]
+                    ["UNIQUE_NODE_ETYPE","attn"],
+                    ["UNIQUE_NODE_ETYPE","msg"]
                   ],
-                  "output":["EDGEWISE","output_tmp1"]
+                  "output":["UNIQUE_NODE_ETYPE","output_tmp1"]
                 }
               }
             }
@@ -152,7 +150,7 @@ OPSPEC{
   }
   traversal_5{
     {
-      "inputs": [["EDGEWISE","output_tmp1"]],
+      "inputs": [["UNIQUE_NODE_ETYPE","output_tmp1"]],
       "outputs": [["DSTNODE","output"]],
       "schedule": "type2",
       "operators":{
@@ -166,7 +164,7 @@ OPSPEC{
               "loop_variable":"idx_feature",
               "loop_begin":"0",
               "loop_end":"num_features",
-              "loop_step":"blockDim.x*gridDim.x",
+              "loop_step":"gridDim.x*blockDim.x",
               "operators":{
                 "1:op":{
                   "op":"sum",
@@ -174,7 +172,7 @@ OPSPEC{
                     "type":"accumulation",
                     "sink":"node"
                   },
-                  "inputs":[["EDGEWISE","output_tmp1"]],
+                  "inputs":[["UNIQUE_NODE_ETYPE","output_tmp1"]],
                   "output":["DSTNODE","output"]
                 }
               }

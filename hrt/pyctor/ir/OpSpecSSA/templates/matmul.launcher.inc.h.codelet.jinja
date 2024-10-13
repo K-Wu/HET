@@ -1,0 +1,156 @@
+{# Adapted from RGNN::FwProp::SeparateCOO::RelationalMatMul in hrt/include/DGLHackKernel/OpExport/RGNNOps.inc.h #}
+{# These flags are no longer C++ template variables but need to be provided in Python: CompactAsOfNodeKind kind, bool ACGatherScatterListIdenticalFlag, bool InputNumHeadOneFlag  #}
+{# The other variable need to be specified during instantiation is kernel_cuda_func_name #}
+
+
+void {{kernel_cuda_func_name}}Launcher(torch::Dict<std::string, at::Tensor> graph_tensors_dict,
+                       at::Tensor &Amat, at::Tensor &Bmat,
+                       at::Tensor &ret) {
+  /// PYCTOR: constants to be emitted by pyctor
+  {% if InputNumHeadOneFlag %}
+    constexpr bool InputNumHeadOneFlag = true;
+  {% else %}
+    constexpr bool InputNumHeadOneFlag = false;
+  {% endif %}
+
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
+
+  /// PYCTOR: Dimension calculation
+  const int64_t num_relations =
+      graph_tensors_dict.at("separate_coo_relptrs").numel() == 0
+          ? (graph_tensors_dict.at("unique_srcs_and_dests_rel_ptrs").numel() -
+             1)
+          : (graph_tensors_dict.at("separate_coo_relptrs").numel() - 1);
+  const int64_t num_heads = Bmat.size(1);
+  const int64_t num_input_dim = Bmat.size(2);
+  const int64_t num_output_per_head_dim =
+      Bmat.size(3);  // weight shape (num_relations, n_heads,
+                        // in_feat, out_feat // n_heads)
+  int64_t num_edges;
+
+  /// PYCTOR: Kernel configuration
+  // TODO: KWU: add reg-tiled specific configurations by introducing tenary
+  // operators
+
+  // NB: configuration specific to shmem-tiled sgemm
+
+  // assuming coarsening in both x and y direction if shmem is used instead of
+  // reg tiling
+  // TODO: KWU: enable reg tiling for compact as of node
+  constexpr bool REG_TILING_FLAG = true;
+
+  MY_SGEMM_GRID_CONFIG()
+
+  {% if kind.is_compact() %}
+    num_edges =
+        graph_tensors_dict.at("unique_srcs_and_dests_node_indices").numel();
+  {% else %}
+    num_edges = graph_tensors_dict.at("separate_coo_eids").numel();
+  {% endif %}
+  int grid_dim_y = std::min(
+      ceil_div<>(num_edges, (int64_t)WORK_BLOCK_SIZE_Y),
+      (int64_t)32768);  // using 32768 instead of 65535 to leave some space in
+                        // case the total number of blocks is slightly larger
+                        // due to relationship with very few workloads
+  std::vector<int> num_blocks_assignment_for_same_relation_vect,
+      num_blocks_assignment_for_all_prev_relation_vect;
+  {% if kind.is_compact() %}
+    at::Tensor unique_srcs_and_dests_rel_ptrs_cpu_contiguous =
+        graph_tensors_dict.at("unique_srcs_and_dests_rel_ptrs")
+            .cpu()
+            .contiguous();
+    std::tie(num_blocks_assignment_for_same_relation_vect,
+             num_blocks_assignment_for_all_prev_relation_vect) =
+        get_schedule_by_relation_kernel_launch_metadata<false, false,
+                                                        int64_t *>(
+            grid_dim_y, num_relations, WORK_BLOCK_SIZE_Y,
+            unique_srcs_and_dests_rel_ptrs_cpu_contiguous.data_ptr<int64_t>(),
+            unique_srcs_and_dests_rel_ptrs_cpu_contiguous.data_ptr<int64_t>() +
+                num_relations + 1);
+  {% else %}
+    at::Tensor separate_coo_relptrs_cpu_contiguous =
+        graph_tensors_dict.at("separate_coo_relptrs").cpu().contiguous();
+    std::tie(num_blocks_assignment_for_same_relation_vect,
+             num_blocks_assignment_for_all_prev_relation_vect) =
+        get_schedule_by_relation_kernel_launch_metadata<false, false,
+                                                        int64_t *>(
+            grid_dim_y, num_relations, WORK_BLOCK_SIZE_Y,
+            separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>(),
+            separate_coo_relptrs_cpu_contiguous.data_ptr<int64_t>() +
+                num_relations + 1);
+  {% endif %}
+  grid_dim_y = num_blocks_assignment_for_all_prev_relation_vect.back();
+
+  thrust::device_vector<int> dev_num_blocks_assignment_for_same_relation_vect(
+      num_blocks_assignment_for_same_relation_vect.begin(),
+      num_blocks_assignment_for_same_relation_vect.end());
+  thrust::device_vector<int>
+      dev_num_blocks_assignment_for_all_prev_relation_vect(
+          num_blocks_assignment_for_all_prev_relation_vect.begin(),
+          num_blocks_assignment_for_all_prev_relation_vect.end());
+
+  /// PYCTOR: Grid configuration and Kernel launch
+  {% if kind.is_compact() %}
+
+    // NB: my shmem sgemm matmul scheme
+    const dim3 nblks(
+        ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE_X),
+        grid_dim_y, num_heads);
+    const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
+    // TODO: KWU: allow more dtype options in this file
+    ETypeMapperData<int64_t, kind> etype_mapper_data{
+        .unique_srcs_and_dests_rel_ptrs =
+            graph_tensors_dict.at("unique_srcs_and_dests_rel_ptrs")
+                .data_ptr<int64_t>(),
+        .unique_srcs_and_dests_node_indices =
+            graph_tensors_dict.at("unique_srcs_and_dests_node_indices")
+                .data_ptr<int64_t>()};
+    {{kernel_cuda_func_name}}<REG_TILING_FLAG, THREADING_BLOCK_SIZE_X,
+                              THREADING_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_X,
+                              WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+                              int64_t *, InputNumHeadOneFlag>
+        <<<nblks, nthrs, 0, stream>>>(
+            Amat.data_ptr<float>(), Bmat.data_ptr<float>(),
+            ret.data_ptr<float>(), etype_mapper_data, num_input_dim,
+            num_output_per_head_dim, num_heads,
+            thrust::raw_pointer_cast(
+                dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+            num_relations);
+  {% else %}
+    // NB: my shmem sgemm matmul scheme
+    const dim3 nblks(
+        ceil_div<>(num_output_per_head_dim, (long)WORK_BLOCK_SIZE_X),
+        grid_dim_y, num_heads);
+    const dim3 nthrs(THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y);
+    {% if ACGatherScatterListIdenticalFlag %}
+      {{kernel_cuda_func_name}}<
+          REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+          WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+          int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+          Amat.data_ptr<float>(), Bmat.data_ptr<float>(),
+          ret.data_ptr<float>(),
+          graph_tensors_dict.at("separate_coo_relptrs").data_ptr<int64_t>(),
+          graph_tensors_dict.at("separate_coo_eids").data_ptr<int64_t>(),
+          num_input_dim, num_output_per_head_dim, num_heads,
+          thrust::raw_pointer_cast(
+              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+          num_relations);
+    {% else %}
+      // NB: KWU: use by default the new reg tiled version here
+      {{kernel_cuda_func_name}}<
+          REG_TILING_FLAG, THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+          WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K, int64_t,
+          int64_t *, InputNumHeadOneFlag><<<nblks, nthrs, 0, stream>>>(
+          Amat.data_ptr<float>(), Bmat.data_ptr<float>(),
+          ret.data_ptr<float>(),
+          graph_tensors_dict.at("separate_coo_node_indices")
+              .data_ptr<int64_t>(),
+          graph_tensors_dict.at("separate_coo_relptrs").data_ptr<int64_t>(),
+          graph_tensors_dict.at("separate_coo_eids").data_ptr<int64_t>(),
+          num_input_dim, num_output_per_head_dim, num_heads,
+          thrust::raw_pointer_cast(
+              dev_num_blocks_assignment_for_all_prev_relation_vect.data()),
+          num_relations);
+    {% endif %}
+  {% endif %}
+}

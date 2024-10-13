@@ -1,0 +1,9 @@
+{# Python code. Indent == 4 #}
+{# The variables need to be specified during instantiation are autograd_func_name, scalars, tensor_args, AutogradFuncClassName #}
+
+# TODO: execute get_in_csr() / get_out_csr() if used
+# TODO: Consider initialize variables used only in this helper func here instead of at the beginning of all forward statements
+
+def {{autograd_func_name}}(graph_tensors_dict, out {%- for scalar in scalars -%},{{ scalars }} {%- endfor -%} {%- for arg in tensor_args -%},{{ arg }} {%- endfor -%}):
+
+    return {{AutogradFuncClassName}}.apply(graph_tensors_dict, out {%- for scalar in scalars -%},{{ scalars }} {%- endfor -%} {%- for arg in tensor_args -%},{{ arg }} {%- endfor -%})

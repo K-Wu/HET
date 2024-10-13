@@ -59,3 +59,7 @@ class ShapeInfererPass(Pass):
                         worklist.move_to_head(defining_op)
 
         return []
+
+
+# TODO: propagate row_purpose after ShapeInfererPass
+# TODO: optionally compactize the shape after row_purpose propagation

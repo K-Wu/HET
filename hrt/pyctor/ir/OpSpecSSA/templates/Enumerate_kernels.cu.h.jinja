@@ -1,0 +1,10 @@
+{# Adapted from hrt/include/DGLHackKernel/PyctorPlayground/enumerate.cu.h #}
+#pragma once
+#include <cuda_runtime.h>
+
+#include "kernel_enums.h"
+#include "utils.cu.h"
+
+{% for kernel_definition in kernel_cuda_definitions %}
+{{ kernel_definition }}
+{% endfor %}

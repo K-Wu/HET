@@ -111,7 +111,7 @@ void _RelationalMatMul(at::Tensor &separate_coo_relptrs,
                         // in_feat, out_feat // n_heads)
   int64_t num_edges;
 
-  // TODO: KWU: add reg-tiled speicifc configurations by introducing tenary
+  // TODO: KWU: add reg-tiled specific configurations by introducing tenary
   // operators
 
   // NB: configuration specific to shmem-tiled sgemm

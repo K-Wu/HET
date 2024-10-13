@@ -3,49 +3,62 @@ from typing import Type, Union, NamedTuple
 import abc
 
 # TODO: Store dimension assignment to enhance extensibility
-_Shape = NamedTuple("Shape", [("type", str)])
-SHAPE_TYPES = {"scalar": 0, "vector": 1, "matrix": 2}
+_Shape = NamedTuple("Shape", [("row_purpose", str), ("slice_type", str)])
+SHAPE_ROW_PURPOSE_TYPES = {
+    "nodewise": 0,
+    "dstnode": 1,
+    "srcnode": 2,
+    "edgewise": 3,
+    "unique_node_etype": 4,
+    "edgetype": 5,
+    "nodetype": 6,
+    "none_as_weight_slice_type": 7,
+    "unassigned": 99,
+}
+SHAPE_SLICE_TYPES = {"scalar": 0, "vector": 1, "matrix": 2}
 
 
 class Shape(_Shape):
     @classmethod
     def from_string(cls, s: str) -> "Shape":
         keyval_str = s.split(",")
-        assert len(keyval_str) == 1
+        assert len(keyval_str) == 2
         keyval_str = [ele.strip() for ele in keyval_str]
-        # removing parantheses
-        return cls(type=keyval_str[0])
+        # Remove bracket
+        keyval_str[0] = keyval_str[0][1:]
+        keyval_str[1] = keyval_str[1][:-1]
+        return cls(row_purpose=keyval_str[0], slice_type=keyval_str[1])
 
     @classmethod
     def get_scalar_shape(cls) -> "Shape":
         # (idx_entry, idx_head)
-        return cls(type="scalar")
+        return cls(row_purpose="unassigned", slice_type="scalar")
 
     @classmethod
     def get_vector_shape(cls) -> "Shape":
         # (idx_entry, idx_head, idx_element)
-        return cls(type="vector")
+        return cls(row_purpose="unassigned", slice_type="vector")
 
     @classmethod
     def get_matrix_shape(cls) -> "Shape":
         # (idx_entry, idx_head, idx_row, idx_column)
-        return cls(type="matrix")
+        return cls(row_purpose="unassigned", slice_type="matrix")
 
     @classmethod
     def from_dict(cls, d: dict["str", "str"]) -> "Shape":
-        return cls(type=d["type"])
+        return cls(row_purpose="unassigned", slice_type=d["slice_type"])
 
     def validate(self) -> None:
-        assert self.type in SHAPE_TYPES
+        assert (
+            self.row_purpose in SHAPE_ROW_PURPOSE_TYPES
+            and self.slice_type in SHAPE_SLICE_TYPES
+        )
 
     def to_dict(self) -> dict["str", "str"]:
-        return {"type": self.type}
-
-    def get_type(self) -> str:
-        return self.type
+        return {"row_purpose": self.row_purpose, "slice_type": self.slice_type}
 
     def to_string(self) -> str:
-        return f"({self.type})"
+        return f"[{self.row_purpose}, {self.slice_type}]"
 
 
 class VarBase(metaclass=abc.ABCMeta):
@@ -97,7 +110,14 @@ _WeightVar = NamedTuple("WeightVar", [("name", str), ("slice_type", str)])
 _DataVar = NamedTuple("DataVar", [("type", str), ("name", str)])
 
 WEIGHT_SLICE_TYPES = {"EDGETYPE": 0, "NODETYPE": 1, "NONE": 2}
-DATA_TYPES = {"EDGEWISE": 0, "NODEWISE": 1, "DSTNODE": 2, "SRCNODE": 3}
+# TODO: Decouple UNIQUE_NODE_ETYPE from DATA_TYPES so that in DAG both UNIQUE_NODE_ETYPE and EDGEWIDE are shown as EDGEWISE while UNIQUE_NODE_ETYPE is recorded in the shape table and opspec ssa
+DATA_TYPES = {
+    "EDGEWISE": 0,
+    "NODEWISE": 1,
+    "DSTNODE": 2,
+    "SRCNODE": 3,
+    "UNIQUE_NODE_ETYPE": 4,
+}
 
 
 def is_valid_var_name(name: str) -> bool:
@@ -160,14 +180,13 @@ class WeightVar(_WeightVar, VarBase):
         return cls(name=d["name"], slice_type=d["slice_type"])
 
     @classmethod
-    def from_list(cls, l: list[str]) -> "WeightVar":
+    def from_opspec_list(cls, l: list[str]) -> "WeightVar":
         """This method is provided for opspec deserialization."""
         return cls(name=l[0], slice_type=l[1])
 
-    def to_list(self) -> list[str]:
+    def to_opspec_list(self) -> list[str]:
         """This method is provided for opspec serialization."""
-        # return [self.name, self.slice_type]
-        return list(self.to_dict().values())
+        return [self.name, self.slice_type]
 
     def to_dict(self) -> dict["str", "str"]:
         return {"name": self.name, "slice_type": self.slice_type}
@@ -219,6 +238,15 @@ class DataVar(_DataVar, VarBase):
         return cls(type=keyval_str[0][1:], name=keyval_str[1][1:-2])
 
     @classmethod
+    def from_opspec_list(cls, l: list[str]) -> "DataVar":
+        """This method is provided for opspec deserialization."""
+        return cls(type=l[0], name=l[1])
+
+    def to_opspec_list(self) -> list[str]:
+        """This method is provided for opspec serialization."""
+        return [self.type, self.name]
+
+    @classmethod
     def from_dict(cls, d: dict["str", "str"]) -> "DataVar":
         return cls(type=d["type"], name=d["name"])
 
@@ -248,8 +276,17 @@ class DataVar(_DataVar, VarBase):
         return DataVar(name=name, type=self.type)
 
 
-def parse_var_class(name: str) -> Union[Type[DataVar], Type[WeightVar]]:
-    if '"' in name:
+def parse_var_spec_class(
+    varspec: list[str],
+) -> Union[Type[DataVar], Type[WeightVar]]:
+    if varspec[0] in WEIGHT_SLICE_TYPES:
+        return WeightVar
+    else:
+        return DataVar
+
+
+def parse_var_class(var: str) -> Union[Type[DataVar], Type[WeightVar]]:
+    if '"' in var:
         return DataVar
     else:
         return WeightVar

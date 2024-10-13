@@ -19,7 +19,10 @@ DAG{
 
 (EDGEWISE, "raw_attn_delta") = ScalarAdd(left=(EDGEWISE, "raw_attn_delta_term1"), right=(DSTNODE, "attn_sum_delta"));
 
-(EDGEWISE, "raw_attn_tmp2_delta") = InverseExponential(input=(EDGEWISE, "raw_attn_delta"));
+(EDGEWISE, "raw_attn_tmp3_delta") = InverseExponential(input=(EDGEWISE, "raw_attn_delta"));
+(EDGEWISE, "raw_attn_tmp2_delta") = ScalarMultiply(left=(EDGEWISE, "raw_attn_tmp3_delta"), right=(EDGETYPE, "mu"));
+(EDGEWISE, "mu_delta_tmp1") = ScalarMultiply(scalar=(EDGEWISE, "raw_attn_tmp3_delta"), vector=(EDGEWISE, "raw_attn_tmp2"));
+(EDGETYPE, "mu_delta") = EdgeTypeSumAccumulation(input=(EDGEWISE, "mu_delta_tmp1"));
 (EDGEWISE, "raw_attn_tmp1_delta") = EdgeScalarVectorMul(scalar=(EDGEWISE, "raw_attn_tmp2_delta"), vector=(DSTNODE, "ht_attn"));
 (EDGEWISE, "ht_attn_dst_delta_tmp1") = EdgeScalarVectorMul(scalar=(EDGEWISE, "raw_attn_tmp2_delta"), vector=(EDGEWISE, "raw_attn_tmp1"));
 (DSTNODE, "ht_attn_delta") = NodeSumAccumulation(input=(EDGEWISE, "ht_attn_dst_delta_tmp1"));

@@ -1,6 +1,0 @@
-{# func_name_to_cpp_signature is a dictionary of function Python names to their C++ signatures #}
-TORCH_LIBRARY_FRAGMENT(torch_hrt, m) {
-  {% for func_name_str, func_cpp_signature in func_name_to_cpp_signature.items() %}
-    m.def({{ func_name_str }}, {{ func_cpp_signature }});
-  {% endfor %}
-}

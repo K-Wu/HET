@@ -37,14 +37,17 @@ class VariableTable:
     stored in the table
 
     Serial Format:
-    each entry is in the format of
-    shape: var_key <- var_name2 <- var_name3 <- ...
-    where shape is one of (matrix, vector, scalar) for data var, and
+    In SHAPE{}, each entry is in the format of
+    var_key: shape
+    In the optional VARIABLENUMBER{}, each entry is in the format of
+    var_key: var_name_1 <- var_name_2 <- var_name_3 <- ...
+    where shape is (dstnode, nodewise, edgewise, srcnode) + shape per type (matrix, vector, scalar) for data var, and
     (none, nodetype, edgetype) + shape per type (matrix, vector, scalar) in the
     case of weight var
-    var_key involves both name and (slice_)type;
-    var_name2, var_name3 are the different value number of the same variable,
-    and only stores their name with (slice_)type omitted
+    var_key is just the name string. We don't use the DAG variable tuple format to involve slice(_type) in order to make it easier to use json serialization.
+    var_name_2, var_name_3 are the different value number of the same variable,
+    and only stores their name with (slice_)type omitted.
+    If no value numbering is done, VARIABLENUMBER{} is not needed. (Which is true in all our cases.)
     """
 
     dsl_vars: Annotated[
@@ -81,7 +84,7 @@ class VariableTable:
     before value numbering, each (key, value) in numbered_key_vals looks like
     (var_key, [var_name]) (another_var, [another_var]) ...
     after value numbering, the above entry may now look like
-    (var_key, [var_name, var_name2, var_name3]) (another_var, [another_var])
+    (var_key, [var_name, var_name_2, var_name_3]) (another_var, [another_var])
 
     def_use_table
     whether before or after value numbering, each (key, value) in def_use_table looks like
@@ -134,10 +137,8 @@ class VariableTable:
             after_value_numbering is not None
             and not var in self.numbered_val_to_key
         ):
-            assert (
-                not after_value_numbering
-            ), f"Value numbering is not done for {var}"
-        var_key_str = self.get_var_key(var).get_name()
+            assert not after_value_numbering, f"Unknown numbered value {var}"
+        var_key_str = self.get_var_key(var).to_string()
         return var_key_str
 
     @classmethod
@@ -151,7 +152,7 @@ class VariableTable:
         """
         var_table = cls()
 
-        assert remove_white_spaces(lines[0].strip()) == "VariableTable{"
+        assert remove_white_spaces(lines[0].strip()) == "VARIABLETABLE{"
         assert lines[-1].strip() == "}"
         lines = lines[1:-1]
 
@@ -168,12 +169,15 @@ class VariableTable:
             )
             # Similarly, we assume the scope ending line only contains "}"
             assert lines[scope_end].strip() == "}"
-            if scope_tag == "InitialVariablesAndWeights":
+            if scope_tag == "InitialVariableAndWeight":
                 # Assume only one line in current scheme
                 assert scope_end - scope_beg - 1 == 1
                 for line in lines[scope_beg + 1 : scope_end]:
                     # Split by ';' because variable string (name, type) contains ','
-                    line_var_strs = line.split(";")
+                    line_var_strs = line.strip().split(";")
+                    # Remove the last empty string if exists
+                    if len(line_var_strs[-1]) == 0:
+                        line_var_strs = line_var_strs[:-1]
                     # Remove the beginning whitespaces
                     line_var_strs = [
                         var_str.strip() for var_str in line_var_strs
@@ -184,59 +188,84 @@ class VariableTable:
                     }
                     var_table.vars_input.update(line_vars)  # in place update
 
-            elif scope_tag == "VariableNumbersAndShapes":
-                # load shape info, each line stores a variable's shape and all its numbered values, i.e.,
-                #  shape: var_key <- var_name2 <- var_name3 <- ...
+            elif scope_tag == "VariableNumber":
+                # Each line stores a variable's all numbered values, i.e.,
+                #  var_key <- var_name2 <- var_name3 <- ...
                 for line in lines[scope_beg + 1 : scope_end]:
                     line = line.strip()
                     if len(line) == 0:
                         continue
-                    shape, vars_str = line.split(":")
-                    shape = shape.strip()
-                    var_varnames_strs = vars_str.split("<-")
+                    var_varnames_strs = line.strip().split("<-")
                     var_varnames_strs = [
                         var_str.strip() for var_str in var_varnames_strs
                     ]
                     var = parse_var_class(var_varnames_strs[0]).from_string(
                         var_varnames_strs[0]
                     )
-                    varnames = var_varnames_strs[1:]
-                    var_table.vars_shape[
-                        var_table.get_var_key_str(var)
-                    ] = Shape(type=shape)
 
                     var_table.numbered_key_vals[var] = [var]
                     var_table.numbered_val_to_key[var] = var
+
+                    varnames = var_varnames_strs[1:]
                     for varname in varnames:
                         var_newer = var.get_numbered_var(varname)
                         var_table.numbered_key_vals[var].append(var_newer)
                         var_table.numbered_val_to_key[var_newer] = var
+            elif scope_tag == "Shape":
+                # load shape info, each line stores a variable's shape
+                #  var_key: shape
+                for line in lines[scope_beg + 1 : scope_end]:
+                    line = line.strip()
+                    if len(line) == 0:
+                        continue
+                    var_str, shape_str = line.split(":")
+                    shape_str = shape_str.strip()
+                    var_str = var_str.strip()
+                    var = parse_var_class(var_str).from_string(var_str)
                     var_table.vars_shape[
                         var_table.get_var_key_str(var)
-                    ] = Shape(type=shape)
+                    ] = Shape.from_string(shape_str)
+
+                    var_table.numbered_key_vals[var] = [var]
+                    var_table.numbered_val_to_key[var] = var
+
         return cls(var_table)
 
     def dumps(self) -> str:
         """output the variable table in the text, i.e., the shape table"""
         result = "VariableTable{\n"
         # Step 1: Output initial variables and weights
-        result += "InitialVariablesAndWeights{\n"
+        result += "InitialVariableAndWeight{\n"
         variable_strings = [var.to_string() for var in self.vars_input]
         for var_str in variable_strings:
             assert ";" not in var_str, f"Variable name {var_str} contains ';'"
         result += "; ".join([var.to_string() for var in self.vars_input])
-        result += "\n}\n"
+        result += ";\n}\n"
 
         # Step 2: Output shape info
-        result += "VariableNumbersAndShapes{\n"
+        result += "Shape{\n"
         for var_str, shape in self.vars_shape.items():
-            result += f"{shape.type}: {var_str}"
-            for var_newer in self.numbered_key_vals[var_str][1:]:
-                result += f" <- {var_newer.to_string()}"
+            result += f"{var_str}: {shape.to_string()}"
             result += "\n"
         result += "}\n"
 
-        result += "}"
+        # Step 3: Output variable numbering info if there is any
+        is_any_numbered = False
+        result_numbering = "VariableNumber{\n"
+        for var_str, shape in self.vars_shape.items():
+            is_curr_numbered = False
+            curr_result_numbering = f"{var_str}"
+            var = parse_var_class(var_str).from_string(var_str)
+            for var_newer in self.numbered_key_vals[var][1:]:
+                is_curr_numbered = True
+                is_any_numbered = True
+                curr_result_numbering += f" <- {var_newer.to_string()}"
+            curr_result_numbering += "\n"
+            if is_curr_numbered:
+                result_numbering += curr_result_numbering
+        result_numbering += "}\n"
+        if is_any_numbered:
+            result += result_numbering
 
         return result
 
@@ -300,7 +329,7 @@ class VariableTable:
             else:
                 assert len(tmp_values) == 1
 
-            # assign a new tmp number to _tmp substring
+            # assign a new number to _suffix substring
             curr_tmp_value = int(tmp_values[-1])
             while 1:
                 curr_tmp_value += 1

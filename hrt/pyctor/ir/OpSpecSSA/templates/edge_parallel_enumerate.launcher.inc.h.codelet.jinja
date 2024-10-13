@@ -1,0 +1,156 @@
+{# Adapted from HET::TorchExport::RGNN::FwProp::_InnerProductVariousLeftAndNodeRight in hrt/include/DGLHackKernel/OpExport/RGNNOps.inc.h #}
+{# int64_t num_relations = separate_coo_rel_ptrs.numel() - 1; #}
+{# These flags are no longer C++ template variables but need to be provided in Python: CompactAsOfNodeKind kind, bool IntegratedFormatRatherThanSeparateFlag, bool CSRRatherThanCOOFlag #}
+{# The other variables need to be specified during instantiation are kernel_cuda_func_name, is_type2_schedule, variable_definitions #}
+
+
+void {{kernel_cuda_func_name}}Launcher(
+    torch::Dict<std::string, at::Tensor> graph_tensors_dict,
+    {%- for arg in tensor_args -%}, at::Tensor& {{ arg }} {%- endfor -%}) {
+  typedef int64_t Idx;
+  typedef float DType;
+  cudaStream_t stream = c10::cuda::getCurrentCUDAStream();
+
+  /// PYCTOR: Define variables.
+  // feat_src_xlen and num_heads must be defined for schedule configuration purpose.
+  // The following is an example:
+  // Idx feat_src_xlen = SeastarComputeXLength<>(feat_src),
+  // Idx num_heads = SeastarComputeXLength<>(edge_inner_product),
+  // DType * p_feat_src = feat_src.data_ptr<DType>(),
+  // DType * p_feat_dst = feat_dst.data_ptr<DType>(),
+  // DType * p_edge_inner_product = edge_inner_product.data_ptr<DType>();
+  {{ variable_definitions }}
+  constexpr CompactAsOfNodeKind kind = CompactAsOfNodeKind::{{ kind.print() }};
+  Idx * eids = nullptr,  // assign later in if branches
+  // TODO: declare __restrict__ in the cuda kernel definition
+
+
+
+  {% if IntegratedFormatRatherThanSeparateFlag and CSRRatherThanCOOFlag %}
+    // Integrated CSR
+    eids = graph_tensors_dict.at("incsr_eids").data_ptr<Idx>();
+    // Configure kernel launch parameters.
+
+    // Set up Type 1 Schedule or Type 2 Schedule. E.g., Type 2 Schedule:
+    // head -> threadIdx.y
+    // node -> blockIdx.y
+    // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
+
+    int64_t incsr_num_rows = graph_tensors_dict.at("incsr_row_ptr").numel() - 1;
+    {% if is_type2_schedule %}
+    auto [nblks2, nthrs2] = get_type2_schedule(
+        num_heads, feat_src_xlen, incsr_num_rows);
+    {% else %}
+    auto [nblks2, nthrs2] = get_type1_schedule(num_heads, incsr_num_rows);
+    {% endif %}
+
+    Idx *incsr_col_indices_data_ptr =
+        graph_tensors_dict.at("incsr_col_indices").numel() > 0
+            ? graph_tensors_dict.at("incsr_col_indices").data_ptr<Idx>()
+            : nullptr;
+    Idx *incsr_reltypes_data_ptr =
+        graph_tensors_dict.at("incsr_reltypes").numel() > 0
+            ? graph_tensors_dict.at("incsr_reltypes").data_ptr<Idx>()
+            : nullptr;
+
+    ETypeMapperData<Idx, kind> etype_mapper_data;
+
+    {% if kind == "EnabledWithDirectIndexing" %}
+      assert(graph_tensors_dict.at("edata_idx_to_inverse_idx").numel() > 0);
+      etype_mapper_data.edata_idx_to_inverse_idx =
+          graph_tensors_dict.at("edata_idx_to_inverse_idx").data_ptr<Idx>();
+    {% elif kind == "Enabled" %}
+      assert(graph_tensors_dict.at("unique_srcs_and_dests_rel_ptrs").numel() >
+             0);
+      assert(
+          graph_tensors_dict.at("unique_srcs_and_dests_node_indices").numel() >
+          0);
+      etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+          graph_tensors_dict.at("unique_srcs_and_dests_rel_ptrs")
+              .data_ptr<Idx>();
+      etype_mapper_data.unique_srcs_and_dests_node_indices =
+          graph_tensors_dict.at("unique_srcs_and_dests_node_indices")
+              .data_ptr<Idx>();
+    {% else %}
+      assert(kind == CompactAsOfNodeKind::Disabled);
+    {% endif %}
+
+    ETypeData<Idx, false> etype_data{
+        .etypes = graph_tensors_dict.at("incsr_reltypes").numel() > 0
+                      ? graph_tensors_dict.at("incsr_reltypes").data_ptr<Idx>()
+                      : nullptr};
+
+    {{kernel_cuda_func_name}}<Idx, DType, kind, true, false, false>
+        <<<nblks2, nthrs2, 0, stream>>>(
+            {%- for arg in tensor_pointer_args -%}{{ arg }}, {%- endfor -%} eids, etype_data, incsr_col_indices_data_ptr,
+            incsr_reltypes_data_ptr, incsr_num_rows, etype_mapper_data);
+  {% elif (not IntegratedFormatRatherThanSeparateFlag) and (not CSRRatherThanCOOFlag) %}
+    // separate coo
+    eids = graph_tensors_dict.at("separate_coo_eids").data_ptr<Idx>();
+    int64_t num_edges =
+        graph_tensors_dict.at("separate_coo_row_indices").numel();
+    int64_t num_relations =
+        graph_tensors_dict.at("separate_coo_rel_ptrs").numel() - 1;
+
+    // Set up Type 1 Schedule or Type 2 Schedule. E.g., Type 2 Schedule:
+    // head -> threadIdx.y
+    // edge -> blockIdx.y
+    // feat_idx -> blockIdx.x * blockDim.x + threadIdx.x
+    // threadIdx.x and threadIdx.y and only this pair is exchanged compared with
+    // original seastar schedule to allow reduction within the warp, i.e., along
+    // x-dimension
+    {% if is_type2_schedule %}
+    auto [nblks_inner_product, nthrs_inner_product] =
+        get_type2_schedule(num_heads, feat_src_xlen, num_edges);
+    {% else %}
+    auto [nblks_inner_product, nthrs_inner_product] =
+        get_type1_schedule(num_heads, num_edges);
+    {% endif %}
+    Idx *separate_coo_row_indices_data_ptr =
+        graph_tensors_dict.at("separate_coo_row_indices").numel() > 0
+            ? graph_tensors_dict.at("separate_coo_row_indices").data_ptr<Idx>()
+            : nullptr;
+    Idx *separate_coo_col_indices_data_ptr =
+        graph_tensors_dict.at("separate_coo_col_indices").numel() > 0
+            ? graph_tensors_dict.at("separate_coo_col_indices").data_ptr<Idx>()
+            : nullptr;
+    ETypeMapperData<Idx, kind> etype_mapper_data;
+    ETypeData<Idx, true> etype_data{
+        .etypes =
+            graph_tensors_dict.at("separate_coo_rel_ptrs").numel() > 0
+                ? graph_tensors_dict.at("separate_coo_rel_ptrs").data_ptr<Idx>()
+                : nullptr,
+        .num_relations = num_relations,
+    };
+
+    {% if kind.is_compact() %}
+      {% if kind.is_binary_search() %}
+        assert(graph_tensors_dict.at("unique_srcs_and_dests_rel_ptrs").numel() >
+               0);
+        assert(graph_tensors_dict.at("unique_srcs_and_dests_node_indices")
+                   .numel() > 0);
+        etype_mapper_data.unique_srcs_and_dests_rel_ptrs =
+            graph_tensors_dict.at("unique_srcs_and_dests_rel_ptrs")
+                .data_ptr<Idx>();
+        etype_mapper_data.unique_srcs_and_dests_node_indices =
+            graph_tensors_dict.at("unique_srcs_and_dests_node_indices")
+                .data_ptr<Idx>();
+      {% else %}
+        assert(graph_tensors_dict.at("edata_idx_to_inverse_idx").numel() > 0);
+        etype_mapper_data.edata_idx_to_inverse_idx =
+            graph_tensors_dict.at("edata_idx_to_inverse_idx").data_ptr<Idx>();
+      {% endif %}
+    {% else %}
+      assert(kind == CompactAsOfNodeKind::Disabled);
+    {% endif %}
+    {{kernel_cuda_func_name}}<Idx, DType, kind, true,
+                                                    true, false>
+        <<<nblks_inner_product, nthrs_inner_product, 0, stream>>>(
+            {%- for arg in tensor_pointer_args -%}{{ arg }}, {%- endfor -%} eids, separate_coo_row_indices_data_ptr,
+            separate_coo_col_indices_data_ptr, etype_data, num_edges,
+            etype_mapper_data);
+    
+  {% else %}
+    assert(0 && "Not implemented");
+  {% endif %}
+}

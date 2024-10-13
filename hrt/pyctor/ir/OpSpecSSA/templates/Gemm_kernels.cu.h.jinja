@@ -1,0 +1,14 @@
+{# Adapted from hrt/include/DGLHackKernel/PyctorPlayground/gemm.cu.h #}
+{# The variables need to be specified during instantiation are kernel_cuda_definitions, kernel_definition #}
+#pragma once
+#include <cuda_runtime.h>
+
+#include "DGLHackKernel/RGNN/my_shmem_sgemm_func_functor.cu.h"
+#include "DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt_functor.cu.h"
+#include "kernel_enums.h"
+#include "macros.h"
+#include "utils.cu.h"
+
+{% for kernel_definition in kernel_cuda_definitions %}
+{{ kernel_definition }}
+{% endfor %}

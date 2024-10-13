@@ -1,0 +1,8 @@
+{# Adapted from __global__ functions in hrt/include/DGLHackKernel/RGNN/my_shmem_sgemm_func_rgcn_hgt.cu.h #}
+// This jinja template uses _simplified_basic_MatMulKernel defined in my_shmem_sgemm_func_rgcn_hgt.cu.h.
+// _basic_MatMulKernel supports GEMM with complicated gather and scatter scheme. _simplified_basic_MatMulKernel supports GEMM with fused operations, e.g., inner product, and/or scaling. 
+
+// set HGT_INSTEAD_OF_RGCN_FLAG_FOR_NUM_HEAD_ASSERTION as true to disable the sanity check.
+
+
+// TODO: finish this jinja template for fused gemm kernels

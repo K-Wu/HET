@@ -156,8 +156,8 @@ class Program:
             tuple[int, int, str]
         ] = program_serializer.find_first_level_scopes(lines)
         # assert len(scopes) == 2
-        assert scopes[0][2] == "VariableTable"
-        assert scopes[1][2] == "DAG" or scopes[1][2] == "DAGDict"
+        assert scopes[0][2] == "VARIABLETABLE"
+        assert scopes[1][2] == "DAG" or scopes[1][2] == "DAGDICT"
         var_table = VariableTable.loads(lines[scopes[0][0] : scopes[0][1] + 1])
         ops = program_serializer.loads_op(lines[scopes[1][0] :])
         if len(scopes) == 2:

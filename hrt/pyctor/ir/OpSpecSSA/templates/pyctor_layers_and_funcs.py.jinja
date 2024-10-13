@@ -1,0 +1,17 @@
+{# Python code. Indent == 4 #}
+{# This file template instantiates the python script file that contains all the Python autograd definitions. autograd_func_class_definitions is a list that contains all autograd function class definitions. forward_helper_func_definitions is a list that contains all function definition that returns AutogradFuncClass.apply() as a helper function in the forward propagation logic. Adapted from hrt/python/backend/hgt_layers_and_funcs.py #}
+{# The variables need to be specified during instantiation are autograd_func_class_definitions, forward_helper_func_definitions #}
+#!/usr/bin/env python3
+import scipy  # Weird bug in new pytorch when import scipy after import torch
+import torch as th
+
+from ..kernels import K
+
+
+{%- for func_class_definition in autograd_func_class_definitions %}
+{{ func_class_definition }}
+{% endfor %}
+
+{%- for forward_helper_func_definition in forward_helper_func_definitions %}
+{{ forward_helper_func_definition }}
+{% endfor %}

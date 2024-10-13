@@ -2,7 +2,17 @@
 ///
 /// SHAPE INFORMATION
 ///
-// TODO: fullfil this
+VARIABLETABLE{
+  InitialVariableAndWeight{
+    (EDGEWISE, "raw_attn_tmp2");(EDGEWISE, "raw_attn");
+  }
+  Shape{
+    (EDGEWISE, "attn_sum"):['dstnode','scalar']
+    (EDGEWISE, "raw_attn"):['edgewise','scalar']
+    (EDGEWISE, "raw_attn_tmp2"):['edgewise','scalar']
+    (EDGEWISE, "attn"):['edgewise','scalar']
+  }
+}
 
 ///
 /// DAG
@@ -22,12 +32,65 @@ DAG{
 OPSPEC{
   traversal_1{
     {
-
+      "inputs": [["EDGEWISE","raw_attn_tmp2"]],
+      "outputs": [["DSTNODE","attn_sum"]],
+      "schedule": "type1",
+      "operators":{
+        "1:loop":{
+          "loop_variable":"idx_edge",
+          "loop_begin":"0",
+          "loop_end":"num_edges",
+          "loop_step":"blockDim.y*gridDim.y",
+          "loop_scalar_tmps":[["EDGEWISE","loop_scalar_tmp1"]],
+          "operators":{
+            "1:op":{
+              "op":"expf",
+              "op_type":"elementwise",
+              "inputs":[["EDGEWISE","raw_attn_tmp2"]],
+              "output":["EDGEWISE","loop_scalar_tmp1"]
+            },
+            "2:op":{
+              "op":"sum",
+              "op_type":{
+                "type":"accumulation",
+                "sink":"node"
+              },
+              "inputs":[["EDGEWISE","loop_scalar_tmp1"]],
+              "output":["DSTNODE","attn_sum"]
+            }
+          }
+        }
+      }
     }
   }
   traversal_2{
     {
-
+      "inputs": [["EDGEWISE","raw_attn"],["DSTNODE","attn_sum"]],
+      "outputs": [["EDGEWISE","attn"]],
+      "schedule": "type1",
+      "operators":{
+        "1:loop":{
+          "loop_variable":"idx_edge",
+          "loop_begin":"0",
+          "loop_end":"num_edges",
+          "loop_step":"blockDim.y*gridDim.y",
+          "operators":{
+            "1:op":{
+              "op":"divide",
+              "op_type":"elementwise",
+              "broadcast":{
+                "operand":"right",
+                "source":"dstnode"
+              },
+              "inputs":[
+                ["EDGEWISE","raw_attn"],
+                ["DSTNODE","attn_sum"]
+              ],
+              "output":["EDGEWISE","attn"]
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -1,0 +1,173 @@
+// Excerpt from hgt.inter-op-ssa
+///
+/// SHAPE INFORMATION
+///
+VARIABLETABLE{
+  InitialVariableAndWeight{
+    (EDGEWISE, "raw_attn_tmp1");(DSTNODE, "ht_attn");(EDGEWISE, "msg");
+  }
+  Shape{
+    (DSTNODE, "output"):['dstnode','vector']
+    (EDGEWISE, "msg"):['edgewise','vector']
+    (EDGEWISE, "output_tmp1"):['edgewise','vector']
+    (EDGEWISE, "attn_sum"):['dstnode','scalar']
+    (EDGEWISE, "raw_attn"):['edgewise','scalar']
+    (EDGEWISE, "raw_attn_tmp2"):['edgewise','scalar']
+    (EDGEWISE, "raw_attn_tmp1"):['edgewise','vector']
+    (DSTNODE, "ht_attn"):['dstnode','vector']
+    (EDGEWISE, "attn"):['edgewise','scalar']
+  }
+}
+
+///
+/// DAG
+///
+DAG{
+1: (EDGEWISE, "attn_sum"),(EDGEWISE, "raw_attn") = TraversalOp(opr0=(EDGEWISE, "raw_attn_tmp1"),opr1=(DSTNODE, "ht_attn"));{
+  1:(EDGEWISE, "raw_attn_tmp2") = EdgeInnerProduct(left = (EDGEWISE, "raw_attn_tmp1"), right = (DSTNODE, "ht_attn"));
+  2:(EDGEWISE, "raw_attn") = Exponential(input = (EDGEWISE, "raw_attn_tmp2"));
+  // edge softmax
+  3:(DSTNODE, "attn_sum") = NodeSumAccumulation(input = (EDGEWISE, "raw_attn"));
+  }
+2: (DSTNODE, "output") = TraversalOp(opr0=(EDGEWISE, "raw_attn"),opr1=(DSTNODE, "attn_sum"),opr2=(EDGEWISE, "msg"));{
+  1:(EDGEWISE, "attn") = ScalarDivide(left = (EDGEWISE, "raw_attn"), right = (DSTNODE, "attn_sum"));
+  2:(EDGEWISE, "output_tmp1") = EdgeScalarVectorMul(scalar=(EDGEWISE, "attn"), vector=(EDGEWISE, "msg"));
+  3:(DSTNODE, "output") = NodeSumAccumulation(input=(EDGEWISE,"output_tmp1"));
+  }
+}
+
+///
+/// OPSPEC
+/// each op has a dedicated scope <optype>_<opidx> in which there is a json substring that describes the specification.
+/// TODO: the head index loop level is omitted for now; it should be added in the future.
+OPSPEC{
+  traversal_1{
+    {
+      "inputs": [["EDGEWISE","raw_attn_tmp1"], ["DSTNODE","ht_attn"]],
+      "outputs": [["DSTNODE","attn_sum"]],
+      "schedule": "type1",
+      "operators":{
+        "1:loop":{
+          "loop_variable":"idx_edge",
+          "loop_begin":"0",
+          "loop_end":"num_edges",
+          "loop_step":"gridDim.y*blockDim.y",
+          "loop_scalar_tmps":[["EDGEWISE","loop_scalar_tmp2"], ["EDGEWISE","loop_scalar_tmp3"]],
+          "operators":{
+            "1:loop":{
+              "loop_variable":"idx_feature",
+              "loop_begin":"0",
+              "loop_end":"num_features",
+              "loop_step":"1",
+              "loop_scalar_tmps":[["EDGEWISE","loop_scalar_tmp1"]],
+              "operators":{
+                "1:op":{
+                  "op":"mul",
+                  "op_type":"elementwise",
+                  "broadcast":{
+                    "operand":"right",
+                    "source":"dstnode"
+                  },
+                  "inputs":[
+                    ["EDGEWISE","raw_attn_tmp1"],
+                    ["DSTNODE","ht_attn"]
+                  ],
+                  "output":["EDGEWISE","loop_scalar_tmp1"]
+                },
+                "2:op":{
+                  "op":"sum",
+                  "op_type":"elementwise",
+                  "op_type":{
+                    "type":"accumulation",
+                    "sink":"edge"
+                  },
+                  "inputs":[
+                    ["EDGEWISE","loop_scalar_tmp1"]
+                  ],
+                  "output":["EDGEWISE","loop_scalar_tmp2"]
+                }
+              }
+            },
+            "2:op":{
+              "op":"expf",
+              "op_type":"elementwise",
+              "inputs":[["EDGEWISE","loop_scalar_tmp2"]],
+              "output":["EDGEWISE","loop_scalar_tmp3"]
+            },
+            "3:op":{
+              "op":"sum",
+              "op_type":{
+                "type":"accumulation",
+                "sink":"node"
+              },
+              "inputs":[["EDGEWISE","loop_scalar_tmp3"]],
+              "output":["DSTNODE","attn_sum"]
+            }
+          }
+        }
+      }
+    }
+  }
+  traversal_2{
+    {
+      "op_idx":2,
+      "inputs": [["EDGEWISE","raw_attn"], ["DSTNODE","attn_sum"], ["EDGEWISE","msg"]],
+      "outputs": ["DSTNODE","output"],
+      "schedule": "type1",
+      "operators":{
+        "1:loop":{
+          "loop_variable":"idx_edge",
+          "loop_begin":"0",
+          "loop_end":"num_edges",
+          "loop_step":"gridDim.y*blockDim.y",
+          "loop_scalar_tmps":[["EDGEWISE","loop_scalar_tmp1"]],
+          "operators":{
+            "1:op":{
+              "op":"divide",
+              "op_type":"elementwise",
+              "broadcast":{
+                "operand":"right",
+                "source":"dstnode"
+              },
+              "inputs":[
+                ["EDGEWISE","raw_attn"],
+                ["DSTNODE","attn_sum"]
+              ],
+              "output":["EDGEWISE","loop_scalar_tmp1"]
+            },
+            "2:loop":{
+              "loop_variable":"idx_feature",
+              "loop_begin":"0",
+              "loop_end":"num_features",
+              "loop_step":"1",
+              "loop_scalar_tmps":[["EDGEWISE","loop_scalar_tmp2"]],
+              "operators":{
+                "1:op":{
+                  "op":"mul",
+                  "broadcast":{
+                    "operand":"left",
+                    "source":"edgewise"
+                  },
+                  "inputs":[
+                    ["EDGEWISE","loop_scalar_tmp1"],
+                    ["EDGEWISE","msg"]
+                  ],
+                  "output":["EDGEWISE","loop_scalar_tmp2"]
+                },
+                "2:op":{
+                  "op":"sum",
+                  "op_type":{
+                    "type":"accumulation",
+                    "sink":"node"
+                  },
+                  "inputs":[["EDGEWISE","loop_scalar_tmp2"]],
+                  "output":["DSTNODE","output"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

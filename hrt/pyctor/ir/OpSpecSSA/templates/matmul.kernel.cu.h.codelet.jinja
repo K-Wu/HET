@@ -1,0 +1,70 @@
+{# Adapted from __global__ functions in hrt/include/DGLHackKernel/RGNN/my_shmem_sgemm_func.cu.h #}
+{# The variables need to be specified during instantiation are kind, kernel_cuda_func_name #}
+// This jinja template uses _basic_MatMulKernel defined in my_shmem_sgemm_func.cu.h.
+// _basic_MatMulKernel supports GEMM with complicated gather and scatter scheme. _simplified_basic_MatMulKernel supports GEMM with fused operations, e.g., inner product, and/or scaling. 
+template <
+    bool RIGHT_REG_TILED_FLAG, int THREADING_BLOCK_SIZE_X,
+    int THREADING_BLOCK_SIZE_Y, int WORK_BLOCK_SIZE_X, int WORK_BLOCK_SIZE_Y,
+    int WORK_BLOCK_SIZE_K, typename Idx, typename IdxPtr,
+    // TODO: check if InputNumHeadOneFlag could be removed
+    bool InputNumHeadOneFlag /*whether (delta_)input_feat is single-headed*/>
+__global__ void MY_SGEMM_LAUNCH_BOUNDS {{kernel_cuda_func_name}}(
+    float *A, float *B, float *C, 
+    {% if kind.is_compact() %}
+    const ETypeMapperData<Idx, CompactAsOfNodeKind::Enabled> etype_mapper_data,
+    {% else %}
+    IdxPtr A_col_row_idx_gather_list,
+    IdxPtr A_rel_ptr, IdxPtr C_eid_scatter_list, 
+    {% endif %}
+    Idx num_A_cols, Idx num_B_cols,
+    int num_heads, int *accum_num_blocks_per_relation, Idx num_relations) {
+  // (input, weight, output) are 1, NH, NH or NH, NH, NH depending on whether
+  // A_num_head_one_flag is true. NH is num_heads
+  Idx idx_block_assignment = blockIdx.y;
+  Idx idx_relation = binary_search<int, int *>(
+      num_relations, accum_num_blocks_per_relation, idx_block_assignment);
+  _basic_MatMulKernel<RIGHT_REG_TILED_FLAG, /*double buffer flag*/ false,
+                      THREADING_BLOCK_SIZE_X, THREADING_BLOCK_SIZE_Y,
+                      WORK_BLOCK_SIZE_X, WORK_BLOCK_SIZE_Y, WORK_BLOCK_SIZE_K,
+                      /*OuterProductFlag*/ false,
+                      /*AGatherKind*/ MySGEMMGatherKind::Basic,
+                      /*BGatherKind*/ MySGEMMGatherKind::Disabled,
+                      /*CScatterKind*/ MySGEMMGatherKind::Basic,
+                      /*AtomicUpdateFlag*/ false, Idx, IdxPtr,
+                      /*numHeadKind*/ MySGEMMNumHeadKind::AssertANumIsOne,
+                      /*compactKind*/ CompactAsOfNodeKind::Disabled>::
+      execute_function(
+          /*A*/ A,
+          /*B*/
+          &B[idx_relation * (InputNumHeadOneFlag ? num_heads : 1) * num_A_cols *
+             num_B_cols],
+          /*C*/ C, 
+          {% if kind.is_compact() %}
+          /*A_gather_list*/ etype_mapper_data.unique_srcs_and_dests_node_indices, 
+          /*B_gather_list*/ nullptr,
+          /*C_scatter_list*/ etype_mapper_data.unique_srcs_and_dests_node_indices,
+          {% else %}
+          /*A_gather_list*/ A_col_row_idx_gather_list,
+          /*B_gather_list*/ nullptr, 
+          /*C_scatter_list*/ C_eid_scatter_list,
+          {% endif %}
+          // TODO: remove etype_mapper_data as the two_order acccess
+          // scheme is never used.
+          /*etype_mapper_data*/ {}, idx_relation,
+          {% if kind.is_compact() %}
+          /*numARows*/ etype_mapper_data.unique_srcs_and_dests_node_indices[idx_relation + 1] - etype_mapper_data.unique_srcs_and_dests_node_indices[idx_relation],
+          {% else %}
+          /*numARows*/ A_rel_ptr[idx_relation + 1] - A_rel_ptr[idx_relation],
+          {% endif %}
+          /*blockIdxAlongRowBeg*/ accum_num_blocks_per_relation[idx_relation],
+          /*strideNumBlocksAlongRow*/
+          (accum_num_blocks_per_relation[idx_relation + 1] -
+           accum_num_blocks_per_relation[idx_relation]),
+          {% if kind.is_compact() %}
+          /*blockRowJobEntryBeg*/ etype_mapper_data.unique_srcs_and_dests_node_indices[idx_relation],
+          {% else %}
+          /*blockRowJobEntryBeg*/ A_rel_ptr[idx_relation],
+          {% endif %}
+          /*num_A_cols*/ num_A_cols, /*num_B_cols*/ num_B_cols,
+          /*num_heads*/ num_heads);
+}
